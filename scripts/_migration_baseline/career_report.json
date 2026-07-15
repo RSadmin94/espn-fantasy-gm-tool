@@ -1,0 +1,151 @@
+{
+  "engine": "career_report",
+  "league": "457622",
+  "payload": {
+    "careerArc": "The Breakthrough",
+    "confidence": "High",
+    "mode": "why-you-won",
+    "ownerKey": "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+    "ownerName": "Rod Sellers",
+    "snapshot": {
+      "activityDna": {
+        "primary": "Trade Opportunist",
+        "secondary": "Roster Builder"
+      },
+      "bestFinish": 1,
+      "biggestRival": "Marlon Moore",
+      "biggestThreat": {
+        "detail": "You are 5-9 against Marlon Moore, including 3 playoff losses. They are the rival most often standing in your way.",
+        "netLosses": 4,
+        "ownerName": "Marlon Moore",
+        "playoffLosses": 3,
+        "record": "5-9"
+      },
+      "careerWinRate": 0.507,
+      "championSeasons": [
+        2010,
+        2025
+      ],
+      "championshipDrought": 0,
+      "leagueDnaRank": null,
+      "playoffTrips": 5,
+      "runnerUps": 0,
+      "seasonsPlayed": 17,
+      "titles": 2
+    },
+    "timelineSeasons": [
+      {
+        "finish": null,
+        "isChampion": false,
+        "season": 2026
+      },
+      {
+        "finish": 1,
+        "isChampion": true,
+        "season": 2025
+      },
+      {
+        "finish": 13,
+        "isChampion": false,
+        "season": 2024
+      },
+      {
+        "finish": 5,
+        "isChampion": false,
+        "season": 2023
+      },
+      {
+        "finish": 13,
+        "isChampion": false,
+        "season": 2022
+      },
+      {
+        "finish": 10,
+        "isChampion": false,
+        "season": 2021
+      },
+      {
+        "finish": 8,
+        "isChampion": false,
+        "season": 2020
+      },
+      {
+        "finish": 4,
+        "isChampion": false,
+        "season": 2019
+      },
+      {
+        "finish": 9,
+        "isChampion": false,
+        "season": 2018
+      },
+      {
+        "finish": 5,
+        "isChampion": false,
+        "season": 2017
+      },
+      {
+        "finish": 13,
+        "isChampion": false,
+        "season": 2016
+      },
+      {
+        "finish": 10,
+        "isChampion": false,
+        "season": 2015
+      },
+      {
+        "finish": 9,
+        "isChampion": false,
+        "season": 2014
+      },
+      {
+        "finish": 9,
+        "isChampion": false,
+        "season": 2013
+      },
+      {
+        "finish": 9,
+        "isChampion": false,
+        "season": 2012
+      },
+      {
+        "finish": 8,
+        "isChampion": false,
+        "season": 2011
+      },
+      {
+        "finish": 1,
+        "isChampion": true,
+        "season": 2010
+      }
+    ],
+    "title": "Why You Won",
+    "topReasons": [
+      {
+        "id": "multi_title",
+        "title": "2 championships proves the system is repeatable"
+      },
+      {
+        "id": "acq_impact",
+        "title": "In-season roster moves added measurable winning edge"
+      },
+      {
+        "id": "dna_edge",
+        "title": "Trade Opportunist DNA drove championship-level roster agility"
+      },
+      {
+        "id": "scoring_peak",
+        "title": "Peaked in the right season"
+      },
+      {
+        "id": "rival_overcome",
+        "title": "Broke through despite Marlon Moore being your biggest rival"
+      }
+    ]
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T22:36:05.615Z",
+  "userId": 1
+}

@@ -11,28 +11,30 @@
  *   Recent losses      × 5   (last 3 seasons, max ~30 for 6 recent)
  *
  * Heat labels:
- *   0–29   → "Cold"
- *   30–59  → "Simmering"
- *   60–99  → "Heated"
- *   100–149→ "Burning"
- *   150+   → "Inferno"
+ *   0–39    → "Cold"
+ *   40–79   → "Simmering"
+ *   80–129  → "Heated"
+ *   130–174 → "Burning"
+ *   175+    → "Inferno"
  */
 
-import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { getAllCachedSeasons, getDb, resolveActiveLeagueId } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import { buildOwnerIdentityAuthority } from "./ownerIdentityAuthority";
+import { buildH2HAuthority } from "./h2hAuthority";
 import {
-  normalizeTeams,
-  normalizeMatchups,
-  normalizeTransactions,
-  normalizeRosters,
-} from "./espnService";
+  loadCompletedTradeIntelligence,
+  type CompletedTradeIntel,
+} from "./completedTradeAuthority";
 import { invokeLLM } from "./_core/llm";
 import { rivalryScores } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and } from "drizzle-orm";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface RivalryPair {
-  memberId: string;         // the user's memberId (Rod)
+  memberId: string;         // the focal user's memberId
   rivalId: string;
   rivalName: string;
   rivalryScore: number;
@@ -50,12 +52,13 @@ export interface RivalryPair {
   revengeAchieved: boolean;
   lastMatchupSeason: number | null;
   loreSentence: string | null;
-  // Rival's all-time playoff record (for narrative context)
+  // Focal owner's all-time playoff record (for narrative context)
   rivalPlayoffWins?: number;
   rivalPlayoffLosses?: number;
   // Rich regular-season H2H stats (computed, not persisted)
-  avgRodPF?: number;            // Rod's avg score in RS matchups vs this rival
-  avgRivalPF?: number;          // Rival's avg score in RS matchups vs Rod
+  ownerName?: string;           // focal owner's display name (for LLM prompts)
+  avgOwnerPF?: number;          // focal owner's avg score in RS matchups vs this rival
+  avgRivalPF?: number;          // rival's avg score in RS matchups vs focal owner
   biggestRodWinMargin?: number | null;
   biggestRodWinSeason?: number | null;
   biggestRodWinRodScore?: number | null;
@@ -85,38 +88,112 @@ interface MatchupRow {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function heatLabel(score: number): RivalryPair["heatLabel"] {
-  if (score >= 150) return "Inferno";
-  if (score >= 100) return "Burning";
-  if (score >= 60) return "Heated";
-  if (score >= 30) return "Simmering";
+  if (score >= 175) return "Inferno";
+  if (score >= 130) return "Burning";
+  if (score >= 80) return "Heated";
+  if (score >= 40) return "Simmering";
   return "Cold";
 }
 
-const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
+/**
+ * Count completed-trade value losses for the focal owner per rival.
+ * Uses completedTradeAuthority verdicts only — no player-count proxy.
+ */
+export function accumulateTradeVerdictLosses(args: {
+  trades: CompletedTradeIntel[];
+  focalOwnerKey: string;
+}): Map<string, number> {
+  const losses = new Map<string, number>();
+  const focalKey = args.focalOwnerKey.trim();
+  if (!focalKey) return losses;
 
-function isRod(name: string): boolean {
-  return ROD_NAMES.some((n) => name.toLowerCase().includes(n));
+  for (const trade of args.trades) {
+    const focalOnA = trade.sideA.ownerKey === focalKey;
+    const focalOnB = trade.sideB.ownerKey === focalKey;
+    if (!focalOnA && !focalOnB) continue;
+
+    const rivalKey = focalOnA ? trade.sideB.ownerKey : trade.sideA.ownerKey;
+    if (!rivalKey) continue;
+
+    // Even trades and focal wins do not count as trade-verdict losses.
+    if (!trade.winnerOwnerKey || trade.winnerOwnerKey === focalKey) continue;
+    if (trade.winnerOwnerKey !== rivalKey) continue;
+
+    losses.set(rivalKey, (losses.get(rivalKey) ?? 0) + 1);
+  }
+
+  return losses;
 }
 
 // ── Core computation ──────────────────────────────────────────────────────────
 
 /**
  * Compute rivalry scores for all opponents vs the primary user (Rod).
- * Reads from the ESPN season cache — no live API calls.
+ * Head-to-head is sourced from the H2H Authority (complete gmMatchups history,
+ * resolved through the Owner Identity Authority); trade-verdict losses come from
+ * completedTradeAuthority (gmTransactions + value verdict). Only opponents who
+ * fielded a team in the league last year receive a heat score.
  */
-export async function computeRivalryScores(): Promise<RivalryPair[]> {
-  const cachedSeasons = await getAllCachedSeasons();
+export async function computeRivalryScores(userId?: number, leagueId?: string): Promise<RivalryPair[]> {
+  const cachedSeasons = await getAllCachedSeasons(leagueId, userId);
   if (cachedSeasons.length === 0) return [];
 
-  // memberId → display name
-  const memberNames = new Map<string, string>();
-  // memberId → teamId per season
-  const seasonTeamToMember = new Map<number, Map<number, string>>();
+  // ── Identity + H2H authorities (single source of truth) ──────────────────
+  const { leagueId: lid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : null },
+    leagueId ?? null,
+  );
+  if (!lid) return [];
+  const identity = await buildOwnerIdentityAuthority(lid);
+  const h2h = await buildH2HAuthority(lid);
 
-  // Rod's memberId (resolved from first available season)
-  let rodMemberId: string | null = null;
+  // Focal owner (Rod): resolve his ESPN SWID, then his canonical person id.
+  let focalMemberId: string | null = null;
+  if (userId != null) {
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) focalMemberId = co.ownerId;
+  }
+  if (!focalMemberId) return [];
 
-  // Per-opponent accumulators
+  const allRows = identity.resolveAll();
+  const normSwid = (s: string | null | undefined) => (s ?? "").replace(/[{}]/g, "").trim().toLowerCase();
+  const focalRow = allRows.find(
+    (r) =>
+      r.resolution.status === "resolved" &&
+      !!r.resolution.canonicalPersonId &&
+      r.resolution.canonicalPersonId.startsWith("id:") &&
+      normSwid((r as { ownerId?: string | null }).ownerId) === normSwid(focalMemberId),
+  );
+  const focalCanon =
+    focalRow?.resolution.canonicalPersonId ??
+    `id:${focalMemberId.startsWith("{") ? focalMemberId : `{${focalMemberId}}`}`;
+
+  // "Recent" window and the in-league-last-year filter both key off the
+  // league's newest season. Last year = newest − 1; recent = last 3 seasons.
+  const RECENT_SEASONS = 3;
+  const currentSeason = allRows.length ? Math.max(...allRows.map((r) => r.season)) : new Date().getFullYear();
+  const lastYear = currentSeason - 1;
+  const recentThreshold = currentSeason - (RECENT_SEASONS - 1);
+
+  // Heat list only includes owners who fielded a team in the league last year.
+  // This drops departed owners and (incidentally) every id-less pre-cache
+  // person, keeping the migrated rivalry set purely id-keyed.
+  const activeLastYear = new Set<string>();
+  for (const r of allRows) {
+    if (r.season === lastYear && r.resolution.status === "resolved" && r.resolution.canonicalPersonId) {
+      activeLastYear.add(r.resolution.canonicalPersonId);
+    }
+  }
+
+  // canonical person id → display name
+  const nameOf = new Map(
+    identity.listPersons().map((p) => [p.canonicalPersonId, p.canonicalName] as const),
+  );
+
+  // Seasons with completed trade rows in gmTransactions.
+  const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
+
+  // Per-opponent accumulators (keyed by canonical person id)
   interface Acc {
     h2hWins: number;
     h2hLosses: number;
@@ -132,8 +209,8 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
     lastMatchupSeason: number | null;
     revengeAchieved: boolean;
     // Rich regular-season H2H stats
-    totalRodPF: number;           // sum of Rod's scores in RS matchups
-    totalRivalPF: number;         // sum of rival's scores in RS matchups
+    totalOwnerPF: number;
+    totalRivalPF: number;
     biggestRodWinMargin: number | null;
     biggestRodWinSeason: number | null;
     biggestRodWinRodScore: number | null;
@@ -142,7 +219,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
     biggestRodLossSeason: number | null;
     biggestRodLossRodScore: number | null;
     biggestRodLossRivalScore: number | null;
-    currentWinStreak: number;     // positive = Rod winning streak, negative = loss streak
+    currentWinStreak: number;
     longestWinStreak: number;
     longestLossStreak: number;
     seasonBreakdown: Array<{ season: number; rodWins: number; rodLosses: number }>;
@@ -157,7 +234,7 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
         recentLossSeasons: new Set(),
         painfulLossSeason: null, painfulLossMargin: null, painfulLossOpponentScore: null,
         lastMatchupSeason: null, revengeAchieved: false,
-        totalRodPF: 0, totalRivalPF: 0,
+        totalOwnerPF: 0, totalRivalPF: 0,
         biggestRodWinMargin: null, biggestRodWinSeason: null,
         biggestRodWinRodScore: null, biggestRodWinRivalScore: null,
         biggestRodLossMargin: null, biggestRodLossSeason: null,
@@ -169,134 +246,66 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
     return acc.get(rivalId)!;
   }
 
-  const RECENT_SEASONS = 3;
-  const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
-  const recentThreshold = sortedSeasons[sortedSeasons.length - RECENT_SEASONS] ?? 0;
+  // ── Pass 1: Head-to-head from the H2H Authority (complete history) ────────
+  // Meetings are A-oriented (A = focal/Rod): scoreA = Rod, scoreB = rival,
+  // winner = canonical id or null (tie). Ties are skipped, matching prior behavior.
+  for (const opp of h2h.opponentsOf(focalCanon)) {
+    const result = h2h.getH2H(focalCanon, opp);
+    const rivalA = getAcc(opp);
+    for (const m of result.meetings) {
+      if (m.winner === null) continue; // tie — never counted (prior behavior)
+      const season = m.season;
+      const rodWon = m.winner === focalCanon;
+      const rodScore = m.scoreA;
+      const rivalScore = m.scoreB;
+      const margin = Math.abs(m.marginA);
 
-  // ── Pass 1: Matchup H2H ──────────────────────────────────────────────────
-  for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
-    if (!row) continue;
-    const data = row.payload as Record<string, unknown>;
-
-    // Build teamId → memberId map
-    const teams = normalizeTeams(data);
-    const teamToMember = new Map<number, string>();
-    const members = (data.members as Record<string, unknown>[]) || [];
-
-    for (const m of members) {
-      const mid = m.id as string;
-      const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || mid;
-      memberNames.set(mid, name);
-      if (!rodMemberId && isRod(name)) rodMemberId = mid;
-    }
-
-    for (const team of teams) {
-      const primaryOwner = (team as any).primaryOwner || ((team as any).memberIds?.[0] ?? "");
-      if (primaryOwner) teamToMember.set((team as any).teamId as number, primaryOwner);
-    }
-    seasonTeamToMember.set(season, teamToMember);
-
-    // Determine playoff start period
-    const settings = (data.settings as Record<string, unknown>) || {};
-    const scheduleSettings = (settings.scheduleSettings as Record<string, unknown>) || {};
-    const playoffMatchupPeriodStart: number =
-      ((scheduleSettings.matchupPeriodCount as number) ?? 14) + 1;
-
-    // Determine playoff elimination: who knocked out Rod in the playoffs?
-    // We look for WINNERS_BRACKET matchups where Rod lost
-    const matchups = normalizeMatchups(data) as MatchupRow[];
-
-    for (const m of matchups) {
-      const homeId = m.homeTeamId as number;
-      const awayId = m.awayTeamId as number;
-      if (!homeId || !awayId) continue;
-      const homeMember = teamToMember.get(homeId);
-      const awayMember = teamToMember.get(awayId);
-      if (!homeMember || !awayMember) continue;
-
-      const isPlayoff = (m.playoffTierType as string) === "WINNERS_BRACKET";
-      const isRegular = !m.playoffTierType || (m.playoffTierType as string) === "NONE";
-      const winner = m.winner as string;
-      if (!winner || winner === "UNDECIDED") continue;
-
-      const homeScore = (m.homeTotalPoints as number) ?? 0;
-      const awayScore = (m.awayTotalPoints as number) ?? 0;
-
-      // Determine Rod's role
-      const rodIsHome = homeMember === rodMemberId;
-      const rodIsAway = awayMember === rodMemberId;
-      if (!rodIsHome && !rodIsAway) continue;
-
-      const rivalMemberId = rodIsHome ? awayMember : homeMember;
-      const rivalA = getAcc(rivalMemberId);
-
-      const rodWon = (rodIsHome && winner === "HOME") || (rodIsAway && winner === "AWAY");
-      const rodLost = !rodWon;
-
-      const rodScore = rodIsHome ? homeScore : awayScore;
-      const rivalScore = rodIsHome ? awayScore : homeScore;
-      const margin = Math.abs(rodScore - rivalScore);
-
-      if (isRegular) {
-        // Accumulate scoring totals
-        rivalA.totalRodPF += rodScore;
+      if (!m.isPlayoff) {
+        rivalA.totalOwnerPF += rodScore;
         rivalA.totalRivalPF += rivalScore;
 
-        // Season breakdown
-        let sb = rivalA.seasonBreakdown.find(s => s.season === season);
+        let sb = rivalA.seasonBreakdown.find((s) => s.season === season);
         if (!sb) { sb = { season, rodWins: 0, rodLosses: 0 }; rivalA.seasonBreakdown.push(sb); }
 
         if (rodWon) {
           rivalA.h2hWins++;
           sb.rodWins++;
-          // Biggest Rod win
           if (rivalA.biggestRodWinMargin === null || margin > rivalA.biggestRodWinMargin) {
             rivalA.biggestRodWinMargin = Math.round(margin * 10) / 10;
             rivalA.biggestRodWinSeason = season;
             rivalA.biggestRodWinRodScore = Math.round(rodScore * 10) / 10;
             rivalA.biggestRodWinRivalScore = Math.round(rivalScore * 10) / 10;
           }
-          // Streak tracking
           if (rivalA.currentWinStreak >= 0) rivalA.currentWinStreak++;
           else rivalA.currentWinStreak = 1;
           if (rivalA.currentWinStreak > rivalA.longestWinStreak) rivalA.longestWinStreak = rivalA.currentWinStreak;
         } else {
           rivalA.h2hLosses++;
           sb.rodLosses++;
-          // Close loss: margin < 5 pts
           if (margin < 5) rivalA.closeLossCount++;
-          // Most painful loss: highest opponent score when Rod lost
           if (rivalA.painfulLossOpponentScore === null || rivalScore > rivalA.painfulLossOpponentScore) {
             rivalA.painfulLossSeason = season;
             rivalA.painfulLossMargin = Math.round(margin * 10) / 10;
             rivalA.painfulLossOpponentScore = Math.round(rivalScore * 10) / 10;
           }
-          // Biggest Rod loss
           if (rivalA.biggestRodLossMargin === null || margin > rivalA.biggestRodLossMargin) {
             rivalA.biggestRodLossMargin = Math.round(margin * 10) / 10;
             rivalA.biggestRodLossSeason = season;
             rivalA.biggestRodLossRodScore = Math.round(rodScore * 10) / 10;
             rivalA.biggestRodLossRivalScore = Math.round(rivalScore * 10) / 10;
           }
-          // Streak tracking
           if (rivalA.currentWinStreak <= 0) rivalA.currentWinStreak--;
           else rivalA.currentWinStreak = -1;
           if (Math.abs(rivalA.currentWinStreak) > rivalA.longestLossStreak) rivalA.longestLossStreak = Math.abs(rivalA.currentWinStreak);
-          // Recent losses
           if (season >= recentThreshold) rivalA.recentLossSeasons.add(season);
         }
-        // Track last matchup season
+
         if (rivalA.lastMatchupSeason === null || season > rivalA.lastMatchupSeason) {
           rivalA.lastMatchupSeason = season;
-          // Revenge: did Rod win the most recent matchup?
           rivalA.revengeAchieved = rodWon;
         }
-      } else if (isPlayoff) {
-        if (rodLost) {
-          rivalA.playoffEliminations++;
-        }
-        // Track last matchup season for playoff matchups too
+      } else {
+        if (!rodWon) rivalA.playoffEliminations++;
         if (rivalA.lastMatchupSeason === null || season > rivalA.lastMatchupSeason) {
           rivalA.lastMatchupSeason = season;
           rivalA.revengeAchieved = rodWon;
@@ -305,80 +314,40 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
     }
   }
 
-  // ── Pass 2: Trade verdict losses ─────────────────────────────────────────
-  // We re-run the simplified trade verdict logic from tradeAging
-  // (only need winner/loser per trade, not full value breakdown)
-  for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
-    if (!row) continue;
-    const data = row.payload as Record<string, unknown>;
-    const teamToMember = seasonTeamToMember.get(season);
-    if (!teamToMember || !rodMemberId) continue;
-
-    const transactions = normalizeTransactions(data) as Record<string, unknown>[];
-    // Group TRADE_PROPOSAL rows by transactionId
-    const tradeGroups = new Map<string, { teamAId: number; teamBId: number; playerRows: Record<string, unknown>[] }>();
-
-    for (const txn of transactions) {
-      const type = txn.type as string;
-      if (type !== "TRADE" && type !== "TRADE_PROPOSAL") continue;
-      const status = txn.status as string;
-      if (status !== "EXECUTED" && status !== "PENDING") continue;
-      const tid = txn.transactionId as string;
-      if (!tid) continue;
-      const fromTeamId = txn.fromTeamId as number;
-      const toTeamId = txn.toTeamId as number;
-      if (!fromTeamId || !toTeamId) continue;
-
-      if (!tradeGroups.has(tid)) {
-        tradeGroups.set(tid, { teamAId: fromTeamId, teamBId: toTeamId, playerRows: [] });
-      }
-      tradeGroups.get(tid)!.playerRows.push(txn);
-    }
-
-    for (const [, group] of Array.from(tradeGroups)) {
-      const teamAMember = teamToMember.get(group.teamAId);
-      const teamBMember = teamToMember.get(group.teamBId);
-      if (!teamAMember || !teamBMember) continue;
-
-      const rodIsA = teamAMember === rodMemberId;
-      const rodIsB = teamBMember === rodMemberId;
-      if (!rodIsA && !rodIsB) continue;
-
-      const rivalMemberId = rodIsA ? teamBMember : teamAMember;
-
-      // Simple value: count players received per side (proxy for value)
-      // A proper value calc would require the full playerMap — here we use
-      // a lightweight heuristic: side that received more players "won"
-      let aReceived = 0;
-      let bReceived = 0;
-      for (const r of group.playerRows) {
-        const toTeamId = r.toTeamId as number;
-        if (toTeamId === group.teamAId) aReceived++;
-        else if (toTeamId === group.teamBId) bReceived++;
-      }
-      // Rod lost the trade if his side received fewer players
-      const rodLostTrade = (rodIsA && aReceived < bReceived) || (rodIsB && bReceived < aReceived);
-      if (rodLostTrade) {
-        getAcc(rivalMemberId).tradeVerdictLosses++;
-      }
+  // ── Pass 2: Trade verdict losses (completed trade intelligence authority) ──
+  const db = await getDb();
+  if (db) {
+    const completedTrades = await loadCompletedTradeIntelligence({
+      db,
+      leagueId: lid,
+      seasons: sortedSeasons,
+    });
+    const tradeLosses = accumulateTradeVerdictLosses({
+      trades: completedTrades,
+      focalOwnerKey: focalCanon,
+    });
+    for (const [rivalCanon, count] of tradeLosses) {
+      if (count > 0) getAcc(rivalCanon).tradeVerdictLosses += count;
     }
   }
 
-  if (!rodMemberId) return [];
+  if (!focalMemberId) return [];
 
   // Fetch rival playoff W/L from live opponent profiles
   let liveProfiles: Map<string, { career: { playoffWins: number; playoffLosses: number } }> | null = null;
   try {
     const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
-    liveProfiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    liveProfiles = await buildLiveOpponentProfiles(userId) as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
   } catch { /* non-fatal */ }
 
   // ── Build final rivalry pairs ─────────────────────────────────────────────
   const pairs: RivalryPair[] = [];
-  for (const [rivalId, a] of Array.from(acc)) {
+  for (const [canonId, a] of Array.from(acc)) {
     const totalLosses = a.h2hLosses;
     if (totalLosses === 0 && a.playoffEliminations === 0) continue; // no rivalry if never lost
+    if (!activeLastYear.has(canonId)) continue; // only owners in the league last year get a heat score
+    // Emit the rival's ESPN SWID (downstream keys off this). Survivors are all id-keyed.
+    const rivalId = canonId.startsWith("id:") ? canonId.slice(3) : canonId;
 
     const score =
       a.h2hLosses * 8 +
@@ -389,16 +358,16 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
 
     const rivalProfile = liveProfiles?.get(rivalId);
     const totalRSGames = a.h2hWins + a.h2hLosses + a.h2hTies;
-    const avgRodPF = totalRSGames > 0 ? Math.round((a.totalRodPF / totalRSGames) * 10) / 10 : undefined;
+    const avgOwnerPF = totalRSGames > 0 ? Math.round((a.totalOwnerPF / totalRSGames) * 10) / 10 : undefined;
     const avgRivalPF = totalRSGames > 0 ? Math.round((a.totalRivalPF / totalRSGames) * 10) / 10 : undefined;
     const currentStreakDirection: RivalryPair['currentStreakDirection'] =
       a.currentWinStreak > 0 ? 'winning' : a.currentWinStreak < 0 ? 'losing' : 'neutral';
     const currentStreakLength = Math.abs(a.currentWinStreak);
     const sortedBreakdown = [...a.seasonBreakdown].sort((x, y) => x.season - y.season);
     pairs.push({
-      memberId: rodMemberId,
+      memberId: focalMemberId,
       rivalId,
-      rivalName: memberNames.get(rivalId) || rivalId,
+      rivalName: nameOf.get(canonId) || rivalId,
       rivalryScore: score,
       h2hWins: a.h2hWins,
       h2hLosses: a.h2hLosses,
@@ -413,10 +382,11 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
       painfulLossOpponentScore: a.painfulLossOpponentScore,
       revengeAchieved: a.revengeAchieved,
       lastMatchupSeason: a.lastMatchupSeason,
-      loreSentence: null, // populated separately
+      loreSentence: null,
+      ownerName: nameOf.get(focalCanon) || undefined,
       rivalPlayoffWins: rivalProfile?.career.playoffWins,
       rivalPlayoffLosses: rivalProfile?.career.playoffLosses,
-      avgRodPF,
+      avgOwnerPF,
       avgRivalPF,
       biggestRodWinMargin: a.biggestRodWinMargin,
       biggestRodWinSeason: a.biggestRodWinSeason,
@@ -445,30 +415,31 @@ export async function computeRivalryScores(): Promise<RivalryPair[]> {
  * Result is cached in the DB.
  */
 export async function generateLoreSentence(pair: RivalryPair): Promise<string> {
+  const ownerLabel = pair.ownerName ?? "The focal owner";
   const totalRSGames = pair.h2hWins + pair.h2hLosses + pair.h2hTies;
 
   // Season-by-season breakdown string (last 6 seasons max)
   const sbLines = (pair.seasonBreakdown ?? [])
     .slice(-6)
-    .map(s => `${s.season}: Rod ${s.rodWins}-${s.rodLosses}`)
+    .map(s => `${s.season}: ${ownerLabel} ${s.rodWins}-${s.rodLosses}`)
     .join(', ');
 
   // Scoring context
-  const scoringCtx = (pair.avgRodPF && pair.avgRivalPF)
-    ? `Rod averages ${pair.avgRodPF} pts vs ${pair.avgRivalPF} pts allowed in these matchups.`
+  const scoringCtx = (pair.avgOwnerPF && pair.avgRivalPF)
+    ? `${ownerLabel} averages ${pair.avgOwnerPF} pts vs ${pair.avgRivalPF} pts allowed in these matchups.`
     : '';
 
   // Biggest win/loss lines
   const bigWinLine = (pair.biggestRodWinMargin && pair.biggestRodWinSeason)
-    ? `Rod's biggest win: ${pair.biggestRodWinRodScore}–${pair.biggestRodWinRivalScore} in ${pair.biggestRodWinSeason} (+${pair.biggestRodWinMargin} pts).`
+    ? `${ownerLabel}'s biggest win: ${pair.biggestRodWinRodScore}–${pair.biggestRodWinRivalScore} in ${pair.biggestRodWinSeason} (+${pair.biggestRodWinMargin} pts).`
     : '';
   const bigLossLine = (pair.biggestRodLossMargin && pair.biggestRodLossSeason)
-    ? `Rod's biggest loss: ${pair.biggestRodLossRodScore}–${pair.biggestRodLossRivalScore} in ${pair.biggestRodLossSeason} (-${pair.biggestRodLossMargin} pts).`
+    ? `${ownerLabel}'s biggest loss: ${pair.biggestRodLossRodScore}–${pair.biggestRodLossRivalScore} in ${pair.biggestRodLossSeason} (-${pair.biggestRodLossMargin} pts).`
     : '';
 
   // Streak context
   const streakLine = (pair.currentStreakLength && pair.currentStreakLength >= 2)
-    ? `Rod is currently on a ${pair.currentStreakLength}-game ${pair.currentStreakDirection} streak vs ${pair.rivalName}.`
+    ? `${ownerLabel} is currently on a ${pair.currentStreakLength}-game ${pair.currentStreakDirection} streak vs ${pair.rivalName}.`
     : '';
   const longestStreakLine = [
     pair.longestWinStreak && pair.longestWinStreak >= 3 ? `Longest win streak: ${pair.longestWinStreak} in a row.` : '',
@@ -484,8 +455,8 @@ export async function generateLoreSentence(pair: RivalryPair): Promise<string> {
   const prompt = `You are writing flavor text for a fantasy football rivalry tracker. Write exactly ONE sentence (max 30 words) that captures the emotional essence of this rivalry. Be dramatic, specific, and personal. Reference actual scores or seasons when they make the sentence more vivid. Do NOT use generic phrases like "fierce rivalry" or "heated battle."
 
 Rivalry data:
-- Rod Sellers vs ${pair.rivalName}
-- All-time regular-season H2H: Rod ${pair.h2hWins}W-${pair.h2hLosses}L-${pair.h2hTies}T (${totalRSGames} games)
+- ${ownerLabel} vs ${pair.rivalName}
+- All-time regular-season H2H: ${ownerLabel} ${pair.h2hWins}W-${pair.h2hLosses}L-${pair.h2hTies}T (${totalRSGames} games)
 - Playoff eliminations by ${pair.rivalName}: ${pair.playoffEliminations}
 ${rivalPoLine}
 - Close losses (< 5 pts): ${pair.closeLossCount}
@@ -497,7 +468,7 @@ ${streakLine}
 ${longestStreakLine}
 ${sbLines ? `- Season breakdown: ${sbLines}` : ''}
 ${pair.painfulLossSeason ? `- Most painful loss: ${pair.painfulLossSeason} season, lost by ${pair.painfulLossMargin} pts (rival scored ${pair.painfulLossOpponentScore})` : ''}
-${pair.revengeAchieved ? '- Rod got revenge in the most recent matchup' : '- Rod has not yet gotten revenge'}
+${pair.revengeAchieved ? `- ${ownerLabel} got revenge in the most recent matchup` : `- ${ownerLabel} has not yet gotten revenge`}
 
 Output: One sentence only. No quotes. No explanation.`;
 
@@ -508,7 +479,7 @@ Output: One sentence only. No quotes. No explanation.`;
     const text = (response?.choices?.[0]?.message?.content as string) || "";
     return text.trim().replace(/^["']|["']$/g, "");
   } catch {
-    return `${pair.rivalName} has been a thorn in Rod's side for ${pair.h2hLosses} losses.`;
+    return `${pair.rivalName} has been a thorn for ${pair.h2hLosses} losses.`;
   }
 }
 
@@ -518,17 +489,26 @@ Output: One sentence only. No quotes. No explanation.`;
  * Upsert rivalry scores into the DB.
  * Generates lore sentences for new/materially changed pairs.
  */
-export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> {
+export async function persistRivalryScores(pairs: RivalryPair[], leagueId: string): Promise<void> {
   const db = await getDb();
   if (!db || pairs.length === 0) return;
 
   for (const pair of pairs) {
     // Check if existing score is materially different (>10 pts) to decide lore regen
-    const [existing] = await db
-      .select({ rivalryScore: rivalryScores.rivalryScore, loreSentence: rivalryScores.loreSentence })
-      .from(rivalryScores)
-      .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId)))
-      .limit(1);
+    let existing: { rivalryScore: number | null; loreSentence: string | null } | undefined;
+    try {
+      [existing] = await db
+        .select({ rivalryScore: rivalryScores.rivalryScore, loreSentence: rivalryScores.loreSentence })
+        .from(rivalryScores)
+        .where(and(eq(rivalryScores.memberId, pair.memberId), eq(rivalryScores.rivalId, pair.rivalId), eq(rivalryScores.leagueId, leagueId)))
+        .limit(1);
+    } catch (e) {
+      if (isMissingTableError(e)) {
+        console.warn("[enrichment] persistRivalryScores: rivalry_scores table absent, skipping rivalry-score persistence.");
+        return;
+      }
+      throw e;
+    }
 
     let loreSentence = existing?.loreSentence ?? null;
     let loreGeneratedAt: Date | null = null;
@@ -545,6 +525,7 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
       .insert(rivalryScores)
       .values({
         memberId: pair.memberId,
+        leagueId,
         rivalId: pair.rivalId,
         rivalName: pair.rivalName,
         rivalryScore: pair.rivalryScore,
@@ -592,15 +573,24 @@ export async function persistRivalryScores(pairs: RivalryPair[]): Promise<void> 
 /**
  * Read cached rivalry scores from the DB for a given memberId.
  */
-export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryPair[]> {
+export async function getRivalryScoresFromDb(memberId: string, leagueId: string): Promise<RivalryPair[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const rows = await db
-    .select()
-    .from(rivalryScores)
-    .where(eq(rivalryScores.memberId, memberId))
-    .orderBy(rivalryScores.rivalryScore);
+  let rows: Array<typeof rivalryScores.$inferSelect>;
+  try {
+    rows = await db
+      .select()
+      .from(rivalryScores)
+      .where(and(eq(rivalryScores.memberId, memberId), eq(rivalryScores.leagueId, leagueId)))
+      .orderBy(rivalryScores.rivalryScore);
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getRivalryScoresFromDb: rivalry_scores table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 
   return rows
     .map((r) => ({
@@ -634,8 +624,9 @@ export async function getRivalryScoresFromDb(memberId: string): Promise<RivalryP
  * Full pipeline: compute → persist → return.
  * Called from the scheduled refresh and manual refresh procedures.
  */
-export async function refreshRivalryScores(): Promise<RivalryPair[]> {
-  const pairs = await computeRivalryScores();
-  await persistRivalryScores(pairs);
+export async function refreshRivalryScores(userId?: number, leagueIdInput?: string): Promise<RivalryPair[]> {
+  const { leagueId } = await resolveActiveLeagueId({ user: userId != null ? { id: userId } : undefined }, leagueIdInput ?? null, undefined);
+  const pairs = await computeRivalryScores(userId, leagueId);
+  await persistRivalryScores(pairs, leagueId);
   return pairs;
 }

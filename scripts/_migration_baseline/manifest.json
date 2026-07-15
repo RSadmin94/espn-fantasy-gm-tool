@@ -1,0 +1,86 @@
+{
+  "captureTimestamp": "2026-07-10T22:36:05.615Z",
+  "league": "457622",
+  "season": 2026,
+  "userId": 1,
+  "outDir": "C:\\Users\\RODERICK\\Projects\\espn-fantasy-gm-tool\\scripts\\_migration_baseline",
+  "engines": [
+    {
+      "engine": "owner_dna",
+      "file": "owner_dna.json",
+      "status": "ok",
+      "hash": "3b288e6489f51381bd346b3a2ad47f7a27a49a00c783ccc46ab11e0f104a87c8"
+    },
+    {
+      "engine": "fear_index",
+      "file": "fear_index.json",
+      "status": "ok",
+      "hash": "e17502f774be4b50cba490951700501cfb9bb428c6b3681b8e2088fdfc798392"
+    },
+    {
+      "engine": "rivalry_rankings",
+      "file": "rivalry_rankings.json",
+      "status": "ok",
+      "hash": "c2b0f38d11420e03c9c08d655286666b972a92422ac7cdd31f8c1fda8cd4819f"
+    },
+    {
+      "engine": "career_report",
+      "file": "career_report.json",
+      "status": "ok",
+      "hash": "136449654f91b39e9c644bbbfa832d4b9dafedf0fb3735da774e7343bd5aa0c5"
+    },
+    {
+      "engine": "draft_war_room",
+      "file": "draft_war_room.json",
+      "status": "ok",
+      "hash": "da998edb9254b75b90f1f938ac9bce66364fb6772dec596eff42011aeb3b7187"
+    },
+    {
+      "engine": "keeper_valuation",
+      "file": "keeper_valuation.json",
+      "status": "ok",
+      "hash": "4636a7363a6e15af06efce6d5bfc01177908b3c551b90f58d129759777ae7d88"
+    },
+    {
+      "engine": "weekly_storylines",
+      "file": "weekly_storylines.json",
+      "status": "ok",
+      "hash": "0fb6abd9df2415c6be1b29efd408544dc4f7552b687156cdcf843c5c24e36ed4"
+    },
+    {
+      "engine": "draft_grades",
+      "file": "draft_grades.json",
+      "status": "ok",
+      "hash": "0e84b707728a3a81b1d1ccdc9c86cc1814cd2b387623926e3326d0e198ee5a25"
+    },
+    {
+      "engine": "championship_authority",
+      "file": "championship_authority.json",
+      "status": "ok",
+      "hash": "ef39224e45cfc1fca5e914b2d1e659735c05fb3c484e845f0c4b4012113cb777"
+    },
+    {
+      "engine": "h2h_authority",
+      "file": "h2h_authority.json",
+      "status": "ok",
+      "hash": "203640019dc67bea8f4b0f3e3d7264416859e8f906a434c26cc7d230fa3c34ee"
+    }
+  ],
+  "errors": [],
+  "combinedPayloadHash": "79ee37c89e77ca0c5ef1cb022c87bdc3e086486b60ac38acc16eb4161668c554",
+  "baselineVersion": "phase-1c-v2",
+  "supersedes": "migration-baseline/phase-1c-step-0",
+  "reason": "Draft War Room snapshot normalization for proven volatile fields (poolTop25.adp integer rounding)",
+  "excludedOrNormalizedFields": [
+    {
+      "engine": "draft_war_room",
+      "path": "payload.poolTop25[].adp",
+      "normalization": "round to nearest integer before hash",
+      "classification": "time-dependent (live ESPN ADP feed micro-drift)",
+      "source": "draftWarRoomRouter.getDraftWarRoomData → availablePool → ESPN ADP cache (espnAdpByPlayerId)",
+      "userVisibleImpact": "Pool rank/order and marketValue unchanged; raw ADP display may differ by ≤0.05 in UI"
+    }
+  ],
+  "okCount": 10,
+  "errorCount": 0
+}

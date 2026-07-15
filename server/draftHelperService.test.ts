@@ -275,7 +275,7 @@ describe("buildPickRecommendationPrompt", () => {
     expect(prompt).toContain("Round 3");
   });
 
-  it("includes Rod's current roster in the prompt", () => {
+  it("includes the focal owner's current roster in the prompt", () => {
     const prompt = buildPickRecommendationPrompt({
       currentOverall: 15,
       currentRound: 2,
@@ -290,6 +290,43 @@ describe("buildPickRecommendationPrompt", () => {
       positionRun: null,
     });
     expect(prompt).toContain("Patrick Mahomes");
+  });
+
+  it("uses the resolved focal owner name in the roster header when provided", () => {
+    const prompt = buildPickRecommendationPrompt({
+      currentOverall: 15,
+      currentRound: 2,
+      pickInRound: 1,
+      totalTeams: 14,
+      totalRounds: 15,
+      rodRoster: [],
+      positionalNeeds: [],
+      topAvailable: [],
+      ownerTendencies: [],
+      recentPicks: [],
+      positionRun: null,
+      focalOwnerName: "Jan Graham",
+    });
+    expect(prompt).toContain("JAN GRAHAM'S CURRENT ROSTER");
+    expect(prompt).not.toContain("ROD'S CURRENT ROSTER");
+  });
+
+  it("falls back to a neutral roster header when no focal owner is provided", () => {
+    const prompt = buildPickRecommendationPrompt({
+      currentOverall: 15,
+      currentRound: 2,
+      pickInRound: 1,
+      totalTeams: 14,
+      totalRounds: 15,
+      rodRoster: [],
+      positionalNeeds: [],
+      topAvailable: [],
+      ownerTendencies: [],
+      recentPicks: [],
+      positionRun: null,
+    });
+    expect(prompt).toContain("YOUR CURRENT ROSTER");
+    expect(prompt).not.toContain("ROD'S");
   });
 
   it("includes position run alert when present", () => {

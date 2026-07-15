@@ -4,6 +4,10 @@
  * Shared helper that builds the GM Advisor system-prompt context string.
  * Used by both the tRPC advisor.chat mutation and the streaming SSE endpoint
  * so the context logic lives in exactly one place.
+ *
+ * Career history **🏆** counts use `computeAllTrophyHistory` (ChampionshipAuthority),
+ * not ESPN playoff-bracket winners alone. Runner-up **🥈** in that block still comes
+ * from the winners-bracket final in each season's combined cache where available.
  */
 
 import {
@@ -13,6 +17,10 @@ import {
   normalizeDraftPicks,
   normalizeDraftOrder,
 } from "./espnService";
+import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
+import {
+  getSeasonTeams,
+} from "./leagueDataReads";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -20,46 +28,76 @@ import {
   type PlayerRow,
 } from "./analytics";
 import { buildAdvisorInjuryContext } from "./injuryAnalytics";
-import { getCachedView, getChatHistory } from "./db";
+import { getCachedView, getChatHistory, resolveActiveLeagueId } from "./db";
 import { memCache } from "./memCache";
 import type { Message } from "./_core/llm";
+import {
+  resolveLeaguePromptContext,
+  buildLeaguePromptContext,
+} from "./leaguePromptContext";
 
-const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
-
-async function getSeasonData(season: number) {
-  return memCache(`seasonData:${season}`, 10 * 60_000, async () => {
-    const cached = await getCachedView(season, "combined");
+async function getAdvisorSeasonData(season: number, userId?: number) {
+  const { leagueId: lid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    season,
+  );
+  return memCache(`seasonData:${lid}:${season}`, 10 * 60_000, async () => {
+    const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
 }
 
 /**
  * Build the full system-prompt context string for the GM Advisor.
- * This is identical to the inline logic in routers.ts advisor.chat,
- * extracted here so the streaming endpoint can reuse it without duplication.
+ * Used by advisor.chat and the streaming SSE handler so prompt context stays in one place.
  *
  * @param season  ESPN season year (e.g. 2025)
  * @param gmMemoryBlock  Optional pre-built GM memory block to inject
+ * @param userId  Authenticated user — resolves correct league cache
  */
 export async function buildAdvisorSystemPrompt(
   season: number,
-  gmMemoryBlock?: string
+  gmMemoryBlock?: string,
+  userId?: number
 ): Promise<string> {
-  let leagueContext = `You are the War Room AI — the ruthlessly sharp, entertainingly honest GM advisor for "ATLANTAS FINEST FF" (League ID: ${LEAGUE_ID}), an 18-season keeper league (2009–2026) with 14 teams.
-Format: Head-to-Head Points, PPR, Snake Draft, 1 keeper per team. Scoring: QB, RB, WR, TE, K, D/ST. Playoffs: 7 teams.
+  const promptCtx = await resolveLeaguePromptContext(userId, season);
+  const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
+  const leagueIdRef = promptCtx.leagueId?.trim()
+    ? ` Active league id: ${promptCtx.leagueId.trim()}.`
+    : "";
+
+  let leagueContext = `You are the War Room AI — the ruthlessly sharp, entertainingly honest GM advisor for ${leagueDescriptor}, ${historyClause}.${leagueIdRef}
+The primary manager you are advising is ${focalClause}.
 
 Personality: You are confident, direct, and occasionally savage — like a front-office analyst who has seen every bad trade and every panic waiver pickup. You call out bad decisions without sugarcoating, celebrate smart moves, and always back your takes with actual data. You use vivid language and sports-media energy (think The Ringer meets a war room whiteboard). Never be generic. Never hedge. If a trade is a robbery, say so. If a roster is a mess, name the problem. If a pickup is a no-brainer, make it sound like one.
 
-Rules: Always reference actual team names, owner names, and player names. Be concise — no padding, no filler. Lead with the verdict, then back it up with data. Use numbers when you have them.`;
+Rules: Always reference actual team names, owner names, and player names when present in the data below. Be concise — no padding, no filler. Lead with the verdict, then back it up with data. Use numbers when you have them.`;
 
-  // Inject GM memory if provided
-  if (gmMemoryBlock) {
-    leagueContext += "\n\n" + gmMemoryBlock;
+  if (gmMemoryBlock?.trim()) {
+    leagueContext += `\n\n## GM PROFILE (${focalClause})\n${gmMemoryBlock.trim()}`;
   }
 
-  const data = await getSeasonData(season);
+  const data = await getAdvisorSeasonData(season, userId);
   if (data) {
-    const teams = normalizeTeams(data);
+    const leagueKey = String(promptCtx.leagueId ?? "").trim().slice(0, 32);
+    const seasonRef = leagueKey ? { leagueId: leagueKey, season } : null;
+    const cacheTeams = normalizeTeams(data);
+    const teamsRes = seasonRef ? await getSeasonTeams(seasonRef) : { count: 0, rows: [] as Record<string, unknown>[] };
+    const cacheTeamNameById = new Map(
+      cacheTeams.map((t) => [t.teamId as number, t.teamName as string]),
+    );
+    const teams = (
+      teamsRes.count > 0
+        ? teamsRes.rows.map((row) => ({
+            ...row,
+            teamName:
+              cacheTeamNameById.get(row.teamId as number) ||
+              (row.teamName as string) ||
+              String((row as Record<string, unknown>).name || ""),
+          }))
+        : cacheTeams
+    ) as ReturnType<typeof normalizeTeams>;
     const settings = normalizeSettings(data);
     const teamOwnerMapAdvisor: Record<number, string> = {};
     for (const t of teams) teamOwnerMapAdvisor[t.teamId as number] = t.owners as string;
@@ -140,7 +178,7 @@ Rules: Always reference actual team names, owner names, and player names. Be con
   // ── Full career history block (all cached seasons) ──────────────────────────
   try {
     const { getAllCachedSeasons, getCachedView } = await import("./db");
-    const allSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const allSeasons = (await getAllCachedSeasons(undefined, userId)).sort((a, b) => a - b);
     if (allSeasons.length > 0) {
       // Aggregate career W/L, championships, playoff appearances per owner
       const careerMap = new Map<string, {
@@ -156,15 +194,15 @@ Rules: Always reference actual team names, owner names, and player names. Be con
       }>();
 
       for (const s of allSeasons) {
-        const row = await getCachedView(s, 'combined');
+        const row = await getCachedView(s, 'combined', undefined, { userId });
         if (!row) continue;
         const d = row.payload as Record<string, unknown>;
         const members = (d.members as Record<string, unknown>[]) ?? [];
         const teams = (d.teams as Record<string, unknown>[]) ?? [];
         const schedule = (d.schedule as Record<string, unknown>[]) ?? [];
 
-        // Determine champion from completed winners bracket
-        let championTeamId: number | null = null;
+        // Runner-up for this season (winners-bracket final loser) — still from ESPN schedule;
+        // championship counts are applied from ChampionshipAuthority via `computeAllTrophyHistory` below.
         let runnerUpTeamId: number | null = null;
         const completedPlayoffs = (schedule as Record<string, unknown>[]).filter(
           (m) => m.playoffTierType === 'WINNERS_BRACKET' && m.winner && m.winner !== 'UNDECIDED'
@@ -174,10 +212,8 @@ Rules: Always reference actual team names, owner names, and player names. Be con
             (a.matchupPeriodId as number) >= (b.matchupPeriodId as number) ? a : b
           );
           if (champMatchup.winner === 'HOME') {
-            championTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
             runnerUpTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
           } else if (champMatchup.winner === 'AWAY') {
-            championTeamId = (champMatchup.away as Record<string, unknown>)?.teamId as number ?? null;
             runnerUpTeamId = (champMatchup.home as Record<string, unknown>)?.teamId as number ?? null;
           }
         }
@@ -195,7 +231,6 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           const rankFinal = (t.rankFinal as number) ?? 0;
           const playoffSeed = (t.playoffSeed as number) ?? 0;
           const madePlayoffs = playoffSeed > 0;
-          const isChamp = t.id === championTeamId;
           const isRunnerUp = t.id === runnerUpTeamId;
 
           if (!careerMap.has(primaryOwner)) {
@@ -206,7 +241,6 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           c.losses += losses;
           c.seasons++;
           if (madePlayoffs) c.playoffAppearances++;
-          if (isChamp) c.championships++;
           if (isRunnerUp) c.runnerUps++;
           if (rankFinal > 0 && rankFinal < c.bestFinish) c.bestFinish = rankFinal;
           if (rankFinal > c.worstFinish) c.worstFinish = rankFinal;
@@ -240,12 +274,29 @@ Rules: Always reference actual team names, owner names, and player names. Be con
         }
       }
 
+      let advisorTrophyMap: Map<string, import("./championshipHistoryBuilder").OwnerTrophyRecord> | null = null;
+      try {
+        const { computeAllTrophyHistory } = await import("./championshipHistoryBuilder");
+        advisorTrophyMap = await computeAllTrophyHistory(undefined, userId);
+        const trophyRecForMember = (memberId: string) => {
+          const s0 = memberId.trim();
+          const bare = s0.replace(/^\{|\}$/g, "");
+          const braced = bare.startsWith("{") ? s0 : `{${bare}}`;
+          return advisorTrophyMap!.get(s0) ?? advisorTrophyMap!.get(bare) ?? advisorTrophyMap!.get(braced);
+        };
+        for (const [memberId, c] of careerMap) {
+          c.championships = trophyRecForMember(memberId)?.championships ?? 0;
+        }
+      } catch {
+        advisorTrophyMap = null;
+      }
+
       if (careerMap.size > 0) {
         const entries = Array.from(careerMap.values())
           .filter(c => c.seasons >= 1)
           .sort((a, b) => b.championships - a.championships || b.wins - a.wins);
 
-        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth):`;
+        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth). 🏆× = ChampionshipAuthority (same as trophy block below); 🥈× = ESPN winners-bracket runner-up when available.`;
         for (const c of entries) {
           const winPct = (c.wins + c.losses) > 0 ? ((c.wins / (c.wins + c.losses)) * 100).toFixed(0) : '0';
           const champStr = c.championships > 0 ? ` 🏆×${c.championships}` : '';
@@ -270,13 +321,14 @@ Rules: Always reference actual team names, owner names, and player names. Be con
           leagueContext += `\nPLAYOFF MACHINES: ${dominantPlayoff.map(p => `${p.name} (${p.playoffAppearances}/${p.seasons} seasons)`).join(', ')} — consistently dangerous.`;
         }
 
-        // ── Detailed trophy history with exact years ──────────────────────────
+        // ── Detailed trophy history (same `computeAllTrophyHistory` map as career 🏆) ──
         try {
-          const { computeAllTrophyHistory, buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
-          const trophyMap = await computeAllTrophyHistory();
-          const trophyBlock = buildLeagueTrophyLeaderboard(trophyMap);
-          if (trophyBlock) {
-            leagueContext += `\n\n${trophyBlock}`;
+          const { buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
+          if (advisorTrophyMap && advisorTrophyMap.size > 0) {
+            const trophyBlock = buildLeagueTrophyLeaderboard(advisorTrophyMap);
+            if (trophyBlock) {
+              leagueContext += `\n\n${trophyBlock}`;
+            }
           }
         } catch {
           // Trophy history unavailable — counts already shown above
@@ -290,9 +342,9 @@ Rules: Always reference actual team names, owner names, and player names. Be con
   // ── Enriched H2H context for current week's opponent ──────────────────────
   try {
     const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import("./h2hContextBuilder");
-    const rodId = await resolveRodMemberId();
-    if (rodId && data) {
-      // Find Rod's current-week opponent from the active season schedule
+    const focalMemberId = await resolveRodMemberId(userId);
+    if (focalMemberId && data) {
+      // Focal manager's current-week opponent from the active season schedule
       const teams = (data as Record<string, unknown>).teams as Record<string, unknown>[] ?? [];
       const schedule = (data as Record<string, unknown>).schedule as Record<string, unknown>[] ?? [];
       const settings2 = (data as Record<string, unknown>).settings as Record<string, unknown> ?? {};
@@ -300,40 +352,41 @@ Rules: Always reference actual team names, owner names, and player names. Be con
       const currentPeriod = (settings2.currentMatchupPeriod as number) ?? 0;
       const playoffStart2 = ((schedSettings2.matchupPeriodCount as number) ?? 14) + 1;
       if (currentPeriod > 0 && currentPeriod < playoffStart2) {
-        // Find Rod's team ID
-        const rodTeam = teams.find(t => (t.primaryOwner as string) === rodId || ((t.owners as string[])?.[0]) === rodId);
-        const rodTeamId = rodTeam?.id as number | undefined;
-        if (rodTeamId) {
+        const focalTeam = teams.find(t => (t.primaryOwner as string) === focalMemberId || ((t.owners as string[])?.[0]) === focalMemberId);
+        const focalTeamId = focalTeam?.id as number | undefined;
+        if (focalTeamId) {
           const currentMatchup = schedule.find(m => {
             const mm = m as Record<string, unknown>;
             if ((mm.matchupPeriodId as number) !== currentPeriod) return false;
             const homeId = (mm.home as Record<string, unknown>)?.teamId as number;
             const awayId = (mm.away as Record<string, unknown>)?.teamId as number;
-            return homeId === rodTeamId || awayId === rodTeamId;
+            return homeId === focalTeamId || awayId === focalTeamId;
           });
           if (currentMatchup) {
             const mm = currentMatchup as Record<string, unknown>;
             const homeId = (mm.home as Record<string, unknown>)?.teamId as number;
             const awayId = (mm.away as Record<string, unknown>)?.teamId as number;
-            const oppTeamId = homeId === rodTeamId ? awayId : homeId;
+            const oppTeamId = homeId === focalTeamId ? awayId : homeId;
             // Find opponent's member ID
             const oppTeam = teams.find(t => (t.id as number) === oppTeamId);
             const oppMemberId = (oppTeam?.primaryOwner as string) || ((oppTeam?.owners as string[])?.[0] ?? "");
-            if (oppMemberId && oppMemberId !== rodId) {
+            if (oppMemberId && oppMemberId !== focalMemberId) {
               const members2 = (data as Record<string, unknown>).members as Record<string, unknown>[] ?? [];
               const oppMember = members2.find(m => (m.id as string) === oppMemberId);
               const oppName = oppMember ? `${oppMember.firstName || ""} ${oppMember.lastName || ""}`.trim() || (oppMember.displayName as string) || oppMemberId : oppMemberId;
-              const rodMember = members2.find(m => (m.id as string) === rodId);
-              const rodName = rodMember ? `${rodMember.firstName || ""} ${rodMember.lastName || ""}`.trim() || "Rod Sellers" : "Rod Sellers";
-              const h2h = await computeRichH2H(rodId, oppMemberId, rodName, oppName);
+              const focalMember = members2.find(m => (m.id as string) === focalMemberId);
+              const focalDisplayName = focalMember
+                ? `${focalMember.firstName || ""} ${focalMember.lastName || ""}`.trim() || (focalMember.displayName as string) || focalClause
+                : focalClause;
+              const h2h = await computeRichH2H(focalMemberId, oppMemberId, focalDisplayName, oppName, userId);
               if (h2h.rsTotalGames > 0) {
                 leagueContext += `\n\n## THIS WEEK'S OPPONENT — H2H HISTORY vs ${oppName.toUpperCase()} (treat as ground truth):\n`;
-                leagueContext += buildH2HPromptBlock(h2h, `Rod vs ${oppName}`);
+                leagueContext += buildH2HPromptBlock(h2h, `${focalDisplayName} vs ${oppName}`);
               }
               // Add opponent's trophy/prestige history
               try {
                 const { computeAllTrophyHistory, buildTrophyPromptBlock } = await import('./championshipHistoryBuilder');
-                const trophyMap = await computeAllTrophyHistory();
+                const trophyMap = await computeAllTrophyHistory(undefined, userId);
                 const oppTrophy = trophyMap.get(oppMemberId);
                 if (oppTrophy) {
                   leagueContext += `\n\n## THIS WEEK'S OPPONENT — TROPHY HISTORY:\n`;
@@ -355,9 +408,9 @@ Rules: Always reference actual team names, owner names, and player names. Be con
   try {
     const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
-    const managerRawData = await buildManagerRawData();
+    const managerRawData = await buildManagerRawData(userId);
     if (managerRawData.length > 0) {
-      const dnaProfiles = calcLeagueDNA(managerRawData);
+      const dnaProfiles = calcLeagueDNA(managerRawData, focalClause);
       const dnaBlock = buildDNAPromptBlock(dnaProfiles);
       leagueContext += "\n\n" + dnaBlock;
     }
@@ -371,28 +424,37 @@ Rules: Always reference actual team names, owner names, and player names. Be con
       // otherwise use season+1 (e.g. active=2025, calendar=2026 → upcoming=2026).
       // This will work correctly at every season rollover.
       const upcomingDraftSeason = season >= new Date().getFullYear() ? season : season + 1;
-      const upcomingDraftData = await getSeasonData(upcomingDraftSeason);
-      const draftData = upcomingDraftData ?? await getSeasonData(season);
+      const upcomingDraftData = await getAdvisorSeasonData(upcomingDraftSeason, userId);
+      const draftData = upcomingDraftData ?? await getAdvisorSeasonData(season, userId);
       const draftLabelYear = upcomingDraftData ? upcomingDraftSeason : season;
       if (draftData) {
         const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
         const pickOrder = draftOrderData.pickOrder || [];
+        const draftKeeperSlots = readKeeperSlotsPerTeamFromPayload(draftData as Record<string, unknown>);
+        const isKeeperLeagueDraft = keepersEnabledFromSlots(draftKeeperSlots);
         if (pickOrder.length > 0) {
           const draftDateMs = draftOrderData.draftDate as number;
           const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
           leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
-          leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it.`;
+          if (isKeeperLeagueDraft) {
+            leagueContext += `\nSnake Draft, ${draftKeeperSlots} keeper slot(s) per team (ESPN). Use this EXACT order — do NOT contradict it.`;
+          } else {
+            leagueContext += `\nRedraft league — ESPN reports ${draftKeeperSlots ?? 0} keeper slot(s) per team. Use this EXACT draft order — do NOT contradict it.`;
+          }
           leagueContext += `\nDraft Date: ${draftDateStr}`;
           leagueContext += `\nRound 1 Pick Order: ${pickOrder.map((p: Record<string, unknown>) => `#${p.position} ${p.owners}`).join(", ")}`;
-          leagueContext += `\n(Round 2 reverses: #14 picks first, etc.)`;
+          const nTeams = promptCtx.teamCount > 0 ? promptCtx.teamCount : pickOrder.length;
+          leagueContext += `\n(Round 2 reverses snake order${nTeams > 0 ? ` in this ${nTeams}-team league` : ""} — last slot in round 1 picks first in round 2.)`;
         }
+        if (isKeeperLeagueDraft) {
         const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
         const keepers = (picks2025 as Array<Record<string, unknown>>).filter(p => p.keeper === true || p.keeper === 1);
         if (keepers.length > 0) {
-          leagueContext += `\n\n2025 KEEPER PICKS (players kept from prior season):`;
+          leagueContext += `\n\n${draftLabelYear} KEEPER PICKS (players kept from prior season):`;
           for (const k of keepers) {
             leagueContext += `\n  Round ${k.roundId}: ${k.playerName} (${k.position}) → kept by ${k.ownerName || k.teamName}`;
           }
+        }
         }
       }
     } catch {
@@ -411,10 +473,11 @@ export async function buildAdvisorMessages(opts: {
   season: number;
   userMessage: string;
   gmMemoryBlock?: string;
+  leagueId: string;
 }): Promise<Message[]> {
-  const { userId, season, userMessage, gmMemoryBlock } = opts;
-  const systemPrompt = await buildAdvisorSystemPrompt(season, gmMemoryBlock);
-  const history = await getChatHistory(userId, season);
+  const { userId, season, userMessage, gmMemoryBlock, leagueId } = opts;
+  const systemPrompt = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+  const history = await getChatHistory(userId, season, leagueId);
   return [
     { role: "system", content: systemPrompt },
     ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),

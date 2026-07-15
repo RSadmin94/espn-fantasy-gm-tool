@@ -1,0 +1,43 @@
+══════════════════════════════════════════════════════════════
+              QB TIMING DIAGNOSTIC REPORT (read-only)
+══════════════════════════════════════════════════════════════
+Generated: 2026-07-05T16:59:10.195Z
+League 457622 · Season 2026
+
+── League QB timing ──
+Historical avg first-QB round: 1.6
+Simulated avg first-QB round:  5.9
+Profile confidence: Medium
+Median first-QB pick: 71.5 (R6)
+Window: pick 38 – 100
+QB timing: median first-QB pick 71.5 (R6), window opens ~pick 38, soft close ~pick 100. 16 season(s), 84% labeled coverage, Medium confidence.
+
+── Owner gaps (hist → sim) ──
+Owner | Hist R | Sim R | Gap | Conf | QB seasons
+Steffon Bizzell | 2.2 | 9 | +6.8 | High | 5
+Nate West | 2.7 | 9 | +6.3 | High | 7
+Demetri Clark | 6.3 | 1 | -5.3 | High | 8
+LOZELL STYLES | 5.3 | 10 | +4.7 | High | 7
+Marlon Moore | 7.7 | 4 | -3.7 | High | 6
+Bruce Edwards | 7.5 | 4 | -3.5 | High | 6
+Randy Broner Jr | 5.1 | 8 | +2.9 | High | 7
+Rod Sellers | 4.6 | 2 | -2.6 | High | 5
+Christian Graham | 6.5 | 4 | -2.5 | High | 6
+Sheldon deRoux | 7.1 | 5 | -2.1 | High | 8
+
+── Watchlist & recommendations ──
+• Steffon Bizzell: hist R2.2 → sim R9 (pick 125 Trevor Lawrence). Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral.
+• Nate West: hist R2.7 → sim R9 (pick 113 Patrick Mahomes). Owner historically takes QB early; sim is late — investigate need-reach / DNA, not league-wide deferral.
+• Demetri Clark: hist R6.3 → sim R1 (pick 9 Josh Allen). Early QB in sim vs history and league median — likely CRITICAL need-reach; fix need engine before timing guard.
+• LOZELL STYLES: hist R5.3 → sim R10 (pick 138 Bo Nix). Sim QB later than history — check roster need urgency and close-decision DNA before league timing.
+• Marlon Moore: hist R7.7 → sim R4 (pick 50 Jalen Hurts). Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards.
+• Bruce Edwards: hist R7.5 → sim R4 (pick 43 Jayden Daniels). Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards.
+• Sheldon deRoux: hist R7.1 → sim R5 (pick 62 Jaxson Dart). Sim QB earlier than owner history — audit pick # and primaryFactor at first QB before adding guards.
+• Marcus Reese: hist R? → sim R3 (pick 40 Drake Maye). No historical QB sample — defer any timing guard; use league median only after data accrues.
+
+── Summary ──
+• League historical first-QB ~R1.6; sim ~R5.9.
+• League QB window (read-only profile): opens ~pick 38, median R6.
+• 10 owner(s) with |gap| ≥ 1.5 rounds; 8 on watchlist.
+• QB timing guards are experimental — diagnose need-reach and owner DNA before shipping league-wide rules.
+══════════════════════════════════════════════════════════════

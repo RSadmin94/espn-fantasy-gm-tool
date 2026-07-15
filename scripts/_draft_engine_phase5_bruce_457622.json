@@ -1,0 +1,459 @@
+{
+  "seed": 457622,
+  "season": 2026,
+  "draftOrder": [
+    "Mark Deroux",
+    "Steffon Bizzell",
+    "Marlon Moore",
+    "Rod Sellers",
+    "Marcus Reese",
+    "Sheldon deRoux",
+    "LOZELL STYLES",
+    "Tony Dorsey",
+    "Jan Graham",
+    "Bruce Edwards",
+    "Christian Graham",
+    "Demetri Clark",
+    "Nate West",
+    "Randy Broner Jr"
+  ],
+  "bruceRosterLegality": {
+    "skillLineupLegal": true,
+    "skillMissing": [],
+    "kFilled": true,
+    "dpFilled": true,
+    "dstFilled": true,
+    "poolGapNotes": [
+      "Kickers not in the ~190-name skill terrain pool — late-round K picks use draft-history fillers when available.",
+      "IDP (DP slot) not in skill terrain — late-round DP picks use draft-history IDP fillers when available."
+    ],
+    "honestSummary": "Roster can field a legal starting lineup for league 457622 rules."
+  },
+  "rosterRules": {
+    "starters": {
+      "QB": 1,
+      "RB": 1,
+      "WR": 2,
+      "TE": 1,
+      "FLEX": 2,
+      "K": 1,
+      "DP": 1,
+      "DST": 0,
+      "BENCH": 0,
+      "IR": 0
+    },
+    "source": "espn_reliable"
+  },
+  "brucePicks": [
+    {
+      "round": 1,
+      "overallPick": 10,
+      "player": "Christian McCaffrey",
+      "position": "RB",
+      "takenOver": [
+        "Nico Collins (WR)",
+        "George Pickens (WR)",
+        "Ja'Marr Chase (WR)"
+      ],
+      "winningDrive": "rbEarlyRound",
+      "winningDriveLabel": "early RB tilt",
+      "pickProbability": 0.1778581447377602,
+      "consideration": [
+        "Christian McCaffrey",
+        "Trey McBride",
+        "Josh Allen",
+        "Ja'Marr Chase",
+        "George Pickens",
+        "Nico Collins",
+        "Patrick Mahomes",
+        "Jared Goff",
+        "Jalen Hurts",
+        "Justin Herbert",
+        "Baker Mayfield",
+        "Matthew Stafford"
+      ]
+    },
+    {
+      "round": 2,
+      "overallPick": 19,
+      "player": "Chris Olave",
+      "position": "WR",
+      "takenOver": [
+        "A.J. Brown (WR)",
+        "George Pickens (WR)",
+        "Javonte Williams (RB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency",
+      "pickProbability": 0.13681131784940875,
+      "scoreDebug": {
+        "personalityUtility": 0.2151307770932198,
+        "valueContribution": -0.01874550248265959,
+        "needContribution": 0.011666666666666624,
+        "constructionUtility": 1.2000000000000002,
+        "finalUtility": 1.402926394377897,
+        "marginOverRunnerUp": 0
+      },
+      "consideration": [
+        "Trey McBride",
+        "Josh Allen",
+        "Jared Goff",
+        "Justin Herbert",
+        "George Pickens",
+        "Chris Olave",
+        "A.J. Brown",
+        "Patrick Mahomes",
+        "Javonte Williams",
+        "James Cook",
+        "Matthew Stafford",
+        "Kyle Pitts"
+      ]
+    },
+    {
+      "round": 3,
+      "overallPick": 38,
+      "player": "Trey McBride",
+      "position": "TE",
+      "takenOver": [
+        "Emeka Egbuka (WR)",
+        "Michael Pittman Jr. (WR)",
+        "Jaylen Waddle (WR)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster need",
+      "pickProbability": 0.07302422505554823,
+      "scoreDebug": {
+        "personalityUtility": -0.005832239102384127,
+        "valueContribution": -0.030730331938786215,
+        "needContribution": 0.025277777777777802,
+        "constructionUtility": 0.4,
+        "finalUtility": 0.4787068590000235,
+        "marginOverRunnerUp": -0.2698529369031082
+      },
+      "consideration": [
+        "Trey McBride",
+        "Josh Allen",
+        "Jared Goff",
+        "Justin Herbert",
+        "Tee Higgins",
+        "Jaylen Waddle",
+        "Michael Pittman Jr.",
+        "Javonte Williams",
+        "Emeka Egbuka",
+        "Trevor Lawrence",
+        "Jordan Love",
+        "Dalton Schultz"
+      ]
+    },
+    {
+      "round": 4,
+      "overallPick": 47,
+      "player": "Ladd McConkey",
+      "position": "WR",
+      "takenOver": [
+        "Justin Jefferson (WR)",
+        "Tee Higgins (WR)",
+        "D'Andre Swift (RB)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run",
+      "pickProbability": 0.14570026690809504,
+      "consideration": [
+        "Josh Allen",
+        "Jared Goff",
+        "Justin Herbert",
+        "Trevor Lawrence",
+        "Tee Higgins",
+        "Justin Jefferson",
+        "Ladd McConkey",
+        "D'Andre Swift",
+        "Jordan Love",
+        "C.J. Stroud",
+        "Chase Brown",
+        "TreVeyon Henderson"
+      ]
+    },
+    {
+      "round": 5,
+      "overallPick": 66,
+      "player": "CeeDee Lamb",
+      "position": "WR",
+      "takenOver": [
+        "Lamar Jackson (QB)",
+        "Davante Adams (WR)",
+        "Caleb Williams (QB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff",
+      "pickProbability": 0.06321028922751247,
+      "consideration": [
+        "Justin Herbert",
+        "Jordan Love",
+        "C.J. Stroud",
+        "Rico Dowdle",
+        "Lamar Jackson",
+        "Davante Adams",
+        "Caleb Williams",
+        "Saquon Barkley",
+        "Romeo Doubs",
+        "Quentin Johnston",
+        "Breece Hall",
+        "CeeDee Lamb"
+      ]
+    },
+    {
+      "round": 6,
+      "overallPick": 75,
+      "player": "Lamar Jackson",
+      "position": "QB",
+      "takenOver": [
+        "Tony Pollard (RB)",
+        "Quinshon Judkins (RB)",
+        "Brock Purdy (QB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft",
+      "pickProbability": 0.15703858644093158,
+      "consideration": [
+        "Justin Herbert",
+        "Jordan Love",
+        "Caleb Williams",
+        "Lamar Jackson",
+        "Christian Watson",
+        "Kenneth Walker III",
+        "Brock Purdy",
+        "Khalil Shakir",
+        "Jordan Addison",
+        "Quinshon Judkins",
+        "Tony Pollard",
+        "Drake London"
+      ]
+    },
+    {
+      "round": 7,
+      "overallPick": 94,
+      "player": "Rhamondre Stevenson",
+      "position": "RB",
+      "takenOver": [
+        "Aaron Jones Sr. (RB)",
+        "Aaron Jones (RB)",
+        "Bucky Irving (RB)"
+      ],
+      "winningDrive": "comfortAnchor",
+      "winningDriveLabel": "comfort re-draft",
+      "pickProbability": 0.1894752378413571,
+      "consideration": [
+        "Jordan Love",
+        "Caleb Williams",
+        "Aaron Rodgers",
+        "Joe Burrow",
+        "Bucky Irving",
+        "Aaron Jones Sr.",
+        "Aaron Jones",
+        "Rashee Rice",
+        "Rhamondre Stevenson",
+        "Jerry Jeudy",
+        "Terry McLaurin",
+        "Marvin Harrison Jr."
+      ]
+    },
+    {
+      "round": 8,
+      "overallPick": 103,
+      "player": "Tre Tucker",
+      "position": "WR",
+      "takenOver": [
+        "Terry McLaurin (WR)",
+        "Rashee Rice (WR)",
+        "Marvin Mims Jr. (WR)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run",
+      "pickProbability": 0.1365913143719298,
+      "consideration": [
+        "Jordan Love",
+        "Caleb Williams",
+        "Aaron Rodgers",
+        "Joe Burrow",
+        "Rashee Rice",
+        "Terry McLaurin",
+        "Aaron Jones",
+        "Tre Tucker",
+        "J.K. Dobbins",
+        "Geno Smith",
+        "Marvin Mims Jr.",
+        "Hollywood Brown"
+      ]
+    },
+    {
+      "round": 9,
+      "overallPick": 122,
+      "player": "Jordan Love",
+      "position": "QB",
+      "takenOver": [
+        "Garrett Wilson (WR)",
+        "Rashee Rice (WR)",
+        "Isiah Pacheco (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff",
+      "pickProbability": 0.01657278646633418,
+      "consideration": [
+        "Jordan Love",
+        "Caleb Williams",
+        "Aaron Rodgers",
+        "Rashee Rice",
+        "Alvin Kamara",
+        "Garrett Wilson",
+        "Jayden Daniels",
+        "Tua Tagovailoa",
+        "Ricky Pearsall",
+        "Isiah Pacheco",
+        "Kyler Murray",
+        "Travis Hunter"
+      ]
+    },
+    {
+      "round": 10,
+      "overallPick": 131,
+      "player": "Foyesade Oluokun (5)",
+      "position": "DP",
+      "takenOver": [
+        "Foyesade Oluokun (6) (DP)",
+        "Foyesade Oluokun (7) (DP)",
+        "Foyesade Oluokun (8) (DP)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "pickProbability": 1,
+      "forcedSlotFill": true,
+      "consideration": [
+        "Foyesade Oluokun (5)",
+        "Foyesade Oluokun (6)",
+        "Foyesade Oluokun (7)",
+        "Foyesade Oluokun (8)",
+        "Foyesade Oluokun (9)",
+        "Foyesade Oluokun (10)",
+        "Foyesade Oluokun (11)",
+        "Foyesade Oluokun (12)",
+        "Foyesade Oluokun (13)",
+        "Foyesade Oluokun (14)",
+        "Roquan Smith",
+        "Roquan Smith (2)"
+      ]
+    },
+    {
+      "round": 11,
+      "overallPick": 150,
+      "player": "Brandon Aubrey (10)",
+      "position": "K",
+      "takenOver": [
+        "Brandon Aubrey (11) (K)",
+        "Brandon Aubrey (12) (K)",
+        "Brandon Aubrey (13) (K)"
+      ],
+      "winningDrive": "need",
+      "winningDriveLabel": "roster slot fill (forced)",
+      "pickProbability": 1,
+      "forcedSlotFill": true,
+      "consideration": [
+        "Brandon Aubrey (10)",
+        "Brandon Aubrey (11)",
+        "Brandon Aubrey (12)",
+        "Brandon Aubrey (13)",
+        "Brandon Aubrey (14)",
+        "Chase McLaughlin",
+        "Chase McLaughlin (2)",
+        "Chase McLaughlin (3)",
+        "Chase McLaughlin (4)",
+        "Chase McLaughlin (5)",
+        "Chase McLaughlin (6)",
+        "Chase McLaughlin (7)"
+      ]
+    },
+    {
+      "round": 12,
+      "overallPick": 159,
+      "player": "Calvin Ridley",
+      "position": "WR",
+      "takenOver": [
+        "Joe Mixon (RB)",
+        "Odell Beckham Jr. (WR)",
+        "Alvin Kamara (RB)"
+      ],
+      "winningDrive": "herdFomo",
+      "winningDriveLabel": "joining the run",
+      "pickProbability": 0.07242630189795901,
+      "consideration": [
+        "Alvin Kamara",
+        "Ricky Pearsall",
+        "Tyreek Hill",
+        "Brandon Aiyuk",
+        "Joe Mixon",
+        "Odell Beckham Jr.",
+        "Malik Nabers",
+        "Diontae Johnson",
+        "Tank Dell",
+        "Amari Cooper",
+        "Calvin Ridley",
+        "Jayden Reed"
+      ]
+    },
+    {
+      "round": 13,
+      "overallPick": 178,
+      "player": "Trey Benson",
+      "position": "RB",
+      "takenOver": [
+        "Ezekiel Elliott (RB)",
+        "Jerick McKinnon (RB)",
+        "Gus Edwards (RB)"
+      ],
+      "winningDrive": "panic",
+      "winningDriveLabel": "tier urgency",
+      "pickProbability": 0.10988413793401969,
+      "consideration": [
+        "Tank Dell",
+        "Amari Cooper",
+        "Jayden Reed",
+        "Michael Thomas",
+        "Ezekiel Elliott",
+        "Tyler Lockett",
+        "Rondale Moore",
+        "James Conner",
+        "Gus Edwards",
+        "Trey Benson",
+        "DeAndre Hopkins",
+        "Jerick McKinnon"
+      ]
+    },
+    {
+      "round": 14,
+      "overallPick": 187,
+      "player": "Rondale Moore",
+      "position": "WR",
+      "takenOver": [
+        "Najee Harris (RB)",
+        "Tank Bigsby (RB)",
+        "James Conner (RB)"
+      ],
+      "winningDrive": "scarcityTierCliff",
+      "winningDriveLabel": "tier cliff",
+      "pickProbability": 0.05970627778787702,
+      "consideration": [
+        "Tank Dell",
+        "Amari Cooper",
+        "Jayden Reed",
+        "Rondale Moore",
+        "James Conner",
+        "Tank Bigsby",
+        "Tyler Lockett",
+        "Brandin Cooks",
+        "DeAndre Hopkins",
+        "Christian Kirk",
+        "Curtis Samuel",
+        "Najee Harris"
+      ]
+    }
+  ]
+}

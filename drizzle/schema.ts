@@ -6,9 +6,11 @@ import {
   mysqlEnum,
   mysqlTable,
   text,
+  longtext,
   timestamp,
   varchar,
   json,
+  decimal,
   index,
   uniqueIndex,
 } from "drizzle-orm/mysql-core";
@@ -30,12 +32,18 @@ export const users = mysqlTable("users", {
   subscriptionStatus: mysqlEnum("subscriptionStatus", ["free", "trialing", "active", "past_due", "canceled"]).default("free").notNull(),
   trialStartedAt: timestamp("trialStartedAt"),
   currentPeriodEnd: timestamp("currentPeriodEnd"),
+  /** Active Stripe price id (rivals/league × month/year). */
+  subscriptionPriceId: varchar("subscriptionPriceId", { length: 128 }),
+  /** Billing interval for the active subscription. */
+  subscriptionInterval: mysqlEnum("subscriptionInterval", ["month", "year"]),
+  /** Paid tier: rivals intelligence vs league commissioner suite. */
+  subscriptionPlan: mysqlEnum("subscriptionPlan", ["rivals", "league"]),
 });
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// Cache raw ESPN API JSON payloads per season + view
+// Legacy ESPN season cache (LONGTEXT payloads; retained for compatibility reads)
 export const espnSeasonCache = mysqlTable(
   "espn_season_cache",
   {
@@ -43,16 +51,12 @@ export const espnSeasonCache = mysqlTable(
     leagueId: varchar("leagueId", { length: 32 }).notNull().default("default"),
     season: int("season").notNull(),
     viewName: varchar("viewName", { length: 64 }).notNull(),
-    payload: json("payload").notNull(),
+    payload: longtext("payload").notNull(),
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (t) => [
-    // unique constraint scoped per league — enables multi-league isolation
-    uniqueIndex("uq_league_season_view").on(t.leagueId, t.season, t.viewName),
-  ]
+  (t) => [uniqueIndex("uq_league_season_view").on(t.leagueId, t.season, t.viewName)]
 );
-
 export type EspnSeasonCache = typeof espnSeasonCache.$inferSelect;
 
 // Track when each season was last refreshed
@@ -73,14 +77,20 @@ export const refreshManifest = mysqlTable("refresh_manifest", {
 export type RefreshManifest = typeof refreshManifest.$inferSelect;
 
 // AI GM Advisor chat history
-export const chatHistory = mysqlTable("chat_history", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId").notNull(),
-  season: int("season"),
-  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const chatHistory = mysqlTable(
+  "chat_history",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    /** ESPN league id (sanitized); isolates advisor threads per league. */
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default(""),
+    season: int("season"),
+    role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [index("idx_chat_history_user_league").on(t.userId, t.leagueId)]
+);
 
 export type ChatHistory = typeof chatHistory.$inferSelect;
 
@@ -189,13 +199,15 @@ export const scheduledJobs = mysqlTable("scheduled_jobs", {
 export type ScheduledJob = typeof scheduledJobs.$inferSelect;
 export type InsertScheduledJob = typeof scheduledJobs.$inferInsert;
 
-// ─── Fantasy Data Cache (FantasyPros ECR/ADP + PFR stats) ─────────────────────
+// ─── Fantasy Data Cache (FantasyPros ECR/ADP + PFR, Vegas odds, ESPN sync rows) ─
+// ESPN payloads use keys: `espn:${leagueId}:${season}:${viewName}` (see server/db.ts).
 export const fantasyDataCache = mysqlTable(
   "fantasy_data_cache",
   {
     id: int("id").primaryKey().autoincrement(),
     cacheKey: varchar("cacheKey", { length: 64 }).notNull(),
-    payload: json("payload").notNull(),
+    /** JSON text (LONGTEXT in DB after migration 0006) — non-ESPN rows use JSON text too. */
+    payload: longtext("payload").notNull(),
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -203,6 +215,274 @@ export const fantasyDataCache = mysqlTable(
 );
 export type FantasyDataCache = typeof fantasyDataCache.$inferSelect;
 export type InsertFantasyDataCache = typeof fantasyDataCache.$inferInsert;
+
+// ─── Canonical raw ESPN cache (LONGTEXT) ─────────────────────────────────────
+export const espnRawCache = mysqlTable(
+  "espn_raw_cache",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    viewName: varchar("viewName", { length: 64 }).notNull(),
+    payload: longtext("payload").notNull(),
+    payloadBytes: int("payloadBytes").notNull().default(0),
+    fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_raw_cache").on(t.leagueId, t.season, t.viewName),
+    index("idx_raw_cache_league_season").on(t.leagueId, t.season),
+  ]
+);
+export type EspnRawCache = typeof espnRawCache.$inferSelect;
+
+export const gmLeagueSettings = mysqlTable(
+  "league_settings",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    teamCount: int("teamCount").notNull().default(0),
+    scoringType: varchar("scoringType", { length: 64 }).notNull().default(""),
+    playoffTeams: int("playoffTeams").notNull().default(0),
+    regularSeasonWeeks: int("regularSeasonWeeks").notNull().default(0),
+    tradeDeadline: bigint("tradeDeadline", { mode: "number" }),
+    rosterSlots: longtext("rosterSlots"),
+    scoringSettings: longtext("scoringSettings"),
+    rawSettings: longtext("rawSettings"),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_league_settings").on(t.leagueId, t.season)]
+);
+
+// League-level declared format override (redraft | keeper | dynasty). League-keyed and
+// sticky across seasons — the authoritative source of league format when present, taking
+// precedence over best-effort ESPN detection (see server/leagueContext.ts precedence).
+export const gmLeagueFormatDeclarations = mysqlTable("league_format_declarations", {
+  leagueId: varchar("leagueId", { length: 32 }).notNull().primaryKey(),
+  declaredFormat: varchar("declaredFormat", { length: 16 }).notNull(),
+  declaredByUserId: int("declaredByUserId"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const gmTeams = mysqlTable(
+  "teams",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    abbreviation: varchar("abbreviation", { length: 16 }).notNull().default(""),
+    ownerName: varchar("ownerName", { length: 255 }).notNull().default(""),
+    ownerId: varchar("ownerId", { length: 128 }).notNull().default(""),
+    logoUrl: varchar("logoUrl", { length: 1024 }).notNull().default(""),
+    wins: int("wins").notNull().default(0),
+    losses: int("losses").notNull().default(0),
+    ties: int("ties").notNull().default(0),
+    pointsFor: decimal("pointsFor", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    pointsAgainst: decimal("pointsAgainst", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    playoffSeed: int("playoffSeed"),
+    finalStanding: int("finalStanding"),
+    rawTeam: longtext("rawTeam").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_teams").on(t.leagueId, t.season, t.teamId)]
+);
+
+export const gmMatchups = mysqlTable(
+  "matchups",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    matchupPeriodId: int("matchupPeriodId").notNull(),
+    homeTeamId: int("homeTeamId").notNull(),
+    awayTeamId: int("awayTeamId").notNull(),
+    homeScore: decimal("homeScore", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    awayScore: decimal("awayScore", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    homeProjected: decimal("homeProjected", { precision: 10, scale: 2, mode: "number" }),
+    awayProjected: decimal("awayProjected", { precision: 10, scale: 2, mode: "number" }),
+    winnerTeamId: int("winnerTeamId"),
+    isPlayoff: int("isPlayoff").notNull().default(0),
+    isCompleted: int("isCompleted").notNull().default(0),
+    rawMatchup: longtext("rawMatchup").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_matchups").on(t.leagueId, t.season, t.matchupPeriodId, t.homeTeamId, t.awayTeamId),
+  ]
+);
+
+export const gmDraftPicks = mysqlTable(
+  "draft_picks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    overallPick: int("overallPick").notNull(),
+    roundId: int("roundId").notNull().default(0),
+    roundPick: int("roundPick").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    owningTeamId: int("owningTeamId"),
+    playerId: int("playerId"),
+    playerName: varchar("playerName", { length: 255 }),
+    position: varchar("position", { length: 16 }),
+    isKeeper: int("isKeeper").notNull().default(0),
+    bidAmount: decimal("bidAmount", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rawPick: longtext("rawPick").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_draft_picks").on(t.leagueId, t.season, t.overallPick)]
+);
+
+export const gmTransactions = mysqlTable(
+  "transactions",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    transactionId: varchar("transactionId", { length: 64 }).notNull(),
+    relatedTransactionId: varchar("relatedTransactionId", { length: 64 }),
+    type: varchar("type", { length: 64 }).notNull().default(""),
+    status: varchar("status", { length: 64 }).notNull().default(""),
+    playerId: int("playerId"),
+    playerKey: int("playerKey").notNull().default(0),
+    playerName: varchar("playerName", { length: 255 }),
+    fromTeamId: int("fromTeamId"),
+    toTeamId: int("toTeamId"),
+    teamId: int("teamId"),
+    itemType: varchar("itemType", { length: 32 }),
+    position: varchar("position", { length: 16 }),
+    round: int("round"),
+    pickInRound: int("pickInRound"),
+    overallPickNumber: int("overallPickNumber"),
+    pickSeason: int("pickSeason"),
+    legIndex: int("legIndex").notNull().default(0),
+    executionType: varchar("executionType", { length: 32 }),
+    bidAmount: decimal("bidAmount", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    proposedDate: bigint("proposedDate", { mode: "number" }),
+    processedDate: bigint("processedDate", { mode: "number" }),
+    rawTransaction: longtext("rawTransaction").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_transactions").on(t.leagueId, t.season, t.transactionId, t.playerKey)]
+);
+
+export const gmRosterEntries = mysqlTable(
+  "roster_entries",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    playerId: int("playerId").notNull(),
+    playerName: varchar("playerName", { length: 255 }).notNull().default(""),
+    position: varchar("position", { length: 16 }).notNull().default(""),
+    nflTeam: varchar("nflTeam", { length: 16 }).notNull().default(""),
+    slotId: int("slotId"),
+    acquisitionType: varchar("acquisitionType", { length: 64 }).notNull().default(""),
+    projectedPoints: decimal("projectedPoints", { precision: 10, scale: 2, mode: "number" }),
+    actualPoints: decimal("actualPoints", { precision: 10, scale: 2, mode: "number" }),
+    injuryStatus: varchar("injuryStatus", { length: 64 }).notNull().default(""),
+    rawRosterEntry: longtext("rawRosterEntry").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_roster_entries").on(t.leagueId, t.season, t.week, t.teamId, t.playerId)]
+);
+
+/**
+ * season_rosters: end-of-season roster snapshot scraped from the ESPN League Rosters page.
+ * One row per player per team per season.
+ * acquisitionType = "Draft" | "Trade" | "Free Agency" | "" (empty for older seasons).
+ * ownerName resolved from gmTeams at query time; blank initially.
+ */
+export const gmSeasonRosters = mysqlTable(
+  "season_rosters",
+  {
+    id:              int("id").autoincrement().primaryKey(),
+    leagueId:        varchar("leagueId",        { length: 32  }).notNull(),
+    season:          int("season").notNull(),
+    teamName:        varchar("teamName",         { length: 255 }).notNull().default(""),
+    ownerName:       varchar("ownerName",        { length: 255 }).notNull().default(""),
+    playerName:      varchar("playerName",       { length: 255 }).notNull(),
+    nflTeam:         varchar("nflTeam",          { length: 32  }).notNull().default(""),
+    position:        varchar("position",         { length: 16  }).notNull().default(""),
+    slot:            varchar("slot",             { length: 32  }).notNull().default(""),
+    acquisitionType: varchar("acquisitionType",  { length: 64  }).notNull().default(""),
+    injuryStatus:    varchar("injuryStatus",     { length: 16  }).notNull().default(""),
+    capturedAt:      timestamp("capturedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_season_rosters").on(t.leagueId, t.season, t.teamName, t.playerName)]
+);
+
+export const gmPlayers = mysqlTable(
+  "players",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    playerId: int("playerId").notNull(),
+    season: int("season").notNull(),
+    name: varchar("name", { length: 255 }).notNull().default(""),
+    position: varchar("position", { length: 16 }).notNull().default(""),
+    nflTeam: varchar("nflTeam", { length: 16 }).notNull().default(""),
+    jerseyNumber: int("jerseyNumber"),
+    injuryStatus: varchar("injuryStatus", { length: 64 }).notNull().default(""),
+    percentOwned: decimal("percentOwned", { precision: 10, scale: 2, mode: "number" }),
+    percentStarted: decimal("percentStarted", { precision: 10, scale: 2, mode: "number" }),
+    averagePoints: decimal("averagePoints", { precision: 10, scale: 4, mode: "number" }),
+    totalPoints: decimal("totalPoints", { precision: 10, scale: 4, mode: "number" }),
+    projectedTotalPoints: decimal("projectedTotalPoints", { precision: 10, scale: 4, mode: "number" }),
+    rawPlayer: longtext("rawPlayer").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_players").on(t.playerId, t.season)]
+);
+
+export const gmStandingsSnapshots = mysqlTable(
+  "standings_snapshots",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull().default(0),
+    teamId: int("teamId").notNull(),
+    rank: int("rank").notNull().default(0),
+    wins: int("wins").notNull().default(0),
+    losses: int("losses").notNull().default(0),
+    ties: int("ties").notNull().default(0),
+    pointsFor: decimal("pointsFor", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    pointsAgainst: decimal("pointsAgainst", { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rawStanding: longtext("rawStanding").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_standings_snapshots").on(t.leagueId, t.season, t.week, t.teamId)]
+);
+
+export const syncRuns = mysqlTable(
+  "sync_runs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    status: mysqlEnum("status", ["running", "success", "partial", "failed"]).notNull().default("running"),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    finishedAt: timestamp("finishedAt"),
+    errorMessage: longtext("errorMessage"),
+    rawViewsSaved: int("rawViewsSaved").notNull().default(0),
+    teamsSaved: int("teamsSaved").notNull().default(0),
+    matchupsSaved: int("matchupsSaved").notNull().default(0),
+    draftPicksSaved: int("draftPicksSaved").notNull().default(0),
+    transactionsSaved: int("transactionsSaved").notNull().default(0),
+    rosterEntriesSaved: int("rosterEntriesSaved").notNull().default(0),
+    playersSaved: int("playersSaved").notNull().default(0),
+    standingsSaved: int("standingsSaved").notNull().default(0),
+  },
+  (t) => [index("idx_sync_runs_league_season").on(t.leagueId, t.season)]
+);
+export type SyncRun = typeof syncRuns.$inferSelect;
 
 // ─── Mock Draft Results ───────────────────────────────────────────────────────
 export const mockDraftResults = mysqlTable(
@@ -545,6 +825,13 @@ export const leagueConnections = mysqlTable(
     dnaProfile: json("dnaProfile"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    // ── P0 profile-identity columns ("which team is mine"); additive, nullable ──
+    selectedTeamId: int("selectedTeamId"),
+    selectedOwnerKey: varchar("selectedOwnerKey", { length: 64 }),
+    selectedOwnerName: varchar("selectedOwnerName", { length: 255 }),
+    selectedFranchiseName: varchar("selectedFranchiseName", { length: 255 }),
+    selectedSeason: int("selectedSeason"),
+    isDefault: boolean("isDefault").default(false).notNull(),
   },
   (t) => [
     index("idx_lc_user").on(t.userId),
@@ -554,6 +841,25 @@ export const leagueConnections = mysqlTable(
 );
 export type LeagueConnection = typeof leagueConnections.$inferSelect;
 export type InsertLeagueConnection = typeof leagueConnections.$inferInsert;
+
+/** Per-user display nickname for a connected league (canonical name stays on league_connections). */
+export const leagueConnectionDisplayNames = mysqlTable(
+  "league_connection_display_names",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    leagueId: varchar("leagueId", { length: 128 }).notNull(),
+    displayName: varchar("displayName", { length: 256 }).notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_lcdn_user_provider_league").on(t.userId, t.provider, t.leagueId),
+    index("idx_lcdn_user").on(t.userId),
+  ],
+);
+export type LeagueConnectionDisplayName = typeof leagueConnectionDisplayNames.$inferSelect;
+export type InsertLeagueConnectionDisplayName = typeof leagueConnectionDisplayNames.$inferInsert;
 
 
 /**
@@ -682,6 +988,29 @@ export const funnelEvents = mysqlTable(
 export type FunnelEvent = typeof funnelEvents.$inferSelect;
 export type InsertFunnelEvent = typeof funnelEvents.$inferInsert;
 
+// Receipt Shares - short links for DNA Receipts.
+// Maps a short code -> the full signed Receipt token, so shared URLs are
+// /r/<code> (~30 chars) instead of /p/<~400-char token>. Also enables
+// per-share view tracking for the funnel.
+export const receiptShares = mysqlTable(
+  "receipt_shares",
+  {
+    code: varchar("code", { length: 16 }).primaryKey(),
+    token: text("token").notNull(),
+    memberId: varchar("memberId", { length: 64 }),
+    leagueId: varchar("leagueId", { length: 32 }),
+    createdByUserId: int("createdByUserId"),
+    views: int("views").notNull().default(0),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (t) => [
+    index("idx_rs_createdByUserId").on(t.createdByUserId),
+    index("idx_rs_createdAt").on(t.createdAt),
+  ],
+);
+export type ReceiptShare = typeof receiptShares.$inferSelect;
+export type InsertReceiptShare = typeof receiptShares.$inferInsert;
+
 // ─── Onboarding State ──────────────────────────────────────────────────────────
 // Tracks which profile the user is on in the sequential reveal (0=self, 1=champion, 2=rival)
 export const onboardingState = mysqlTable(
@@ -719,6 +1048,7 @@ export const rivalryScores = mysqlTable(
   {
     id: int("id").autoincrement().primaryKey(),
     memberId: varchar("memberId", { length: 64 }).notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default(""),
     rivalId: varchar("rivalId", { length: 64 }).notNull(),
     rivalName: varchar("rivalName", { length: 128 }).notNull(),
     rivalryScore: int("rivalryScore").notNull().default(0),
@@ -744,7 +1074,7 @@ export const rivalryScores = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
-    uniqueIndex("uq_rivalry_pair").on(t.memberId, t.rivalId),
+    uniqueIndex("uq_rivalry_pair").on(t.leagueId, t.memberId, t.rivalId),
     index("idx_rivalry_member").on(t.memberId),
     index("idx_rivalry_score").on(t.rivalryScore),
   ]
@@ -1008,3 +1338,198 @@ export const leagueEvents = mysqlTable(
 );
 export type LeagueEvent = typeof leagueEvents.$inferSelect;
 export type InsertLeagueEvent = typeof leagueEvents.$inferInsert;
+
+// ─── ESPN League History Medals ───────────────────────────────────────────────
+// Source of truth for champion / runner-up / third-place per season.
+// Populated from the ESPN League History page — not derived from standings.
+export const leagueMedals = mysqlTable(
+  "league_medals",
+  {
+    id:              int("id").autoincrement().primaryKey(),
+    leagueId:        varchar("leagueId", { length: 32 }).notNull(),
+    season:          int("season").notNull(),
+    championOwner:   varchar("championOwner", { length: 255 }).notNull().default(""),
+    runnerUpOwner:   varchar("runnerUpOwner", { length: 255 }).notNull().default(""),
+    thirdPlaceOwner: varchar("thirdPlaceOwner", { length: 255 }).notNull().default(""),
+    source:          varchar("source", { length: 64 }).notNull().default("espn_history_medal"),
+    updatedAt:       timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_league_medals").on(t.leagueId, t.season)]
+);
+export type LeagueMedal = typeof leagueMedals.$inferSelect;
+
+// ── Owner Aliases ────────────────────────────────────────────────────────────
+// Commissioner-approved mappings from legacy team names (pre-2018) to known
+// ownerNames. Populated by the Owner Identity Review page.
+export const ownerAliases = mysqlTable(
+  "owner_aliases",
+  {
+    id:                 int("id").autoincrement().primaryKey(),
+    leagueId:           varchar("leagueId", { length: 32 }).notNull(),
+    legacyTeamName:     varchar("legacyTeamName", { length: 255 }).notNull(),
+    legacySeason:       int("legacySeason"),
+    resolvedOwnerName:  varchar("resolvedOwnerName", { length: 255 }),
+    confidence:         int("confidence").notNull().default(0),
+    resolutionMethod:   varchar("resolutionMethod", { length: 64 }).notNull().default("unresolved"),
+    status:             varchar("status", { length: 32 }).notNull().default("pending"),
+    notes:              text("notes"),
+    createdAt:          timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:          timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_owner_aliases").on(t.leagueId, t.legacyTeamName)]
+);
+export type OwnerAlias = typeof ownerAliases.$inferSelect;
+
+// ── P2 Player Intelligence Pipeline ──────────────────────────────────────────
+//
+// gmPlayerRegistry  → canonical player identity (one row per player, ever)
+// gmWeeklyPlayerStats → canonical weekly fantasy performance
+//
+// Named differently from the existing `gmPlayers` (season cache) and
+// `weeklyPlayerStats` (raw stat columns) tables to avoid collisions.
+//
+// Valid position values (enforced in application logic, not DB ENUM so that
+// adding new positions does not require a schema migration):
+//   QB | RB | WR | TE | K | DEF | DL | LB | DB
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const gmPlayerRegistry = mysqlTable(
+  "gm_player_registry",
+  {
+    id:              bigint("id",          { mode: "number" }).autoincrement().primaryKey(),
+    espnPlayerId:    varchar("espnPlayerId",   { length: 50  }),
+    sleeperPlayerId: varchar("sleeperPlayerId",{ length: 50  }),
+    fullName:        varchar("fullName",       { length: 100 }).notNull(),
+    normalizedName:  varchar("normalizedName", { length: 100 }).notNull(),
+    position:        varchar("position",       { length: 10  }).notNull().default(""),
+    currentNflTeam:  varchar("currentNflTeam", { length: 3   }),
+    firstSeasonSeen: int("firstSeasonSeen"),
+    lastSeasonSeen:  int("lastSeasonSeen"),
+    isActive:        boolean("isActive").notNull().default(true),
+    needsReview:     boolean("needsReview").notNull().default(false),
+    espnAdpPprRank:  int("espnAdpPprRank"),
+    reviewReason:    varchar("reviewReason",   { length: 255 }),
+    createdAt:       timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:       timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_gm_player_registry_espn").on(t.espnPlayerId),
+    uniqueIndex("uq_gm_player_registry_sleeper").on(t.sleeperPlayerId),
+    index("idx_gm_player_registry_norm").on(t.normalizedName),
+    index("idx_gm_player_registry_position").on(t.position),
+    index("idx_gm_player_registry_active").on(t.isActive),
+    index("idx_gm_player_registry_review").on(t.needsReview),
+  ]
+);
+
+export type GmPlayerRegistry      = typeof gmPlayerRegistry.$inferSelect;
+export type InsertGmPlayerRegistry = typeof gmPlayerRegistry.$inferInsert;
+
+export const gmWeeklyPlayerStats = mysqlTable(
+  "gm_weekly_player_stats",
+  {
+    id:               bigint("id",             { mode: "number" }).autoincrement().primaryKey(),
+    playerId:         bigint("playerId",        { mode: "number" }).notNull(),
+    season:           int("season").notNull(),
+    week:             int("week").notNull(),
+    pointsScored:     decimal("pointsScored",   { precision: 10, scale: 2, mode: "number" }).notNull().default(0),
+    rosterSlotId:     int("rosterSlotId").notNull().default(0),
+    isStarter:        boolean("isStarter").notNull().default(false),
+    ownerKey:         varchar("ownerKey",       { length: 50 }).notNull(),
+    teamId:           int("teamId"),
+    source:           varchar("source",         { length: 50 }).notNull().default("espn"),
+    sourceConfidence: decimal("sourceConfidence", { precision: 5, scale: 2, mode: "number" }).notNull().default(100),
+    needsReview:      boolean("needsReview").notNull().default(false),
+    reviewReason:     varchar("reviewReason",   { length: 255 }),
+    createdAt:        timestamp("createdAt").defaultNow().notNull(),
+    updatedAt:        timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_gm_wps").on(t.playerId, t.season, t.week, t.ownerKey),
+    index("idx_gm_wps_season_player").on(t.season, t.playerId),
+    index("idx_gm_wps_owner_season").on(t.ownerKey, t.season),
+    index("idx_gm_wps_season_week").on(t.season, t.week),
+    index("idx_gm_wps_team_season").on(t.teamId, t.season),
+    index("idx_gm_wps_review").on(t.needsReview),
+  ]
+);
+
+export type GmWeeklyPlayerStats       = typeof gmWeeklyPlayerStats.$inferSelect;
+export type InsertGmWeeklyPlayerStats  = typeof gmWeeklyPlayerStats.$inferInsert;
+
+
+// ─── Manual keeper selections (user override of predicted keepers) ──────────────
+// Phase 1: lets a user mark which players a team will keep, overriding the Draft
+// War Room's predicted keepers. Persisted per (userId, leagueId, season, ownerKey,
+// playerId). ownerKey is the Keeper Advisor's canonical merge-aware owner key; the
+// Draft War Room reconciles selections to teams by playerId, not ownerKey. Additive
+// table — features degrade safely when it is absent (see server/manualKeeperSelections.ts).
+export const gmManualKeeperSelections = mysqlTable(
+  "gm_manual_keeper_selections",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId").notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    ownerKey: varchar("ownerKey", { length: 64 }).notNull(),
+    playerId: int("playerId").notNull(),
+    playerName: varchar("playerName", { length: 128 }).notNull().default(""),
+    position: varchar("position", { length: 8 }).notNull().default(""),
+    // Which of the team's picks in the keeper's cost round this keeper occupies.
+    // 0 = auto (use the team's LATER / less-valuable pick in that round — the default rule);
+    // 1 = first pick, 2 = second, … (explicit override). Matters when a team holds multiple
+    // picks in a round (e.g. a traded pick). Additive; defaults to 0 (auto → later pick).
+    keeperRoundPick: int("keeperRoundPick").notNull().default(0),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_manual_keeper").on(t.userId, t.leagueId, t.season, t.ownerKey, t.playerId),
+    index("idx_manual_keeper_lookup").on(t.userId, t.leagueId, t.season),
+  ],
+);
+
+export type GmManualKeeperSelection      = typeof gmManualKeeperSelections.$inferSelect;
+export type InsertGmManualKeeperSelection = typeof gmManualKeeperSelections.$inferInsert;
+
+// ── Team-season owner overrides (manual corrections) ───────────────────────────
+export const gmTeamOwnerOverrides = mysqlTable(
+  "gm_team_owner_overrides",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    provider: varchar("provider", { length: 16 }).notNull().default("sleeper"),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    ownerKey: varchar("ownerKey", { length: 128 }).notNull(),
+    ownerName: varchar("ownerName", { length: 255 }).notNull().default(""),
+    updatedByUserId: int("updatedByUserId").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_gm_team_owner_override").on(t.leagueId, t.season, t.teamId)],
+);
+export type GmTeamOwnerOverride = typeof gmTeamOwnerOverrides.$inferSelect;
+
+// ── Team-season owner resolution snapshot (refreshed on import) ───────────────
+export const gmTeamOwnerResolution = mysqlTable(
+  "gm_team_owner_resolution",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    provider: varchar("provider", { length: 16 }).notNull().default("sleeper"),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    teamId: int("teamId").notNull(),
+    teamName: varchar("teamName", { length: 255 }).notNull().default(""),
+    status: varchar("status", { length: 16 }).notNull(),
+    ownerKey: varchar("ownerKey", { length: 128 }),
+    ownerName: varchar("ownerName", { length: 255 }),
+    suggestedOwnerKey: varchar("suggestedOwnerKey", { length: 128 }),
+    suggestedOwnerName: varchar("suggestedOwnerName", { length: 255 }),
+    suggestionReason: text("suggestionReason"),
+    sourceDetail: varchar("sourceDetail", { length: 255 }).notNull().default(""),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [uniqueIndex("uq_gm_team_owner_resolution").on(t.leagueId, t.season, t.teamId)],
+);
+export type GmTeamOwnerResolution = typeof gmTeamOwnerResolution.$inferSelect;

@@ -1,14 +1,106 @@
 /**
  * Tests for championshipHistoryBuilder.ts
- * Covers: buildTrophySummary, buildTrophyPromptBlock, buildLeagueTrophyLeaderboard
+ * Covers: buildTrophySummary, buildTrophyPromptBlock, buildLeagueTrophyLeaderboard,
+ * mergeTrophyHistoryFromAuthorityAndHoF (PR-G vs ChampionshipAuthority; OLD rank path in tests only)
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   buildTrophySummary,
   buildTrophyPromptBlock,
   buildLeagueTrophyLeaderboard,
+  mergeTrophyHistoryFromAuthorityAndHoF,
+  sumChampionshipsInTrophyMap,
   type OwnerTrophyRecord,
 } from "./championshipHistoryBuilder";
+import { resolveChampionsFromRows, type MedalRowLite } from "./championshipAuthority";
+import type { HallOfFamePayload } from "./hallOfFameService";
+import type { GmTeamRow } from "./ownerProfileService";
+import { memberIdFromOwnerKey } from "./db";
+
+/** Same key shape as `championshipHistoryBuilder` trophy map (bare member id when `id:{uuid}`). */
+function trophyMapKey(canonicalOwnerKey: string): string {
+  const mid = memberIdFromOwnerKey(canonicalOwnerKey);
+  return mid && mid.length > 0 ? mid : canonicalOwnerKey;
+}
+
+function team(
+  season: number,
+  teamId: number,
+  ownerId: string,
+  ownerName: string,
+  name: string,
+  finalStanding: number | null,
+  rawTeam?: string,
+): GmTeamRow {
+  return {
+    season,
+    teamId,
+    ownerId,
+    ownerName,
+    name,
+    finalStanding,
+    rawTeam: rawTeam ?? "{}",
+  } as unknown as GmTeamRow;
+}
+
+/** Deprecated-style champion pick (tests only): `rankCalculatedFinal === 1` else `finalStanding === 1`. */
+function countTitlesOldRankOrFinalStanding(rows: GmTeamRow[]): Map<string, number> {
+  const rowsBySeason = new Map<number, GmTeamRow[]>();
+  for (const t of rows) {
+    const s = Number(t.season);
+    if (!rowsBySeason.has(s)) rowsBySeason.set(s, []);
+    rowsBySeason.get(s)!.push(t);
+  }
+  const titlesByKey = new Map<string, number>();
+  for (const [, seasonRows] of rowsBySeason) {
+    let champ: GmTeamRow | undefined;
+    for (const t of seasonRows) {
+      let rank: number | null = null;
+      try {
+        const raw = JSON.parse(String(t.rawTeam || "{}")) as { rankCalculatedFinal?: number };
+        if (raw.rankCalculatedFinal != null) rank = Number(raw.rankCalculatedFinal);
+      } catch {
+        /* ignore */
+      }
+      if (rank === 1) {
+        champ = t;
+        break;
+      }
+    }
+    if (!champ) champ = seasonRows.find((t) => Number(t.finalStanding) === 1);
+    if (!champ) continue;
+    const oid = String(champ.ownerId || "").trim();
+    const ownerKey = oid ? `id:${oid}` : String(champ.ownerName || "").trim();
+    const key = trophyMapKey(ownerKey);
+    titlesByKey.set(key, (titlesByKey.get(key) ?? 0) + 1);
+  }
+  return titlesByKey;
+}
+
+function hofPayloadWithHistory(
+  history: HallOfFamePayload["championships"]["history"],
+  ownerRecords: HallOfFamePayload["ownerRecords"] = [],
+): HallOfFamePayload {
+  return {
+    coverage: {
+      completedRsGmMatchupGames: 0,
+      dedupedMatchupRows: 0,
+      seasonsTouched: [],
+      note: "",
+    },
+    championships: {
+      leaderboard: [],
+      history,
+      medalDiagnostics: {
+        totalMedals: 0,
+        unmatchedChampionTeams: [],
+        unmatchedRunnerUpTeams: [],
+        unmatchedThirdTeams: [],
+      },
+    },
+    ownerRecords,
+  } as unknown as HallOfFamePayload;
+}
 
 function makeRecord(overrides: Partial<OwnerTrophyRecord> = {}): OwnerTrophyRecord {
   return {
@@ -166,5 +258,162 @@ describe("buildLeagueTrophyLeaderboard", () => {
     const result = buildLeagueTrophyLeaderboard(map);
     expect(result).toContain("NEAR-MISSES");
     expect(result).toContain("Sad Owner");
+  });
+});
+
+describe("mergeTrophyHistoryFromAuthorityAndHoF (PR-G / ChampionshipAuthority)", () => {
+  it("matches authority titles per map key and league-wide title sum", () => {
+    const rows: GmTeamRow[] = [
+      team(2020, 1, "guid-A", "Alice", "Team A", 2),
+      team(2020, 2, "guid-B", "Bob", "Team B", 1),
+      team(2021, 1, "guid-A", "Alice", "Team A", 1),
+      team(2021, 2, "guid-B", "Bob", "Team B", 2),
+    ];
+    const medals: MedalRowLite[] = [{ season: 2020, championOwner: "Alice" }];
+    const authority = resolveChampionsFromRows(rows, medals);
+    const keyA = authority.canonicalKeyForOwnerId("guid-A");
+    const payload = hofPayloadWithHistory([]);
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload,
+      leagueId: "test-league",
+    });
+    expect(sumChampionshipsInTrophyMap(map)).toBe(
+      [...authority.titlesByKey.values()].reduce((a, b) => a + b, 0),
+    );
+    expect(map.get(trophyMapKey(keyA))?.championships).toBe(authority.titlesByKey.get(keyA));
+  });
+
+  it("golden 158918 pattern: 8 distinct medal champions => 8 league titles", () => {
+    const rows: GmTeamRow[] = [];
+    const medals: MedalRowLite[] = [];
+    for (let i = 0; i < 8; i++) {
+      const y = 2010 + i;
+      const winner = `guid-${i}`;
+      const wname = `Owner${i}`;
+      rows.push(team(y, 1, winner, wname, `Team${i}`, 1));
+      rows.push(team(y, 2, "guid-loser", "Loser", "LTeam", 2));
+      medals.push({ season: y, championOwner: wname });
+    }
+    const authority = resolveChampionsFromRows(rows, medals);
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory([]),
+      leagueId: "158918",
+    });
+    expect(sumChampionshipsInTrophyMap(map)).toBe(8);
+    expect(authority.fallbackSeasons).toHaveLength(0);
+  });
+
+  it("golden 457622 pattern: 16 distinct medal champions => 16 league titles", () => {
+    const rows: GmTeamRow[] = [];
+    const medals: MedalRowLite[] = [];
+    for (let i = 0; i < 16; i++) {
+      const y = 2000 + i;
+      const winner = `guid-${i}`;
+      const wname = `Mgr${i}`;
+      rows.push(team(y, 1, winner, wname, `T${i}`, 1));
+      rows.push(team(y, 2, "guid-loser", "Loser", "LTeam", 2));
+      medals.push({ season: y, championOwner: wname });
+    }
+    const authority = resolveChampionsFromRows(rows, medals);
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory([]),
+      leagueId: "457622",
+    });
+    expect(sumChampionshipsInTrophyMap(map)).toBe(16);
+  });
+
+  it("golden 480452315 pattern: no medals, 3 fallback seasons => 3 titles total", () => {
+    const rows: GmTeamRow[] = [
+      team(2022, 1, "guid-A", "Alice", "Team A", 1),
+      team(2022, 2, "guid-B", "Bob", "Team B", 2),
+      team(2023, 1, "guid-A", "Alice", "Team A", 2),
+      team(2023, 2, "guid-B", "Bob", "Team B", 1),
+      team(2024, 1, "guid-A", "Alice", "Team A", 1),
+      team(2024, 2, "guid-B", "Bob", "Team B", 2),
+    ];
+    const authority = resolveChampionsFromRows(rows, []);
+    expect(authority.fallbackSeasons.sort()).toEqual([2022, 2023, 2024]);
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory([]),
+      leagueId: "480452315",
+    });
+    expect(sumChampionshipsInTrophyMap(map)).toBe(3);
+  });
+
+  it("logs fallback seasons as finalStanding fallback (not medals)", () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const rows: GmTeamRow[] = [
+      team(2029, 1, "guid-A", "Alice", "Team A", 1),
+      team(2029, 2, "guid-B", "Bob", "Team B", 2),
+    ];
+    const authority = resolveChampionsFromRows(rows, []);
+    mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory([]),
+      leagueId: "480452315",
+    });
+    expect(logSpy.mock.calls.some((c) => String(c[0]).includes("finalStanding fallback, NOT league_medals"))).toBe(
+      true,
+    );
+    logSpy.mockRestore();
+  });
+
+  it("HoF supplies runner-up / third only (champs still from authority)", () => {
+    const rows: GmTeamRow[] = [
+      team(2020, 1, "guid-A", "Alice", "Team A", 1),
+      team(2020, 2, "guid-B", "Bob", "Team B", 2),
+    ];
+    const medals: MedalRowLite[] = [{ season: 2020, championOwner: "Alice" }];
+    const authority = resolveChampionsFromRows(rows, medals);
+    const keyA = authority.canonicalKeyForOwnerId("guid-A");
+    const keyB = authority.canonicalKeyForOwnerId("guid-B");
+    const history: HallOfFamePayload["championships"]["history"] = [
+      {
+        season: 2020,
+        championTeam: null,
+        runnerUpTeam: null,
+        thirdTeam: null,
+        resolvedChampionOwnerKey: null,
+        resolvedChampionDisplay: null,
+        resolvedRunnerUpOwnerKey: keyB,
+        resolvedRunnerUpDisplay: "Bob",
+        resolvedThirdOwnerKey: null,
+        resolvedThirdDisplay: null,
+      },
+    ];
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory(history),
+      leagueId: "hof-ru",
+    });
+    expect(map.get(trophyMapKey(keyA))?.championships).toBe(1);
+    expect(map.get(trophyMapKey(keyB))?.runnerUps).toBe(1);
+    expect(map.get(trophyMapKey(keyB))?.runnerUpYears).toEqual([2020]);
+  });
+
+  it("three-way: PR-G matches authority; OLD rank path can disagree when medal beats rankCalculatedFinal", () => {
+    const rows: GmTeamRow[] = [
+      team(2020, 1, "guid-A", "Alice", "Team A", 2, JSON.stringify({ rankCalculatedFinal: 2 })),
+      team(2020, 2, "guid-B", "Bob", "Team B", 1, JSON.stringify({ rankCalculatedFinal: 1 })),
+    ];
+    const medals: MedalRowLite[] = [{ season: 2020, championOwner: "Alice" }];
+    const authority = resolveChampionsFromRows(rows, medals);
+    const keyA = authority.canonicalKeyForOwnerId("guid-A");
+    const keyB = authority.canonicalKeyForOwnerId("guid-B");
+    const map = mergeTrophyHistoryFromAuthorityAndHoF({
+      authority,
+      payload: hofPayloadWithHistory([]),
+      leagueId: "three-way",
+    });
+    expect(map.get(trophyMapKey(keyA))?.championships).toBe(1);
+    expect(map.get(trophyMapKey(keyB))?.championships ?? 0).toBe(0);
+    expect(authority.titlesByKey.get(keyA)).toBe(1);
+    const oldTitles = countTitlesOldRankOrFinalStanding(rows);
+    expect(oldTitles.get(trophyMapKey(keyB))).toBe(1);
+    expect(oldTitles.get(trophyMapKey(keyA)) ?? 0).toBe(0);
   });
 });

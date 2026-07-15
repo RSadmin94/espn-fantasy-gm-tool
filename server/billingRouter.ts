@@ -1,7 +1,7 @@
 /**
  * billingRouter.ts
  *
- * tRPC procedures for Stripe billing:
+ * tRPC procedures for Stripe billing (V1 — Rivals monthly/annual only):
  *   billing.createCheckoutSession  — creates a Stripe Checkout session, returns URL
  *   billing.getSubscriptionStatus  — returns current user subscription state
  *   billing.createPortalSession    — creates a Stripe Customer Portal session for self-service
@@ -9,58 +9,74 @@
  * All procedures are protected (require login).
  */
 import { z } from "zod";
-import { protectedProcedure, router } from "./_core/trpc";
+import { protectedProcedure, router, hasRivalsIntelligenceEntitlement, resolvePremiumAccess } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { stripe } from "./stripe/client";
-import { PRODUCTS } from "./stripe/products";
-import { ENV } from "./_core/env";
+import {
+  STRIPE_BRAND,
+  STRIPE_CHECKOUT_COPY,
+  getPriceDefinition,
+  intervalFromPriceId,
+  planFromPriceId,
+  type BillingInterval,
+} from "./stripe/products";
+import { resolveStripePriceId } from "./stripe/resolveCheckoutPrice";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { recordFunnelEvent } from "./funnelService";
 
+const checkoutInput = z.object({
+  origin: z.string().url(),
+  interval: z.enum(["month", "year"]).default("year"),
+  /** @deprecated V1 always checks out Rivals; ignored if present */
+  plan: z.literal("rivals").optional(),
+});
+
+async function ensureStripeCustomer(userId: number, userRow: typeof users.$inferSelect) {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+  let customerId = userRow.stripeCustomerId ?? undefined;
+  if (!customerId) {
+    const customer = await stripe.customers.create({
+      email: userRow.email ?? undefined,
+      name: userRow.name ?? undefined,
+      metadata: {
+        userId: userId.toString(),
+        app: "fantasy_football_rivals",
+      },
+    });
+    customerId = customer.id;
+    await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
+  }
+  return customerId;
+}
+
+function resolveConfiguredPriceId(interval: BillingInterval): string | null {
+  return getPriceDefinition(interval).priceId || null;
+}
+
 export const billingRouter = router({
-  /**
-   * Create a Stripe Checkout session for the monthly plan.
-   * Returns the checkout URL — frontend opens it in a new tab.
-   */
   createCheckoutSession: protectedProcedure
-    .input(z.object({ origin: z.string().url() }))
+    .input(checkoutInput)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
-      // Get or create Stripe customer
       const [userRow] = await db.select().from(users).where(eq(users.id, userId));
       if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
-      let customerId = userRow.stripeCustomerId ?? undefined;
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: userRow.email ?? undefined,
-          name: userRow.name ?? undefined,
-          metadata: { userId: userId.toString() },
-        });
-        customerId = customer.id;
-          await db.update(users).set({ stripeCustomerId: customerId }).where(eq(users.id, userId));
-      }
+      const customerId = await ensureStripeCustomer(userId, userRow);
+      const interval = input.interval;
 
-      // Resolve price ID — from env or fallback to lookup
-      let priceId = ENV.stripePriceIdMonthly || PRODUCTS.gmWarRoom.monthly.priceId;
-      if (!priceId) {
-        // Dynamically look up the price from Stripe if no env var is set
-        const prices = await stripe.prices.list({ active: true, limit: 10 });
-        const found = prices.data.find(
-          (p) => p.unit_amount === PRODUCTS.gmWarRoom.monthly.amount && p.recurring?.interval === "month"
-        );
-        if (found) priceId = found.id;
-      }
-
+      const priceId =
+        resolveConfiguredPriceId(interval) ?? (await resolveStripePriceId(stripe, interval));
       if (!priceId) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: "No active monthly price configured. Set STRIPE_PRICE_ID_MONTHLY.",
+          message: `No active Rivals ${interval} price configured. Run pnpm stripe:setup-products.`,
         });
       }
 
@@ -72,10 +88,26 @@ export const billingRouter = router({
         success_url: `${input.origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${input.origin}/reveal`,
         client_reference_id: userId.toString(),
+        custom_text: {
+          submit: { message: STRIPE_CHECKOUT_COPY.submitMessage },
+        },
+        subscription_data: {
+          description: STRIPE_CHECKOUT_COPY.rivalsSubscriptionDescription,
+          metadata: {
+            app: "fantasy_football_rivals",
+            brand: STRIPE_BRAND.appName,
+            plan: "rivals",
+            interval,
+          },
+        },
         metadata: {
           user_id: userId.toString(),
           customer_email: userRow.email ?? "",
           customer_name: userRow.name ?? "",
+          product: "fantasy_football_rivals",
+          plan: "rivals",
+          interval,
+          price_id: priceId,
         },
       });
 
@@ -83,16 +115,15 @@ export const billingRouter = router({
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Stripe did not return a checkout URL" });
       }
 
-      // Track funnel event: clicked_cta
-      await recordFunnelEvent({ userId, event: "clicked_cta", metadata: { priceId } });
+      await recordFunnelEvent({
+        userId,
+        event: "checkout_opened",
+        metadata: { plan: "rivals", interval, stripeSessionId: session.id },
+      });
 
       return { url: session.url };
     }),
 
-  /**
-   * Returns the current user's subscription status and trial info.
-   * Used by the frontend to show trial banners and paywall states.
-   */
   getSubscriptionStatus: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
@@ -107,20 +138,41 @@ export const billingRouter = router({
     const isTrialExpired = trialStartedAt !== null && trialDaysLeft === 0;
     const currentPeriodEnd = userRow.currentPeriodEnd ? new Date(userRow.currentPeriodEnd).getTime() : null;
 
+    const plan =
+      userRow.subscriptionPlan === "rivals"
+        ? "rivals"
+        : planFromPriceId(userRow.subscriptionPriceId) ??
+          (userRow.subscriptionStatus === "active" ? "rivals" : null);
+    const interval =
+      userRow.subscriptionInterval ?? intervalFromPriceId(userRow.subscriptionPriceId);
+
+    const hasRivalsAccess = hasRivalsIntelligenceEntitlement(userRow);
+
     return {
       status: userRow.subscriptionStatus,
+      plan,
+      interval,
       trialDaysLeft,
       isTrialExpired,
       currentPeriodEnd,
-      hasAccess:
-        userRow.subscriptionStatus === "active" ||
-        (userRow.subscriptionStatus === "trialing" && !isTrialExpired),
+      hasAccess: hasRivalsAccess,
+      hasRivalsAccess,
+      subscriptionPriceId: userRow.subscriptionPriceId ?? null,
     };
   }),
 
   /**
-   * Create a Stripe Customer Portal session for self-service billing management.
+   * Session-access claim for already-entitled accounts. Returns whether the
+   * signed-in user is truly entitled per resolvePremiumAccess (paid OR founder
+   * whitelist OR claimed founder owner-identity). The client uses this so an
+   * entitled founder who clicks "Unlock Rivals Pro" flips the UI to full access
+   * for the session instead of being routed to Stripe. Server data gates remain
+   * the real enforcement — this only governs presentation.
    */
+  claimSessionAccess: protectedProcedure.mutation(async ({ ctx }) => {
+    return { granted: await resolvePremiumAccess(ctx.user) };
+  }),
+
   createPortalSession: protectedProcedure
     .input(z.object({ origin: z.string().url() }))
     .mutation(async ({ ctx, input }) => {
@@ -133,7 +185,7 @@ export const billingRouter = router({
 
       const session = await stripe.billingPortal.sessions.create({
         customer: userRow.stripeCustomerId,
-        return_url: `${input.origin}/command-center`,
+        return_url: `${input.origin}/settings`,
       });
 
       return { url: session.url };

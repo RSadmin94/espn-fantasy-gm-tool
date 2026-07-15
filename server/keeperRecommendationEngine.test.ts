@@ -73,6 +73,10 @@ function makeManagerDNA(overrides: Partial<ManagerDNA> = {}): ManagerDNA {
       draftStyleBadge: "Balanced Drafter",
       reachPositions: [],
       valuePositions: [],
+      boardSlotCount: 200,
+      draftedPickCount: 160,
+      keeperSlotCount: 40,
+      retainedSlotCount: 10,
     },
     trade: {
       avgTradesPerSeason: 3,

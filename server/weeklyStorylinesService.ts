@@ -23,8 +23,14 @@
  *   getWeeklyStorylinesFromDb() — read cached rows from DB
  */
 
-import { getDb, getCachedView } from "./db";
+import { getDb, getCachedView, resolveActiveLeagueId } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  getSeasonTransactions,
+} from "./leagueDataReads";
 import { weeklyStorylines, rivalryScores } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and, desc } from "drizzle-orm";
 import {
   normalizeTeams,
@@ -33,6 +39,7 @@ import {
   normalizeSettings,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,14 +94,6 @@ export interface WeeklyStorylineRow {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function isRodTeam(name: string, abbrev: string, owners: string): boolean {
-  const n = name.toLowerCase();
-  const o = owners.toLowerCase();
-  return n.includes("str8") || n.includes("rodzilla") ||
-    o.includes("rod") || o.includes("sellers") ||
-    abbrev.toLowerCase().includes("rod");
-}
 
 /**
  * Compute a rough desperation score from win%, transaction activity, and
@@ -193,8 +192,8 @@ export interface StorylinesInput {
     h2hLosses: number;
     playoffEliminations: number;
   }>;
-  rodTeamId: number | null;
-  rodMemberIds: string[];
+  focalTeamId: number | null;
+  focalMemberIds: string[];
   prevSeasonRanks: Record<number, number>; // teamId → final rank last season
   // memberId → { playoffWins, playoffLosses } for narrative context
   ownerPlayoffRecords?: Record<string, { playoffWins: number; playoffLosses: number }>;
@@ -207,7 +206,7 @@ export interface StorylinesInput {
 export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] {
   const {
     season, week, teams, matchups, transactions, ownerMap, teamNameMap,
-    rivalryPairs, rodTeamId, rodMemberIds, prevSeasonRanks,
+    rivalryPairs, focalTeamId, focalMemberIds, prevSeasonRanks,
     ownerPlayoffRecords = {},
     rivalH2HBlocks = {},
     ownerTrophyBlocks = {},
@@ -290,7 +289,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     const ownerName = ownerMap[tid] || "Unknown";
     const record = `${wins}-${losses}`;
     const rank = standingMap[tid] || 14;
-    const isRod = tid === rodTeamId;
+    const isFocalOwner = tid === focalTeamId;
     const opponentTid = currentMatchupMap[tid] ?? null;
     const opponentName = opponentTid ? (ownerMap[opponentTid] || null) : null;
 
@@ -314,8 +313,8 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     const prevRank = prevSeasonRanks[tid] ?? null;
     const totalTx = totalTxMap[tid] || 0;
 
-    // ── 1. REVENGE_GAME (Rod only) ────────────────────────────────────────
-    if (isRod && opponentTid) {
+    // ── 1. REVENGE_GAME (focal user's team only) ─────────────────────────
+    if (isFocalOwner && opponentTid) {
       const opponentMids = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
       const matchingRivalry = rivalryPairs.find(
         (rp) => opponentMids.includes(rp.rivalId) && rp.h2hLosses >= 3
@@ -335,13 +334,13 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           intensityScore: Math.min(100, 50 + matchingRivalry.h2hLosses * 5),
           supportingStat: `H2H record: ${matchingRivalry.h2hLosses} losses vs ${matchingRivalry.rivalName}`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${matchingRivalry.rivalName} this week. Rod has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}${(() => { const mids = (teams.find(t => opponentMids.includes((t.memberIds as string[])?.[0]))?.memberIds as string[]) || []; const trophyStr = mids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
+          llmContext: `${ownerName} (${record}) faces ${matchingRivalry.rivalName} this week. ${ownerName} has lost to them ${matchingRivalry.h2hLosses} times head-to-head.${rivalPoStr} This is a revenge opportunity.${rivalH2HBlocks[matchingRivalry.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[matchingRivalry.rivalId]}` : ''}${(() => { const mids = (teams.find(t => opponentMids.includes((t.memberIds as string[])?.[0]))?.memberIds as string[]) || []; const trophyStr = mids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
 
-    // ── 2. HEARTBREAK_PENDING (Rod only) ─────────────────────────────────
-    if (isRod && opponentTid) {
+    // ── 2. HEARTBREAK_PENDING (focal user's team only) ───────────────────
+    if (isFocalOwner && opponentTid) {
       const opponentMids = (teams.find(t => (t.teamId as number) === opponentTid)?.memberIds as string[]) || [];
       const isEliminator = opponentMids.some((mid) => playoffEliminatorRivalIds.has(mid));
       if (isEliminator) {
@@ -360,9 +359,9 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
           ownerName,
           record,
           intensityScore: Math.min(100, 60 + (elimRival?.playoffEliminations ?? 1) * 15),
-          supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated Rod from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
+          supportingStat: `${elimRival?.rivalName ?? opponentName} eliminated ${ownerName} from playoffs ${elimRival?.playoffEliminations ?? 1}x`,
           opponentName,
-          llmContext: `Rod Sellers (${record}) faces ${opponentName} this week — the same manager who has eliminated Rod from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}${(() => { const trophyStr = opponentMids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
+          llmContext: `${ownerName} (${record}) faces ${opponentName} this week — the same manager who has eliminated ${ownerName} from the playoffs ${elimRival?.playoffEliminations ?? 1} time(s).${elimPoStr} This is unfinished business.${elimRival && rivalH2HBlocks[elimRival.rivalId] ? `\n\nFull H2H history:\n${rivalH2HBlocks[elimRival.rivalId]}` : ''}${(() => { const trophyStr = opponentMids.map(mid => ownerTrophyBlocks[mid]).find(Boolean); return trophyStr ? `\n\nOpponent prestige: ${trophyStr}` : ''; })()}`,
         });
       }
     }
@@ -403,7 +402,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     }
 
     // ── 5. DESPERATION_WINDOW ────────────────────────────────────────────
-    if (despScore >= 60 && !isRod) {
+    if (despScore >= 60) {
       stories.push({
         storyType: "DESPERATION_WINDOW",
         emotionalTag: "TRADE WINDOW OPEN",
@@ -459,7 +458,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     }
 
     // ── 8. FEAR_RISING ───────────────────────────────────────────────────
-    if (top2RecentTeamIds.has(tid) && !isRod) {
+    if (top2RecentTeamIds.has(tid)) {
       const pts = recentPtsMap[tid] || 0;
       stories.push({
         storyType: "FEAR_RISING",
@@ -496,17 +495,18 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
 // ─── LLM generation ───────────────────────────────────────────────────────────
 
 async function generateStoryContent(
-  trigger: StoryTrigger
+  trigger: StoryTrigger,
+  league: { leagueDescriptor: string; historyClause: string; focalClause: string }
 ): Promise<{ headline: string; bodyText: string }> {
   const tagLabel = trigger.emotionalTag;
-  const prompt = `You are a sharp, emotionally intelligent fantasy football journalist writing for a 14-team league that has played together for 18 seasons. Write a story card for this week's storylines feed.
+  const prompt = `You are a sharp, emotionally intelligent fantasy football journalist writing for ${league.leagueDescriptor} - ${league.historyClause}. Write a story card for this week's storylines feed.
 
 Story type: ${trigger.storyType}
 Emotional tag: ${tagLabel}
 Context: ${trigger.llmContext}
 
 Write:
-1. A bold, punchy headline (max 8 words) in the voice of a sports journalist. No quotes. No punctuation at end. Examples: "Demetri Clark Is Cracking", "The Silent Assassin Strikes Again", "Rod's Revenge Tour Begins Now"
+1. A bold, punchy headline (max 8 words) in the voice of a sports journalist. No quotes. No punctuation at end. Examples: "Demetri Clark Is Cracking", "The Silent Assassin Strikes Again", "${league.focalClause}'s Revenge Tour Begins Now"
 2. A 2-sentence narrative body that explains the story with specific facts and emotional weight. Use the manager's name. Reference the stat. Make it feel like something is at stake.
 
 Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
@@ -588,18 +588,32 @@ export async function getLatestWeeklyStorylinesFromDb(
  * Called from the weekly refresh handler and manual refresh procedures.
  * Uses existing cached ESPN data — no new ESPN API calls.
  */
-export async function refreshWeeklyStorylines(season: number): Promise<WeeklyStorylineRow[]> {
+export async function refreshWeeklyStorylines(season: number, userId?: number): Promise<WeeklyStorylineRow[]> {
   const db = await getDb();
   if (!db) return [];
 
-  // Load cached season data
-  const data = await getCachedView(season, "combined");
-  if (!data) return [];
-  const payload = data.payload as Record<string, unknown>;
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    season,
+  );
+  const leagueKey = String(leagueId).slice(0, 32);
+  const ref = { leagueId: leagueKey, season };
 
-  const teams = normalizeTeams(payload);
-  const matchups = normalizeMatchups(payload);
-  const transactions = normalizeTransactions(payload) as unknown[];
+  const [teamsRes, matchRes, txRes, data] = await Promise.all([
+    getSeasonTeams(ref),
+    getSeasonMatchups(ref),
+    getSeasonTransactions(ref),
+    getCachedView(season, "combined", undefined, { userId }),
+  ]);
+
+  if (teamsRes.count === 0) return [];
+  const payload = data?.payload as Record<string, unknown> | undefined;
+  if (!payload) return [];
+
+  const teams = teamsRes.rows as ReturnType<typeof normalizeTeams>;
+  const matchups = matchRes.rows as ReturnType<typeof normalizeMatchups>;
+  const transactions = txRes.rows as ReturnType<typeof normalizeTransactions>;
   const settings = normalizeSettings(payload);
 
   const currentWeek = Math.max(1, (settings.currentMatchupPeriod as number) || 1);
@@ -619,18 +633,25 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     memberIdsMap[tid] = (t.memberIds as string[]) || [];
   }
 
-  // Detect Rod's team
-  let rodTeamId: number | null = null;
-  let rodMemberIds: string[] = [];
-  for (const t of teams) {
-    const tid = t.teamId as number;
-    const name = (t.teamName as string) || "";
-    const abbrev = (t.abbrev as string) || "";
-    const owners = (t.owners as string) || "";
-    if (isRodTeam(name, abbrev, owners)) {
-      rodTeamId = tid;
-      rodMemberIds = memberIdsMap[tid] ?? [];
-      break;
+  // Detect focal user's team via their active profile (profile-based, not name-based).
+  let focalTeamId: number | null = null;
+  let focalMemberIds: string[] = [];
+  if (userId != null) {
+    const { resolveCurrentOwner } = await import("./currentOwnerService");
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) {
+      const focalMemberId = co.ownerId ?? "";
+      for (const t of teams) {
+        const tid = t.teamId as number;
+        const mids = memberIdsMap[tid] ?? [];
+        if (focalMemberId && mids.includes(focalMemberId)) {
+          focalTeamId = tid;
+          focalMemberIds = mids;
+          break;
+        }
+      }
+      // No name-based fallback: if the profile's memberId isn't on a team this
+      // season, focalTeamId stays null (neutral — focal-only stories don't fire).
     }
   }
 
@@ -641,18 +662,27 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     h2hLosses: number;
     playoffEliminations: number;
   }> = [];
-  if (rodMemberIds.length > 0) {
+  if (focalMemberIds.length > 0) {
     // Try each of Rod's memberIds
-    for (const mid of rodMemberIds) {
-      const rows = await db
-        .select({
-          rivalId: rivalryScores.rivalId,
-          rivalName: rivalryScores.rivalName,
-          h2hLosses: rivalryScores.h2hLosses,
-          playoffEliminations: rivalryScores.playoffEliminations,
-        })
-        .from(rivalryScores)
-        .where(eq(rivalryScores.memberId, mid));
+    for (const mid of focalMemberIds) {
+      let rows: typeof rivalryPairs = [];
+      try {
+        rows = await db
+          .select({
+            rivalId: rivalryScores.rivalId,
+            rivalName: rivalryScores.rivalName,
+            h2hLosses: rivalryScores.h2hLosses,
+            playoffEliminations: rivalryScores.playoffEliminations,
+          })
+          .from(rivalryScores)
+          .where(eq(rivalryScores.memberId, mid));
+      } catch (e) {
+        if (isMissingTableError(e)) {
+          console.warn("[enrichment] weeklyStorylines: rivalry_scores table absent, skipping rivalry enrichment.");
+          break;
+        }
+        throw e;
+      }
       if (rows.length > 0) {
         rivalryPairs = rows;
         break;
@@ -663,10 +693,18 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   // Load previous season ranks (for COLLAPSE detection)
   const prevSeasonRanks: Record<number, number> = {};
   const prevSeason = season - 1;
-  const prevData = await getCachedView(prevSeason, "combined");
-  if (prevData) {
-    const prevPayload = prevData.payload as Record<string, unknown>;
-    const prevTeams = normalizeTeams(prevPayload);
+  const prevTeamsRes = await getSeasonTeams({ leagueId: leagueKey, season: prevSeason });
+  let prevTeams: ReturnType<typeof normalizeTeams> | null =
+    prevTeamsRes.count > 0
+      ? (prevTeamsRes.rows as ReturnType<typeof normalizeTeams>)
+      : null;
+  if (!prevTeams) {
+    const prevData = await getCachedView(prevSeason, "combined", undefined, { userId });
+    if (prevData) {
+      prevTeams = normalizeTeams(prevData.payload as Record<string, unknown>);
+    }
+  }
+  if (prevTeams) {
     const sortedPrev = [...prevTeams].sort((a, b) => {
       const rA = (a.rankFinal as number) || 99;
       const rB = (b.rankFinal as number) || 99;
@@ -682,7 +720,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   const ownerPlayoffRecords: Record<string, { playoffWins: number; playoffLosses: number }> = {};
   try {
     const { buildLiveOpponentProfiles } = await import('./liveOpponentProfile');
-    const profiles = await buildLiveOpponentProfiles() as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
+    const profiles = await buildLiveOpponentProfiles(userId) as Map<string, { career: { playoffWins: number; playoffLosses: number } }>;
     for (const [memberId, profile] of Array.from(profiles.entries())) {
       ownerPlayoffRecords[memberId] = {
         playoffWins: profile.career.playoffWins ?? 0,
@@ -695,7 +733,7 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
   const ownerTrophyBlocks: Record<string, string> = {};
   try {
     const { computeAllTrophyHistory, buildTrophySummary } = await import('./championshipHistoryBuilder');
-    const trophyMap = await computeAllTrophyHistory();
+    const trophyMap = await computeAllTrophyHistory(undefined, userId);
     for (const [memberId, rec] of Array.from(trophyMap.entries())) {
       ownerTrophyBlocks[memberId] = buildTrophySummary(rec);
     }
@@ -703,10 +741,10 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
 
   // Build enriched H2H blocks for Rod's rivalry pairs
   const rivalH2HBlocks: Record<string, string> = {};
-  if (rodMemberIds.length > 0) {
+  if (focalMemberIds.length > 0) {
     try {
       const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
-      const rodId = await resolveRodMemberId();
+      const rodId = await resolveRodMemberId(userId);
       if (rodId) {
         // Resolve member names from current season data
         const membersArr = (payload.members as Record<string, unknown>[]) || [];
@@ -716,12 +754,12 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
           const name = `${m.firstName || ''} ${m.lastName || ''}`.trim() || (m.displayName as string) || mid;
           memberNameMap.set(mid, name);
         }
-        const rodName = memberNameMap.get(rodId) || 'Rod Sellers';
+        const rodName = memberNameMap.get(rodId) || 'Your team';
         for (const rp of rivalryPairs) {
           const rivalName = memberNameMap.get(rp.rivalId) || rp.rivalName;
-          const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName);
+          const h2h = await computeRichH2H(rodId, rp.rivalId, rodName, rivalName, userId);
           if (h2h.rsTotalGames > 0) {
-            rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `Rod vs ${rivalName}`);
+            rivalH2HBlocks[rp.rivalId] = buildH2HPromptBlock(h2h, `${rodName} vs ${rivalName}`);
           }
         }
       }
@@ -740,8 +778,8 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
     teamNameMap,
     memberIdsMap,
     rivalryPairs,
-    rodTeamId,
-    rodMemberIds,
+    focalTeamId,
+    focalMemberIds,
     prevSeasonRanks,
     ownerPlayoffRecords,
     rivalH2HBlocks,
@@ -754,11 +792,15 @@ export async function refreshWeeklyStorylines(season: number): Promise<WeeklySto
 
   const results: WeeklyStorylineRow[] = [...existingRows];
 
+  // C4: resolve neutral league context once for all story prompts.
+  const __leagueCtx = await resolveLeaguePromptContext(userId, season);
+  const __leaguePrompt = buildLeaguePromptContext(__leagueCtx);
+
   for (const trigger of triggers) {
     const key = `${trigger.storyType}-${trigger.teamId}`;
     if (existingKeys.has(key)) continue; // already cached
 
-    const { headline, bodyText } = await generateStoryContent(trigger);
+    const { headline, bodyText } = await generateStoryContent(trigger, __leaguePrompt);
 
     const row = {
       season,

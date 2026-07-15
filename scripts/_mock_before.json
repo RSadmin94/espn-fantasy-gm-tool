@@ -1,0 +1,1570 @@
+[
+  {
+    "pick": 1,
+    "round": 1,
+    "owner": "Nate West",
+    "player": "Jahmyr Gibbs",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 2,
+    "round": 1,
+    "owner": "Randy Broner Jr",
+    "player": "Ja'Marr Chase",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 3,
+    "round": 1,
+    "owner": "LOZELL STYLES",
+    "player": "Drake London",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 4,
+    "round": 1,
+    "owner": "Tony Dorsey",
+    "player": "Amon-Ra St. Brown",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 5,
+    "round": 1,
+    "owner": "Mark Deroux",
+    "player": "Christian McCaffrey",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 6,
+    "round": 1,
+    "owner": "Sheldon deRoux",
+    "player": "Jonathan Taylor",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 7,
+    "round": 1,
+    "owner": "Marlon Moore",
+    "player": "Justin Jefferson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 8,
+    "round": 1,
+    "owner": "Jan Graham",
+    "player": "De'Von Achane",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 9,
+    "round": 1,
+    "owner": "Demetri Clark",
+    "player": "Josh Allen",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 10,
+    "round": 1,
+    "owner": "Christian Graham",
+    "player": "CeeDee Lamb",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 11,
+    "round": 1,
+    "owner": "Sheldon deRoux",
+    "player": "Ashton Jeanty",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 12,
+    "round": 1,
+    "owner": "Marcus Reese",
+    "player": "Puka Nacua",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 13,
+    "round": 1,
+    "owner": "Steffon Bizzell",
+    "player": "Colston Loveland",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 14,
+    "round": 1,
+    "owner": "Randy Broner Jr",
+    "player": "Bijan Robinson",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 15,
+    "round": 2,
+    "owner": "Bruce Edwards",
+    "player": "Saquon Barkley",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 16,
+    "round": 2,
+    "owner": "Steffon Bizzell",
+    "player": "Jeremiyah Love",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 17,
+    "round": 2,
+    "owner": "Marcus Reese",
+    "player": "Derrick Henry",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 18,
+    "round": 2,
+    "owner": "Rod Sellers",
+    "player": "Lamar Jackson",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 19,
+    "round": 2,
+    "owner": "Christian Graham",
+    "player": "Omarion Hampton",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 20,
+    "round": 2,
+    "owner": "Demetri Clark",
+    "player": "Nico Collins",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 21,
+    "round": 2,
+    "owner": "Jan Graham",
+    "player": "Chase Brown",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 22,
+    "round": 2,
+    "owner": "Marlon Moore",
+    "player": "Josh Jacobs",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 23,
+    "round": 2,
+    "owner": "Rod Sellers",
+    "player": "Trey McBride",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 24,
+    "round": 2,
+    "owner": "Mark Deroux",
+    "player": "A.J. Brown",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 25,
+    "round": 2,
+    "owner": "Tony Dorsey",
+    "player": "Kenneth Walker III",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 26,
+    "round": 2,
+    "owner": "LOZELL STYLES",
+    "player": "George Pickens",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 27,
+    "round": 2,
+    "owner": "Bruce Edwards",
+    "player": "Tyler Warren",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 28,
+    "round": 2,
+    "owner": "Nate West",
+    "player": "Chris Olave",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 29,
+    "round": 3,
+    "owner": "Nate West",
+    "player": "James Cook III",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 30,
+    "round": 3,
+    "owner": "Bruce Edwards",
+    "player": "Breece Hall",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 31,
+    "round": 3,
+    "owner": "LOZELL STYLES",
+    "player": "Garrett Wilson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 32,
+    "round": 3,
+    "owner": "Tony Dorsey",
+    "player": "Kyren Williams",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 33,
+    "round": 3,
+    "owner": "Mark Deroux",
+    "player": "Javonte Williams",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 34,
+    "round": 3,
+    "owner": "Rod Sellers",
+    "player": "Tetairoa McMillan",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 35,
+    "round": 3,
+    "owner": "Marlon Moore",
+    "player": "Cam Skattebo",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 36,
+    "round": 3,
+    "owner": "Jan Graham",
+    "player": "Zay Flowers",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 37,
+    "round": 3,
+    "owner": "Demetri Clark",
+    "player": "Davante Adams",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 38,
+    "round": 3,
+    "owner": "Christian Graham",
+    "player": "Emeka Egbuka",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 39,
+    "round": 3,
+    "owner": "Rod Sellers",
+    "player": "Bucky Irving",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 40,
+    "round": 3,
+    "owner": "Marcus Reese",
+    "player": "Drake Maye",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 41,
+    "round": 3,
+    "owner": "Steffon Bizzell",
+    "player": "Terry McLaurin",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 42,
+    "round": 3,
+    "owner": "Bruce Edwards",
+    "player": "Malik Nabers",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 43,
+    "round": 4,
+    "owner": "Bruce Edwards",
+    "player": "Jayden Daniels",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 44,
+    "round": 4,
+    "owner": "Steffon Bizzell",
+    "player": "Quinshon Judkins",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 45,
+    "round": 4,
+    "owner": "Marcus Reese",
+    "player": "Ladd McConkey",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 46,
+    "round": 4,
+    "owner": "Rod Sellers",
+    "player": "Carnell Tate",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 47,
+    "round": 4,
+    "owner": "Christian Graham",
+    "player": "Joe Burrow",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 48,
+    "round": 4,
+    "owner": "Demetri Clark",
+    "player": "Tee Higgins",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 49,
+    "round": 4,
+    "owner": "Jan Graham",
+    "player": "TreVeyon Henderson",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 50,
+    "round": 4,
+    "owner": "Marlon Moore",
+    "player": "Jalen Hurts",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 51,
+    "round": 4,
+    "owner": "Sheldon deRoux",
+    "player": "DeVonta Smith",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 52,
+    "round": 4,
+    "owner": "Mark Deroux",
+    "player": "Jaylen Waddle",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 53,
+    "round": 4,
+    "owner": "Tony Dorsey",
+    "player": "Jadarian Price",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 54,
+    "round": 4,
+    "owner": "LOZELL STYLES",
+    "player": "DJ Moore",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 55,
+    "round": 4,
+    "owner": "Randy Broner Jr",
+    "player": "Harold Fannin Jr.",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 56,
+    "round": 4,
+    "owner": "Nate West",
+    "player": "Jameson Williams",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 57,
+    "round": 5,
+    "owner": "Nate West",
+    "player": "D'Andre Swift",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 58,
+    "round": 5,
+    "owner": "Bruce Edwards",
+    "player": "David Montgomery",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 59,
+    "round": 5,
+    "owner": "LOZELL STYLES",
+    "player": "Rome Odunze",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 60,
+    "round": 5,
+    "owner": "Tony Dorsey",
+    "player": "Kyle Pitts Sr.",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 61,
+    "round": 5,
+    "owner": "Mark Deroux",
+    "player": "Jaxson Dart",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 62,
+    "round": 5,
+    "owner": "Sheldon deRoux",
+    "player": "Bhayshul Tuten",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 63,
+    "round": 5,
+    "owner": "Marlon Moore",
+    "player": "Luther Burden III",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 64,
+    "round": 5,
+    "owner": "Jan Graham",
+    "player": "Sam LaPorta",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 65,
+    "round": 5,
+    "owner": "Demetri Clark",
+    "player": "Marvin Harrison Jr.",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 66,
+    "round": 5,
+    "owner": "Christian Graham",
+    "player": "Mike Evans",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 67,
+    "round": 5,
+    "owner": "Sheldon deRoux",
+    "player": "Chuba Hubbard",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 68,
+    "round": 5,
+    "owner": "Marcus Reese",
+    "player": "George Kittle",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 69,
+    "round": 5,
+    "owner": "Steffon Bizzell",
+    "player": "Rashee Rice",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 70,
+    "round": 5,
+    "owner": "Randy Broner Jr",
+    "player": "DK Metcalf",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 71,
+    "round": 6,
+    "owner": "Randy Broner Jr",
+    "player": "Michael Pittman Jr.",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 72,
+    "round": 6,
+    "owner": "Steffon Bizzell",
+    "player": "Courtland Sutton",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 73,
+    "round": 6,
+    "owner": "Marcus Reese",
+    "player": "Alec Pierce",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 74,
+    "round": 6,
+    "owner": "Rod Sellers",
+    "player": "Tony Pollard",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 75,
+    "round": 6,
+    "owner": "Christian Graham",
+    "player": "Myles Garrett",
+    "pos": "DP",
+    "factor": "ESPN_ADP"
+  },
+  {
+    "pick": 76,
+    "round": 6,
+    "owner": "Demetri Clark",
+    "player": "Jordyn Brooks",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 77,
+    "round": 6,
+    "owner": "Jan Graham",
+    "player": "Maxx Crosby",
+    "pos": "DP",
+    "factor": "ESPN_ADP"
+  },
+  {
+    "pick": 78,
+    "round": 6,
+    "owner": "Marlon Moore",
+    "player": "Fred Warner",
+    "pos": "DP",
+    "factor": "ESPN_ADP"
+  },
+  {
+    "pick": 79,
+    "round": 6,
+    "owner": "Sheldon deRoux",
+    "player": "Blake Cashman",
+    "pos": "DP",
+    "factor": "ESPN_ADP"
+  },
+  {
+    "pick": 80,
+    "round": 6,
+    "owner": "Mark Deroux",
+    "player": "Jack Campbell",
+    "pos": "DP",
+    "factor": "POSITION_CAP"
+  },
+  {
+    "pick": 81,
+    "round": 6,
+    "owner": "Tony Dorsey",
+    "player": "Jordyn Tyson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 82,
+    "round": 6,
+    "owner": "LOZELL STYLES",
+    "player": "Brock Bowers",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 83,
+    "round": 6,
+    "owner": "Randy Broner Jr",
+    "player": "Will Anderson Jr.",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 84,
+    "round": 6,
+    "owner": "Nate West",
+    "player": "Travis Kelce",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 85,
+    "round": 7,
+    "owner": "Nate West",
+    "player": "Jaylen Warren",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 86,
+    "round": 7,
+    "owner": "Randy Broner Jr",
+    "player": "Christian Watson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 87,
+    "round": 7,
+    "owner": "LOZELL STYLES",
+    "player": "Brian Thomas Jr.",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 88,
+    "round": 7,
+    "owner": "Tony Dorsey",
+    "player": "Aaron Jones Sr.",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 89,
+    "round": 7,
+    "owner": "Mark Deroux",
+    "player": "Travis Etienne Jr.",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 90,
+    "round": 7,
+    "owner": "Rod Sellers",
+    "player": "Rico Dowdle",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 91,
+    "round": 7,
+    "owner": "Marlon Moore",
+    "player": "Chris Godwin Jr.",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 92,
+    "round": 7,
+    "owner": "Jan Graham",
+    "player": "Matthew Stafford",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 93,
+    "round": 7,
+    "owner": "Demetri Clark",
+    "player": "Parker Washington",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 94,
+    "round": 7,
+    "owner": "Christian Graham",
+    "player": "Dallas Goedert",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 95,
+    "round": 7,
+    "owner": "Sheldon deRoux",
+    "player": "Dak Prescott",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 96,
+    "round": 7,
+    "owner": "Marcus Reese",
+    "player": "Jakobi Meyers",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 97,
+    "round": 7,
+    "owner": "Steffon Bizzell",
+    "player": "Jeffery Simmons",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 98,
+    "round": 7,
+    "owner": "Bruce Edwards",
+    "player": "Nick Bolton",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 99,
+    "round": 8,
+    "owner": "Bruce Edwards",
+    "player": "J.K. Dobbins",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 100,
+    "round": 8,
+    "owner": "Steffon Bizzell",
+    "player": "Brock Purdy",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 101,
+    "round": 8,
+    "owner": "Marcus Reese",
+    "player": "Kenneth Gainwell",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 102,
+    "round": 8,
+    "owner": "Rod Sellers",
+    "player": "Carson Schwesinger",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 103,
+    "round": 8,
+    "owner": "Christian Graham",
+    "player": "Rachaad White",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 104,
+    "round": 8,
+    "owner": "Demetri Clark",
+    "player": "Makai Lemon",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 105,
+    "round": 8,
+    "owner": "Jan Graham",
+    "player": "Jaxon Smith-Njigba",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 106,
+    "round": 8,
+    "owner": "Marlon Moore",
+    "player": "Rhamondre Stevenson",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 107,
+    "round": 8,
+    "owner": "Sheldon deRoux",
+    "player": "Tucker Kraft",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 108,
+    "round": 8,
+    "owner": "Mark Deroux",
+    "player": "Jake Ferguson",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 109,
+    "round": 8,
+    "owner": "Tony Dorsey",
+    "player": "Caleb Williams",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 110,
+    "round": 8,
+    "owner": "LOZELL STYLES",
+    "player": "Brian Burns",
+    "pos": "DP",
+    "factor": "ROSTER_NEED"
+  },
+  {
+    "pick": 111,
+    "round": 8,
+    "owner": "Randy Broner Jr",
+    "player": "Wan'Dale Robinson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 112,
+    "round": 8,
+    "owner": "Nate West",
+    "player": "Patrick Mahomes",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 113,
+    "round": 9,
+    "owner": "Nate West",
+    "player": "RJ Harvey",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 114,
+    "round": 9,
+    "owner": "Randy Broner Jr",
+    "player": "Kyle Monangai",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 115,
+    "round": 9,
+    "owner": "LOZELL STYLES",
+    "player": "Travis Hunter",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 116,
+    "round": 9,
+    "owner": "Tony Dorsey",
+    "player": "Matthew Golden",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 117,
+    "round": 9,
+    "owner": "Mark Deroux",
+    "player": "Michael Wilson",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 118,
+    "round": 9,
+    "owner": "Sheldon deRoux",
+    "player": "Ricky Pearsall",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 119,
+    "round": 9,
+    "owner": "Marlon Moore",
+    "player": "Blake Corum",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 120,
+    "round": 9,
+    "owner": "Jan Graham",
+    "player": "KC Concepcion",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 121,
+    "round": 9,
+    "owner": "Demetri Clark",
+    "player": "Xavier Worthy",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 122,
+    "round": 9,
+    "owner": "Christian Graham",
+    "player": "Jonathon Brooks",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 123,
+    "round": 9,
+    "owner": "Rod Sellers",
+    "player": "Josh Downs",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 124,
+    "round": 9,
+    "owner": "Marcus Reese",
+    "player": "Aidan Hutchinson",
+    "pos": "DP",
+    "factor": "POSITION_CAP"
+  },
+  {
+    "pick": 125,
+    "round": 9,
+    "owner": "Steffon Bizzell",
+    "player": "Jordan Addison",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 126,
+    "round": 9,
+    "owner": "Bruce Edwards",
+    "player": "Jacory Croskey-Merritt",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 127,
+    "round": 10,
+    "owner": "Bruce Edwards",
+    "player": "Khalil Shakir",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 128,
+    "round": 10,
+    "owner": "Steffon Bizzell",
+    "player": "Quentin Johnston",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 129,
+    "round": 10,
+    "owner": "Marcus Reese",
+    "player": "Zach Charbonnet",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 130,
+    "round": 10,
+    "owner": "Rod Sellers",
+    "player": "Woody Marks",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 131,
+    "round": 10,
+    "owner": "Christian Graham",
+    "player": "Jayden Reed",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 132,
+    "round": 10,
+    "owner": "Demetri Clark",
+    "player": "Isaiah Likely",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 133,
+    "round": 10,
+    "owner": "Jan Graham",
+    "player": "Isiah Pacheco",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 134,
+    "round": 10,
+    "owner": "Marlon Moore",
+    "player": "Mark Andrews",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 135,
+    "round": 10,
+    "owner": "Sheldon deRoux",
+    "player": "Romeo Doubs",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 136,
+    "round": 10,
+    "owner": "Mark Deroux",
+    "player": "Tyjae Spears",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 137,
+    "round": 10,
+    "owner": "Tony Dorsey",
+    "player": "Cedric Gray",
+    "pos": "DP",
+    "factor": "POSITION_CAP"
+  },
+  {
+    "pick": 138,
+    "round": 10,
+    "owner": "LOZELL STYLES",
+    "player": "Trevor Lawrence",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 139,
+    "round": 10,
+    "owner": "Randy Broner Jr",
+    "player": "Bo Nix",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 140,
+    "round": 10,
+    "owner": "Nate West",
+    "player": "Foyesade Oluokun",
+    "pos": "DP",
+    "factor": "POSITION_CAP"
+  },
+  {
+    "pick": 141,
+    "round": 11,
+    "owner": "Nate West",
+    "player": "Alvin Kamara",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 142,
+    "round": 11,
+    "owner": "Randy Broner Jr",
+    "player": "Jordan Mason",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 143,
+    "round": 11,
+    "owner": "LOZELL STYLES",
+    "player": "Chris Rodriguez Jr.",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 144,
+    "round": 11,
+    "owner": "Tony Dorsey",
+    "player": "Jalen Coker",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 145,
+    "round": 11,
+    "owner": "Mark Deroux",
+    "player": "Jayden Higgins",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 146,
+    "round": 11,
+    "owner": "Sheldon deRoux",
+    "player": "Omar Cooper Jr.",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 147,
+    "round": 11,
+    "owner": "Marlon Moore",
+    "player": "Rashid Shaheed",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 148,
+    "round": 11,
+    "owner": "Jan Graham",
+    "player": "Stefon Diggs",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 149,
+    "round": 11,
+    "owner": "Demetri Clark",
+    "player": "Tyler Allgeier",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 150,
+    "round": 11,
+    "owner": "Christian Graham",
+    "player": "Jalen McMillan",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 151,
+    "round": 11,
+    "owner": "Rod Sellers",
+    "player": "Calvin Ridley",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 152,
+    "round": 11,
+    "owner": "Marcus Reese",
+    "player": "Tyreek Hill",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 153,
+    "round": 11,
+    "owner": "Steffon Bizzell",
+    "player": "Tank Bigsby",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 154,
+    "round": 11,
+    "owner": "Bruce Edwards",
+    "player": "Jerry Jeudy",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 155,
+    "round": 12,
+    "owner": "Bruce Edwards",
+    "player": "Kenyon Sadiq",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 156,
+    "round": 12,
+    "owner": "Steffon Bizzell",
+    "player": "T.J. Hockenson",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 157,
+    "round": 12,
+    "owner": "Marcus Reese",
+    "player": "Justin Herbert",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 158,
+    "round": 12,
+    "owner": "Rod Sellers",
+    "player": "Jared Goff",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 159,
+    "round": 12,
+    "owner": "Christian Graham",
+    "player": "Dalton Kincaid",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 160,
+    "round": 12,
+    "owner": "Demetri Clark",
+    "player": "Tyler Shough",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 161,
+    "round": 12,
+    "owner": "Jan Graham",
+    "player": "Kyler Murray",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 162,
+    "round": 12,
+    "owner": "Marlon Moore",
+    "player": "Baker Mayfield",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 163,
+    "round": 12,
+    "owner": "Sheldon deRoux",
+    "player": "Hunter Henry",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 164,
+    "round": 12,
+    "owner": "Mark Deroux",
+    "player": "Jordan Love",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 165,
+    "round": 12,
+    "owner": "Tony Dorsey",
+    "player": "Fernando Mendoza",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 166,
+    "round": 12,
+    "owner": "LOZELL STYLES",
+    "player": "Juwan Johnson",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 167,
+    "round": 12,
+    "owner": "Randy Broner Jr",
+    "player": "Sam Darnold",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 168,
+    "round": 12,
+    "owner": "Nate West",
+    "player": "Daniel Jones",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 169,
+    "round": 13,
+    "owner": "Nate West",
+    "player": "Brandon Aubrey",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 170,
+    "round": 13,
+    "owner": "Randy Broner Jr",
+    "player": "Cameron Dicker",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 171,
+    "round": 13,
+    "owner": "LOZELL STYLES",
+    "player": "Jason Myers",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 172,
+    "round": 13,
+    "owner": "Tony Dorsey",
+    "player": "Ka'imi Fairbairn",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 173,
+    "round": 13,
+    "owner": "Mark Deroux",
+    "player": "Cam Little",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 174,
+    "round": 13,
+    "owner": "Sheldon deRoux",
+    "player": "Harrison Mevis",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 175,
+    "round": 13,
+    "owner": "Marlon Moore",
+    "player": "Eddy Pineiro",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 176,
+    "round": 13,
+    "owner": "Jan Graham",
+    "player": "Jake Bates",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 177,
+    "round": 13,
+    "owner": "Demetri Clark",
+    "player": "Harrison Butker",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 178,
+    "round": 13,
+    "owner": "Christian Graham",
+    "player": "Tyler Loop",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 179,
+    "round": 13,
+    "owner": "Rod Sellers",
+    "player": "Chris Boswell",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 180,
+    "round": 13,
+    "owner": "Marcus Reese",
+    "player": "Will Reichard",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 181,
+    "round": 13,
+    "owner": "Steffon Bizzell",
+    "player": "Cairo Santos",
+    "pos": "K",
+    "factor": null
+  },
+  {
+    "pick": 182,
+    "round": 13,
+    "owner": "Bruce Edwards",
+    "player": "C.J. Stroud",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 183,
+    "round": 14,
+    "owner": "Bruce Edwards",
+    "player": "Brenton Strange",
+    "pos": "TE",
+    "factor": null
+  },
+  {
+    "pick": 184,
+    "round": 14,
+    "owner": "Steffon Bizzell",
+    "player": "Tyrone Tracy Jr.",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 185,
+    "round": 14,
+    "owner": "Marcus Reese",
+    "player": "Brian Robinson Jr.",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 186,
+    "round": 14,
+    "owner": "Rod Sellers",
+    "player": "Denzel Boston",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 187,
+    "round": 14,
+    "owner": "Christian Graham",
+    "player": "Cam Ward",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 188,
+    "round": 14,
+    "owner": "Demetri Clark",
+    "player": "Nick Bellore",
+    "pos": "RB",
+    "factor": null
+  },
+  {
+    "pick": 189,
+    "round": 14,
+    "owner": "Jan Graham",
+    "player": "Jauan Jennings",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 190,
+    "round": 14,
+    "owner": "Marlon Moore",
+    "player": "Cooper Kupp",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 191,
+    "round": 14,
+    "owner": "Sheldon deRoux",
+    "player": "Malik Willis",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 192,
+    "round": 14,
+    "owner": "Mark Deroux",
+    "player": "Germie Bernard",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 193,
+    "round": 14,
+    "owner": "Tony Dorsey",
+    "player": "Brandon Aiyuk",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 194,
+    "round": 14,
+    "owner": "LOZELL STYLES",
+    "player": "Bryce Young",
+    "pos": "QB",
+    "factor": null
+  },
+  {
+    "pick": 195,
+    "round": 14,
+    "owner": "Randy Broner Jr",
+    "player": "Deebo Samuel",
+    "pos": "WR",
+    "factor": null
+  },
+  {
+    "pick": 196,
+    "round": 14,
+    "owner": "Nate West",
+    "player": "Chig Okonkwo",
+    "pos": "TE",
+    "factor": null
+  }
+]

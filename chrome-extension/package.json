@@ -1,0 +1,8 @@
+{
+  "name": "gm-war-room-chrome-extension",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "node --check background.js && node --check popup.js"
+  }
+}

@@ -13,6 +13,9 @@
  *   4. parsePickRecommendation() — parse the LLM JSON response.
  *
  * No ESPN API calls. No DB writes. All inputs come from existing procedures.
+ *
+ * QUARANTINE: Active draft / war-room tools only — not Draft History V3 display.
+ * Historical board: `draftRecapCanonical` / docs/DRAFT_HISTORY_CANONICAL.md
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -333,15 +336,23 @@ export function buildPickRecommendationPrompt(params: {
   recentPicks: DraftPick[];
   positionRun: { position: string; count: number; alert: string } | null;
   leagueContext: string;
+  /** Resolved focal-owner display name (from leaguePromptContext); neutral fallback when absent. */
+  focalOwnerName?: string | null;
 }): string {
   const {
     currentOverall, currentRound, pickInRound, totalTeams, totalRounds,
     rodRoster, positionalNeeds, topAvailable, ownerTendencies, recentPicks, positionRun, leagueContext,
+    focalOwnerName,
   } = params;
 
   const rosterSummary = rodRoster.length === 0
     ? "No players drafted yet."
     : rodRoster.map(s => `${s.position} ${s.playerName} (Rd ${s.round})`).join(", ");
+
+  // Roster header owner label: resolved focal owner when known, neutral otherwise.
+  const rosterOwnerLabel = focalOwnerName && focalOwnerName.trim()
+    ? `${focalOwnerName.trim().toUpperCase()}'S CURRENT ROSTER`
+    : "YOUR CURRENT ROSTER";
 
   const needsSummary = positionalNeeds
     .filter(n => n.urgency !== "low")
@@ -361,7 +372,11 @@ export function buildPickRecommendationPrompt(params: {
     `#${p.overall} ${p.ownerName}: ${p.playerName} (${p.position})`
   ).join("\n");
 
-  return `You are an elite fantasy football draft advisor for a 14-team PPR league (15 rounds, snake draft).
+  const leagueSizeLabel = totalTeams > 0
+    ? `a ${totalTeams}-team league${totalRounds > 0 ? ` (${totalRounds} rounds)` : ""}`
+    : "a fantasy football league";
+
+  return `You are an elite fantasy football draft advisor for ${leagueSizeLabel}.
 
 LEAGUE CONTEXT:
 ${leagueContext}
@@ -370,7 +385,7 @@ CURRENT PICK:
 - Overall pick: #${currentOverall} (Round ${currentRound}, Pick ${pickInRound} of ${totalTeams})
 - Rounds remaining: ${totalRounds - currentRound + 1}
 
-ROD'S CURRENT ROSTER (${rodRoster.length} players):
+${rosterOwnerLabel} (${rodRoster.length} players):
 ${rosterSummary}
 
 POSITIONAL NEEDS (urgency analysis):

@@ -29,8 +29,14 @@
  *   getReputationEventsFromDb()  — read cached rows from DB
  */
 
-import { getAllCachedSeasons, getCachedView, getDb } from "./db";
+import { getAllCachedSeasons, getDb, resolveActiveLeagueId } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  getSeasonTransactions,
+} from "./leagueDataReads";
 import { reputationEvents } from "../drizzle/schema";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, desc } from "drizzle-orm";
 import {
   normalizeTeams,
@@ -397,27 +403,35 @@ async function upsertReputationEvent(
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db
-    .insert(reputationEvents)
-    .values({
-      memberId: event.memberId,
-      ownerName: event.ownerName,
-      season: event.season,
-      eventType: event.eventType,
-      eventLabel: event.eventLabel,
-      eventSentence: sentence,
-      supportingStat: event.supportingStat,
-      severity: event.severity,
-    })
-    .onDuplicateKeyUpdate({
-      set: {
+  try {
+    await db
+      .insert(reputationEvents)
+      .values({
+        memberId: event.memberId,
+        ownerName: event.ownerName,
+        season: event.season,
+        eventType: event.eventType,
         eventLabel: event.eventLabel,
+        eventSentence: sentence,
         supportingStat: event.supportingStat,
         severity: event.severity,
-        // Only update sentence if we have a new one
-        eventSentence: sentence,
-      },
-    });
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          eventLabel: event.eventLabel,
+          supportingStat: event.supportingStat,
+          severity: event.severity,
+          // Only update sentence if we have a new one
+          eventSentence: sentence,
+        },
+      });
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] upsertReputationEvent: reputation_events table absent, skipping reputation persistence.");
+      return;
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for a member, sorted by season desc. */
@@ -436,11 +450,19 @@ export async function getReputationEventsFromDb(
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .where(eq(reputationEvents.memberId, memberId))
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .where(eq(reputationEvents.memberId, memberId))
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for a season. */
@@ -459,11 +481,19 @@ export async function getSeasonReputationEventsFromDb(
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .where(eq(reputationEvents.season, season))
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .where(eq(reputationEvents.season, season))
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getSeasonReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 /** Read all reputation events for all members (for the reputation timeline). */
@@ -480,10 +510,18 @@ export async function getAllReputationEventsFromDb(): Promise<Array<{
 }>> {
   const db = await getDb();
   if (!db) return [];
-  return db
-    .select()
-    .from(reputationEvents)
-    .orderBy(desc(reputationEvents.season));
+  try {
+    return await db
+      .select()
+      .from(reputationEvents)
+      .orderBy(desc(reputationEvents.season));
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      console.warn("[enrichment] getAllReputationEventsFromDb: reputation_events table absent, returning empty enrichment.");
+      return [];
+    }
+    throw e;
+  }
 }
 
 // ─── Refresh (compute + persist) ─────────────────────────────────────────────
@@ -494,11 +532,19 @@ export async function getAllReputationEventsFromDb(): Promise<Array<{
  * LLM sentences are generated once per event and cached.
  */
 export async function refreshReputationEvents(
-  opts: { generateLLM?: boolean } = {}
+  opts: { generateLLM?: boolean; userId?: number } = {}
 ): Promise<{ processed: number; newLLM: number; skipped: number }> {
-  const { generateLLM = true } = opts;
-  const cachedSeasons = await getAllCachedSeasons();
+  const { generateLLM = true, userId } = opts;
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return { processed: 0, newLLM: 0, skipped: 0 };
+
+  const anchorSeason = Math.max(...cachedSeasons);
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    anchorSeason,
+  );
+  const leagueKey = String(leagueId).slice(0, 32);
 
   // Load existing events to avoid re-generating LLM sentences
   const existingEvents = await getAllReputationEventsFromDb();
@@ -537,12 +583,18 @@ export async function refreshReputationEvents(
 
   for (const season of cachedSeasons) {
     try {
-      const payload = await getCachedView(season, "combined");
-      if (!payload) continue;
+      const ref = { leagueId: leagueKey, season };
+      const [teamsRes, matchRes, txRes] = await Promise.all([
+        getSeasonTeams(ref),
+        getSeasonMatchups(ref),
+        getSeasonTransactions(ref),
+      ]);
 
-      const teams = normalizeTeams(payload as Record<string, unknown>);
-      const matchups = normalizeMatchups(payload as Record<string, unknown>);
-      const txs = normalizeTransactions(payload as Record<string, unknown>);
+      if (teamsRes.count === 0) continue;
+
+      const teams = teamsRes.rows as ReturnType<typeof normalizeTeams>;
+      const matchups = matchRes.rows as ReturnType<typeof normalizeMatchups>;
+      const txs = txRes.rows as ReturnType<typeof normalizeTransactions>;
 
       // Build maps
       const teamMemberMap: Record<number, string> = {};

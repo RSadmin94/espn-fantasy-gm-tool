@@ -1,13 +1,23 @@
-import { getDb } from "./server/db";
-import { espnSeasonCache } from "./drizzle/schema";
+import { getDb, parseEspnFantasyDataCacheKey } from "./server/db";
+import { fantasyDataCache } from "./drizzle/schema";
+import { like } from "drizzle-orm";
 
 async function main() {
   const db = await getDb();
-  const rows = await db.select({ season: espnSeasonCache.season, view: espnSeasonCache.view }).from(espnSeasonCache);
-  console.log("Views in cache:", rows.map(r => `${r.season}:${r.view}`).join(", "));
+  const rows = await db
+    .select({ cacheKey: fantasyDataCache.cacheKey })
+    .from(fantasyDataCache)
+    .where(like(fantasyDataCache.cacheKey, "espn:%"));
+  console.log(
+    "ESPN rows in fantasy_data_cache:",
+    rows.map((r) => {
+      const p = parseEspnFantasyDataCacheKey(r.cacheKey);
+      return p ? `${p.season}:${p.viewName} (${p.leagueId})` : r.cacheKey;
+    }).join(", ")
+  );
 
-  // Sample one season to see payload structure
-  const sample = await db.select().from(espnSeasonCache).limit(1);
+  // Sample one ESPN row to see payload structure
+  const sample = await db.select().from(fantasyDataCache).where(like(fantasyDataCache.cacheKey, "espn:%")).limit(1);
   if (sample.length > 0) {
     const payload = typeof sample[0].payload === "string"
       ? JSON.parse(sample[0].payload)

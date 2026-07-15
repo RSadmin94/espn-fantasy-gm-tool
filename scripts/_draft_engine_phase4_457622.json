@@ -1,0 +1,860 @@
+{
+  "separation": {
+    "spreadBefore": {
+      "uniqueLabels": 4,
+      "meanNeed": 0.7359197376326093
+    },
+    "spreadAfter": {
+      "uniqueArchetypes": 6,
+      "meanAbsDeviation": 0.12593864221923798
+    }
+  },
+  "clusters": [
+    {
+      "id": "cluster_1",
+      "label": "Legacy RB-Forward",
+      "members": 2
+    },
+    {
+      "id": "cluster_2",
+      "label": "WR-Forward",
+      "members": 3
+    },
+    {
+      "id": "cluster_3",
+      "label": "RB-Forward",
+      "members": 5
+    },
+    {
+      "id": "cluster_4",
+      "label": "Herd-Responsive",
+      "members": 2
+    }
+  ],
+  "souls": [
+    {
+      "displayName": "Christian Graham",
+      "personalityFitTier": "full",
+      "choiceEventCount": 205,
+      "distinctiveArchetype": "Modern WR-Forward",
+      "clusterLabel": "WR-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "panic",
+          "delta": -0.2924980675379118
+        },
+        {
+          "drive": "rbEarlyRound",
+          "delta": -0.2836744880591315
+        },
+        {
+          "drive": "comfortAnchor",
+          "delta": -0.23153921612230874
+        }
+      ],
+      "avgChosenProbability": 0.07327479138010891,
+      "coefficients": {
+        "value": -0.039493950986786326,
+        "need": 0.35,
+        "scarcityTierCliff": 0.17735023477960316,
+        "herdFomo": 0.18865547290210455,
+        "contrarian": -0.2102921061646351,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.0974625789335167,
+        "panic": 0.13610573658956338,
+        "rbEarlyRound": -0.0854735630244288,
+        "wrEarlyRound": 0.1790605878040891,
+        "rbEarlyLegacyEra": -0.011867348830378524,
+        "wrEarlyModernEra": 0.18346672982376094
+      },
+      "deviationCoefficients": {
+        "value": -0.052397746506064505,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.08584192668933711,
+        "herdFomo": 0.12238973654611686,
+        "contrarian": -0.03844650425827634,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.23153921612230874,
+        "panic": -0.2924980675379118,
+        "rbEarlyRound": -0.2836744880591315,
+        "wrEarlyRound": 0.15096829568280926,
+        "rbEarlyLegacyEra": -0.20309730972503043,
+        "wrEarlyModernEra": 0.11937253731055074
+      }
+    },
+    {
+      "displayName": "LOZELL STYLES",
+      "personalityFitTier": "full",
+      "choiceEventCount": 197,
+      "distinctiveArchetype": "Comfort Re-Drafter",
+      "clusterLabel": "RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "panic",
+          "delta": 0.38284364765550144
+        },
+        {
+          "drive": "value",
+          "delta": 0.21311986201802188
+        },
+        {
+          "drive": "scarcityTierCliff",
+          "delta": -0.1816151558000535
+        }
+      ],
+      "avgChosenProbability": 0.08426269173713426,
+      "coefficients": {
+        "value": 0.22602365753730005,
+        "need": 0.35,
+        "scarcityTierCliff": -0.09010684770978747,
+        "herdFomo": -0.024557739291974422,
+        "contrarian": -0.0048154698793756836,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.4791186342581102,
+        "panic": 0.8114474517829766,
+        "rbEarlyRound": 0.2397935909942,
+        "wrEarlyRound": 0.1425916462683134,
+        "rbEarlyLegacyEra": 0.3108547659169984,
+        "wrEarlyModernEra": 0.1593514382474225
+      },
+      "deviationCoefficients": {
+        "value": 0.21311986201802188,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": -0.1816151558000535,
+        "herdFomo": -0.09082347564796212,
+        "contrarian": 0.16703013202698308,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.15011683920228475,
+        "panic": 0.38284364765550144,
+        "rbEarlyRound": 0.041592665959497316,
+        "wrEarlyRound": 0.11449935414703355,
+        "rbEarlyLegacyEra": 0.11962480502234649,
+        "wrEarlyModernEra": 0.0952572457342123
+      }
+    },
+    {
+      "displayName": "Demetri Clark",
+      "personalityFitTier": "full",
+      "choiceEventCount": 194,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "value",
+          "delta": 0.2537827412209831
+        },
+        {
+          "drive": "rbEarlyLegacyEra",
+          "delta": 0.07011852270717181
+        },
+        {
+          "drive": "scarcityTierCliff",
+          "delta": 0.04747234932928028
+        }
+      ],
+      "avgChosenProbability": 0.07470880524154905,
+      "coefficients": {
+        "value": 0.26668653674026127,
+        "need": 0.35,
+        "scarcityTierCliff": 0.13898065741954632,
+        "herdFomo": 0.056939826329551635,
+        "contrarian": -0.20006944541416766,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.35927565021061836,
+        "panic": 0.43851116694013753,
+        "rbEarlyRound": 0.23099373476157808,
+        "wrEarlyRound": 0.026703458534726863,
+        "rbEarlyLegacyEra": 0.2613484836018237,
+        "wrEarlyModernEra": 0.05048191432375862
+      },
+      "deviationCoefficients": {
+        "value": 0.2537827412209831,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.04747234932928028,
+        "herdFomo": -0.009325910026436054,
+        "contrarian": -0.028223843507808904,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.030273855154792917,
+        "panic": 0.009907362812662357,
+        "rbEarlyRound": 0.0327928097268754,
+        "wrEarlyRound": -0.0013888335865529788,
+        "rbEarlyLegacyEra": 0.07011852270717181,
+        "wrEarlyModernEra": -0.013612278189451585
+      }
+    },
+    {
+      "displayName": "Jan Graham",
+      "personalityFitTier": "full",
+      "choiceEventCount": 192,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "Herd-Responsive",
+      "distinctiveDrives": [
+        {
+          "drive": "wrEarlyRound",
+          "delta": -0.20048965427765056
+        },
+        {
+          "drive": "value",
+          "delta": 0.1920683422888954
+        },
+        {
+          "drive": "panic",
+          "delta": 0.12414807568368319
+        }
+      ],
+      "avgChosenProbability": 0.06536469438112298,
+      "coefficients": {
+        "value": 0.20497213780817358,
+        "need": 0.35,
+        "scarcityTierCliff": 0.17491826308866268,
+        "herdFomo": 0.06962124973103533,
+        "contrarian": -0.26938632589267747,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.26765039388649553,
+        "panic": 0.5527518798111584,
+        "rbEarlyRound": 0.29726855579677536,
+        "wrEarlyRound": -0.17239736215637072,
+        "rbEarlyLegacyEra": 0.2220258687437693,
+        "wrEarlyModernEra": 0.09315690363654598
+      },
+      "deviationCoefficients": {
+        "value": 0.1920683422888954,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.08340995499839664,
+        "herdFomo": 0.0033555133750476362,
+        "contrarian": -0.09754072398631872,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.06135140116932991,
+        "panic": 0.12414807568368319,
+        "rbEarlyRound": 0.09906763076207267,
+        "wrEarlyRound": -0.20048965427765056,
+        "rbEarlyLegacyEra": 0.0307959078491174,
+        "wrEarlyModernEra": 0.029062711123335777
+      }
+    },
+    {
+      "displayName": "Rod Sellers",
+      "personalityFitTier": "full",
+      "choiceEventCount": 191,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "rbEarlyRound",
+          "delta": 0.2303364751530895
+        },
+        {
+          "drive": "value",
+          "delta": 0.15119441725314797
+        },
+        {
+          "drive": "rbEarlyLegacyEra",
+          "delta": 0.14539325407912737
+        }
+      ],
+      "avgChosenProbability": 0.06789817561532344,
+      "coefficients": {
+        "value": 0.16409821277242614,
+        "need": 0.35,
+        "scarcityTierCliff": 0.15939309714142058,
+        "herdFomo": 0.049697204339308736,
+        "contrarian": -0.10004080608217973,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.4080665574173568,
+        "panic": 0.5388054908113566,
+        "rbEarlyRound": 0.4285374001877922,
+        "wrEarlyRound": -0.027307199818855838,
+        "rbEarlyLegacyEra": 0.3366232149737793,
+        "wrEarlyModernEra": -0.0206697699822231
+      },
+      "deviationCoefficients": {
+        "value": 0.15119441725314797,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.06788478905115454,
+        "herdFomo": -0.016568532016678954,
+        "contrarian": 0.07180479582417902,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.07906476236153137,
+        "panic": 0.11020168668388147,
+        "rbEarlyRound": 0.2303364751530895,
+        "wrEarlyRound": -0.05539949194013568,
+        "rbEarlyLegacyEra": 0.14539325407912737,
+        "wrEarlyModernEra": -0.0847639624954333
+      }
+    },
+    {
+      "displayName": "Mark Deroux",
+      "personalityFitTier": "full",
+      "choiceEventCount": 179,
+      "distinctiveArchetype": "WR-Forward",
+      "clusterLabel": "WR-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "wrEarlyRound",
+          "delta": 0.3457437321601663
+        },
+        {
+          "drive": "contrarian",
+          "delta": 0.23137528697606746
+        },
+        {
+          "drive": "rbEarlyRound",
+          "delta": -0.17616683169104141
+        }
+      ],
+      "avgChosenProbability": 0.0666922764445206,
+      "coefficients": {
+        "value": 0.03620376065921354,
+        "need": 0.35,
+        "scarcityTierCliff": 0.01983925996850348,
+        "herdFomo": -0.006295343256244812,
+        "contrarian": 0.05952968506970872,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.3747822482601805,
+        "panic": 0.31136569396117225,
+        "rbEarlyRound": 0.022034093343661267,
+        "wrEarlyRound": 0.37383602428144613,
+        "rbEarlyLegacyEra": 0.06500889715594262,
+        "wrEarlyModernEra": 0.14627196339286752
+      },
+      "deviationCoefficients": {
+        "value": 0.02329996513993536,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": -0.07166904812176256,
+        "herdFomo": -0.0725610796122325,
+        "contrarian": 0.23137528697606746,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.04578045320435503,
+        "panic": -0.11723811016630292,
+        "rbEarlyRound": -0.17616683169104141,
+        "wrEarlyRound": 0.3457437321601663,
+        "rbEarlyLegacyEra": -0.12622106373870928,
+        "wrEarlyModernEra": 0.08217777087965732
+      }
+    },
+    {
+      "displayName": "Steffon Bizzell",
+      "personalityFitTier": "full",
+      "choiceEventCount": 179,
+      "distinctiveArchetype": "WR-Forward",
+      "clusterLabel": "RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "rbEarlyLegacyEra",
+          "delta": -0.2196838365295995
+        },
+        {
+          "drive": "comfortAnchor",
+          "delta": 0.1814593492574616
+        },
+        {
+          "drive": "value",
+          "delta": 0.17925302336402754
+        }
+      ],
+      "avgChosenProbability": 0.062471245681397766,
+      "coefficients": {
+        "value": 0.1921568188833057,
+        "need": 0.35,
+        "scarcityTierCliff": 0.22496821775012318,
+        "herdFomo": -0.09528990882120453,
+        "contrarian": -0.25704276780505353,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.510461144313287,
+        "panic": 0.27445540894759424,
+        "rbEarlyRound": 0.03770649880530277,
+        "wrEarlyRound": -0.06309847808832508,
+        "rbEarlyLegacyEra": -0.028453875634947584,
+        "wrEarlyModernEra": -0.026884966498267996
+      },
+      "deviationCoefficients": {
+        "value": 0.17925302336402754,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.13345990965985716,
+        "herdFomo": -0.16155564517719223,
+        "contrarian": -0.08519716589869478,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.1814593492574616,
+        "panic": -0.15414839517988094,
+        "rbEarlyRound": -0.1604944262293999,
+        "wrEarlyRound": -0.09119077020960492,
+        "rbEarlyLegacyEra": -0.2196838365295995,
+        "wrEarlyModernEra": -0.0909791590114782
+      }
+    },
+    {
+      "displayName": "Randy Broner Jr",
+      "personalityFitTier": "full",
+      "choiceEventCount": 178,
+      "distinctiveArchetype": "Herd-Responsive",
+      "clusterLabel": "Herd-Responsive",
+      "distinctiveDrives": [
+        {
+          "drive": "contrarian",
+          "delta": -0.198452329571262
+        },
+        {
+          "drive": "wrEarlyRound",
+          "delta": -0.18442971558223403
+        },
+        {
+          "drive": "value",
+          "delta": -0.11841778406481415
+        }
+      ],
+      "avgChosenProbability": 0.06578465325792988,
+      "coefficients": {
+        "value": -0.10551398854553597,
+        "need": 0.35,
+        "scarcityTierCliff": 0.05058517249214466,
+        "herdFomo": 0.06794542972418458,
+        "contrarian": -0.37029793147762075,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.2941072495732316,
+        "panic": 0.4969704959409138,
+        "rbEarlyRound": 0.13007217908939106,
+        "wrEarlyRound": -0.1563374234609542,
+        "rbEarlyLegacyEra": 0.19663911121992525,
+        "wrEarlyModernEra": 0.08986038504041952
+      },
+      "deviationCoefficients": {
+        "value": -0.11841778406481415,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": -0.04092313559812138,
+        "herdFomo": 0.0016796933681968856,
+        "contrarian": -0.198452329571262,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.03489454548259385,
+        "panic": 0.06836669181343863,
+        "rbEarlyRound": -0.06812874594531163,
+        "wrEarlyRound": -0.18442971558223403,
+        "rbEarlyLegacyEra": 0.0054091503252733375,
+        "wrEarlyModernEra": 0.02576619252720931
+      }
+    },
+    {
+      "displayName": "Bruce Edwards",
+      "personalityFitTier": "full",
+      "choiceEventCount": 176,
+      "distinctiveArchetype": "Evolving RB-to-WR",
+      "clusterLabel": "Legacy RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "rbEarlyLegacyEra",
+          "delta": 0.2953669535810681
+        },
+        {
+          "drive": "rbEarlyRound",
+          "delta": 0.223551499537295
+        },
+        {
+          "drive": "herdFomo",
+          "delta": 0.19932096189499726
+        }
+      ],
+      "avgChosenProbability": 0.06880072271792051,
+      "coefficients": {
+        "value": -0.030730331938786215,
+        "need": 0.35,
+        "scarcityTierCliff": 0.11275374311868164,
+        "herdFomo": 0.26558669825098496,
+        "contrarian": -0.2865858918608722,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.36189001184381586,
+        "panic": 0.5010984937403933,
+        "rbEarlyRound": 0.4217524245719977,
+        "wrEarlyRound": -0.08747662368146257,
+        "rbEarlyLegacyEra": 0.48659691447572007,
+        "wrEarlyModernEra": 0.14535144707587155
+      },
+      "deviationCoefficients": {
+        "value": -0.043634127458064394,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.021245435028415596,
+        "herdFomo": 0.19932096189499726,
+        "contrarian": -0.11474028995451344,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.03288821678799042,
+        "panic": 0.0724946896129181,
+        "rbEarlyRound": 0.223551499537295,
+        "wrEarlyRound": -0.11556891580274241,
+        "rbEarlyLegacyEra": 0.2953669535810681,
+        "wrEarlyModernEra": 0.08125725456266135
+      }
+    },
+    {
+      "displayName": "Nate West",
+      "personalityFitTier": "full",
+      "choiceEventCount": 159,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "wrEarlyRound",
+          "delta": -0.24905013201452966
+        },
+        {
+          "drive": "panic",
+          "delta": -0.2359120130809542
+        },
+        {
+          "drive": "herdFomo",
+          "delta": -0.20608205576708405
+        }
+      ],
+      "avgChosenProbability": 0.05949181084171433,
+      "coefficients": {
+        "value": -0.12974803217351352,
+        "need": 0.35,
+        "scarcityTierCliff": 0.17793583805878693,
+        "herdFomo": -0.13981631941109637,
+        "contrarian": 0.005936518030210851,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.27380510914244044,
+        "panic": 0.19269179104652098,
+        "rbEarlyRound": 0.24681892456194618,
+        "wrEarlyRound": -0.22095783989324982,
+        "rbEarlyLegacyEra": 0.1608309324613141,
+        "wrEarlyModernEra": -0.054993691219870945
+      },
+      "deviationCoefficients": {
+        "value": -0.1426518276927917,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": 0.08642752996852089,
+        "herdFomo": -0.20608205576708405,
+        "contrarian": 0.17778211993656962,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.055196685913385,
+        "panic": -0.2359120130809542,
+        "rbEarlyRound": 0.048617999527243494,
+        "wrEarlyRound": -0.24905013201452966,
+        "rbEarlyLegacyEra": -0.030399028433337805,
+        "wrEarlyModernEra": -0.11908788373308116
+      }
+    },
+    {
+      "displayName": "Marlon Moore",
+      "personalityFitTier": "full",
+      "choiceEventCount": 94,
+      "distinctiveArchetype": "WR-Forward",
+      "clusterLabel": "WR-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "wrEarlyRound",
+          "delta": 0.3119520895705465
+        },
+        {
+          "drive": "comfortAnchor",
+          "delta": -0.2498067013379477
+        },
+        {
+          "drive": "herdFomo",
+          "delta": 0.2429866144054283
+        }
+      ],
+      "avgChosenProbability": 0.07249060247606179,
+      "coefficients": {
+        "value": -0.18045953404669535,
+        "need": 0.35,
+        "scarcityTierCliff": 0.035395839810685566,
+        "herdFomo": 0.309252350761416,
+        "contrarian": -0.40954203935774997,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.07919509371787777,
+        "panic": 0.584067676934115,
+        "rbEarlyRound": 0.03426174781657486,
+        "wrEarlyRound": 0.3400443816918263,
+        "rbEarlyLegacyEra": 0.12845306949049556,
+        "wrEarlyModernEra": 0.09011743046676228
+      },
+      "deviationCoefficients": {
+        "value": -0.19336332956597352,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": -0.056112468279580476,
+        "herdFomo": 0.2429866144054283,
+        "contrarian": -0.2376964374513912,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.2498067013379477,
+        "panic": 0.1554638728066398,
+        "rbEarlyRound": -0.16393917721812784,
+        "wrEarlyRound": 0.3119520895705465,
+        "rbEarlyLegacyEra": -0.06277689140415635,
+        "wrEarlyModernEra": 0.026023237953552075
+      }
+    },
+    {
+      "displayName": "Sheldon deRoux",
+      "personalityFitTier": "full",
+      "choiceEventCount": 82,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "Legacy RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "value",
+          "delta": -0.4622535359973029
+        },
+        {
+          "drive": "rbEarlyRound",
+          "delta": 0.1764445884769393
+        },
+        {
+          "drive": "scarcityTierCliff",
+          "delta": -0.1754220869254444
+        }
+      ],
+      "avgChosenProbability": 0.08108586711208034,
+      "coefficients": {
+        "value": -0.44934974047802473,
+        "need": 0.35,
+        "scarcityTierCliff": -0.08391377883517835,
+        "herdFomo": 0.05344991501378665,
+        "contrarian": -0.019540642041892323,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.442206869112974,
+        "panic": 0.30497436302379866,
+        "rbEarlyRound": 0.374645513511642,
+        "wrEarlyRound": 0.002446333974174499,
+        "rbEarlyLegacyEra": 0.16669949716138024,
+        "wrEarlyModernEra": -0.08637947414852441
+      },
+      "deviationCoefficients": {
+        "value": -0.4622535359973029,
+        "need": -5.551115123125783e-17,
+        "scarcityTierCliff": -0.1754220869254444,
+        "herdFomo": -0.012815821342201036,
+        "contrarian": 0.15230495986446643,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.11320507405714858,
+        "panic": -0.12362944110367652,
+        "rbEarlyRound": 0.1764445884769393,
+        "wrEarlyRound": -0.025645958147105342,
+        "rbEarlyLegacyEra": -0.024530463733271668,
+        "wrEarlyModernEra": -0.15047366666173462
+      }
+    },
+    {
+      "displayName": "Tony Dorsey",
+      "personalityFitTier": "shrinkage_cold",
+      "choiceEventCount": 15,
+      "distinctiveArchetype": "RB-Forward",
+      "clusterLabel": "Legacy RB-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "panic",
+          "delta": -0.3330207715617557
+        },
+        {
+          "drive": "value",
+          "delta": -0.23725888071627543
+        },
+        {
+          "drive": "comfortAnchor",
+          "delta": -0.21322677403979584
+        }
+      ],
+      "avgChosenProbability": 0.06914975609427881,
+      "shrinkage": {
+        "ownWeight": 0.13043478260869565,
+        "clusterWeight": 0.5652173913043478,
+        "leagueWeight": 0.3043478260869565
+      },
+      "coefficients": {
+        "value": -0.22435508519699726,
+        "need": 0.11173236886521022,
+        "scarcityTierCliff": -0.0013554757490015848,
+        "herdFomo": 0.10137407305262983,
+        "contrarian": -0.070182998741531,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.11577502101602959,
+        "panic": 0.09558303256571951,
+        "rbEarlyRound": 0.309472539388565,
+        "wrEarlyRound": -0.024173141125898592,
+        "rbEarlyLegacyEra": 0.13474117001188,
+        "wrEarlyModernEra": 0.007131350385994737
+      },
+      "deviationCoefficients": {
+        "value": -0.23725888071627543,
+        "need": -0.23826763113478983,
+        "scarcityTierCliff": -0.09286378383926763,
+        "herdFomo": 0.03510833669664214,
+        "contrarian": 0.10166260316482775,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.21322677403979584,
+        "panic": -0.3330207715617557,
+        "rbEarlyRound": 0.11127161435386232,
+        "wrEarlyRound": -0.05226543324717843,
+        "rbEarlyLegacyEra": -0.05648879088277192,
+        "wrEarlyModernEra": -0.05696284212721547
+      }
+    },
+    {
+      "displayName": "Marcus Reese",
+      "personalityFitTier": "shrinkage_cold",
+      "choiceEventCount": 7,
+      "distinctiveArchetype": "WR-Forward",
+      "clusterLabel": "WR-Forward",
+      "distinctiveDrives": [
+        {
+          "drive": "comfortAnchor",
+          "delta": -0.30958299971555103
+        },
+        {
+          "drive": "panic",
+          "delta": -0.3074732860595289
+        },
+        {
+          "drive": "rbEarlyRound",
+          "delta": -0.27640334446314274
+        }
+      ],
+      "avgChosenProbability": 0.056410616911353836,
+      "shrinkage": {
+        "ownWeight": 0.06542056074766354,
+        "clusterWeight": 0.6074766355140188,
+        "leagueWeight": 0.32710280373831774
+      },
+      "coefficients": {
+        "value": -0.029565834276303684,
+        "need": 0.1283856270195487,
+        "scarcityTierCliff": 0.018650176223920865,
+        "herdFomo": 0.04380814288569883,
+        "contrarian": -0.02811590239790332,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": 0.01941879534027438,
+        "panic": 0.12113051806794628,
+        "rbEarlyRound": -0.07820241942844008,
+        "wrEarlyRound": 0.212256443495973,
+        "rbEarlyLegacyEra": -0.016844381066899672,
+        "wrEarlyModernEra": 0.10636645099945637
+      },
+      "deviationCoefficients": {
+        "value": -0.042469629795581866,
+        "need": -0.22161437298045134,
+        "scarcityTierCliff": -0.07285813186634518,
+        "herdFomo": -0.02245759347028886,
+        "contrarian": 0.14372969950845543,
+        "homerAffinity": 0,
+        "blockRevenge": 0,
+        "comfortAnchor": -0.30958299971555103,
+        "panic": -0.3074732860595289,
+        "rbEarlyRound": -0.27640334446314274,
+        "wrEarlyRound": 0.18416415137469316,
+        "rbEarlyLegacyEra": -0.20807434196155158,
+        "wrEarlyModernEra": 0.04227225848624616
+      }
+    }
+  ],
+  "legacyBefore": [
+    {
+      "displayName": "Bruce Edwards",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.7388982972388051
+    },
+    {
+      "displayName": "Christian Graham",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.70325368002072
+    },
+    {
+      "displayName": "Demetri Clark",
+      "clusterLabel": "RB-First Builder",
+      "topDrive": "need",
+      "needCoef": 0.764245545459569
+    },
+    {
+      "displayName": "Jan Graham",
+      "clusterLabel": "RB-First Builder",
+      "topDrive": "need",
+      "needCoef": 0.8937732592828865
+    },
+    {
+      "displayName": "LOZELL STYLES",
+      "clusterLabel": "RB-First Builder",
+      "topDrive": "need",
+      "needCoef": 0.8512949914645926
+    },
+    {
+      "displayName": "Marcus Reese",
+      "clusterLabel": "WR-Value Patient",
+      "topDrive": "need",
+      "needCoef": 0.8724124264913715
+    },
+    {
+      "displayName": "Mark Deroux",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.579441418944226
+    },
+    {
+      "displayName": "Marlon Moore",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.642517389585696
+    },
+    {
+      "displayName": "Nate West",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.9676404593908734
+    },
+    {
+      "displayName": "Randy Broner Jr",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.9324344201225085
+    },
+    {
+      "displayName": "Rod Sellers",
+      "clusterLabel": "RB-First Builder",
+      "topDrive": "need",
+      "needCoef": 0.6902977859774789
+    },
+    {
+      "displayName": "Sheldon deRoux",
+      "clusterLabel": "Roster-Architect",
+      "topDrive": "need",
+      "needCoef": 0.7350871703754489
+    },
+    {
+      "displayName": "Steffon Bizzell",
+      "clusterLabel": "Balanced Drafter",
+      "topDrive": "need",
+      "needCoef": 0.8623037879533128
+    },
+    {
+      "displayName": "Tony Dorsey",
+      "clusterLabel": "RB-First Builder",
+      "topDrive": "rbEarlyRound",
+      "needCoef": 0.06927569454904121
+    }
+  ]
+}

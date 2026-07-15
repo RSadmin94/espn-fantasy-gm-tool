@@ -19,7 +19,7 @@ import { recordFunnelEvent } from "./funnelService";
 
 export const onboardingRouter = router({
   getRevealData: protectedProcedure.query(async ({ ctx }) => {
-    const managers: ManagerRawData[] = await buildManagerRawData();
+    const managers: ManagerRawData[] = await buildManagerRawData(ctx.user.id);
     const dnaProfiles: ManagerDNA[] = calcLeagueDNA(managers);
 
     // ── 1. Find the logged-in user's manager ──────────────────────────────

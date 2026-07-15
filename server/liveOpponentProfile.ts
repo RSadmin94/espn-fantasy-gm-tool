@@ -5,7 +5,7 @@
  * Replaces the static opponentData.ts hardcoded file.
  *
  * Data sources:
- *   - espnSeasonCache (teams, schedule, transactions, draftPicks) per season
+ *   - fantasy_data_cache ESPN rows (teams, schedule, transactions, draftPicks) per season
  *   - calcManagerBehavior() from analytics.ts for GM archetypes
  *
  * The returned shape is compatible with the OpponentData interface from
@@ -13,6 +13,7 @@
  */
 
 import { getAllCachedSeasons, getCachedView } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   normalizeTeams,
   normalizeMatchups,
@@ -32,6 +33,7 @@ export interface LiveOpponentSeason {
   season: number;
   wins: number;
   losses: number;
+  ties?: number;
   pf: number;
   pa: number;
   seed: number;
@@ -50,7 +52,7 @@ export interface LiveOpponentData {
   memberId: string;
   ownerName: string;
   teamIds: number[];
-  career: { wins: number; losses: number; pf: number; pa: number; playoffSeasons: number; playoffWins: number; playoffLosses: number };
+  career: { wins: number; losses: number; ties: number; pf: number; pa: number; playoffSeasons: number; playoffWins: number; playoffLosses: number };
   seasons: LiveOpponentSeason[];
   h2hVsRod: { wins: number; losses: number };
   gmArchetype: string;
@@ -76,9 +78,12 @@ const ROD_MEMBER_IDS = [
 
 // ── Main builder ──────────────────────────────────────────────────────────────
 
-export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOpponentData>> {
-  const cachedSeasons = await getAllCachedSeasons();
+export async function buildLiveOpponentProfiles(userId?: number): Promise<Map<string, LiveOpponentData>> {
+  const cachedSeasons = await getAllCachedSeasons(undefined, userId);
   if (cachedSeasons.length === 0) return new Map();
+
+  // Numeric hygiene: coerce any value to a finite number; undefined/null/NaN/Infinity -> 0.
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
   // memberId → accumulated data
   const profileMap = new Map<string, {
@@ -96,10 +101,15 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
 
   // Identify Rod's member ID from the first available season
   let rodMemberId: string | null = null;
-  const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
+  // Wave 2: prefer the authenticated user's selected owner; the name match below is the fallback.
+  if (userId != null) {
+    const co = await resolveCurrentOwner({ id: userId });
+    if (co.isSetupComplete) rodMemberId = co.ownerId;
+  }
+  // focalMemberId resolved from profile above — no name-based fallback.
 
   for (const season of cachedSeasons.sort((a, b) => b - a)) {
-    const row = await getCachedView(season, "combined");
+    const row = await getCachedView(season, "combined", undefined, { userId });
     if (!row) continue;
     const data = row.payload as Record<string, unknown>;
     const members = (data.members as Record<string, unknown>[]) || [];
@@ -116,9 +126,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       const mid = m.id as string;
       const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || mid;
       memberIdToName.set(mid, name);
-      if (!rodMemberId && ROD_NAMES.some(n => name.toLowerCase().includes(n))) {
-        rodMemberId = mid;
-      }
+      // focalMemberId already resolved from profile — no name-based fallback here.
     }
 
     // Normalize data for this season
@@ -234,10 +242,11 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
 
       profile.seasons.push({
         season,
-        wins: team.wins as number,
-        losses: team.losses as number,
-        pf: Math.round((team.pointsFor as number) || 0),
-        pa: Math.round((team.pointsAgainst as number) || 0),
+        wins: num(team.wins),
+        losses: num(team.losses),
+        ties: num((team as { ties?: unknown }).ties),
+        pf: Math.round(num(team.pointsFor)),
+        pa: Math.round(num(team.pointsAgainst)),
         seed,
         rank,
         acquisitions,
@@ -249,10 +258,10 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       profile.allTeamRows.push({
         teamId: tid,
         ownerName: displayName,
-        wins: team.wins as number,
-        losses: team.losses as number,
-        pointsFor: team.pointsFor as number,
-        pointsAgainst: team.pointsAgainst as number,
+        wins: num(team.wins),
+        losses: num(team.losses),
+        pointsFor: num(team.pointsFor),
+        pointsAgainst: num(team.pointsAgainst),
       });
 
       for (const tx of teamTxns) {
@@ -275,7 +284,11 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
           roundPickNumber: pick.roundPickNumber as number,
           overallPickNumber: pick.overallPickNumber as number,
           position: pick.position as string,
-          keeper: pick.keeper as boolean,
+          keeper: !!(pick.keeper as boolean),
+          reservedForKeeper: pick.reservedForKeeper === true,
+          draftedForAnalytics: pick.draftedForAnalytics as boolean | undefined,
+          keeperSlot: pick.keeperSlot as boolean | undefined,
+          retained: pick.retained as boolean | undefined,
         });
       }
     }
@@ -286,16 +299,17 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
 
   for (const [memberId, profile] of Array.from(profileMap.entries())) {
     const seasons = profile.seasons.sort((a: LiveOpponentSeason, b: LiveOpponentSeason) => a.season - b.season);
-    const totalWins = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.wins, 0);
-    const totalLosses = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.losses, 0);
-    const totalPF = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.pf, 0);
-    const totalPA = seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.pa, 0);
+    const totalWins = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.wins), 0);
+    const totalLosses = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.losses), 0);
+    const totalTies = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.ties), 0);
+    const totalPF = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.pf), 0);
+    const totalPA = seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.pa), 0);
     const playoffSeasons = seasons.filter((s: LiveOpponentSeason) => s.seed > 0 && s.seed <= 7).length;
     const avgAcquisitions = seasons.length > 0
-      ? Math.round(seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.acquisitions, 0) / seasons.length)
+      ? Math.round(seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.acquisitions), 0) / seasons.length)
       : 0;
     const avgTrades = seasons.length > 0
-      ? Math.round((seasons.reduce((s: number, r: LiveOpponentSeason) => s + r.trades, 0) / seasons.length) * 10) / 10
+      ? Math.round((seasons.reduce((s: number, r: LiveOpponentSeason) => s + num(r.trades), 0) / seasons.length) * 10) / 10
       : 0;
 
     // Run analytics for this manager
@@ -315,7 +329,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
     if (totalWins > totalLosses) {
       strengthsWeaknesses.push({
         type: "strength",
-        text: `Winning career record: ${totalWins}W-${totalLosses}L (${Math.round(totalWins / (totalWins + totalLosses) * 100)}% win rate)`,
+        text: `Winning career record: ${totalWins}W-${totalLosses}L (${(totalWins + totalLosses + totalTies > 0 ? Math.round(totalWins / (totalWins + totalLosses + totalTies) * 100) : 0)}% win rate)`,
       });
     } else {
       strengthsWeaknesses.push({
@@ -327,9 +341,9 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       strengthsWeaknesses.push({ type: "strength", text: `Consistent playoff presence: ${playoffSeasons} of ${seasons.length} seasons` });
     }
     if (behavior?.avgWaiverAddsPerSeason > 40) {
-      strengthsWeaknesses.push({ type: "strength", text: `High waiver activity (${behavior.avgWaiverAddsPerSeason.toFixed(0)} adds/season) — patches roster holes quickly` });
+      strengthsWeaknesses.push({ type: "strength", text: `High waiver activity (${num(behavior.avgWaiverAddsPerSeason).toFixed(0)} adds/season) — patches roster holes quickly` });
     } else if (behavior?.avgWaiverAddsPerSeason < 20) {
-      strengthsWeaknesses.push({ type: "weakness", text: `Low waiver activity (${behavior?.avgWaiverAddsPerSeason?.toFixed(0) ?? "?"} adds/season) — may miss breakout pickups` });
+      strengthsWeaknesses.push({ type: "weakness", text: `Low waiver activity (${num(behavior?.avgWaiverAddsPerSeason).toFixed(0)} adds/season) — may miss breakout pickups` });
     }
     if (behavior?.earlyQbTendency) {
       strengthsWeaknesses.push({ type: "blindspot", text: "Drafts QB early (rounds 1-3) — may sacrifice positional value" });
@@ -337,7 +351,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
     if (behavior?.keeperEfficiencyAvg < 0) {
       strengthsWeaknesses.push({ type: "weakness", text: "Keeper decisions tend to cost draft capital — overpays for keepers" });
     } else if (behavior?.keeperEfficiencyAvg > 2) {
-      strengthsWeaknesses.push({ type: "strength", text: `Excellent keeper efficiency (+${behavior.keeperEfficiencyAvg.toFixed(1)} rounds avg savings)` });
+      strengthsWeaknesses.push({ type: "strength", text: `Excellent keeper efficiency (+${num(behavior.keeperEfficiencyAvg).toFixed(1)} rounds avg savings)` });
     }
 
     // Draft style badge
@@ -361,7 +375,7 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       memberId,
       ownerName: profile.displayName,
       teamIds: Array.from(profile.teamIds),
-      career: { wins: totalWins, losses: totalLosses, pf: totalPF, pa: totalPA, playoffSeasons, playoffWins: profile.playoffWins, playoffLosses: profile.playoffLosses },
+      career: { wins: totalWins, losses: totalLosses, ties: totalTies, pf: totalPF, pa: totalPA, playoffSeasons, playoffWins: num(profile.playoffWins), playoffLosses: num(profile.playoffLosses) },
       seasons,
       h2hVsRod: profile.h2hVsRod,
       gmArchetype: behavior?.gmArchetype ?? "Balanced",
@@ -373,10 +387,10 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
       draftStyleDesc,
       earlyQbTendency: behavior?.earlyQbTendency ?? false,
       earlyTeTendency: behavior?.earlyTeTendency ?? false,
-      keeperEfficiencyAvg: behavior?.keeperEfficiencyAvg ?? 0,
-      waiverAggressionScore: behavior?.waiverAggressionScore ?? 0,
-      tradeFrequencyScore: behavior?.tradeFrequencyScore ?? 0,
-      rosterStabilityScore: behavior?.rosterStabilityScore ?? 0,
+      keeperEfficiencyAvg: num(behavior?.keeperEfficiencyAvg),
+      waiverAggressionScore: num(behavior?.waiverAggressionScore),
+      tradeFrequencyScore: num(behavior?.tradeFrequencyScore),
+      rosterStabilityScore: num(behavior?.rosterStabilityScore),
     });
   }
 
@@ -387,8 +401,8 @@ export async function buildLiveOpponentProfiles(): Promise<Map<string, LiveOppon
  * Find a single opponent profile by memberId.
  * Falls back to fuzzy name match if exact ID not found.
  */
-export async function findLiveOpponentProfile(memberId: string): Promise<LiveOpponentData | null> {
-  const profiles = await buildLiveOpponentProfiles();
+export async function findLiveOpponentProfile(memberId: string, userId?: number): Promise<LiveOpponentData | null> {
+  const profiles = await buildLiveOpponentProfiles(userId);
   if (profiles.has(memberId)) return profiles.get(memberId)!;
 
   // Fuzzy match by partial memberId (ESPN IDs are GUIDs, sometimes truncated)
@@ -405,14 +419,14 @@ export async function findLiveOpponentProfile(memberId: string): Promise<LiveOpp
  * Get GM style context for the trade offer generator.
  * Returns a minimal object compatible with the existing trade generator prompt.
  */
-export async function getGmStyleForTradeGenerator(memberId: string): Promise<{
+export async function getGmStyleForTradeGenerator(memberId: string, userId?: number): Promise<{
   archetype: string;
   avgTrades: number;
   h2hVsRod: { wins: number; losses: number };
   strengthsWeaknesses: LiveStrengthWeakness[];
   draftStyleBadge: string;
 } | null> {
-  const profile = await findLiveOpponentProfile(memberId);
+  const profile = await findLiveOpponentProfile(memberId, userId);
   if (!profile) return null;
   return {
     archetype: profile.gmArchetype,

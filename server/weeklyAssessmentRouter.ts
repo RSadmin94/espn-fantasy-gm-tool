@@ -21,12 +21,14 @@ import {
   buildWeeklyAssessment,
   buildTeamAssessment,
   buildRodOpportunityBoard,
+  resolveFocalTeamId,
 } from "./weeklyAssessmentService";
 import {
   normalizeTeams, normalizeRosters, normalizeMatchups,
   normalizeTransactions, normalizeSettings,
 } from "./espnService";
 import { getCachedView } from "./db";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import { memCache } from "./memCache";
 import { calcManagerDNA, type DraftPickRecord, type ManagerRawData } from "./leagueDNA";
 
@@ -87,7 +89,7 @@ export const weeklyAssessmentRouter = router({
       season: z.number().default(2025),
       forceRefresh: z.boolean().default(false),
     }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const cacheKey = getCacheKey(input.season);
       const cached = reportCache.get(cacheKey);
 
@@ -95,7 +97,7 @@ export const weeklyAssessmentRouter = router({
         return { ...cached.report, fromCache: true };
       }
 
-      const report = await buildWeeklyAssessment(input.season);
+      const report = await buildWeeklyAssessment(input.season, ctx.user?.id);
       reportCache.set(cacheKey, { report, cachedAt: Date.now() });
       return { ...report, fromCache: false };
     }),
@@ -110,8 +112,8 @@ export const weeklyAssessmentRouter = router({
       teamId: z.number(),
       season: z.number().default(2025),
     }))
-    .query(async ({ input }) => {
-      const cached = await getCachedView(input.season, "combined");
+    .query(async ({ ctx, input }) => {
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data for this season." });
 
       const data = cached.payload as Record<string, unknown>;
@@ -132,10 +134,7 @@ export const weeklyAssessmentRouter = router({
       const dna = calcManagerDNA(managerRawData, []);
       const dnaMap = new Map([[input.teamId, dna]]);
 
-      const rodTeamId = teams.find(t => {
-        const name = ((t.teamName as string) || "").toLowerCase();
-        return name.includes("str8") || name.includes("rodzilla");
-      })?.teamId as number ?? null;
+      const rodTeamId = await resolveFocalTeamId(teams, ctx.user?.id);
 
       const allTeamsData = {
         teams,
@@ -147,7 +146,9 @@ export const weeklyAssessmentRouter = router({
         teamNameMap,
       };
 
-      const raw = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+      const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const __league = buildLeaguePromptContext(__leagueCtx);
+      const raw = await buildTeamAssessment(input.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId, __league);
 
       // Map plain-English gmArchetype to ARCHETYPE_COLORS key used by the extension
       const ARCHETYPE_KEY_MAP: Record<string, string> = {
@@ -201,7 +202,7 @@ export const weeklyAssessmentRouter = router({
    */
   rodOpportunities: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       // Check the reportCache first — buildWeeklyAssessment runs 14+ LLM calls;
       // if fullReport already ran this season, reuse its result instead of re-running.
       const cacheKey = getCacheKey(input.season);
@@ -216,7 +217,7 @@ export const weeklyAssessmentRouter = router({
       }
       // Cache miss — run the full assessment and populate the shared cache so
       // subsequent calls to fullReport or rodOpportunities are both served instantly.
-      const full = await buildWeeklyAssessment(input.season);
+      const full = await buildWeeklyAssessment(input.season, ctx.user?.id);
       reportCache.set(cacheKey, { report: full, cachedAt: Date.now() });
       return {
         week: full.week,
@@ -231,10 +232,17 @@ export const weeklyAssessmentRouter = router({
    * Use for the Command Center threat assessment board.
    */
   leaguePulse: publicProcedure
-    .input(z.object({ season: z.number().default(2025) }))
-    .query(({ input }) => {
-      return memCache(`leaguePulse:${input.season}`, 5 * 60_000, async () => {
-      const cached = await getCachedView(input.season, "combined");
+    .input(
+      z.object({
+        season: z.number().default(2025),
+        activeLeagueKey: z.string().optional(),
+      }),
+    )
+    .query(({ ctx, input }) => {
+      void input.activeLeagueKey;
+      const salt = input.activeLeagueKey ?? "__none__";
+      return memCache(`leaguePulse:${input.season}:${salt}`, 5 * 60_000, async () => {
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No data." });
 
       const data = cached.payload as Record<string, unknown>;
@@ -348,11 +356,11 @@ export const weeklyAssessmentRouter = router({
    */
   batchRunAssessment: publicProcedure
     .input(z.object({ season: z.number().default(2025) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       pruneBatchJobs();
 
       // Get team list from cached data
-      const cached = await getCachedView(input.season, "combined");
+      const cached = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
       if (!cached) throw new TRPCError({ code: "NOT_FOUND", message: "No ESPN data cached for this season. Run a data refresh first." });
 
       const data = cached.payload as Record<string, unknown>;
@@ -386,10 +394,9 @@ export const weeklyAssessmentRouter = router({
         for (const t of teams) {
           teamNameMap[t.teamId as number] = (t.teamName as string) || (t.owners as string) || "Unknown";
         }
-        const rodTeamId = teams.find(t => {
-          const name = ((t.teamName as string) || "").toLowerCase();
-          return name.includes("str8") || name.includes("rodzilla");
-        })?.teamId as number ?? null;
+        const rodTeamId = await resolveFocalTeamId(teams, ctx.user?.id);
+        const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+        const __league = buildLeaguePromptContext(__leagueCtx);
         const allTeamsData = {
           teams,
           rosters: [],
@@ -413,7 +420,7 @@ export const weeklyAssessmentRouter = router({
             };
             const dna = _calcDNA(managerRawData, []);
             const dnaMap = new Map([[entry.teamId, dna]]);
-            await buildTeamAssessment(entry.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId);
+            await buildTeamAssessment(entry.teamId, input.season, allTeamsData, dnaMap, [], rodTeamId, __league);
             entry.status = "done";
             job.successCount++;
           } catch (err) {

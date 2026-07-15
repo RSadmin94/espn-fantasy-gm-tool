@@ -281,7 +281,7 @@ All procedures are defined in `server/routers.ts`. The root router merges three 
 | `espn.rosters` | query | public | `{ season: number }` | Returns per-team roster arrays with player details |
 | `espn.draftPicks` | query | public | `{ season: number }` | Returns deduplicated, normalized draft picks for the season |
 | `espn.matchups` | query | public | `{ season: number }` | Returns all matchups with scores and playoff tier |
-| `espn.transactions` | query | public | `{ season: number }` | Returns recent transactions captured in the cache |
+| `espn.transactions` | query | public | `{ season: number; teamId?: number; typeFilter?: string }` | Returns recent transactions from cache; `TRADES` matches all trade types |
 | `espn.allStandings` | query | public | — | Aggregates standings across all cached seasons into one response |
 | `espn.freeAgents` | query | public | `{ season: number }` | Returns available free agents from the current roster data |
 | `espn.keeperHistory` | query | public | — | Returns all keeper-flagged picks across all seasons |

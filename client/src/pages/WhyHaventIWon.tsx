@@ -1,0 +1,694 @@
+import { trpc } from "@/lib/trpc";
+import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { cn } from "@/lib/utils";
+import { COMMERCIAL } from "@/lib/commercialCopy";
+import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
+import {
+  Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
+  Medal, Activity, Shield, Sparkles, Flame, Gauge, AlertTriangle, CheckCircle2, ArrowDown, ArrowUp, Star,
+  Lock, ChevronRight, Route,
+} from "lucide-react";
+
+const PAGEBG: CSSProperties = {
+  background:
+    "radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)",
+  color: "#f3f8ff",
+};
+const PANEL =
+  "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
+
+const CATEGORY_ICON: Record<string, ReactNode> = {
+  playoffs: <Calendar className="h-5 w-5" />,
+  scoring: <TrendingDown className="h-5 w-5" />,
+  position: <Target className="h-5 w-5" />,
+  acquisitions: <ShoppingCart className="h-5 w-5" />,
+  rivals: <Swords className="h-5 w-5" />,
+  draft: <Crown className="h-5 w-5" />,
+  close_games: <Target className="h-5 w-5" />,
+};
+
+/** Icons used in champion (positive) mode — same keys but upbeat icons. */
+const CHAMPION_ICON: Record<string, ReactNode> = {
+  scoring: <TrendingUp className="h-5 w-5" />,
+  position: <Shield className="h-5 w-5" />,
+  playoffs: <Trophy className="h-5 w-5" />,
+  acquisitions: <Activity className="h-5 w-5" />,
+  rivals: <Swords className="h-5 w-5" />,
+  draft: <Star className="h-5 w-5" />,
+};
+
+const ARC_STYLE: Record<string, { grad: string; text: string; ring: string; icon: ReactNode; blurb: string }> = {
+  "The Dynasty":     { grad: "from-amber-400/25 to-yellow-600/10", text: "text-amber-300", ring: "border-amber-400/40", icon: <Crown className="h-4 w-4" />, blurb: "Repeat champion" },
+  "The Breakthrough":{ grad: "from-lime-400/25 to-emerald-600/10", text: "text-lime-300", ring: "border-lime-400/40", icon: <Sparkles className="h-4 w-4" />, blurb: "Reached the mountaintop" },
+  "The Contender":   { grad: "from-violet-400/25 to-fuchsia-600/10", text: "text-violet-300", ring: "border-violet-400/40", icon: <Flame className="h-4 w-4" />, blurb: "Proven, chasing the next" },
+  "The Gatekeeper":  { grad: "from-cyan-400/25 to-sky-600/10", text: "text-cyan-300", ring: "border-cyan-400/40", icon: <Shield className="h-4 w-4" />, blurb: "Perennial finalist, no trophy" },
+  "The Challenger":  { grad: "from-orange-400/25 to-red-600/10", text: "text-orange-300", ring: "border-orange-400/40", icon: <Swords className="h-4 w-4" />, blurb: "Winning record, still chasing" },
+  "The Builder":     { grad: "from-teal-400/25 to-emerald-600/10", text: "text-teal-300", ring: "border-teal-400/40", icon: <Activity className="h-4 w-4" />, blurb: "Active roster constructor" },
+  "The Underdog":    { grad: "from-slate-300/20 to-slate-600/10", text: "text-slate-300", ring: "border-slate-400/40", icon: <Target className="h-4 w-4" />, blurb: "Persistent against the odds" },
+};
+
+const TIER_COLOR: Record<string, string> = {
+  "Championship-Ready": "text-amber-300",
+  "Contender": "text-lime-400",
+  "Rising": "text-cyan-300",
+  "Rebuilding": "text-orange-300",
+  "Foundation": "text-white/60",
+};
+
+function scoreColor(n: number): string { return n >= 70 ? "text-lime-400" : n >= 50 ? "text-amber-300" : "text-red-400"; }
+function scoreBar(n: number): string { return n >= 70 ? "bg-lime-400" : n >= 50 ? "bg-amber-400" : "bg-red-500"; }
+function sevText(s: string): string { return s === "high" ? "text-red-400" : s === "medium" ? "text-orange-300" : s === "low" ? "text-lime-400" : "text-white/75"; }
+function sevBorder(s: string): string { return s === "high" ? "border-red-500/25" : s === "medium" ? "border-orange-400/20" : "border-white/[0.06]"; }
+
+/** Positive contribution strength — used in champion mode Top Reasons. High = gold, strong positive. */
+function strengthColor(s: number): string {
+  if (s >= 80) return "text-amber-300";
+  if (s >= 60) return "text-lime-400";
+  if (s >= 40) return "text-cyan-300";
+  return "text-white/60";
+}
+function strengthBar(s: number): string {
+  if (s >= 80) return "bg-amber-400";
+  if (s >= 60) return "bg-lime-400";
+  if (s >= 40) return "bg-cyan-400";
+  return "bg-white/30";
+}
+
+function severityColor(s: number): string {
+  if (s >= 80) return "text-red-400";
+  if (s >= 55) return "text-orange-400";
+  if (s >= 35) return "text-amber-300";
+  return "text-white/60";
+}
+function severityBar(s: number): string {
+  if (s >= 80) return "bg-red-500";
+  if (s >= 55) return "bg-orange-500";
+  if (s >= 35) return "bg-amber-400";
+  return "bg-white/30";
+}
+
+function Stat({ label, value, accent }: { label: string; value: ReactNode; accent?: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center">
+      <div className={cn("text-[22px] font-black leading-none tabular-nums", accent ?? "text-white/90")}>{value}</div>
+      <div className="mt-1 text-[12px] uppercase tracking-wide text-white/40">{label}</div>
+    </div>
+  );
+}
+
+function TimelineRow({ card }: { card: any }) {
+  const champ = card.isChampion;
+  const runner = card.isRunnerUp;
+  const madePlayoffs = !champ && !runner && typeof card.finish === "number" && card.finish > 0 && card.finish <= 6;
+  const inProgress = card.resultLabel === "In Progress";
+
+  const dot = champ ? "bg-amber-400 ring-amber-400/30"
+    : runner ? "bg-violet-400 ring-violet-400/30"
+    : madePlayoffs ? "bg-cyan-400 ring-cyan-400/20"
+    : inProgress ? "bg-white/30 ring-white/10"
+    : "bg-white/15 ring-white/5";
+
+  const labelColor = champ ? "text-amber-300"
+    : runner ? "text-violet-300"
+    : madePlayoffs ? "text-cyan-300"
+    : "text-white/45";
+
+  return (
+    <div className="relative flex gap-4">
+      <div className="relative flex w-12 shrink-0 flex-col items-center">
+        <div className={cn("z-10 mt-1 h-3.5 w-3.5 rounded-full ring-4", dot)} />
+        <div className="absolute top-1 bottom-[-20px] w-px bg-white/[0.08]" />
+      </div>
+      <div
+        className={cn(
+          "mb-3 flex-1 rounded-xl border bg-white/[0.02] p-3.5 sm:p-4",
+          champ ? "border-amber-400/30 bg-amber-400/[0.04] shadow-[0_0_24px_-16px_rgba(245,197,24,0.7)]"
+            : runner ? "border-violet-400/25"
+            : "border-white/[0.06]",
+        )}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="text-[20px] font-black tabular-nums text-white/90">{card.season}</span>
+            <span className={cn("inline-flex items-center gap-1.5 text-[13px] font-bold", labelColor)}>
+              {champ && <Trophy className="h-3.5 w-3.5" />}
+              {runner && <Medal className="h-3.5 w-3.5" />}
+              {card.resultLabel}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-[13px] tabular-nums text-white/55">
+            <span className="font-semibold text-white/75">{card.record}</span>
+            {card.pointsFor != null && <span className="hidden sm:inline">{card.pointsFor.toLocaleString()} PF</span>}
+          </div>
+        </div>
+        {(champ || card.championName) && (
+          <div className="mt-1.5 text-[12px] text-white/40">
+            {champ ? (
+              <span className="font-semibold text-amber-300/90">Your championship season</span>
+            ) : card.championName ? (
+              <>Champion that year: <span className="text-white/60">{card.championName}</span></>
+            ) : null}
+          </div>
+        )}
+        {!card.playerLevelAvailable && !inProgress && (
+          <div className="mt-1.5 text-[12px] italic text-white/25">Player-level metrics unavailable before 2021. Team-level analysis available.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const POS_ORDER = ["QB", "RB", "WR", "TE"];
+
+export function WhyHaventIWon() {
+  const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
+  const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
+  const q = trpc.leagueIntel.careerReport.useQuery(
+    withLeagueSalt({}, leagueContextKey),
+    { staleTime: 60_000, enabled: leagueKeyReady },
+  );
+  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
+    onSuccess: (res) => { window.open(res.url, "_blank", "noopener,noreferrer"); },
+  });
+  const [openReason, setOpenReason] = useState<string | null>(null);
+  const [showThreat, setShowThreat] = useState(false);
+  const data = leagueKeyReady ? q.data : undefined;
+  const snap = data?.snapshot ?? null;
+  const arc = data?.careerArc ?? null;
+  const arcStyle = (arc && ARC_STYLE[arc]) || null;
+  const readiness = data?.readiness ?? null;
+  const patterns = data?.patterns ?? [];
+  // Map a reason's category to the already-computed PatternStat(s) that measure it.
+  // (Explicit + safe — no fuzzy matching, no mis-attribution.)
+  const patternsForCategory = (cat: string) => {
+    const pred: Record<string, (id: string) => boolean> = {
+      playoffs: (id) => id === "missed",
+      scoring: (id) => id === "pfgap",
+      position: (id) => id.startsWith("pos-"),
+      close_games: (id) => id === "close",
+      rivals: (id) => id === "lostchamp",
+    };
+    const fn = pred[cat];
+    return fn ? patterns.filter((p: { id?: string }) => fn(String(p.id ?? ""))) : [];
+  };
+  const isWin = data?.mode === "why-you-won" || data?.mode === "why-you-broke-through";
+  const whyPaywallCopy = resolvePaywallCopy(
+    data?.lockedReasons && data.lockedReasons > 0
+      ? `You're seeing 1 of ${data.totalReasons} reasons. ${data.lockedReasons} more are locked.`
+      : "Your full Championship Report is locked.",
+    "You know enough to be curious. Unlock why you haven't won — every ranked factor, your Championship Readiness score, positional gaps vs league champions, and your Title Path.",
+  );
+
+  // Conversion funnel instrumentation (fire-and-forget; see docs/FREEMIUM_GATING_SPEC.md)
+  const logEvent = trpc.usageMonitor.logUIEvent.useMutation();
+  const firedSnapshot = useRef(false);
+  const firedPaywall = useRef(false);
+  useEffect(() => {
+    if (data && !data.needsOwnerSelection && !firedSnapshot.current) {
+      firedSnapshot.current = true;
+      setLastFreeFeature("why_havent_i_won");
+      logEvent.mutate({ eventType: "feature_open", featureName: "whyhavent_snapshot_viewed", page: "why-havent-i-won" });
+    }
+  }, [data]);
+  useEffect(() => {
+    if (data?.gated && !firedPaywall.current) {
+      firedPaywall.current = true;
+      logEvent.mutate({ eventType: "feature_open", featureName: "whyhavent_paywall_viewed", page: "why-havent-i-won" });
+    }
+  }, [data]);
+
+  const reasonsHeading =
+    data?.mode === "why-you-won" ? "Top Reasons You Won"
+    : data?.mode === "why-you-broke-through" ? "Why You Broke Through"
+    : "Top Reasons You Haven't Won";
+
+  const sortedPositional = readiness
+    ? [...readiness.positional].sort((a: any, b: any) => POS_ORDER.indexOf(a.position) - POS_ORDER.indexOf(b.position))
+    : [];
+
+  return (
+    <div className="min-h-screen w-full" style={PAGEBG}>
+      <div className="px-6 py-6 max-w-[1400px]">
+
+        {(!leagueKeyReady || (q.isLoading && !data)) && (
+          <div className={cn(PANEL, "flex items-center justify-center gap-3 p-16 text-white/50")}>
+            <Loader2 className="h-5 w-5 animate-spin text-lime-400" />{" "}
+            {!leagueKeyReady ? "Loading league…" : "Reading your league history..."}
+          </div>
+        )}
+        {leagueKeyReady && q.isError && (
+          <div className={cn(PANEL, "p-8 text-center text-red-300")}>Couldn't build your career report. {String(q.error?.message ?? "")}</div>
+        )}
+
+        {data && data.needsOwnerSelection && (
+          <div className={cn(PANEL, "p-10 text-center")}>
+            <h2 className="text-[22px] font-black text-white/90">Select your team for this league</h2>
+            <p className="mx-auto mt-3 max-w-md text-[14px] leading-relaxed text-white/55">
+              We could not tell which team is yours in this league, so we will not guess. Choose your team to see your career, titles, and season timeline.
+            </p>
+            <a href="/settings" className="mt-5 inline-flex items-center gap-2 rounded-lg border border-lime-400/30 bg-lime-500/10 px-4 py-2 text-[14px] font-bold text-lime-300 hover:bg-lime-500/20">
+              Select your team
+            </a>
+          </div>
+        )}
+        {data && !data.needsOwnerSelection && (
+          <div className="space-y-6">
+
+            {/* SECTION 0 - Career Story Header */}
+            <div className={cn(PANEL, "overflow-hidden p-6 sm:p-8")}>
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <div className="flex items-center gap-2 rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-violet-300">
+                  <HelpCircle className="h-3.5 w-3.5" /> LeagueDNA Intelligence
+                </div>
+                {snap && (
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{snap.seasonsPlayed} Seasons</span>
+                    <span className="rounded-full border border-zinc-700 bg-zinc-800/60 px-3 py-1 text-[11px] font-semibold text-zinc-300">{data.teamCount > 0 ? `${data.teamCount}-Team League` : "League size pending sync"}</span>
+                    {data.confidence && <span className={cn("rounded-full border px-3 py-1 text-[11px] font-semibold", data.confidence === "High" ? "border-lime-400/30 bg-lime-500/10 text-lime-300" : "border-amber-400/30 bg-amber-500/10 text-amber-300")}>Confidence: {data.confidence}</span>}
+                  </div>
+                )}
+              </div>
+
+              {arc && arcStyle && (
+                <div className={cn("mb-3 inline-flex items-center gap-2 rounded-full border bg-gradient-to-r px-3.5 py-1.5 text-[13px] font-black uppercase tracking-wider", arcStyle.grad, arcStyle.text, arcStyle.ring)}>
+                  {arcStyle.icon}
+                  {arc}
+                  <span className="font-medium normal-case text-white/45">&middot; {arcStyle.blurb}</span>
+                </div>
+              )}
+
+              <h1 className="text-[32px] font-black leading-[1.04] tracking-tight sm:text-[44px]">
+                {data.mode === "why-you-won" ? <>Why You Won<span className="align-super text-[0.4em] text-white/40">{"\u2122"}</span></>
+                  : data.mode === "why-you-broke-through" ? <>Why You Broke Through<span className="align-super text-[0.4em] text-white/40">{"\u2122"}</span></>
+                  : <>Why Haven't I Won<span className="text-lime-400">?</span><span className="align-super text-[0.4em] text-white/40">{"\u2122"}</span></>}
+              </h1>
+              <p className="mt-1.5 text-[14px] text-white/45">{data.subtitle}</p>
+
+              {data.careerStory && (
+                <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-white/85">{data.careerStory}</p>
+              )}
+              <div className="mt-4 text-[13px] text-white/40">
+                <span className="font-semibold text-white/70">{data.ownerName}</span>
+                {snap && <> &middot; {snap.seasonsPlayed} seasons of real league data &middot; confidence {data.confidence}</>}
+              </div>
+            </div>
+
+            {/* SECTION 1 - Career Snapshot */}
+            {snap && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-4 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-lime-400">
+                  <Trophy className="h-4 w-4" /> Career Snapshot
+                </div>
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+                  <Stat label="Seasons" value={snap.seasonsPlayed} />
+                  <Stat label="Titles" value={snap.titles} accent={snap.titles > 0 ? "text-amber-300" : "text-white/90"} />
+                  <Stat label="Runner-Ups" value={snap.runnerUps} accent={snap.runnerUps > 0 ? "text-violet-300" : "text-white/90"} />
+                  <Stat label="Playoff Trips" value={snap.playoffTrips} />
+                  <Stat label="Win %" value={`${Math.round(snap.careerWinRate * 100)}%`} accent={snap.careerWinRate >= 0.5 ? "text-lime-400" : "text-white/90"} />
+                  <Stat label="Best Finish" value={snap.bestFinish ? `#${snap.bestFinish}` : "-"} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/50">
+                  {snap.activityDna.primary && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                      <Activity className="h-3.5 w-3.5 text-lime-400" /> Activity DNA: <span className="font-semibold text-white/80">{snap.activityDna.primary}</span>
+                      {snap.activityDna.secondary && <span className="text-white/40">/ {snap.activityDna.secondary}</span>}
+                    </span>
+                  )}
+                  {readiness && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1">
+                      <Gauge className="h-3.5 w-3.5 text-lime-400" /> Championship Readiness:
+                      <span className={cn("font-bold", scoreColor(readiness.score))}>{readiness.score}</span>
+                      <span className="text-white/40">({readiness.tier})</span>
+                    </span>
+                  )}
+                  {snap.biggestRival && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1 text-violet-200">
+                      <Swords className="h-3.5 w-3.5 text-violet-300" /> Biggest Rival: <span className="font-semibold text-white/85">{snap.biggestRival}</span>
+                    </span>
+                  )}
+                  {snap.biggestThreat && (
+                    <button
+                      onClick={() => setShowThreat((v) => !v)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1 text-orange-200 underline-offset-2 hover:underline"
+                    >
+                      <Flame className="h-3.5 w-3.5 text-orange-300" /> Biggest Threat: <span className="font-semibold text-white/85">{snap.biggestThreat.ownerName}</span>
+                      <span className="text-[10px] text-orange-300/70">{showThreat ? "▲" : "▼"}</span>
+                    </button>
+                  )}
+                  {snap.titles > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1 text-amber-300">
+                      <Crown className="h-3.5 w-3.5" /> {snap.championSeasons.join(", ")}
+                    </span>
+                  )}
+                </div>
+                {showThreat && snap.biggestThreat && (
+                  <div className="mt-3 rounded-xl border border-orange-400/20 bg-orange-500/[0.06] p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-widest text-orange-200/80">Why this is your biggest threat</div>
+                    <div className="mt-2 grid gap-1.5 text-[13px]">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-white/55">Record vs you</span>
+                        <span className="tabular-nums font-semibold text-white/90">{snap.biggestThreat.record}</span>
+                      </div>
+                      {snap.biggestThreat.playoffLosses > 0 && (
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-white/55">Playoff losses to them</span>
+                          <span className="tabular-nums font-semibold text-white/90">{snap.biggestThreat.playoffLosses}</span>
+                        </div>
+                      )}
+                    </div>
+                    {snap.biggestThreat.detail && <p className="mt-2 text-[13px] text-white/60">{snap.biggestThreat.detail}</p>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Top Reasons (moved to top) */}
+            <div className={cn(PANEL, "p-5 sm:p-6")}>
+              <div className="mb-4 flex items-center gap-3">
+                <span className={isWin ? "text-amber-300" : "text-lime-400"}>
+                  {isWin ? <Crown className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                </span>
+                <div>
+                  <h2 className="text-[20px] font-extrabold leading-tight">{reasonsHeading}</h2>
+                  <p className="text-[13px] text-white/45">
+                    {isWin
+                      ? "Ranked by contribution strength from real league data"
+                      : "Ranked by deterministic severity from real league data"}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {data.topReasons.map((f: any, i: number) => {
+                  const colorFn = isWin ? strengthColor : severityColor;
+                  const barFn = isWin ? strengthBar : severityBar;
+                  const iconMap = isWin ? CHAMPION_ICON : CATEGORY_ICON;
+                  const evid = patternsForCategory(String(f.category));
+                  return (
+                    <div key={f.id} className={cn(
+                      "rounded-xl border p-4",
+                      isWin ? "border-amber-400/15 bg-amber-400/[0.02]" : "border-white/[0.06] bg-white/[0.02]",
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <span className={cn("mt-0.5 shrink-0", colorFn(f.severity))}>
+                          {iconMap[f.category] ?? <Target className="h-5 w-5" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-bold text-white/90">
+                              <span className="mr-2 text-white/35">{i + 1}.</span>{f.headline}
+                            </div>
+                            <span className={cn("shrink-0 text-[13px] font-bold tabular-nums", colorFn(f.severity))}>
+                              {Math.round(f.severity)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[14px] text-white/55">{f.detail}</p>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                            <div className={cn("h-full rounded-full", barFn(f.severity))} style={{ width: `${Math.round(f.severity)}%` }} />
+                          </div>
+                          {evid.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => setOpenReason((cur) => (cur === f.id ? null : f.id))}
+                                className="mt-2 text-[11px] font-bold uppercase tracking-widest text-white/45 underline-offset-2 hover:underline"
+                              >
+                                {openReason === f.id ? "Hide evidence" : "Evidence"}
+                              </button>
+                              {openReason === f.id && (
+                                <div className="mt-2 space-y-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+                                  {evid.map((p: any) => (
+                                    <div key={p.id}>
+                                      <div className="flex items-start justify-between gap-3 text-[13px]">
+                                        <span className="text-white/70">{p.label}</span>
+                                        <span className="shrink-0 tabular-nums font-semibold text-white/90">{p.value}</span>
+                                      </div>
+                                      {p.detail && <p className="mt-0.5 text-[12px] text-white/45">{p.detail}</p>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {data.topReasons.length === 0 && (
+                  <p className="text-[14px] text-white/50">
+                    {isWin
+                      ? "Championship data is still computing."
+                      : "No standout weaknesses found in the data - a balanced resume."}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {!data.gated && data.titlePath?.available && data.titlePath.moves.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-1 flex items-center gap-2 text-[13px] font-semibold uppercase tracking-wide text-lime-400">
+                  <Route className="h-4 w-4" /> Your Title Path
+                </div>
+                <p className="mb-4 text-[14px] text-white/55">{data.titlePath.moveCount} move{data.titlePath.moveCount === 1 ? "" : "s"} to {data.titlePath.targetTier} (currently {data.titlePath.currentTier}, readiness {data.titlePath.currentScore})</p>
+                <div className="space-y-3">
+                  {data.titlePath.moves.map((m) => (
+                    <div key={m.rank} className="flex items-start gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[13px] font-bold text-lime-300">{m.rank}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-bold text-white/90">{m.title}</div>
+                          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", m.impact === "high" ? "bg-red-500/15 text-red-300" : m.impact === "medium" ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-white/60")}>{m.impact}</span>
+                        </div>
+                        <p className="mt-1 text-[14px] text-white/55">{m.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {data.gated && (
+              <div className={cn(PANEL, "relative overflow-hidden p-6 sm:p-7 ring-1 ring-lime-400/30")}>
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-lime-400/50 to-transparent" />
+                <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-lime-300">
+                  <Lock className="h-4 w-4" /> Locked - Full Championship Report
+                </div>
+                <h3 className="mt-3 text-[22px] font-black leading-tight sm:text-[26px]">
+                  {data.lockedReasons > 0 ? (
+                    <>You&apos;re seeing 1 of {data.totalReasons} reasons. <span className="text-lime-400">{data.lockedReasons} more are locked.</span></>
+                  ) : (
+                    <>Your full Championship Report is <span className="text-lime-400">locked.</span></>
+                  )}
+                </h3>
+                <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-white/60">
+                  {whyPaywallCopy.description}
+                </p>
+                {data.titlePath?.available && (
+                  <div className="mt-3 rounded-lg border border-lime-400/20 bg-lime-500/[0.05] p-3 text-[14px] leading-relaxed text-white/80">
+                    <span className="font-bold text-lime-300">Your Title Path: </span>{data.titlePath.summary}
+                  </div>
+                )}
+                <ul className="mt-4 grid gap-1.5 text-[14px] text-white/75 sm:grid-cols-2">
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> All {data.totalReasons} championship blockers, ranked</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Championship Readiness score and tier</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Positional gaps vs league champions</li>
+                  <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-lime-400" /> Your Title Path - the exact moves to contention</li>
+                </ul>
+                <button
+                  onClick={() => {
+                    logEvent.mutate({ eventType: "cta_click", featureName: "whyhavent_unlock_clicked", page: "why-havent-i-won" });
+                    checkoutMutation.mutate({ origin: window.location.origin });
+                  }}
+                  disabled={checkoutMutation.isPending}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300 disabled:opacity-60"
+                >
+                  {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {/* SECTION 3 - Pattern Detection / Championship Signals */}
+            {patterns.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-4 flex items-center gap-3">
+                  <span className={isWin ? "text-amber-300" : "text-orange-300"}>
+                    {isWin ? <Trophy className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                  </span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">
+                      {isWin ? "Championship Signals" : "Pattern Detection"}
+                    </h2>
+                    <p className="text-[13px] text-white/45">
+                      {isWin ? "The data behind your title run" : "The recurring signals in your league history"}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                  {patterns.map((p: any) => (
+                    <div key={p.id} className={cn("rounded-xl border bg-white/[0.02] p-4", isWin ? "border-amber-400/20" : sevBorder(p.severity))}>
+                      <div className={cn("text-[26px] font-black leading-none tabular-nums", isWin ? sevText("low") : sevText(p.severity))}>{p.value}</div>
+                      <div className="mt-1.5 text-[12px] font-semibold text-white/85">{p.label}</div>
+                      <div className="mt-1 text-[12px] leading-snug text-white/40">{p.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SECTION 3b - Obstacles You Overcame (champion modes only) */}
+            {isWin && data.obstaclesOvercome && (
+              (data.obstaclesOvercome.patterns.length > 0 || data.obstaclesOvercome.findings.length > 0) && (
+                <div className={cn(PANEL, "p-5 sm:p-6 border-white/[0.04]", "bg-[linear-gradient(180deg,#16121a,#110d14)]")}
+                  style={{ opacity: 0.85 }}>
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="text-white/35"><Shield className="h-5 w-5" /></span>
+                    <div>
+                      <h2 className="text-[20px] font-extrabold leading-tight text-white/60">Obstacles You Overcame</h2>
+                      <p className="text-[13px] text-white/30">The hurdles that make this title mean more</p>
+                    </div>
+                  </div>
+                  {data.obstaclesOvercome.patterns.length > 0 && (
+                    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+                      {data.obstaclesOvercome.patterns.map((p: any) => (
+                        <div key={p.id} className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-4">
+                          <div className="text-[26px] font-black leading-none tabular-nums text-white/40">{p.value}</div>
+                          <div className="mt-1.5 text-[12px] font-semibold text-white/55">{p.label}</div>
+                          <div className="mt-1 text-[12px] leading-snug text-white/25">{p.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {data.obstaclesOvercome.findings.length > 0 && (
+                    <div className="space-y-2">
+                      {data.obstaclesOvercome.findings.map((f: any, i: number) => (
+                        <div key={f.id} className="rounded-xl border border-white/[0.05] bg-white/[0.01] p-3">
+                          <div className="flex items-start gap-3">
+                            <span className="mt-0.5 shrink-0 text-white/25">
+                              {CATEGORY_ICON[f.category] ?? <Target className="h-5 w-5" />}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="font-bold text-white/45">
+                                <span className="mr-2 text-white/20">{i + 1}.</span>{f.headline}
+                              </div>
+                              <p className="mt-1 text-[13px] text-white/30">{f.detail}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            )}
+
+            {/* SECTION 4 - Championship Readiness Score */}
+            {readiness && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-lime-400"><Gauge className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">Championship Readiness Score</h2>
+                    <p className="text-[13px] text-white/45">Positional 40% &middot; Playoff 15% &middot; Acquisitions 15% &middot; Draft 15% &middot; Roster Mgmt 10% &middot; Activity 5%</p>
+                  </div>
+                </div>
+
+                {/* score hero */}
+                <div className="flex items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                  <div className="text-center">
+                    <div className={cn("text-[56px] font-black leading-none tabular-nums", scoreColor(readiness.score))}>{readiness.score}</div>
+                    <div className="text-[11px] uppercase tracking-wide text-white/40">out of 100</div>
+                  </div>
+                  <div className="flex-1">
+                    <div className={cn("text-[18px] font-extrabold", TIER_COLOR[readiness.tier] ?? "text-white/80")}>{readiness.tier}</div>
+                    <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-white/[0.07]">
+                      <div className={cn("h-full rounded-full", scoreBar(readiness.score))} style={{ width: `${readiness.score}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* component breakdown */}
+                <div className="mt-4 grid gap-2.5">
+                  {readiness.components.map((c: any) => (
+                    <div key={c.key} className="flex items-center gap-3">
+                      <div className="w-40 shrink-0 text-[13px] text-white/60">{c.label} <span className="text-white/30">({Math.round(c.weight * 100)}%)</span></div>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/[0.06]">
+                        <div className={cn("h-full rounded-full", scoreBar(c.score))} style={{ width: `${c.score}%` }} />
+                      </div>
+                      <div className={cn("w-9 shrink-0 text-right text-[13px] font-bold tabular-nums", scoreColor(c.score))}>{c.score}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* positional gap cards */}
+                {sortedPositional.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/40">Your starters vs the champion benchmark (pts/game)</div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      {sortedPositional.map((g: any) => {
+                        const behind = g.gap > 0.05;
+                        const ahead = g.gap < -0.05;
+                        return (
+                          <div key={g.position} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-center">
+                            <div className="text-[13px] font-bold uppercase tracking-wide text-white/50">{g.position}</div>
+                            <div className="mt-1 text-[22px] font-black tabular-nums text-white/90">{g.ownerAvg.toFixed(1)}</div>
+                            <div className="text-[12px] text-white/35">champ {g.championAvg.toFixed(1)}</div>
+                            <div className={cn("mt-1 inline-flex items-center gap-1 text-[13px] font-bold tabular-nums", behind ? "text-red-400" : ahead ? "text-lime-400" : "text-white/50")}>
+                              {behind ? <ArrowDown className="h-3 w-3" /> : ahead ? <ArrowUp className="h-3 w-3" /> : null}
+                              {g.gap > 0 ? `-${g.gap.toFixed(1)}` : `+${Math.abs(g.gap).toFixed(1)}`}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* action plan */}
+                {readiness.topActions.length > 0 && (
+                  <>
+                    <div className="mt-6 mb-2 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-lime-400">
+                      <CheckCircle2 className="h-4 w-4" /> Action Plan
+                    </div>
+                    <div className="space-y-2">
+                      {readiness.topActions.map((a: string, i: number) => (
+                        <div key={i} className="flex items-start gap-3 rounded-xl border border-lime-400/15 bg-lime-400/[0.03] p-3">
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[11px] font-bold text-lime-400">{i + 1}</span>
+                          <span className="text-[14px] text-white/80">{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Season Timeline (moved to bottom) */}
+            {data.timeline.length > 0 && (
+              <div className={cn(PANEL, "p-5 sm:p-6")}>
+                <div className="mb-5 flex items-center gap-3">
+                  <span className="text-lime-400"><Calendar className="h-5 w-5" /></span>
+                  <div>
+                    <h2 className="text-[20px] font-extrabold leading-tight">Season Timeline</h2>
+                    <p className="text-[13px] text-white/45">Every season of your career, newest first</p>
+                  </div>
+                </div>
+                <div className="pl-1">
+                  {data.timeline.map((c: any) => <TimelineRow key={c.season} card={c} />)}
+                </div>
+              </div>
+            )}
+
+            <p className="px-1 text-[12px] text-white/30">
+              Every number is computed deterministically from real league history (matchups, standings, drafts, championships). No estimates, no AI-generated facts.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default WhyHaventIWon;

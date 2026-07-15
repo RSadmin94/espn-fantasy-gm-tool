@@ -52,8 +52,8 @@ function baseInput(overrides: Partial<StorylinesInput> = {}): StorylinesInput {
     teamNameMap: { 1: "Str8FrmHell", 2: "Demetri's Team" },
     memberIdsMap: { 1: ["rod-1"], 2: ["opp-1"] },
     rivalryPairs: [],
-    rodTeamId: 1,
-    rodMemberIds: ["rod-1"],
+    focalTeamId: 1,
+    focalMemberIds: ["rod-1"],
     prevSeasonRanks: {},
     ...overrides,
   };
@@ -168,7 +168,7 @@ describe("computeWeeklyStorylines", () => {
           ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [i + 3, `Owner ${i + 3}`])),
         },
         prevSeasonRanks: { 1: 2 }, // was #2 last season
-        rodTeamId: null, // not Rod's story
+        focalTeamId: null, // not Rod's story
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).toContain("COLLAPSE");
@@ -181,7 +181,7 @@ describe("computeWeeklyStorylines", () => {
           makeTeam({ teamId: 1, wins: 1, losses: 9, memberIds: ["rod-1"] }),
           makeTeam({ teamId: 2, wins: 9, losses: 1, memberIds: ["opp-1"] }),
         ],
-        rodTeamId: null,
+        focalTeamId: null,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).not.toContain("COLLAPSE");
@@ -198,7 +198,7 @@ describe("computeWeeklyStorylines", () => {
           makeTeam({ teamId: 2, wins: 6, losses: 3, memberIds: ["opp-1"] }),
         ],
         transactions: [], // 0 transactions for both
-        rodTeamId: null,
+        focalTeamId: null,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).toContain("SILENT_THREAT");
@@ -215,7 +215,7 @@ describe("computeWeeklyStorylines", () => {
         teams,
         ownerMap,
         transactions: [],
-        rodTeamId: null,
+        focalTeamId: null,
         matchups: [],
       });
       const result = computeWeeklyStorylines(input);
@@ -239,7 +239,7 @@ describe("computeWeeklyStorylines", () => {
           // Current week (week 10)
           makeMatchup({ matchupPeriodId: 10, homeTeamId: 1, awayTeamId: 2 }),
         ],
-        rodTeamId: 1,
+        focalTeamId: 1,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).toContain("DESPERATION_WINDOW");
@@ -251,7 +251,7 @@ describe("computeWeeklyStorylines", () => {
           makeTeam({ teamId: 1, wins: 1, losses: 9, memberIds: ["rod-1"] }),
           makeTeam({ teamId: 2, wins: 8, losses: 2, memberIds: ["opp-1"] }),
         ],
-        rodTeamId: 1,
+        focalTeamId: 1,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).not.toContain("DESPERATION_WINDOW");
@@ -263,7 +263,7 @@ describe("computeWeeklyStorylines", () => {
           makeTeam({ teamId: 1, wins: 5, losses: 5, memberIds: ["rod-1"] }),
           makeTeam({ teamId: 2, wins: 5, losses: 5, memberIds: ["opp-1"] }),
         ],
-        rodTeamId: 1,
+        focalTeamId: 1,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).not.toContain("DESPERATION_WINDOW");
@@ -285,7 +285,7 @@ describe("computeWeeklyStorylines", () => {
       const input = baseInput({
         teams,
         ownerMap,
-        rodTeamId: null,
+        focalTeamId: null,
         matchups: [],
       });
       const result = computeWeeklyStorylines(input);
@@ -307,7 +307,7 @@ describe("computeWeeklyStorylines", () => {
       const input = baseInput({
         teams,
         ownerMap,
-        rodTeamId: null,
+        focalTeamId: null,
         matchups: [],
       });
       const result = computeWeeklyStorylines(input);
@@ -327,7 +327,7 @@ describe("computeWeeklyStorylines", () => {
       const input = baseInput({
         teams,
         ownerMap,
-        rodTeamId: null,
+        focalTeamId: null,
         matchups: [],
       });
       const result = computeWeeklyStorylines(input);
@@ -375,7 +375,7 @@ describe("computeWeeklyStorylines", () => {
         makeMatchup({ matchupPeriodId: 10, homeTeamId: 1, awayTeamId: 2 }),
       ];
       const ownerMap = { 1: "Owner One", 2: "Owner Two", 3: "Owner Three", 4: "Owner Four", 5: "Owner Five", 6: "Owner Six" };
-      const input = baseInput({ teams, matchups, ownerMap, rodTeamId: null });
+      const input = baseInput({ teams, matchups, ownerMap, focalTeamId: null });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).toContain("MOMENTUM_SHIFT");
     });
@@ -390,7 +390,7 @@ describe("computeWeeklyStorylines", () => {
         makeMatchup({ matchupPeriodId: 9, homeTeamId: 1, awayTeamId: 2, homeTotalPoints: 125, awayTotalPoints: 105 }),
         makeMatchup({ matchupPeriodId: 10, homeTeamId: 1, awayTeamId: 2 }),
       ];
-      const input = baseInput({ teams, matchups, rodTeamId: null });
+      const input = baseInput({ teams, matchups, focalTeamId: null });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).not.toContain("MOMENTUM_SHIFT");
     });
@@ -431,7 +431,7 @@ describe("computeWeeklyStorylines", () => {
         teams,
         matchups,
         ownerMap: { 1: "Rod Sellers", 2: "Demetri Clark", 3: "Marcus Jones", 4: "Kevin Smith" },
-        rodTeamId: 1,
+        focalTeamId: 1,
       });
       const result = computeWeeklyStorylines(input);
       expect(storyTypes(result)).toContain("FEAR_RISING");
@@ -444,8 +444,11 @@ describe("computeWeeklyStorylines", () => {
       const teams = [
         makeTeam({ teamId: 1, wins: 8, losses: 2, memberIds: ["rod-1"] }),
         makeTeam({ teamId: 2, wins: 2, losses: 8, memberIds: ["opp-1"] }),
+        makeTeam({ teamId: 3, wins: 6, losses: 4, memberIds: ["opp-2"] }),
+        makeTeam({ teamId: 4, wins: 6, losses: 4, memberIds: ["opp-3"] }),
       ];
       const matchups = [
+        // Rod scores well in recent weeks (180 PPG) but teams 3/4 take the top-2 slots
         ...Array.from({ length: 4 }, (_, i) => makeMatchup({
           matchupPeriodId: 6 + i,
           homeTeamId: 1,
@@ -453,9 +456,21 @@ describe("computeWeeklyStorylines", () => {
           homeTotalPoints: 180,
           awayTotalPoints: 80,
         })),
+        ...Array.from({ length: 4 }, (_, i) => makeMatchup({
+          matchupPeriodId: 6 + i,
+          homeTeamId: 3,
+          awayTeamId: 4,
+          homeTotalPoints: 200,
+          awayTotalPoints: 190,
+        })),
         makeMatchup({ matchupPeriodId: 10, homeTeamId: 1, awayTeamId: 2 }),
       ];
-      const input = baseInput({ teams, matchups, rodTeamId: 1 });
+      const input = baseInput({
+        teams,
+        matchups,
+        ownerMap: { 1: "Rod Sellers", 2: "Demetri Clark", 3: "Marcus Jones", 4: "Kevin Smith" },
+        focalTeamId: 1,
+      });
       const result = computeWeeklyStorylines(input);
       const fearStories = result.filter((s) => s.storyType === "FEAR_RISING");
       expect(fearStories.every((s) => s.teamId !== 1)).toBe(true);
@@ -487,7 +502,7 @@ describe("computeWeeklyStorylines", () => {
         transactions: [],
         rivalryPairs: [],
         prevSeasonRanks: {},
-        rodTeamId: null,
+        focalTeamId: null,
       });
       const result = computeWeeklyStorylines(input);
       const allowedTypes = new Set(["PLAYOFF_BUBBLE", "FEAR_RISING"]);
@@ -506,7 +521,7 @@ describe("computeWeeklyStorylines", () => {
         memberIds: [`m-${i + 1}`],
       }));
       const ownerMap = Object.fromEntries(teams.map((t) => [t.teamId, `Owner ${t.teamId}`]));
-      const input = baseInput({ teams, ownerMap, rodTeamId: null, matchups: [] });
+      const input = baseInput({ teams, ownerMap, focalTeamId: null, matchups: [] });
       const result = computeWeeklyStorylines(input);
       for (let i = 1; i < result.length; i++) {
         expect(result[i - 1].intensityScore).toBeGreaterThanOrEqual(result[i].intensityScore);

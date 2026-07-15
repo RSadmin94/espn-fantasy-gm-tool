@@ -14,8 +14,10 @@
  * Cached in memCache for 10 min to avoid redundant season scans.
  */
 
-import { getAllCachedSeasons, getCachedView } from "./db";
-import { normalizeMatchups, normalizeTeams } from "./espnService";
+import { getCachedView, resolveActiveLeagueId } from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import { listSeasonsForLeagueHistorical } from "./historicalDataService";
+import { getSeasonMatchups, getSeasonTeams } from "./leagueDataReads";
 import { memCache } from "./memCache";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -78,11 +80,12 @@ export async function computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName = "Owner A",
-  memberBName = "Owner B"
+  memberBName = "Owner B",
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cacheKey = `richH2H:${memberAId}:${memberBId}`;
+  const cacheKey = `richH2H:${memberAId}:${memberBId}:${userId ?? "anon"}`;
   return memCache(cacheKey, 10 * 60_000, async () => {
-    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName);
+    return _computeRichH2H(memberAId, memberBId, memberAName, memberBName, userId);
   });
 }
 
@@ -90,27 +93,36 @@ async function _computeRichH2H(
   memberAId: string,
   memberBId: string,
   memberAName: string,
-  memberBName: string
+  memberBName: string,
+  userId?: number
 ): Promise<RichH2HStats> {
-  const cachedSeasons = await getAllCachedSeasons();
-  const sortedSeasons = [...cachedSeasons].sort((a, b) => a - b);
+  const sortedSeasons: number[] = await listSeasonsForLeagueHistorical(undefined, userId);
 
   const matchups: H2HMatchup[] = [];
 
   for (const season of sortedSeasons) {
-    const row = await getCachedView(season, "combined");
-    if (!row) continue;
-    const data = row.payload as Record<string, unknown>;
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: userId != null ? { id: userId } : undefined },
+      null,
+      season,
+    );
+    const ref = { leagueId: String(leagueId).slice(0, 32), season };
+    const matchRes = await getSeasonMatchups(ref);
+    if (matchRes.count === 0) continue;
 
-    // Build teamId → memberId map
-    const teams = normalizeTeams(data);
+    const teamRes = await getSeasonTeams(ref);
     const teamToMember = new Map<number, string>();
-    for (const team of teams) {
-      const primaryOwner = (team as any).primaryOwner || ((team as any).memberIds?.[0] ?? "");
-      if (primaryOwner) teamToMember.set((team as any).teamId as number, primaryOwner);
+    for (const team of teamRes.rows) {
+      const tr = team as Record<string, unknown>;
+      const primaryOwner = String(tr.primaryOwner || (Array.isArray(tr.memberIds) ? tr.memberIds[0] : "") || "").trim();
+      const tid = Number(tr.teamId);
+      if (primaryOwner && tid) teamToMember.set(tid, primaryOwner);
     }
 
-    // Resolve member names from members array if not provided
+    const row = await getCachedView(season, "combined", undefined, { userId });
+    const data = (row?.payload as Record<string, unknown>) || {};
+
+    // Resolve member names from members array when combined cache has it
     const members = (data.members as Record<string, unknown>[]) || [];
     for (const m of members) {
       const mid = m.id as string;
@@ -119,12 +131,7 @@ async function _computeRichH2H(
       if (mid === memberBId && memberBName === "Owner B") memberBName = name;
     }
 
-    // Playoff start period
-    const settings = (data.settings as Record<string, unknown>) || {};
-    const scheduleSettings = (settings.scheduleSettings as Record<string, unknown>) || {};
-    const playoffStart: number = ((scheduleSettings.matchupPeriodCount as number) ?? 14) + 1;
-
-    const normalizedMatchups = normalizeMatchups(data) as Record<string, unknown>[];
+    const normalizedMatchups = matchRes.rows as Record<string, unknown>[];
 
     for (const m of normalizedMatchups) {
       const homeId = m.homeTeamId as number;
@@ -151,7 +158,15 @@ async function _computeRichH2H(
       const period = m.matchupPeriodId as number;
       const isPlayoff = !(!m.playoffTierType || (m.playoffTierType as string) === "NONE");
 
-      matchups.push({ season, period, isPlayoff, memberAScore: aScore, memberBScore: bScore, memberAWon: aWon });
+      const seasonYear = (m.season as number) ?? season;
+      matchups.push({
+        season: seasonYear,
+        period,
+        isPlayoff,
+        memberAScore: aScore,
+        memberBScore: bScore,
+        memberAWon: aWon,
+      });
     }
   }
 
@@ -262,26 +277,26 @@ async function _computeRichH2H(
 
 /**
  * Build a compact, information-dense H2H context string for AI prompts.
- * memberAName is always "Rod" (or the primary user).
+ * memberAName is the focal (primary) owner display name, resolved upstream.
  */
-export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sellers"): string {
+export function buildH2HPromptBlock(stats: RichH2HStats, label = `H2H vs ${stats.memberAName}`): string {
   const lines: string[] = [];
 
   lines.push(`${label}: ${stats.rsWins}W-${stats.rsLosses}L${stats.rsTies > 0 ? `-${stats.rsTies}T` : ""} (${stats.rsTotalGames} regular-season games)`);
 
   if (stats.avgMemberAPF !== null && stats.avgMemberBPF !== null) {
-    lines.push(`  Avg scoring: Rod ${stats.avgMemberAPF} pts vs ${stats.memberBName} ${stats.avgMemberBPF} pts`);
+    lines.push(`  Avg scoring: ${stats.memberAName} ${stats.avgMemberAPF} pts vs ${stats.memberBName} ${stats.avgMemberBPF} pts`);
   }
 
   if (stats.biggestAWin) {
-    lines.push(`  Biggest Rod win: ${stats.biggestAWin.aScore}–${stats.biggestAWin.bScore} in ${stats.biggestAWin.season} (+${stats.biggestAWin.margin} pts)`);
+    lines.push(`  Biggest ${stats.memberAName} win: ${stats.biggestAWin.aScore}–${stats.biggestAWin.bScore} in ${stats.biggestAWin.season} (+${stats.biggestAWin.margin} pts)`);
   }
   if (stats.biggestALoss) {
-    lines.push(`  Biggest Rod loss: ${stats.biggestALoss.aScore}–${stats.biggestALoss.bScore} in ${stats.biggestALoss.season} (-${stats.biggestALoss.margin} pts)`);
+    lines.push(`  Biggest ${stats.memberAName} loss: ${stats.biggestALoss.aScore}–${stats.biggestALoss.bScore} in ${stats.biggestALoss.season} (-${stats.biggestALoss.margin} pts)`);
   }
 
   if (stats.currentStreakLength >= 2) {
-    lines.push(`  Current streak: Rod ${stats.currentStreakLength}-game ${stats.currentStreakDirection} streak`);
+    lines.push(`  Current streak: ${stats.memberAName} ${stats.currentStreakLength}-game ${stats.currentStreakDirection} streak`);
   }
   const streakParts: string[] = [];
   if (stats.longestWinStreak >= 3) streakParts.push(`longest win streak: ${stats.longestWinStreak}`);
@@ -290,34 +305,20 @@ export function buildH2HPromptBlock(stats: RichH2HStats, label = "H2H vs Rod Sel
 
   const recentBreakdown = stats.seasonBreakdown.slice(-5);
   if (recentBreakdown.length > 0) {
-    const bdStr = recentBreakdown.map(s => `${s.season}: Rod ${s.aWins}-${s.aLosses}`).join(", ");
+    const bdStr = recentBreakdown.map(s => `${s.season}: ${stats.memberAName} ${s.aWins}-${s.aLosses}`).join(", ");
     lines.push(`  Recent seasons: ${bdStr}`);
   }
 
   if (stats.playoffWins + stats.playoffLosses > 0) {
-    lines.push(`  Playoff H2H: Rod ${stats.playoffWins}W-${stats.playoffLosses}L (${stats.playoffEliminations} eliminations by ${stats.memberBName})`);
+    lines.push(`  Playoff H2H: ${stats.memberAName} ${stats.playoffWins}W-${stats.playoffLosses}L (${stats.playoffEliminations} eliminations by ${stats.memberBName})`);
   }
 
   return lines.join("\n");
 }
 
-// ── Resolve Rod's member ID ───────────────────────────────────────────────────
+// Resolve the focal user ESPN member ID from their active profile.
 
-const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
-
-export async function resolveRodMemberId(): Promise<string | null> {
-  return memCache("rodMemberId", 60 * 60_000, async () => {
-    const seasons = await getAllCachedSeasons();
-    for (const season of seasons.sort((a, b) => b - a)) {
-      const row = await getCachedView(season, "combined");
-      if (!row) continue;
-      const data = row.payload as Record<string, unknown>;
-      const members = (data.members as Record<string, unknown>[]) || [];
-      for (const m of members) {
-        const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-        if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) return m.id as string;
-      }
-    }
-    return null;
-  });
+export async function resolveRodMemberId(userId?: number): Promise<string | null> {
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
+  return co.isSetupComplete ? co.ownerId : null;
 }

@@ -18,7 +18,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import type { PlayerRow, TeamRow, DraftPickRow, TransactionRow, ManagerBehaviorStats } from "./analytics";
+import { isOpenDraftAnalyticsPick, type PlayerRow, type TeamRow, type DraftPickRow, type TransactionRow, type ManagerBehaviorStats } from "./analytics";
 
 // ─── 1. 3D PROJECTIONS ────────────────────────────────────────────────────────
 // Requires: weekly scoring history per player (array of weekly point totals)
@@ -171,10 +171,10 @@ export interface KeeperFutureValue {
 
 const PICK_BASE_FV = 3000;
 const PICK_K_FV = 0.028;
-const PICK_TEAMS_FV = 14;
 
-function pickValFV(round: number, pickMid = 7): number {
-  const overall = (round - 1) * PICK_TEAMS_FV + pickMid;
+function pickValFV(round: number, teamCount: number, pickMid: number): number {
+  if (teamCount <= 0 || round < 1) return 0;
+  const overall = (round - 1) * teamCount + pickMid;
   return Math.round(PICK_BASE_FV * Math.exp(-PICK_K_FV * (overall - 1)));
 }
 
@@ -191,21 +191,25 @@ function estimateAdpRoundFV(avgPoints: number, position: string): number {
 export function calcKeeperFutureValue(
   players: PlayerRow[],
   // Optional: player ages from ESPN or manual mapping
-  playerAges?: Map<number, number>
+  playerAges: Map<number, number> | undefined,
+  draftGeometry: { teamCount: number; roundCount: number },
 ): KeeperFutureValue[] {
   const results: KeeperFutureValue[] = [];
+  const teamCount = draftGeometry.teamCount;
+  const roundCap = draftGeometry.roundCount;
+  const pickMid = teamCount > 0 ? Math.max(1, Math.min(teamCount, Math.ceil(teamCount / 2))) : 1;
 
   for (const player of players) {
     if (!player.keeperValue || player.keeperValue <= 0) continue;
 
     const keeperRound = player.keeperValue;
-    const nextYearRound = Math.min(keeperRound + 1, 14);
+    const nextYearRound = roundCap > 0 ? Math.min(keeperRound + 1, roundCap) : keeperRound + 1;
 
-    const keeperPickValue = pickValFV(keeperRound);
-    const nextYearPickValue = pickValFV(nextYearRound);
+    const keeperPickValue = pickValFV(keeperRound, teamCount, pickMid);
+    const nextYearPickValue = pickValFV(nextYearRound, teamCount, pickMid);
 
     const adpRound = estimateAdpRoundFV(player.avgPoints, player.position);
-    const adpPickValue = pickValFV(adpRound);
+    const adpPickValue = pickValFV(adpRound, teamCount, pickMid);
 
     // Age trajectory
     const age = playerAges?.get(player.playerId) ?? 0;
@@ -437,10 +441,10 @@ export function calcOpponentOvervaluation(
   const positions = ["QB", "RB", "WR", "TE"];
   const results: OpponentOvervaluation[] = [];
 
-  // Calculate league average draft round per position (excluding keepers)
+  // Calculate league average draft round per position (open-draft picks only — Phase 3C)
   const leagueAvgByPos: Record<string, number> = {};
   for (const pos of positions) {
-    const posPicks = draftPicks.filter(p => p.position === pos && !p.keeper);
+    const posPicks = draftPicks.filter(p => p.position === pos && isOpenDraftAnalyticsPick(p));
     leagueAvgByPos[pos] = posPicks.length > 0
       ? Math.round((posPicks.reduce((s, p) => s + p.roundId, 0) / posPicks.length) * 10) / 10
       : 7;

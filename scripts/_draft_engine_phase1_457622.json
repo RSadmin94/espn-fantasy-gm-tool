@@ -1,0 +1,537 @@
+{
+  "stats": {
+    "totalBoardSlots": 3302,
+    "openChoiceEvents": 2562,
+    "activeChooserChoices": 2048,
+    "departedChooserChoices": 514,
+    "seasons": 17
+  },
+  "bruceSample": [
+    {
+      "leagueId": "457622",
+      "season": 2024,
+      "round": 13,
+      "roundPick": 1,
+      "overallPick": 157,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Zaire Franklin",
+        "position": "LB"
+      },
+      "roomState": {
+        "picksSoFar": 112,
+        "teamCount": 13,
+        "positionCounts": {
+          "WR": 53,
+          "RB": 31,
+          "TE": 14,
+          "QB": 13,
+          "K": 1
+        },
+        "recentBoardPositions": [
+          "QB",
+          "QB",
+          "RB",
+          "WR",
+          "WR",
+          "TE"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 31,
+            "remaining": 3
+          },
+          "WR": {
+            "drafted": 53,
+            "remaining": 1
+          },
+          "QB": {
+            "drafted": 13,
+            "remaining": 0
+          },
+          "TE": {
+            "drafted": 14,
+            "remaining": 0
+          }
+        }
+      },
+      "availableCount": 14
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 2,
+      "roundPick": 2,
+      "overallPick": 16,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Garrett Wilson",
+        "position": "WR"
+      },
+      "roomState": {
+        "picksSoFar": 15,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 9,
+          "RB": 6
+        },
+        "recentBoardPositions": [
+          "WR",
+          "RB",
+          "WR",
+          "RB",
+          "WR",
+          "WR"
+        ],
+        "runInProgress": {
+          "position": "WR",
+          "countInLastFour": 3
+        },
+        "tierByPosition": {
+          "RB": {
+            "drafted": 6,
+            "remaining": 24
+          },
+          "WR": {
+            "drafted": 9,
+            "remaining": 40
+          },
+          "QB": {
+            "drafted": 0,
+            "remaining": 17
+          },
+          "TE": {
+            "drafted": 0,
+            "remaining": 13
+          }
+        }
+      },
+      "availableCount": 105
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 4,
+      "roundPick": 13,
+      "overallPick": 55,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Emeka Egbuka",
+        "position": "WR"
+      },
+      "roomState": {
+        "picksSoFar": 49,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 24,
+          "RB": 17,
+          "QB": 5,
+          "TE": 3
+        },
+        "recentBoardPositions": [
+          "WR",
+          "WR",
+          "RB",
+          "RB",
+          "WR",
+          "WR"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 17,
+            "remaining": 13
+          },
+          "WR": {
+            "drafted": 24,
+            "remaining": 25
+          },
+          "QB": {
+            "drafted": 5,
+            "remaining": 12
+          },
+          "TE": {
+            "drafted": 3,
+            "remaining": 10
+          }
+        }
+      },
+      "availableCount": 71
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 5,
+      "roundPick": 13,
+      "overallPick": 69,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Rashee Rice",
+        "position": "WR"
+      },
+      "roomState": {
+        "picksSoFar": 58,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 29,
+          "RB": 19,
+          "QB": 7,
+          "TE": 3
+        },
+        "recentBoardPositions": [
+          "WR",
+          "RB",
+          "RB",
+          "WR",
+          "QB",
+          "QB"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 19,
+            "remaining": 11
+          },
+          "WR": {
+            "drafted": 29,
+            "remaining": 20
+          },
+          "QB": {
+            "drafted": 7,
+            "remaining": 10
+          },
+          "TE": {
+            "drafted": 3,
+            "remaining": 10
+          }
+        }
+      },
+      "availableCount": 62
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 6,
+      "roundPick": 2,
+      "overallPick": 72,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "D'Andre Swift",
+        "position": "RB"
+      },
+      "roomState": {
+        "picksSoFar": 59,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 30,
+          "RB": 19,
+          "QB": 7,
+          "TE": 3
+        },
+        "recentBoardPositions": [
+          "RB",
+          "RB",
+          "WR",
+          "QB",
+          "QB",
+          "WR"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 19,
+            "remaining": 11
+          },
+          "WR": {
+            "drafted": 30,
+            "remaining": 19
+          },
+          "QB": {
+            "drafted": 7,
+            "remaining": 10
+          },
+          "TE": {
+            "drafted": 3,
+            "remaining": 10
+          }
+        }
+      },
+      "availableCount": 61
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 8,
+      "roundPick": 2,
+      "overallPick": 100,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Drake Maye",
+        "position": "QB"
+      },
+      "roomState": {
+        "picksSoFar": 82,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 41,
+          "RB": 23,
+          "QB": 10,
+          "TE": 8
+        },
+        "recentBoardPositions": [
+          "TE",
+          "RB",
+          "WR",
+          "TE",
+          "TE",
+          "TE"
+        ],
+        "runInProgress": {
+          "position": "TE",
+          "countInLastFour": 3
+        },
+        "tierByPosition": {
+          "RB": {
+            "drafted": 23,
+            "remaining": 7
+          },
+          "WR": {
+            "drafted": 41,
+            "remaining": 8
+          },
+          "QB": {
+            "drafted": 10,
+            "remaining": 7
+          },
+          "TE": {
+            "drafted": 8,
+            "remaining": 5
+          }
+        }
+      },
+      "availableCount": 38
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 12,
+      "roundPick": 2,
+      "overallPick": 156,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Quinshon Judkins",
+        "position": "RB"
+      },
+      "roomState": {
+        "picksSoFar": 109,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 48,
+          "RB": 29,
+          "QB": 17,
+          "TE": 12,
+          "LB": 1,
+          "K": 2
+        },
+        "recentBoardPositions": [
+          "TE",
+          "TE",
+          "RB",
+          "RB",
+          "TE",
+          "RB"
+        ],
+        "runInProgress": {
+          "position": "RB",
+          "countInLastFour": 3
+        },
+        "tierByPosition": {
+          "RB": {
+            "drafted": 29,
+            "remaining": 1
+          },
+          "WR": {
+            "drafted": 48,
+            "remaining": 1
+          },
+          "QB": {
+            "drafted": 17,
+            "remaining": 0
+          },
+          "TE": {
+            "drafted": 12,
+            "remaining": 1
+          }
+        }
+      },
+      "availableCount": 11
+    },
+    {
+      "leagueId": "457622",
+      "season": 2025,
+      "round": 13,
+      "roundPick": 13,
+      "overallPick": 181,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Harrison Butker",
+        "position": "K"
+      },
+      "roomState": {
+        "picksSoFar": 116,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 49,
+          "RB": 30,
+          "QB": 17,
+          "TE": 13,
+          "LB": 1,
+          "K": 4,
+          "DE": 2
+        },
+        "recentBoardPositions": [
+          "DE",
+          "WR",
+          "TE",
+          "K",
+          "DE",
+          "K"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 30,
+            "remaining": 0
+          },
+          "WR": {
+            "drafted": 49,
+            "remaining": 0
+          },
+          "QB": {
+            "drafted": 17,
+            "remaining": 0
+          },
+          "TE": {
+            "drafted": 13,
+            "remaining": 0
+          }
+        }
+      },
+      "availableCount": 4
+    },
+    {
+      "leagueId": "457622",
+      "season": 2022,
+      "round": 1,
+      "roundPick": 3,
+      "overallPick": 3,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "Dalvin Cook",
+        "position": "RB"
+      },
+      "roomState": {
+        "picksSoFar": 2,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 1,
+          "RB": 1
+        },
+        "recentBoardPositions": [
+          "WR",
+          "RB"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 1,
+            "remaining": 38
+          },
+          "WR": {
+            "drafted": 1,
+            "remaining": 56
+          },
+          "QB": {
+            "drafted": 0,
+            "remaining": 14
+          },
+          "TE": {
+            "drafted": 0,
+            "remaining": 14
+          }
+        }
+      },
+      "availableCount": 139
+    },
+    {
+      "leagueId": "457622",
+      "season": 2022,
+      "round": 1,
+      "roundPick": 9,
+      "overallPick": 9,
+      "chooserProfileKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "chooserDisplayName": "Bruce Edwards",
+      "chooserRole": "active",
+      "chosenPlayer": {
+        "playerName": "D'Andre Swift",
+        "position": "RB"
+      },
+      "roomState": {
+        "picksSoFar": 8,
+        "teamCount": 14,
+        "positionCounts": {
+          "WR": 3,
+          "RB": 3,
+          "TE": 2
+        },
+        "recentBoardPositions": [
+          "RB",
+          "RB",
+          "WR",
+          "WR",
+          "TE",
+          "TE"
+        ],
+        "runInProgress": null,
+        "tierByPosition": {
+          "RB": {
+            "drafted": 3,
+            "remaining": 36
+          },
+          "WR": {
+            "drafted": 3,
+            "remaining": 54
+          },
+          "QB": {
+            "drafted": 0,
+            "remaining": 14
+          },
+          "TE": {
+            "drafted": 2,
+            "remaining": 12
+          }
+        }
+      },
+      "availableCount": 133
+    }
+  ]
+}

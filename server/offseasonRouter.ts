@@ -14,20 +14,22 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
-import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, upsertCachedView, upsertRefreshManifest, upsertViewHealth } from "./db";
+import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, getDefaultEspnLeagueId, upsertRefreshManifest, upsertViewHealth } from "./db";
+import { syncEspnCombinedFullPipeline } from "./espnPersistence";
 import { normalizeDraftPicks, fetchEspnViewsHardened, normalizeTeams, normalizeRosters, normalizeMatchups, normalizeTransactions, validateDataQuality } from "./espnService";
 import { getOrFetchLeagueIdentity, upsertLeagueIdentity } from "./leagueIdentityService";
 import { memCache } from "./memCache";
 
-async function getSeasonData(season: number) {
-  const cached = await getCachedView(season, "combined");
+async function getSeasonData(season: number, userId?: number) {
+  const cached = await getCachedView(season, "combined", undefined, { userId });
   if (cached) return cached.payload as Record<string, unknown>;
   return null;
 }
 
 export const offseasonRouter = router({
   // ── All 14 teams: DNA-powered keeper recommendations ─────────────────────
-  keeperRecommendations: protectedProcedure.query(async () => {
+  keeperRecommendations: protectedProcedure.query(async ({ ctx }) => {
+    const uid = ctx.user?.id;
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
@@ -38,17 +40,17 @@ export const offseasonRouter = router({
     if (!completedSeason) return { teams: [], leagueSummary: null };
     const planningYear = completedSeason + 1; // e.g. 2025 → 2026
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(undefined, uid)).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return { teams: [], leagueSummary: null };
 
     const latestSeason = completedSeason; // explicit alias for clarity
-    const data2025 = await getSeasonData(latestSeason);
+    const data2025 = await getSeasonData(latestSeason, uid);
     if (!data2025) return { teams: [], leagueSummary: null };
 
     // Build keeper eligibility (mirrors keeperEligibility2026 logic)
     const keepersByPlayerByTeam: Record<number, Record<number, Array<{ season: number; roundId: number; playerName: string; position: string }>>> = {};
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season);
+      const data = await getSeasonData(season, uid);
       if (!data) continue;
       const picks = normalizeDraftPicks(data);
       for (const p of picks) {
@@ -86,7 +88,7 @@ export const offseasonRouter = router({
     const prevSeason = latestSeason - 1;
     const keepers2024: Record<number, Record<number, number>> = {};
     if (cachedSeasons.includes(prevSeason)) {
-      const data2024 = await getSeasonData(prevSeason);
+      const data2024 = await getSeasonData(prevSeason, uid);
       if (data2024) {
         const picks2024 = normalizeDraftPicks(data2024);
         for (const p of picks2024) {
@@ -156,7 +158,7 @@ export const offseasonRouter = router({
     });
 
     // Get DNA profiles
-    const managers = await buildManagerRawData();
+    const managers = await buildManagerRawData(uid);
     const dnaProfiles = calcLeagueDNA(managers);
 
     // Get 2026 draft order and team names from leagueIdentity (live ESPN, cached in DB)
@@ -205,7 +207,8 @@ export const offseasonRouter = router({
   }),
 
   // ── 2026 draft strategy board ─────────────────────────────────────────────
-  draftBoard: protectedProcedure.query(async () => {
+  draftBoard: protectedProcedure.query(async ({ ctx }) => {
+    const uid = ctx.user?.id;
     const { calcLeagueDNA } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
 
@@ -213,14 +216,14 @@ export const offseasonRouter = router({
     const completedSeason = await getCompletedSeasonForOffseason();
     if (!completedSeason) return null;
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(undefined, uid)).sort((a: number, b: number) => a - b);
     if (cachedSeasons.length === 0) return null;
 
     const latestSeason = completedSeason;
-    const data2025 = await getSeasonData(latestSeason);
+    const data2025 = await getSeasonData(latestSeason, uid);
     if (!data2025) return null;
 
-    const managers = await buildManagerRawData();
+    const managers = await buildManagerRawData(uid);
     const dnaProfiles = calcLeagueDNA(managers);
 
     // Get keeper recommendations (reuse the same logic)
@@ -243,7 +246,7 @@ export const offseasonRouter = router({
     const prevSeason = latestSeason - 1;
     const keepers2024: Record<number, Record<number, boolean>> = {};
     if (cachedSeasons.includes(prevSeason)) {
-      const data2024 = await getSeasonData(prevSeason);
+      const data2024 = await getSeasonData(prevSeason, uid);
       if (data2024) {
         const picks2024 = normalizeDraftPicks(data2024);
         for (const p of picks2024) {
@@ -300,7 +303,8 @@ export const offseasonRouter = router({
   // ── Single team: LLM-generated keeper + draft brief ───────────────────────
   teamKeeperBrief: protectedProcedure
     .input(z.object({ teamId: z.number(), teamName: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const uid = ctx.user?.id;
       const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
 
@@ -308,11 +312,11 @@ export const offseasonRouter = router({
       if (!completedSeason) return { brief: "No completed season data available." };
       const planningYear = completedSeason + 1;
 
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, uid)).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { brief: "No data available." };
 
       const latestSeason = completedSeason;
-      const data2025 = await getSeasonData(latestSeason);
+      const data2025 = await getSeasonData(latestSeason, uid);
       if (!data2025) return { brief: `No ${latestSeason} season data available.` };
 
       // Get this team's keepers
@@ -320,7 +324,7 @@ export const offseasonRouter = router({
       const teamKeepers = picks2025.filter(p => p.keeper && p.teamId === input.teamId);
 
       // Get DNA — use live 2026 identity for owner name if available
-      const managers = await buildManagerRawData();
+      const managers = await buildManagerRawData(uid);
       const dnaProfiles = calcLeagueDNA(managers);
       const identity2026brief = await getOrFetchLeagueIdentity(planningYear);
       const liveTeam = identity2026brief?.teams?.find(t => t.teamId === input.teamId);
@@ -333,7 +337,7 @@ export const offseasonRouter = router({
       const prevSeason = latestSeason - 1;
       const keepers2024: Record<number, number> = {};
       if (cachedSeasons.includes(prevSeason)) {
-        const data2024 = await getSeasonData(prevSeason);
+        const data2024 = await getSeasonData(prevSeason, uid);
         if (data2024) {
           const picks2024 = normalizeDraftPicks(data2024);
           for (const p of picks2024) {
@@ -395,14 +399,28 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
 
         // Persist per-view health
         for (const vr of pipelineResult.viewResults) {
-          await upsertViewHealth(season, vr.viewName, {
-            status: vr.status === "auth_error" ? "error" : vr.status,
-            errorMessage: vr.error,
-            recordCount: vr.recordCount,
-          });
+          try {
+            await upsertViewHealth(season, vr.viewName, {
+              status: vr.status === "auth_error" ? "error" : vr.status,
+              errorMessage: vr.error,
+              recordCount: vr.recordCount,
+            });
+          } catch (vhErr) {
+            console.warn("[offseason.refresh] upsertViewHealth failed:", season, vr.viewName, vhErr);
+          }
         }
 
-        await upsertCachedView(season, "combined", data);
+        const leagueId = (await getDefaultEspnLeagueId()) ?? "default";
+        const quality = validateDataQuality(season, data);
+        try {
+          await syncEspnCombinedFullPipeline(leagueId, season, data as Record<string, unknown>, {
+            pipelineAllOk: pipelineResult.allViewsOk,
+            qualityUsable: quality.isUsable,
+          });
+        } catch (persistErr) {
+          console.warn("[offseason.refresh] syncEspnCombinedFullPipeline failed:", season, persistErr);
+          throw persistErr;
+        }
 
         // Update league identity (team names, draft order, settings)
         try { await upsertLeagueIdentity(season, data); } catch (_e) { /* non-fatal */ }
@@ -412,23 +430,30 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
         const matchups = normalizeMatchups(data);
         const picks = normalizeDraftPicks(data);
         const txs = normalizeTransactions(data);
-        const quality = validateDataQuality(season, data);
         const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
           : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
           : "success";
 
-        await upsertRefreshManifest(season, {
-          teamCount: teams.length, rosterCount: rosters.length,
-          matchupCount: matchups.length, draftPickCount: picks.length,
-          transactionCount: txs.length, status: overallStatus,
-          viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
-          errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-        });
+        try {
+          await upsertRefreshManifest(season, {
+            teamCount: teams.length, rosterCount: rosters.length,
+            matchupCount: matchups.length, draftPickCount: picks.length,
+            transactionCount: txs.length, status: overallStatus,
+            viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
+            errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
+          });
+        } catch (mfErr) {
+          console.warn("[offseason.refresh] upsertRefreshManifest failed:", season, mfErr);
+        }
 
         results[season] = { status: overallStatus };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+        try {
+          await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
+        } catch (mfErr) {
+          console.warn("[offseason.refresh] upsertRefreshManifest (failed) failed:", season, mfErr);
+        }
         results[season] = { status: "failed", error: msg };
       }
     }

@@ -1,0 +1,1 @@
+export { GmBriefingPage } from "./GmBriefingPage";

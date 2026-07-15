@@ -39,15 +39,21 @@ async function getInjuryBlock(playerNames: string[]): Promise<string> {
   }
 }
 
-async function getDNABlock(focusMemberIds?: string[]): Promise<string> {
+async function getDNABlock(focusMemberIds?: string[], userId?: number): Promise<string> {
   try {
-    const cachedSeasons = await getAllCachedSeasons();
+    const cachedSeasons = await getAllCachedSeasons(undefined, userId);
     if (cachedSeasons.length === 0) return "";
     const { buildManagerRawData } = await import("./dnaRouter");
     const { calcLeagueDNA, buildDNAPromptBlock: buildBlock } = await import("./leagueDNA");
-    const allManagers = await buildManagerRawData();
+    const { resolveCurrentOwner } = await import("./currentOwnerService");
+    const allManagers = await buildManagerRawData(userId);
     if (allManagers.length === 0) return "";
-    const dnaProfiles = calcLeagueDNA(allManagers);
+    let focalLabel = "the focal manager";
+    if (userId != null) {
+      const co = await resolveCurrentOwner({ id: userId });
+      if (co.displayName?.trim()) focalLabel = co.displayName.trim();
+    }
+    const dnaProfiles = calcLeagueDNA(allManagers, focalLabel);
     const focused = focusMemberIds && focusMemberIds.length > 0
       ? dnaProfiles.filter(p => focusMemberIds.includes(p.memberId))
       : dnaProfiles;
@@ -76,15 +82,15 @@ export const agentRouter = router({
       playerB: z.object({ name: z.string(), position: z.string(), projectedPoints: z.number().optional() }),
       /** Pre-built simulation summary from Phase 2 (simulation.startSit) */
       simulationSummary: z.string().optional(),
-      /** League context: Rod's record, current week, matchup */
+      /** League context: standings, current week, matchup */
       leagueContext: z.string().optional(),
       /** Target memberIds for DNA focus (trade opponent, current matchup opponent) */
       opponentMemberIds: z.array(z.string()).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [injuryBlock, dnaBlock] = await Promise.all([
         getInjuryBlock([input.playerA.name, input.playerB.name]),
-        input.opponentMemberIds ? getDNABlock(input.opponentMemberIds) : Promise.resolve(""),
+        input.opponentMemberIds ? getDNABlock(input.opponentMemberIds, ctx.user?.id) : Promise.resolve(""),
       ]);
 
       const extraFacts = [
@@ -107,7 +113,7 @@ export const agentRouter = router({
         extraFacts: extraFacts || undefined,
       });
 
-      return runAgentDebate(context);
+      return runAgentDebate(context, { userId: ctx.user?.id });
     }),
 
   /**
@@ -119,9 +125,9 @@ export const agentRouter = router({
    */
   trade: subscribedProcedure
     .input(z.object({
-      /** What Rod is giving up */
+      /** Assets the manager would send out */
       giving: z.array(z.object({ name: z.string(), position: z.string() })),
-      /** What Rod is receiving */
+      /** Assets the manager would receive */
       receiving: z.array(z.object({ name: z.string(), position: z.string() })),
       /** Pre-built trade math from tradeAnalyze endpoint */
       tradeMathSummary: z.string().optional(),
@@ -129,7 +135,7 @@ export const agentRouter = router({
       targetMemberId: z.string().optional(),
       leagueContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const allPlayerNames = [
         ...input.giving.map(p => p.name),
         ...input.receiving.map(p => p.name),
@@ -137,14 +143,14 @@ export const agentRouter = router({
 
       const [injuryBlock, dnaBlock] = await Promise.all([
         getInjuryBlock(allPlayerNames),
-        input.targetMemberId ? getDNABlock([input.targetMemberId]) : Promise.resolve(""),
+        input.targetMemberId ? getDNABlock([input.targetMemberId], ctx.user?.id) : Promise.resolve(""),
       ]);
 
       const givingDesc = input.giving.map(p => `${p.name} (${p.position})`).join(" + ");
       const receivingDesc = input.receiving.map(p => `${p.name} (${p.position})`).join(" + ");
 
       const context = buildAgentContext({
-        question: `Should Rod accept this trade? Giving: ${givingDesc} | Receiving: ${receivingDesc}`,
+        question: `Should the manager accept this trade? Giving: ${givingDesc} | Receiving: ${receivingDesc}`,
         optionA: `ACCEPT — receive ${receivingDesc}`,
         optionB: `DECLINE — keep ${givingDesc}`,
         injuryBlock,
@@ -153,7 +159,7 @@ export const agentRouter = router({
         leagueContext: input.leagueContext,
       });
 
-      return runAgentDebate(context);
+      return runAgentDebate(context, { userId: ctx.user?.id });
     }),
 
   /**
@@ -180,7 +186,7 @@ export const agentRouter = router({
       keeperROISummary: z.string().optional(),
       leagueContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const playerNames = [input.playerA.name];
       if (input.playerB) playerNames.push(input.playerB.name);
 
@@ -196,7 +202,7 @@ export const agentRouter = router({
       const context = buildAgentContext({
         question: input.playerB
           ? `Which keeper is the better value: ${input.playerA.name} or ${input.playerB.name}?`
-          : `Should Rod keep ${input.playerA.name} in round ${input.playerA.keeperRound}?`,
+          : `Should the manager keep ${input.playerA.name} in round ${input.playerA.keeperRound}?`,
         optionA: aDesc,
         optionB: bDesc,
         injuryBlock,
@@ -204,7 +210,7 @@ export const agentRouter = router({
         leagueContext: input.leagueContext,
       });
 
-      return runAgentDebate(context);
+      return runAgentDebate(context, { userId: ctx.user?.id });
     }),
 
   /**
@@ -225,7 +231,7 @@ export const agentRouter = router({
       /** League draft context */
       leagueContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const [injuryBlock] = await Promise.all([
         getInjuryBlock([input.optionA.name, input.optionB.name]),
       ]);
@@ -234,7 +240,7 @@ export const agentRouter = router({
       const bDesc = `${input.optionB.name} (${input.optionB.position})${input.optionB.ecrRank ? ` — ECR #${input.optionB.ecrRank}` : ""}`;
 
       const extraFacts = input.currentRoster
-        ? `ROD'S CURRENT ROSTER:\n${input.currentRoster}`
+        ? `CURRENT ROSTER:\n${input.currentRoster}`
         : undefined;
 
       const context = buildAgentContext({
@@ -246,7 +252,7 @@ export const agentRouter = router({
         extraFacts,
       });
 
-      return runAgentDebate(context);
+      return runAgentDebate(context, { userId: ctx.user?.id });
     }),
 
   /**
@@ -263,7 +269,7 @@ export const agentRouter = router({
       calculatedFacts: z.string().optional().default(""),
       leagueContext: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const context = buildAgentContext({
         question: input.question,
         optionA: input.optionA,
@@ -272,6 +278,6 @@ export const agentRouter = router({
         leagueContext: input.leagueContext,
       });
 
-      return runAgentDebate(context);
+      return runAgentDebate(context, { userId: ctx.user?.id });
     }),
 });

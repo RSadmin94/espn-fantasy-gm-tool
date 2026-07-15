@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import { TRPCError } from "@trpc/server";
 import {
   calcChampionshipEquity,
@@ -41,6 +42,7 @@ import {
   normalizeMatchups,
   normalizeSettings,
 } from "./espnService";
+import { resolveFocalTeamId } from "./weeklyAssessmentService";
 
 // ─── Shared input schemas ─────────────────────────────────────────────────────
 
@@ -61,19 +63,19 @@ const TeamStandingInput = z.object({
   pointsFor: z.number(),
   projectedLineup: z.array(SimPlayerInput),
   remainingSchedule: z.array(z.number()),
-  isRod: z.boolean().default(false),
+  isFocalOwner: z.boolean().default(false),
 });
 
 // ─── ESPN data helper ─────────────────────────────────────────────────────────
 
-async function buildTeamStandings(season: number): Promise<{
+async function buildTeamStandings(season: number, userId?: number): Promise<{
   teams: TeamStanding[];
-  rodTeamId: number | null;
+  focalTeamId: number | null;
   currentWeek: number;
   playoffWeekStart: number;
 }> {
-  const cached = await getCachedView(season, "combined");
-  if (!cached) return { teams: [], rodTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
+  const cached = await getCachedView(season, "combined", undefined, { userId });
+  if (!cached) return { teams: [], focalTeamId: null, currentWeek: 1, playoffWeekStart: 15 };
 
   const data = cached.payload as Record<string, unknown>;
   const rawTeams = normalizeTeams(data);
@@ -126,17 +128,9 @@ async function buildTeamStandings(season: number): Promise<{
     teamRemainingSchedule.get(awayId)!.push(homeId);
   }
 
-  // Detect Rod's team
-  let rodTeamId: number | null = null;
-  for (const t of rawTeams) {
-    const name = ((t.teamName as string) || "").toLowerCase();
-    const owner = ((t.owners as string) || "").toLowerCase();
-    if (name.includes("str8") || name.includes("rodzilla") ||
-        owner.includes("rod") || owner.includes("sellers")) {
-      rodTeamId = t.teamId as number;
-      break;
-    }
-  }
+  // Resolve the focal owner's team from their active profile (memberId match),
+  // never by display name. Null when no profile is set up (neutral, no Rod fallback).
+  const focalTeamId: number | null = await resolveFocalTeamId(rawTeams, userId);
 
   const teams: TeamStanding[] = rawTeams.map(t => ({
     teamId: t.teamId as number,
@@ -146,10 +140,10 @@ async function buildTeamStandings(season: number): Promise<{
     pointsFor: (t.pointsFor as number) || 0,
     projectedLineup: teamLineups.get(t.teamId as number) ?? [],
     remainingSchedule: teamRemainingSchedule.get(t.teamId as number) ?? [],
-    isRod: t.teamId === rodTeamId,
+    isFocalOwner: t.teamId === focalTeamId,
   }));
 
-  return { teams, rodTeamId, currentWeek, playoffWeekStart };
+  return { teams, focalTeamId, currentWeek, playoffWeekStart };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -166,13 +160,13 @@ export const champRouter = router({
       season: z.number().default(2025),
       simCount: z.number().min(500).max(5000).default(2000),
     }))
-    .query(async ({ input }) => {
-      const { teams, rodTeamId, playoffWeekStart } = await buildTeamStandings(input.season);
+    .query(async ({ ctx, input }) => {
+      const { teams, focalTeamId, playoffWeekStart } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season." });
-      if (!rodTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify Rod's team." });
+      if (!focalTeamId) throw new TRPCError({ code: "NOT_FOUND", message: "Could not identify the selected owner's team. Please select an owner profile for this league." });
 
-      const rodTeam = teams.find(t => t.teamId === rodTeamId);
-      if (!rodTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Rod's team not found." });
+      const rodTeam = teams.find(t => t.teamId === focalTeamId);
+      if (!rodTeam) throw new TRPCError({ code: "NOT_FOUND", message: "Selected owner's team not found." });
 
       // Separate starters (top 2 per skill position) and backups
       const starters = rodTeam.projectedLineup.slice(0, 8);
@@ -189,7 +183,7 @@ export const champRouter = router({
         input.simCount
       );
 
-      return { ...result, season: input.season, rodTeamId };
+      return { ...result, season: input.season, focalTeamId };
     }),
 
   /**
@@ -198,8 +192,8 @@ export const champRouter = router({
    */
   leagueRankings: publicProcedure
     .input(z.object({ season: z.number().default(2025), simCount: z.number().default(1000) }))
-    .query(async ({ input }) => {
-      const { teams } = await buildTeamStandings(input.season);
+    .query(async ({ ctx, input }) => {
+      const { teams } = await buildTeamStandings(input.season, ctx.user?.id);
       if (teams.length === 0) return [];
       return calcChampionshipEquity(teams, input.simCount);
     }),
@@ -217,13 +211,13 @@ export const champRouter = router({
       season: z.number().default(2025),
       specificQuestion: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season);
-      if (!rodTeamId || teams.length === 0) {
+    .mutation(async ({ ctx, input }) => {
+      const { teams, focalTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
+      if (!focalTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }
 
-      const rodTeam = teams.find(t => t.teamId === rodTeamId)!;
+      const rodTeam = teams.find(t => t.teamId === focalTeamId)!;
       const starters = rodTeam.projectedLineup.slice(0, 8);
       const backups = rodTeam.projectedLineup.slice(8);
 
@@ -234,7 +228,10 @@ export const champRouter = router({
         })),
       }, 1000);
 
-      const systemPrompt = `You are the Championship Equity advisor for Rod Sellers in "ATLANTAS FINEST FF" (14-team PPR keeper league).
+      const __leagueCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const { leagueDescriptor, focalClause } = buildLeaguePromptContext(__leagueCtx);
+
+      const systemPrompt = `You are the Championship Equity advisor for ${focalClause} in ${leagueDescriptor}.
 You optimize for championship probability — NOT weekly points. These are two different objectives.
 
 ${simResult.promptBlock}
@@ -243,9 +240,9 @@ KEY PRINCIPLE:
 - If championship probability < 10%: recommend HIGH VARIANCE — only upside moves can close the gap
 - If championship probability 10-20%: balanced, slight lean toward variance
 - If championship probability > 20%: protect the equity, avoid unnecessary risk
-- Unique roster construction matters — if Rod's roster looks like everyone else's, he can't win
+- Unique roster construction matters — if ${focalClause}'s roster looks like everyone else's, they can't win
 
-Answer Rod's question using the championship equity data above as ground truth.`;
+Answer ${focalClause}'s question using the championship equity data above as ground truth.`;
 
       const question = input.specificQuestion
         || "Based on my championship equity, should I be playing it safe or swinging for ceiling moves?";
@@ -278,25 +275,25 @@ Answer Rod's question using the championship equity data above as ground truth.`
       decisionDescription: z.string(),
       simCount: z.number().min(200).max(2000).default(500),
     }))
-    .mutation(async ({ input }) => {
-      const { teams, rodTeamId } = await buildTeamStandings(input.season);
-      if (!rodTeamId || teams.length === 0) {
+    .mutation(async ({ ctx, input }) => {
+      const { teams, focalTeamId } = await buildTeamStandings(input.season, ctx.user?.id);
+      if (!focalTeamId || teams.length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Season data unavailable." });
       }
 
-      const rodTeamBase = teams.find(t => t.teamId === rodTeamId)!;
+      const rodTeamBase = teams.find(t => t.teamId === focalTeamId)!;
 
       // Before sim
       const beforeTeam: TeamStanding = { ...rodTeamBase, projectedLineup: input.beforeLineup as SimPlayer[] };
-      const teamsWithBefore = teams.map(t => t.teamId === rodTeamId ? beforeTeam : t);
+      const teamsWithBefore = teams.map(t => t.teamId === focalTeamId ? beforeTeam : t);
       const equityBefore = calcChampionshipEquity(teamsWithBefore, input.simCount);
-      const rodBefore = equityBefore.find(e => e.teamId === rodTeamId)!;
+      const rodBefore = equityBefore.find(e => e.teamId === focalTeamId)!;
 
       // After sim
       const afterTeam: TeamStanding = { ...rodTeamBase, projectedLineup: input.afterLineup as SimPlayer[] };
-      const teamsWithAfter = teams.map(t => t.teamId === rodTeamId ? afterTeam : t);
+      const teamsWithAfter = teams.map(t => t.teamId === focalTeamId ? afterTeam : t);
       const equityAfter = calcChampionshipEquity(teamsWithAfter, input.simCount);
-      const rodAfter = equityAfter.find(e => e.teamId === rodTeamId)!;
+      const rodAfter = equityAfter.find(e => e.teamId === focalTeamId)!;
 
       const champDelta = Math.round((rodAfter.champProbabilityAbsolute - rodBefore.champProbabilityAbsolute) * 10) / 10;
       const playoffDelta = rodAfter.playoffProbability - rodBefore.playoffProbability;

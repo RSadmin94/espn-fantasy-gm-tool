@@ -2,6 +2,21 @@ import type { Express } from "express";
 import mysql from "mysql2/promise";
 import { ENV } from "./env";
 
+/** Informational only; never used for pass/fail. */
+function optionalEnv(...keys: string[]): string {
+  for (const key of keys) {
+    const v = process.env[key];
+    if (typeof v === "string" && v.trim() !== "") return v.trim();
+  }
+  return "unknown";
+}
+
+function nodeEnvLabel(): string {
+  const v = process.env.NODE_ENV;
+  if (typeof v === "string" && v.trim() !== "") return v.trim();
+  return "unknown";
+}
+
 export function registerHealthRoute(app: Express): void {
   app.get("/api/health", async (_req, res) => {
     const checks: Record<string, "ok" | "missing" | "error" | "warn"> = {};
@@ -43,10 +58,26 @@ export function registerHealthRoute(app: Express): void {
     const warned = Object.entries(checks).filter(([, v]) => v === "warn");
 
     const status = hardFailed.length === 0 ? 200 : 503;
+
+    const gitSha = optionalEnv(
+      "GIT_COMMIT",
+      "RAILWAY_GIT_COMMIT_SHA",
+      "VERCEL_GIT_COMMIT_SHA",
+    );
+    const gitBranch = optionalEnv(
+      "RAILWAY_GIT_BRANCH",
+      "VERCEL_GIT_COMMIT_REF",
+    );
+    const buildTime = optionalEnv("BUILD_TIME");
+
     res.status(status).json({
       status: status === 200 ? "ok" : "degraded",
       timestamp: new Date().toISOString(),
       version: process.env.npm_package_version ?? "unknown",
+      gitSha,
+      gitBranch,
+      buildTime,
+      nodeEnv: nodeEnvLabel(),
       checks,
       ...(hardFailed.length > 0 && {
         failed: hardFailed.map(([k, v]) => `${k}: ${v}`),

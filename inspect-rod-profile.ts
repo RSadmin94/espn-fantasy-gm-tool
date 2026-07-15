@@ -1,15 +1,19 @@
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
-import { espnSeasonCache } from "./drizzle/schema.js";
+import { fantasyDataCache } from "./drizzle/schema.js";
+import { like } from "drizzle-orm";
+import { parseEspnFantasyDataCacheKey } from "./server/db.js";
 
 const conn = await mysql.createConnection(process.env.DATABASE_URL!);
 const db = drizzle(conn);
 
-const rows = await db.select().from(espnSeasonCache);
+const rows = await db.select().from(fantasyDataCache).where(like(fantasyDataCache.cacheKey, "espn:%"));
 
 for (const row of rows) {
+  const meta = parseEspnFantasyDataCacheKey(row.cacheKey);
+  if (!meta || meta.viewName !== "combined") continue;
   const payload = row.payload as Record<string, unknown>;
-  const season = row.season;
+  const season = meta.season;
   const teams = (payload.teams as unknown[]) || [];
   const members = (payload.members as unknown[]) || [];
 

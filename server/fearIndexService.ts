@@ -35,7 +35,12 @@
  *   getFearIndexFromDb()    — read cached rows from DB
  */
 
-import { getDb, getCachedView } from "./db";
+import { getDb, getCachedView, resolveActiveLeagueId } from "./db";
+import {
+  getSeasonMatchups,
+  getSeasonTeams,
+  getSeasonTransactions,
+} from "./leagueDataReads";
 import { fearIndex } from "../drizzle/schema";
 import { eq, and, desc } from "drizzle-orm";
 import {
@@ -328,6 +333,24 @@ export async function getLatestFearIndexFromDb(season: number): Promise<FearInde
   return getFearIndexFromDb(season, latestWeek);
 }
 
+/**
+ * Get the most recent fear index across ALL seasons (latest season + week that
+ * has any rows). Used as a fallback when the requested/active season has no data
+ * yet — e.g. the offseason, when the in-season weekly refresh hasn't run for the
+ * current year.
+ */
+export async function getLatestFearIndexAnySeason(): Promise<FearIndexEntry[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const latest = await db
+    .select({ season: fearIndex.season, week: fearIndex.week })
+    .from(fearIndex)
+    .orderBy(desc(fearIndex.season), desc(fearIndex.week))
+    .limit(1);
+  if (latest.length === 0) return [];
+  return getFearIndexFromDb(latest[0].season, latest[0].week);
+}
+
 // ─── Refresh (compute + persist) ─────────────────────────────────────────────
 
 /**
@@ -341,17 +364,32 @@ export async function getLatestFearIndexFromDb(season: number): Promise<FearInde
  */
 export async function refreshFearIndex(
   season: number,
-  rosterHealthOverride?: Record<number, number>
+  rosterHealthOverride?: Record<number, number>,
+  userId?: number
 ): Promise<FearIndexEntry[]> {
-  const payload = await getCachedView(season, "combined");
-  if (!payload) {
-    console.warn(`[fearIndex] No cached data for season ${season}`);
+  const { leagueId } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    null,
+    season,
+  );
+  const ref = { leagueId: String(leagueId).slice(0, 32), season };
+
+  const [teamsRes, matchRes, txRes, payloadRow] = await Promise.all([
+    getSeasonTeams(ref),
+    getSeasonMatchups(ref),
+    getSeasonTransactions(ref),
+    getCachedView(season, "combined", undefined, { userId }),
+  ]);
+
+  if (teamsRes.count === 0) {
+    console.warn(`[fearIndex] No normalized teams for season ${season}`);
     return [];
   }
 
-  const teams = normalizeTeams(payload as Record<string, unknown>);
-  const matchups = normalizeMatchups(payload as Record<string, unknown>);
-  const transactions = normalizeTransactions(payload as Record<string, unknown>);
+  const teams = teamsRes.rows as ReturnType<typeof normalizeTeams>;
+  const matchups = matchRes.rows as ReturnType<typeof normalizeMatchups>;
+  const transactions = txRes.rows as ReturnType<typeof normalizeTransactions>;
+  const payload = payloadRow?.payload as Record<string, unknown> | undefined;
 
   // Determine current week from matchup data
   const matchupWeeks = (matchups as Array<Record<string, unknown>>).map(
@@ -387,8 +425,9 @@ export async function refreshFearIndex(
   // Build exploitabilityMap from league DNA
   const exploitabilityMap: Record<string, number> = {};
   try {
+    if (!payload) throw new Error("no combined cache for exploitability DNA");
     // Build minimal ManagerRawData for DNA calculation
-    const allSeasonData = payload as Record<string, unknown>;
+    const allSeasonData = payload;
     const rawTeams = (allSeasonData.teams as Record<string, unknown>[]) || [];
     const rawMembers = (allSeasonData.members as Record<string, unknown>[]) || [];
     const memberMap: Record<string, Record<string, unknown>> = {};

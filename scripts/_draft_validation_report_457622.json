@@ -1,0 +1,1839 @@
+{
+  "generatedAt": "2026-07-05T17:13:00.402Z",
+  "leagueId": "457622",
+  "season": 2026,
+  "overallGrade": "A-",
+  "scores": {
+    "ownerAuthenticity": 84,
+    "leagueAuthenticity": 90,
+    "stability": 98,
+    "explainability": 100,
+    "regression": 75
+  },
+  "ownerAuthenticity": [
+    {
+      "owner": "Christian Graham",
+      "ownerKey": "christian graham",
+      "authenticityPct": 89.6,
+      "positionMatchPct": 89,
+      "roundMatchPct": 90.4,
+      "historicalPositionDistribution": {
+        "RB": 0.26666666666666666,
+        "WR": 0.48,
+        "QB": 0.12,
+        "TE": 0.13333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.45454545454545453,
+        "QB": 0.18181818181818182,
+        "TE": 0.18181818181818182,
+        "RB": 0.18181818181818182
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.75,
+        "WR": 5.611111111111111,
+        "QB": 7.777777777777778,
+        "TE": 7.9
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 6.2,
+        "QB": 9,
+        "TE": 8.5,
+        "RB": 9.5
+      },
+      "historicalQbTiming": 6.5,
+      "simulatedQbTiming": 4,
+      "historicalTeTiming": 6.428571428571429,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.35714285714285715,
+      "simulatedRbWrBalance": 0.28571428571428575
+    },
+    {
+      "owner": "Randy Broner Jr",
+      "ownerKey": "randy broner jr",
+      "authenticityPct": 88.2,
+      "positionMatchPct": 94.4,
+      "roundMatchPct": 80.6,
+      "historicalPositionDistribution": {
+        "WR": 0.45161290322580644,
+        "RB": 0.3064516129032258,
+        "QB": 0.12903225806451613,
+        "TE": 0.11290322580645161
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.45454545454545453,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182,
+        "RB": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 5.464285714285714,
+        "RB": 6.052631578947368,
+        "QB": 5.5,
+        "TE": 6.857142857142857
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 6.6,
+        "TE": 4,
+        "QB": 10,
+        "RB": 10
+      },
+      "historicalQbTiming": 5.142857142857143,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 6,
+      "simulatedTeTiming": 4,
+      "historicalRbWrBalance": 0.4042553191489362,
+      "simulatedRbWrBalance": 0.37499999999999994
+    },
+    {
+      "owner": "Nate West",
+      "ownerKey": "nate west",
+      "authenticityPct": 87.5,
+      "positionMatchPct": 89.7,
+      "roundMatchPct": 84.9,
+      "historicalPositionDistribution": {
+        "RB": 0.36666666666666664,
+        "QB": 0.16666666666666666,
+        "WR": 0.3333333333333333,
+        "TE": 0.13333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "WR": 0.2727272727272727,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.7727272727272725,
+        "QB": 4.7,
+        "WR": 6.8,
+        "TE": 9
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 5.8,
+        "WR": 7.666666666666667,
+        "TE": 6,
+        "QB": 10.5
+      },
+      "historicalQbTiming": 2.7142857142857144,
+      "simulatedQbTiming": 9,
+      "historicalTeTiming": 7.666666666666667,
+      "simulatedTeTiming": 6,
+      "historicalRbWrBalance": 0.5238095238095238,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Tony Dorsey",
+      "ownerKey": "tony dorsey",
+      "authenticityPct": 86.7,
+      "positionMatchPct": 91.6,
+      "roundMatchPct": 80.8,
+      "historicalPositionDistribution": {
+        "RB": 0.38461538461538464,
+        "WR": 0.3076923076923077,
+        "QB": 0.23076923076923078,
+        "TE": 0.07692307692307693
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182,
+        "WR": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 3,
+        "WR": 3.75,
+        "QB": 8.666666666666666,
+        "TE": 7
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 4.4,
+        "TE": 5,
+        "QB": 10,
+        "WR": 11.333333333333334
+      },
+      "historicalQbTiming": 7.5,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 7,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.5555555555555556,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Sheldon deRoux",
+      "ownerKey": "sheldon deroux",
+      "authenticityPct": 85.7,
+      "positionMatchPct": 88.6,
+      "roundMatchPct": 82.1,
+      "historicalPositionDistribution": {
+        "RB": 0.3064516129032258,
+        "WR": 0.3870967741935484,
+        "TE": 0.14516129032258066,
+        "QB": 0.16129032258064516
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.36363636363636365,
+        "QB": 0.18181818181818182,
+        "TE": 0.18181818181818182,
+        "WR": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.842105263157895,
+        "WR": 6.041666666666667,
+        "TE": 6.333333333333333,
+        "QB": 8
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 3.5,
+        "QB": 9.5,
+        "TE": 10,
+        "WR": 10
+      },
+      "historicalQbTiming": 7.125,
+      "simulatedQbTiming": 5,
+      "historicalTeTiming": 5.285714285714286,
+      "simulatedTeTiming": 8,
+      "historicalRbWrBalance": 0.441860465116279,
+      "simulatedRbWrBalance": 0.5714285714285715
+    },
+    {
+      "owner": "Marlon Moore",
+      "ownerKey": "marlon moore",
+      "authenticityPct": 85,
+      "positionMatchPct": 80.9,
+      "roundMatchPct": 89.9,
+      "historicalPositionDistribution": {
+        "RB": 0.15789473684210525,
+        "QB": 0.10526315789473684,
+        "TE": 0.15789473684210525,
+        "WR": 0.5789473684210527
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.2727272727272727,
+        "WR": 0.45454545454545453,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 4.555555555555555,
+        "QB": 7.666666666666667,
+        "TE": 6.111111111111111,
+        "WR": 5.909090909090909
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 6.333333333333333,
+        "WR": 8.4,
+        "QB": 8,
+        "TE": 8
+      },
+      "historicalQbTiming": 7.666666666666667,
+      "simulatedQbTiming": 4,
+      "historicalTeTiming": 5.375,
+      "simulatedTeTiming": 8,
+      "historicalRbWrBalance": 0.21428571428571425,
+      "simulatedRbWrBalance": 0.37499999999999994
+    },
+    {
+      "owner": "Bruce Edwards",
+      "ownerKey": "bruce edwards",
+      "authenticityPct": 84.1,
+      "positionMatchPct": 76.8,
+      "roundMatchPct": 93.1,
+      "historicalPositionDistribution": {
+        "RB": 0.35384615384615387,
+        "TE": 0.09230769230769231,
+        "WR": 0.46153846153846156,
+        "QB": 0.09230769230769231
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.3333333333333333,
+        "TE": 0.25,
+        "QB": 0.16666666666666666,
+        "RB": 0.25
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.739130434782608,
+        "TE": 8.5,
+        "WR": 5.566666666666666,
+        "QB": 7.5
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 6.25,
+        "TE": 9.333333333333334,
+        "QB": 8.5,
+        "RB": 7.666666666666667
+      },
+      "historicalQbTiming": 7.5,
+      "simulatedQbTiming": 4,
+      "historicalTeTiming": 8,
+      "simulatedTeTiming": 2,
+      "historicalRbWrBalance": 0.4339622641509434,
+      "simulatedRbWrBalance": 0.4285714285714286
+    },
+    {
+      "owner": "Rod Sellers",
+      "ownerKey": "rod sellers",
+      "authenticityPct": 83.4,
+      "positionMatchPct": 88,
+      "roundMatchPct": 77.7,
+      "historicalPositionDistribution": {
+        "RB": 0.36666666666666664,
+        "WR": 0.38333333333333336,
+        "QB": 0.13333333333333333,
+        "TE": 0.11666666666666667
+      },
+      "simulatedPositionDistribution": {
+        "QB": 0.18181818181818182,
+        "RB": 0.36363636363636365,
+        "WR": 0.45454545454545453
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 4.363636363636363,
+        "WR": 5.782608695652174,
+        "QB": 6.5,
+        "TE": 6.857142857142857
+      },
+      "simulatedAvgRoundByPosition": {
+        "QB": 7,
+        "RB": 6,
+        "WR": 8.8
+      },
+      "historicalQbTiming": 4.6,
+      "simulatedQbTiming": 2,
+      "historicalTeTiming": 6.857142857142857,
+      "simulatedTeTiming": null,
+      "historicalRbWrBalance": 0.4888888888888889,
+      "simulatedRbWrBalance": 0.4444444444444445
+    },
+    {
+      "owner": "Jan Graham",
+      "ownerKey": "jan graham",
+      "authenticityPct": 83.2,
+      "positionMatchPct": 86.4,
+      "roundMatchPct": 79.2,
+      "historicalPositionDistribution": {
+        "WR": 0.29310344827586204,
+        "TE": 0.20689655172413793,
+        "QB": 0.15517241379310345,
+        "RB": 0.3448275862068966
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091,
+        "WR": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.9411764705882355,
+        "TE": 6.833333333333333,
+        "QB": 7.666666666666667,
+        "RB": 5.6
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 3,
+        "QB": 9.5,
+        "TE": 9,
+        "WR": 11.666666666666666
+      },
+      "historicalQbTiming": 7.142857142857143,
+      "simulatedQbTiming": 7,
+      "historicalTeTiming": 5,
+      "simulatedTeTiming": 9,
+      "historicalRbWrBalance": 0.5405405405405406,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Steffon Bizzell",
+      "ownerKey": "steffon bizzell",
+      "authenticityPct": 82.8,
+      "positionMatchPct": 82.2,
+      "roundMatchPct": 83.5,
+      "historicalPositionDistribution": {
+        "QB": 0.1276595744680851,
+        "RB": 0.1702127659574468,
+        "WR": 0.5957446808510638,
+        "TE": 0.10638297872340426
+      },
+      "simulatedPositionDistribution": {
+        "TE": 0.18181818181818182,
+        "RB": 0.2727272727272727,
+        "WR": 0.45454545454545453,
+        "QB": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "QB": 3.6666666666666665,
+        "RB": 4.125,
+        "WR": 6.178571428571429,
+        "TE": 6.8
+      },
+      "simulatedAvgRoundByPosition": {
+        "TE": 6.5,
+        "RB": 9,
+        "WR": 6.2,
+        "QB": 9
+      },
+      "historicalQbTiming": 2.2,
+      "simulatedQbTiming": 9,
+      "historicalTeTiming": 5,
+      "simulatedTeTiming": 1,
+      "historicalRbWrBalance": 0.2222222222222222,
+      "simulatedRbWrBalance": 0.37499999999999994
+    },
+    {
+      "owner": "Demetri Clark",
+      "ownerKey": "demetri clark",
+      "authenticityPct": 81.1,
+      "positionMatchPct": 82.5,
+      "roundMatchPct": 79.4,
+      "historicalPositionDistribution": {
+        "WR": 0.5,
+        "TE": 0.109375,
+        "RB": 0.265625,
+        "QB": 0.125
+      },
+      "simulatedPositionDistribution": {
+        "QB": 0.18181818181818182,
+        "WR": 0.5454545454545454,
+        "TE": 0.18181818181818182,
+        "RB": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 6.34375,
+        "TE": 5.142857142857143,
+        "RB": 5.588235294117647,
+        "QB": 6.25
+      },
+      "simulatedAvgRoundByPosition": {
+        "QB": 6.5,
+        "WR": 5.666666666666667,
+        "TE": 12,
+        "RB": 11
+      },
+      "historicalQbTiming": 6.25,
+      "simulatedQbTiming": 1,
+      "historicalTeTiming": 5.142857142857143,
+      "simulatedTeTiming": 10,
+      "historicalRbWrBalance": 0.3469387755102041,
+      "simulatedRbWrBalance": 0.14285714285714288
+    },
+    {
+      "owner": "LOZELL STYLES",
+      "ownerKey": "lozell styles",
+      "authenticityPct": 79.2,
+      "positionMatchPct": 81.3,
+      "roundMatchPct": 76.7,
+      "historicalPositionDistribution": {
+        "WR": 0.5230769230769231,
+        "TE": 0.09230769230769231,
+        "RB": 0.27692307692307694,
+        "QB": 0.1076923076923077
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.6363636363636364,
+        "QB": 0.18181818181818182,
+        "RB": 0.09090909090909091,
+        "TE": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.323529411764706,
+        "TE": 7.166666666666667,
+        "RB": 7.722222222222222,
+        "QB": 5.285714285714286
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 4.428571428571429,
+        "QB": 12,
+        "RB": 11,
+        "TE": 12
+      },
+      "historicalQbTiming": 5.285714285714286,
+      "simulatedQbTiming": 10,
+      "historicalTeTiming": 7.166666666666667,
+      "simulatedTeTiming": 12,
+      "historicalRbWrBalance": 0.34615384615384615,
+      "simulatedRbWrBalance": 0.125
+    },
+    {
+      "owner": "Mark Deroux",
+      "ownerKey": "mark deroux",
+      "authenticityPct": 78.8,
+      "positionMatchPct": 77.8,
+      "roundMatchPct": 80.1,
+      "historicalPositionDistribution": {
+        "WR": 0.44285714285714284,
+        "RB": 0.2714285714285714,
+        "QB": 0.14285714285714285,
+        "TE": 0.14285714285714285
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "WR": 0.2727272727272727,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.774193548387097,
+        "RB": 6.2631578947368425,
+        "QB": 7.2,
+        "TE": 7.2
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 4,
+        "WR": 9.666666666666666,
+        "QB": 10,
+        "TE": 10
+      },
+      "historicalQbTiming": 6.714285714285714,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 4.166666666666667,
+      "simulatedTeTiming": 10,
+      "historicalRbWrBalance": 0.38,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Marcus Reese",
+      "ownerKey": "marcus reese",
+      "authenticityPct": 76.5,
+      "positionMatchPct": 78.8,
+      "roundMatchPct": 73.7,
+      "historicalPositionDistribution": {
+        "WR": 0.5,
+        "TE": 0.16666666666666666,
+        "RB": 0.3333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.36363636363636365,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091,
+        "WR": 0.36363636363636365
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.666666666666667,
+        "TE": 3,
+        "RB": 4.5
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 7,
+        "QB": 7.5,
+        "TE": 5,
+        "WR": 8.5
+      },
+      "historicalQbTiming": null,
+      "simulatedQbTiming": 3,
+      "historicalTeTiming": 3,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.4,
+      "simulatedRbWrBalance": 0.5
+    }
+  ],
+  "leagueAuthenticity": {
+    "historical": {
+      "offensePickCount": 876,
+      "positionDistribution": {
+        "RB": 0.27331887201735355,
+        "WR": 0.4316702819956616,
+        "QB": 0.12364425162689804,
+        "TE": 0.12147505422993492,
+        "DP": 0.049891540130151846
+      },
+      "positionDistributionByRound": {
+        "1": {
+          "RB": 0.44680851063829785,
+          "WR": 0.46808510638297873,
+          "QB": 0.0425531914893617,
+          "TE": 0.0425531914893617
+        },
+        "2": {
+          "WR": 0.43820224719101125,
+          "TE": 0.11235955056179775,
+          "RB": 0.3146067415730337,
+          "QB": 0.1348314606741573
+        },
+        "3": {
+          "WR": 0.4895833333333333,
+          "QB": 0.09375,
+          "RB": 0.3229166666666667,
+          "TE": 0.08333333333333333,
+          "DP": 0.010416666666666666
+        },
+        "4": {
+          "TE": 0.14457831325301204,
+          "QB": 0.0963855421686747,
+          "RB": 0.2289156626506024,
+          "WR": 0.5301204819277109
+        },
+        "5": {
+          "WR": 0.4430379746835443,
+          "TE": 0.189873417721519,
+          "RB": 0.20253164556962025,
+          "QB": 0.16455696202531644
+        },
+        "6": {
+          "WR": 0.5609756097560976,
+          "QB": 0.17073170731707318,
+          "RB": 0.15853658536585366,
+          "TE": 0.0975609756097561,
+          "DP": 0.012195121951219513
+        },
+        "7": {
+          "QB": 0.1267605633802817,
+          "TE": 0.16901408450704225,
+          "WR": 0.38028169014084506,
+          "RB": 0.28169014084507044,
+          "DP": 0.04225352112676056
+        },
+        "8": {
+          "RB": 0.352112676056338,
+          "WR": 0.36619718309859156,
+          "TE": 0.08450704225352113,
+          "QB": 0.14084507042253522,
+          "DP": 0.056338028169014086
+        },
+        "9": {
+          "RB": 0.23636363636363636,
+          "QB": 0.12727272727272726,
+          "WR": 0.4727272727272727,
+          "TE": 0.10909090909090909,
+          "DP": 0.05454545454545454
+        },
+        "10": {
+          "RB": 0.2727272727272727,
+          "QB": 0.20454545454545456,
+          "WR": 0.36363636363636365,
+          "TE": 0.09090909090909091,
+          "DP": 0.06818181818181818
+        },
+        "11": {
+          "RB": 0.2807017543859649,
+          "WR": 0.3157894736842105,
+          "TE": 0.21052631578947367,
+          "QB": 0.10526315789473684,
+          "DP": 0.08771929824561403
+        },
+        "12": {
+          "WR": 0.2727272727272727,
+          "QB": 0.18181818181818182,
+          "RB": 0.18181818181818182,
+          "TE": 0.18181818181818182,
+          "DP": 0.18181818181818182
+        },
+        "13": {
+          "TE": 0.12121212121212122,
+          "WR": 0.2727272727272727,
+          "RB": 0.15151515151515152,
+          "QB": 0.06060606060606061,
+          "DP": 0.3939393939393939
+        },
+        "14": {
+          "RB": 0.16666666666666666,
+          "QB": 0.125,
+          "WR": 0.375,
+          "TE": 0.125,
+          "DP": 0.20833333333333334
+        }
+      },
+      "avgRoundByPosition": {
+        "RB": 5.535714285714286,
+        "WR": 5.693467336683417,
+        "QB": 6.684210526315789,
+        "TE": 6.848214285714286,
+        "DP": 11.065217391304348
+      },
+      "avgFirstQbRound": 1.625,
+      "avgFirstTeRound": 1.75,
+      "avgFirstRbRound": 1,
+      "avgFirstWrRound": 1,
+      "avgFirstDpRound": 7.625,
+      "rbWrBalance": 0.3876923076923077
+    },
+    "simulated": {
+      "offensePickCount": 155,
+      "positionDistribution": {
+        "RB": 0.28402366863905326,
+        "WR": 0.3609467455621302,
+        "QB": 0.15976331360946747,
+        "TE": 0.11242603550295859,
+        "DP": 0.08284023668639054
+      },
+      "positionDistributionByRound": {
+        "1": {
+          "RB": 0.5555555555555556,
+          "WR": 0.2222222222222222,
+          "QB": 0.1111111111111111,
+          "TE": 0.1111111111111111
+        },
+        "2": {
+          "WR": 0.3076923076923077,
+          "RB": 0.5384615384615384,
+          "QB": 0.07692307692307693,
+          "TE": 0.07692307692307693
+        },
+        "3": {
+          "WR": 0.5,
+          "RB": 0.4166666666666667,
+          "QB": 0.08333333333333333
+        },
+        "4": {
+          "QB": 0.25,
+          "WR": 0.4166666666666667,
+          "RB": 0.25,
+          "TE": 0.08333333333333333
+        },
+        "5": {
+          "WR": 0.38461538461538464,
+          "RB": 0.3076923076923077,
+          "TE": 0.23076923076923078,
+          "QB": 0.07692307692307693
+        },
+        "6": {
+          "WR": 0.3076923076923077,
+          "RB": 0.07692307692307693,
+          "TE": 0.07692307692307693,
+          "DP": 0.5384615384615384
+        },
+        "7": {
+          "RB": 0.3076923076923077,
+          "WR": 0.38461538461538464,
+          "QB": 0.07692307692307693,
+          "DP": 0.23076923076923078
+        },
+        "8": {
+          "RB": 0.3076923076923077,
+          "WR": 0.23076923076923078,
+          "TE": 0.15384615384615385,
+          "QB": 0.23076923076923078,
+          "DP": 0.07692307692307693
+        },
+        "9": {
+          "QB": 0.14285714285714285,
+          "RB": 0.21428571428571427,
+          "WR": 0.5,
+          "TE": 0.07142857142857142,
+          "DP": 0.07142857142857142
+        },
+        "10": {
+          "RB": 0.35714285714285715,
+          "WR": 0.2857142857142857,
+          "TE": 0.14285714285714285,
+          "QB": 0.07142857142857142,
+          "DP": 0.14285714285714285
+        },
+        "11": {
+          "RB": 0.35714285714285715,
+          "WR": 0.6428571428571429
+        },
+        "12": {
+          "TE": 0.35714285714285715,
+          "QB": 0.6428571428571429
+        },
+        "13": {
+          "QB": 1
+        },
+        "14": {
+          "TE": 0.14285714285714285,
+          "RB": 0.14285714285714285,
+          "WR": 0.5,
+          "QB": 0.21428571428571427
+        }
+      },
+      "avgRoundByPosition": {
+        "RB": 6.083333333333333,
+        "WR": 7.475409836065574,
+        "QB": 9.074074074074074,
+        "TE": 8.473684210526315,
+        "DP": 7.142857142857143
+      },
+      "avgFirstQbRound": 1,
+      "avgFirstTeRound": 1,
+      "avgFirstRbRound": 1,
+      "avgFirstWrRound": 1,
+      "avgFirstDpRound": 6,
+      "rbWrBalance": 0.44036697247706424
+    },
+    "positionDistributionSimilarityPct": 92,
+    "avgRoundSimilarityPct": 87.2,
+    "overallSimilarityPct": 89.6,
+    "avgQbRound": {
+      "historical": 1.625,
+      "simulated": 1
+    },
+    "avgTeRound": {
+      "historical": 1.75,
+      "simulated": 1
+    },
+    "avgFirstRb": {
+      "historical": 1,
+      "simulated": 1
+    },
+    "avgFirstWr": {
+      "historical": 1,
+      "simulated": 1
+    },
+    "avgFirstDp": {
+      "historical": 7.625,
+      "simulated": 6
+    },
+    "reachFrequencyPct": {
+      "historical": 0,
+      "simulated": 16.5
+    },
+    "valueFrequencyPct": {
+      "historical": 0,
+      "simulated": 22.5
+    }
+  },
+  "stability": {
+    "simulationCount": 100,
+    "playerCount": 182,
+    "meanStdDev": 0.6,
+    "mostVolatile": [
+      {
+        "player": "Trevor Lawrence",
+        "position": "QB",
+        "meanPick": 128.9,
+        "stdDev": 6.18,
+        "earliestPick": 114,
+        "latestPick": 138,
+        "pickSpread": 24
+      },
+      {
+        "player": "Jake Ferguson",
+        "position": "TE",
+        "meanPick": 113.5,
+        "stdDev": 5.98,
+        "earliestPick": 107,
+        "latestPick": 132,
+        "pickSpread": 25
+      },
+      {
+        "player": "Dak Prescott",
+        "position": "QB",
+        "meanPick": 102.7,
+        "stdDev": 5.12,
+        "earliestPick": 95,
+        "latestPick": 108,
+        "pickSpread": 13
+      },
+      {
+        "player": "Dallas Goedert",
+        "position": "TE",
+        "meanPick": 101.2,
+        "stdDev": 4.26,
+        "earliestPick": 92,
+        "latestPick": 106,
+        "pickSpread": 14
+      },
+      {
+        "player": "Travis Hunter",
+        "position": "WR",
+        "meanPick": 113.5,
+        "stdDev": 3.06,
+        "earliestPick": 104,
+        "latestPick": 115,
+        "pickSpread": 11
+      },
+      {
+        "player": "George Pickens",
+        "position": "WR",
+        "meanPick": 22.8,
+        "stdDev": 2.99,
+        "earliestPick": 20,
+        "latestPick": 26,
+        "pickSpread": 6
+      },
+      {
+        "player": "Matthew Stafford",
+        "position": "QB",
+        "meanPick": 92.8,
+        "stdDev": 2.31,
+        "earliestPick": 91,
+        "latestPick": 99,
+        "pickSpread": 8
+      },
+      {
+        "player": "Brock Purdy",
+        "position": "QB",
+        "meanPick": 108,
+        "stdDev": 2.3,
+        "earliestPick": 100,
+        "latestPick": 109,
+        "pickSpread": 9
+      },
+      {
+        "player": "Chris Rodriguez Jr.",
+        "position": "RB",
+        "meanPick": 143.8,
+        "stdDev": 2.08,
+        "earliestPick": 143,
+        "latestPick": 149,
+        "pickSpread": 6
+      },
+      {
+        "player": "RJ Harvey",
+        "position": "RB",
+        "meanPick": 111,
+        "stdDev": 2.04,
+        "earliestPick": 107,
+        "latestPick": 113,
+        "pickSpread": 6
+      }
+    ],
+    "mostStable": [
+      {
+        "player": "Jahmyr Gibbs",
+        "position": "RB",
+        "meanPick": 1,
+        "stdDev": 0,
+        "earliestPick": 1,
+        "latestPick": 1,
+        "pickSpread": 0
+      },
+      {
+        "player": "Ja'Marr Chase",
+        "position": "WR",
+        "meanPick": 2,
+        "stdDev": 0,
+        "earliestPick": 2,
+        "latestPick": 2,
+        "pickSpread": 0
+      },
+      {
+        "player": "Drake London",
+        "position": "WR",
+        "meanPick": 3,
+        "stdDev": 0,
+        "earliestPick": 3,
+        "latestPick": 3,
+        "pickSpread": 0
+      },
+      {
+        "player": "Christian McCaffrey",
+        "position": "RB",
+        "meanPick": 5,
+        "stdDev": 0,
+        "earliestPick": 5,
+        "latestPick": 5,
+        "pickSpread": 0
+      },
+      {
+        "player": "Jonathan Taylor",
+        "position": "RB",
+        "meanPick": 6,
+        "stdDev": 0,
+        "earliestPick": 6,
+        "latestPick": 6,
+        "pickSpread": 0
+      },
+      {
+        "player": "De'Von Achane",
+        "position": "RB",
+        "meanPick": 8,
+        "stdDev": 0,
+        "earliestPick": 8,
+        "latestPick": 8,
+        "pickSpread": 0
+      },
+      {
+        "player": "Josh Allen",
+        "position": "QB",
+        "meanPick": 9,
+        "stdDev": 0,
+        "earliestPick": 9,
+        "latestPick": 9,
+        "pickSpread": 0
+      },
+      {
+        "player": "Ashton Jeanty",
+        "position": "RB",
+        "meanPick": 11,
+        "stdDev": 0,
+        "earliestPick": 11,
+        "latestPick": 11,
+        "pickSpread": 0
+      },
+      {
+        "player": "Colston Loveland",
+        "position": "TE",
+        "meanPick": 13,
+        "stdDev": 0,
+        "earliestPick": 13,
+        "latestPick": 13,
+        "pickSpread": 0
+      },
+      {
+        "player": "Lamar Jackson",
+        "position": "QB",
+        "meanPick": 18,
+        "stdDev": 0,
+        "earliestPick": 18,
+        "latestPick": 18,
+        "pickSpread": 0
+      }
+    ],
+    "flaggedVolatile": []
+  },
+  "dnaInfluence": {
+    "totalOwnerDnaNudges": 16,
+    "directNudges": 16,
+    "cascadedPickDiffs": 43,
+    "avgAdpMovement": 1.8,
+    "largestAdpMovement": {
+      "player": "Nico Collins",
+      "owner": "Bruce Edwards",
+      "pick": 15,
+      "adpDelta": 5
+    },
+    "byOwner": [
+      {
+        "owner": "Bruce Edwards",
+        "directNudges": 2,
+        "positions": {
+          "WR": 2
+        }
+      },
+      {
+        "owner": "Christian Graham",
+        "directNudges": 2,
+        "positions": {
+          "WR": 2
+        }
+      },
+      {
+        "owner": "Marlon Moore",
+        "directNudges": 2,
+        "positions": {
+          "WR": 2
+        }
+      },
+      {
+        "owner": "Rod Sellers",
+        "directNudges": 2,
+        "positions": {
+          "RB": 1,
+          "WR": 1
+        }
+      },
+      {
+        "owner": "Steffon Bizzell",
+        "directNudges": 2,
+        "positions": {
+          "WR": 2
+        }
+      },
+      {
+        "owner": "Nate West",
+        "directNudges": 2,
+        "positions": {
+          "WR": 1,
+          "RB": 1
+        }
+      },
+      {
+        "owner": "Randy Broner Jr",
+        "directNudges": 2,
+        "positions": {
+          "WR": 1,
+          "RB": 1
+        }
+      },
+      {
+        "owner": "Sheldon deRoux",
+        "directNudges": 1,
+        "positions": {
+          "RB": 1
+        }
+      },
+      {
+        "owner": "Mark Deroux",
+        "directNudges": 1,
+        "positions": {
+          "RB": 1
+        }
+      }
+    ],
+    "byPosition": {
+      "WR": 11,
+      "RB": 5
+    }
+  },
+  "explainability": {
+    "totalNonBpaPicks": 118,
+    "explainedCount": 118,
+    "explainedPct": 100,
+    "missingExplanations": [],
+    "conflictingExplanations": []
+  },
+  "factorInfluence": {
+    "totalPicks": 182,
+    "factors": [
+      {
+        "id": "owner-dna",
+        "label": "Owner DNA",
+        "evaluatedCount": 217,
+        "appliedPct": 7.4,
+        "supportedPct": 7.4,
+        "blockedPct": 32.3,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.1
+      },
+      {
+        "id": "board-bpa",
+        "label": "Board",
+        "evaluatedCount": 182,
+        "appliedPct": 73.1,
+        "supportedPct": 85.7,
+        "blockedPct": 0,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.3
+      },
+      {
+        "id": "roster-cap",
+        "label": "Roster Construction",
+        "evaluatedCount": 182,
+        "appliedPct": 73.1,
+        "supportedPct": 0,
+        "blockedPct": 49.5,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.22
+      },
+      {
+        "id": "league-dp-timing",
+        "label": "League History",
+        "evaluatedCount": 182,
+        "appliedPct": 0.5,
+        "supportedPct": 7.7,
+        "blockedPct": 0,
+        "avgConfidence": 0.91,
+        "avgInfluence": 0.07
+      },
+      {
+        "id": "roster-need",
+        "label": "Need",
+        "evaluatedCount": 182,
+        "appliedPct": 17.6,
+        "supportedPct": 18.7,
+        "blockedPct": 0,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.11
+      },
+      {
+        "id": "scarcity",
+        "label": "Scarcity",
+        "evaluatedCount": 182,
+        "appliedPct": 0,
+        "supportedPct": 0,
+        "blockedPct": 0,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.1
+      },
+      {
+        "id": "espn-value",
+        "label": "Value",
+        "evaluatedCount": 182,
+        "appliedPct": 73.1,
+        "supportedPct": 100,
+        "blockedPct": 0,
+        "avgConfidence": 0.94,
+        "avgInfluence": 0.26
+      }
+    ]
+  },
+  "regression": {
+    "productionLabel": "6405f04",
+    "changedPickCount": 74,
+    "changedPositionCount": 43,
+    "changedRoundCount": 0,
+    "garrett": {
+      "production": {
+        "pick": 75,
+        "round": 6,
+        "owner": "Christian Graham",
+        "player": "Myles Garrett",
+        "pos": "DP",
+        "factor": "ESPN_ADP"
+      },
+      "current": {
+        "pick": 75,
+        "round": 6,
+        "owner": "Christian Graham",
+        "player": "Myles Garrett",
+        "pos": "DP",
+        "factor": "ESPN_ADP"
+      }
+    },
+    "warner": {
+      "production": {
+        "pick": 78,
+        "round": 6,
+        "owner": "Marlon Moore",
+        "player": "Fred Warner",
+        "pos": "DP",
+        "factor": "ESPN_ADP"
+      },
+      "current": {
+        "pick": 78,
+        "round": 6,
+        "owner": "Marlon Moore",
+        "player": "Fred Warner",
+        "pos": "DP",
+        "factor": "ESPN_ADP"
+      }
+    },
+    "dpCount": {
+      "production": 14,
+      "current": 14
+    },
+    "qbTimingDelta": 0,
+    "teTimingDelta": 0,
+    "first20": [
+      {
+        "pick": 1,
+        "production": "Jahmyr Gibbs",
+        "current": "Jahmyr Gibbs",
+        "changed": false
+      },
+      {
+        "pick": 2,
+        "production": "Ja'Marr Chase",
+        "current": "Ja'Marr Chase",
+        "changed": false
+      },
+      {
+        "pick": 3,
+        "production": "Drake London",
+        "current": "Drake London",
+        "changed": false
+      },
+      {
+        "pick": 4,
+        "production": "Amon-Ra St. Brown",
+        "current": "Amon-Ra St. Brown",
+        "changed": false
+      },
+      {
+        "pick": 5,
+        "production": "Christian McCaffrey",
+        "current": "Christian McCaffrey",
+        "changed": false
+      },
+      {
+        "pick": 6,
+        "production": "Jonathan Taylor",
+        "current": "Jonathan Taylor",
+        "changed": false
+      },
+      {
+        "pick": 7,
+        "production": "Justin Jefferson",
+        "current": "Justin Jefferson",
+        "changed": false
+      },
+      {
+        "pick": 8,
+        "production": "De'Von Achane",
+        "current": "De'Von Achane",
+        "changed": false
+      },
+      {
+        "pick": 9,
+        "production": "Josh Allen",
+        "current": "Josh Allen",
+        "changed": false
+      },
+      {
+        "pick": 10,
+        "production": "CeeDee Lamb",
+        "current": "CeeDee Lamb",
+        "changed": false
+      },
+      {
+        "pick": 11,
+        "production": "Ashton Jeanty",
+        "current": "Ashton Jeanty",
+        "changed": false
+      },
+      {
+        "pick": 12,
+        "production": "Puka Nacua",
+        "current": "Puka Nacua",
+        "changed": false
+      },
+      {
+        "pick": 13,
+        "production": "Colston Loveland",
+        "current": "Colston Loveland",
+        "changed": false
+      },
+      {
+        "pick": 14,
+        "production": "Bijan Robinson",
+        "current": "Bijan Robinson",
+        "changed": false
+      },
+      {
+        "pick": 15,
+        "production": "Saquon Barkley",
+        "current": "Nico Collins",
+        "changed": true
+      },
+      {
+        "pick": 16,
+        "production": "Jeremiyah Love",
+        "current": "Saquon Barkley",
+        "changed": true
+      },
+      {
+        "pick": 17,
+        "production": "Derrick Henry",
+        "current": "Jeremiyah Love",
+        "changed": true
+      },
+      {
+        "pick": 18,
+        "production": "Lamar Jackson",
+        "current": "Lamar Jackson",
+        "changed": false
+      },
+      {
+        "pick": 19,
+        "production": "Omarion Hampton",
+        "current": "A.J. Brown",
+        "changed": true
+      },
+      {
+        "pick": 20,
+        "production": "Nico Collins",
+        "current": "George Pickens",
+        "changed": true
+      }
+    ],
+    "summary": "74 player changes vs 6405f04; Garrett 75→75; Warner 78→78; DP 14→14; first-20 unchanged: 15/20"
+  },
+  "performance": {
+    "buildMockDraftMs": {
+      "withDna": 29,
+      "withoutDna": 26,
+      "dnaOverheadMs": 4
+    },
+    "authenticityMs": 21,
+    "stability100RunsMs": 2062,
+    "totalValidationMs": 2143
+  },
+  "legacyAuthenticity": {
+    "leagueScore": 0.389033636458608,
+    "leagueBaselineScore": 0.33634605697788633,
+    "leagueLift": 0.05268757948072167,
+    "directDnaNudges": 16,
+    "offensePickCount": 155,
+    "top14PlayerMatches": 14,
+    "top14Total": 14,
+    "garrettPick": 75,
+    "warnerPick": 78,
+    "dpCount": 14,
+    "teamsWith2PlusDp": 0,
+    "perOwner": [
+      {
+        "ownerKey": "marlon moore",
+        "ownerName": "Marlon Moore",
+        "offensePicks": 11,
+        "score": 0.49172308807259313,
+        "baselineScore": 0.3522036231026097,
+        "lift": 0.13951946496998338,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "nate west",
+        "ownerName": "Nate West",
+        "offensePicks": 11,
+        "score": 0.4478753840768599,
+        "baselineScore": 0.32447873597416027,
+        "lift": 0.12339664810269965,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "bruce edwards",
+        "ownerName": "Bruce Edwards",
+        "offensePicks": 12,
+        "score": 0.3379169925879288,
+        "baselineScore": 0.244866399067595,
+        "lift": 0.09305059352033378,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "jan graham",
+        "ownerName": "Jan Graham",
+        "offensePicks": 11,
+        "score": 0.38084901847447183,
+        "baselineScore": 0.29336497467352285,
+        "lift": 0.08748404380094899,
+        "dnaNudges": 0
+      },
+      {
+        "ownerKey": "sheldon deroux",
+        "ownerName": "Sheldon deRoux",
+        "offensePicks": 11,
+        "score": 0.3860612077454919,
+        "baselineScore": 0.3037756032278882,
+        "lift": 0.08228560451760374,
+        "dnaNudges": 1
+      },
+      {
+        "ownerKey": "steffon bizzell",
+        "ownerName": "Steffon Bizzell",
+        "offensePicks": 11,
+        "score": 0.3738234814311577,
+        "baselineScore": 0.2968716481218244,
+        "lift": 0.07695183330933326,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "mark deroux",
+        "ownerName": "Mark Deroux",
+        "offensePicks": 11,
+        "score": 0.34115813939002476,
+        "baselineScore": 0.2847298542094294,
+        "lift": 0.056428285180595346,
+        "dnaNudges": 1
+      },
+      {
+        "ownerKey": "randy broner jr",
+        "ownerName": "Randy Broner Jr",
+        "offensePicks": 11,
+        "score": 0.4144206495623448,
+        "baselineScore": 0.3776242342153553,
+        "lift": 0.03679641534698952,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "rod sellers",
+        "ownerName": "Rod Sellers",
+        "offensePicks": 11,
+        "score": 0.4672635654056965,
+        "baselineScore": 0.4474072665583225,
+        "lift": 0.019856298847374033,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "christian graham",
+        "ownerName": "Christian Graham",
+        "offensePicks": 11,
+        "score": 0.30454834785996626,
+        "baselineScore": 0.29041267373559454,
+        "lift": 0.014135674124371767,
+        "dnaNudges": 2
+      },
+      {
+        "ownerKey": "marcus reese",
+        "ownerName": "Marcus Reese",
+        "offensePicks": 11,
+        "score": 0.29004442494742566,
+        "baselineScore": 0.2859925388502483,
+        "lift": 0.0040518860971773965,
+        "dnaNudges": 0
+      },
+      {
+        "ownerKey": "lozell styles",
+        "ownerName": "LOZELL STYLES",
+        "offensePicks": 11,
+        "score": 0.5601252280135852,
+        "baselineScore": 0.5601252280135852,
+        "lift": 0,
+        "dnaNudges": 0
+      },
+      {
+        "ownerKey": "demetri clark",
+        "ownerName": "Demetri Clark",
+        "offensePicks": 11,
+        "score": 0.386472148031768,
+        "baselineScore": 0.386472148031768,
+        "lift": 0,
+        "dnaNudges": 0
+      },
+      {
+        "ownerKey": "tony dorsey",
+        "ownerName": "Tony Dorsey",
+        "offensePicks": 11,
+        "score": 0.26883620244580303,
+        "baselineScore": 0.26883620244580303,
+        "lift": 0,
+        "dnaNudges": 0
+      }
+    ],
+    "compositeObjective": 49.440879542005135
+  },
+  "weakestOwners": [
+    {
+      "owner": "Marcus Reese",
+      "ownerKey": "marcus reese",
+      "authenticityPct": 76.5,
+      "positionMatchPct": 78.8,
+      "roundMatchPct": 73.7,
+      "historicalPositionDistribution": {
+        "WR": 0.5,
+        "TE": 0.16666666666666666,
+        "RB": 0.3333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.36363636363636365,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091,
+        "WR": 0.36363636363636365
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.666666666666667,
+        "TE": 3,
+        "RB": 4.5
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 7,
+        "QB": 7.5,
+        "TE": 5,
+        "WR": 8.5
+      },
+      "historicalQbTiming": null,
+      "simulatedQbTiming": 3,
+      "historicalTeTiming": 3,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.4,
+      "simulatedRbWrBalance": 0.5
+    },
+    {
+      "owner": "Mark Deroux",
+      "ownerKey": "mark deroux",
+      "authenticityPct": 78.8,
+      "positionMatchPct": 77.8,
+      "roundMatchPct": 80.1,
+      "historicalPositionDistribution": {
+        "WR": 0.44285714285714284,
+        "RB": 0.2714285714285714,
+        "QB": 0.14285714285714285,
+        "TE": 0.14285714285714285
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "WR": 0.2727272727272727,
+        "QB": 0.18181818181818182,
+        "TE": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.774193548387097,
+        "RB": 6.2631578947368425,
+        "QB": 7.2,
+        "TE": 7.2
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 4,
+        "WR": 9.666666666666666,
+        "QB": 10,
+        "TE": 10
+      },
+      "historicalQbTiming": 6.714285714285714,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 4.166666666666667,
+      "simulatedTeTiming": 10,
+      "historicalRbWrBalance": 0.38,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "LOZELL STYLES",
+      "ownerKey": "lozell styles",
+      "authenticityPct": 79.2,
+      "positionMatchPct": 81.3,
+      "roundMatchPct": 76.7,
+      "historicalPositionDistribution": {
+        "WR": 0.5230769230769231,
+        "TE": 0.09230769230769231,
+        "RB": 0.27692307692307694,
+        "QB": 0.1076923076923077
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.6363636363636364,
+        "QB": 0.18181818181818182,
+        "RB": 0.09090909090909091,
+        "TE": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 4.323529411764706,
+        "TE": 7.166666666666667,
+        "RB": 7.722222222222222,
+        "QB": 5.285714285714286
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 4.428571428571429,
+        "QB": 12,
+        "RB": 11,
+        "TE": 12
+      },
+      "historicalQbTiming": 5.285714285714286,
+      "simulatedQbTiming": 10,
+      "historicalTeTiming": 7.166666666666667,
+      "simulatedTeTiming": 12,
+      "historicalRbWrBalance": 0.34615384615384615,
+      "simulatedRbWrBalance": 0.125
+    },
+    {
+      "owner": "Demetri Clark",
+      "ownerKey": "demetri clark",
+      "authenticityPct": 81.1,
+      "positionMatchPct": 82.5,
+      "roundMatchPct": 79.4,
+      "historicalPositionDistribution": {
+        "WR": 0.5,
+        "TE": 0.109375,
+        "RB": 0.265625,
+        "QB": 0.125
+      },
+      "simulatedPositionDistribution": {
+        "QB": 0.18181818181818182,
+        "WR": 0.5454545454545454,
+        "TE": 0.18181818181818182,
+        "RB": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 6.34375,
+        "TE": 5.142857142857143,
+        "RB": 5.588235294117647,
+        "QB": 6.25
+      },
+      "simulatedAvgRoundByPosition": {
+        "QB": 6.5,
+        "WR": 5.666666666666667,
+        "TE": 12,
+        "RB": 11
+      },
+      "historicalQbTiming": 6.25,
+      "simulatedQbTiming": 1,
+      "historicalTeTiming": 5.142857142857143,
+      "simulatedTeTiming": 10,
+      "historicalRbWrBalance": 0.3469387755102041,
+      "simulatedRbWrBalance": 0.14285714285714288
+    },
+    {
+      "owner": "Steffon Bizzell",
+      "ownerKey": "steffon bizzell",
+      "authenticityPct": 82.8,
+      "positionMatchPct": 82.2,
+      "roundMatchPct": 83.5,
+      "historicalPositionDistribution": {
+        "QB": 0.1276595744680851,
+        "RB": 0.1702127659574468,
+        "WR": 0.5957446808510638,
+        "TE": 0.10638297872340426
+      },
+      "simulatedPositionDistribution": {
+        "TE": 0.18181818181818182,
+        "RB": 0.2727272727272727,
+        "WR": 0.45454545454545453,
+        "QB": 0.09090909090909091
+      },
+      "historicalAvgRoundByPosition": {
+        "QB": 3.6666666666666665,
+        "RB": 4.125,
+        "WR": 6.178571428571429,
+        "TE": 6.8
+      },
+      "simulatedAvgRoundByPosition": {
+        "TE": 6.5,
+        "RB": 9,
+        "WR": 6.2,
+        "QB": 9
+      },
+      "historicalQbTiming": 2.2,
+      "simulatedQbTiming": 9,
+      "historicalTeTiming": 5,
+      "simulatedTeTiming": 1,
+      "historicalRbWrBalance": 0.2222222222222222,
+      "simulatedRbWrBalance": 0.37499999999999994
+    }
+  ],
+  "strongestOwners": [
+    {
+      "owner": "Christian Graham",
+      "ownerKey": "christian graham",
+      "authenticityPct": 89.6,
+      "positionMatchPct": 89,
+      "roundMatchPct": 90.4,
+      "historicalPositionDistribution": {
+        "RB": 0.26666666666666666,
+        "WR": 0.48,
+        "QB": 0.12,
+        "TE": 0.13333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.45454545454545453,
+        "QB": 0.18181818181818182,
+        "TE": 0.18181818181818182,
+        "RB": 0.18181818181818182
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.75,
+        "WR": 5.611111111111111,
+        "QB": 7.777777777777778,
+        "TE": 7.9
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 6.2,
+        "QB": 9,
+        "TE": 8.5,
+        "RB": 9.5
+      },
+      "historicalQbTiming": 6.5,
+      "simulatedQbTiming": 4,
+      "historicalTeTiming": 6.428571428571429,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.35714285714285715,
+      "simulatedRbWrBalance": 0.28571428571428575
+    },
+    {
+      "owner": "Randy Broner Jr",
+      "ownerKey": "randy broner jr",
+      "authenticityPct": 88.2,
+      "positionMatchPct": 94.4,
+      "roundMatchPct": 80.6,
+      "historicalPositionDistribution": {
+        "WR": 0.45161290322580644,
+        "RB": 0.3064516129032258,
+        "QB": 0.12903225806451613,
+        "TE": 0.11290322580645161
+      },
+      "simulatedPositionDistribution": {
+        "WR": 0.45454545454545453,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182,
+        "RB": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "WR": 5.464285714285714,
+        "RB": 6.052631578947368,
+        "QB": 5.5,
+        "TE": 6.857142857142857
+      },
+      "simulatedAvgRoundByPosition": {
+        "WR": 6.6,
+        "TE": 4,
+        "QB": 10,
+        "RB": 10
+      },
+      "historicalQbTiming": 5.142857142857143,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 6,
+      "simulatedTeTiming": 4,
+      "historicalRbWrBalance": 0.4042553191489362,
+      "simulatedRbWrBalance": 0.37499999999999994
+    },
+    {
+      "owner": "Nate West",
+      "ownerKey": "nate west",
+      "authenticityPct": 87.5,
+      "positionMatchPct": 89.7,
+      "roundMatchPct": 84.9,
+      "historicalPositionDistribution": {
+        "RB": 0.36666666666666664,
+        "QB": 0.16666666666666666,
+        "WR": 0.3333333333333333,
+        "TE": 0.13333333333333333
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "WR": 0.2727272727272727,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.7727272727272725,
+        "QB": 4.7,
+        "WR": 6.8,
+        "TE": 9
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 5.8,
+        "WR": 7.666666666666667,
+        "TE": 6,
+        "QB": 10.5
+      },
+      "historicalQbTiming": 2.7142857142857144,
+      "simulatedQbTiming": 9,
+      "historicalTeTiming": 7.666666666666667,
+      "simulatedTeTiming": 6,
+      "historicalRbWrBalance": 0.5238095238095238,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Tony Dorsey",
+      "ownerKey": "tony dorsey",
+      "authenticityPct": 86.7,
+      "positionMatchPct": 91.6,
+      "roundMatchPct": 80.8,
+      "historicalPositionDistribution": {
+        "RB": 0.38461538461538464,
+        "WR": 0.3076923076923077,
+        "QB": 0.23076923076923078,
+        "TE": 0.07692307692307693
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.45454545454545453,
+        "TE": 0.09090909090909091,
+        "QB": 0.18181818181818182,
+        "WR": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 3,
+        "WR": 3.75,
+        "QB": 8.666666666666666,
+        "TE": 7
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 4.4,
+        "TE": 5,
+        "QB": 10,
+        "WR": 11.333333333333334
+      },
+      "historicalQbTiming": 7.5,
+      "simulatedQbTiming": 8,
+      "historicalTeTiming": 7,
+      "simulatedTeTiming": 5,
+      "historicalRbWrBalance": 0.5555555555555556,
+      "simulatedRbWrBalance": 0.625
+    },
+    {
+      "owner": "Sheldon deRoux",
+      "ownerKey": "sheldon deroux",
+      "authenticityPct": 85.7,
+      "positionMatchPct": 88.6,
+      "roundMatchPct": 82.1,
+      "historicalPositionDistribution": {
+        "RB": 0.3064516129032258,
+        "WR": 0.3870967741935484,
+        "TE": 0.14516129032258066,
+        "QB": 0.16129032258064516
+      },
+      "simulatedPositionDistribution": {
+        "RB": 0.36363636363636365,
+        "QB": 0.18181818181818182,
+        "TE": 0.18181818181818182,
+        "WR": 0.2727272727272727
+      },
+      "historicalAvgRoundByPosition": {
+        "RB": 5.842105263157895,
+        "WR": 6.041666666666667,
+        "TE": 6.333333333333333,
+        "QB": 8
+      },
+      "simulatedAvgRoundByPosition": {
+        "RB": 3.5,
+        "QB": 9.5,
+        "TE": 10,
+        "WR": 10
+      },
+      "historicalQbTiming": 7.125,
+      "simulatedQbTiming": 5,
+      "historicalTeTiming": 5.285714285714286,
+      "simulatedTeTiming": 8,
+      "historicalRbWrBalance": 0.441860465116279,
+      "simulatedRbWrBalance": 0.5714285714285715
+    }
+  ],
+  "realismGaps": [
+    "3 owner(s) below 80% authenticity: LOZELL STYLES, Mark Deroux, Marcus Reese"
+  ]
+}

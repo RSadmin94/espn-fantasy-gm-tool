@@ -64,7 +64,7 @@ function makeOwner(overrides: Partial<MockOwnerLite> = {}): MockOwnerLite {
     teamName: "Test Team",
     ownerName: "Test Owner",
     draftSlot: 1,
-    isRod: false,
+    isFocalOwner: false,
     gmArchetype: "Balanced Manager",
     draftStyleBadge: "Balanced Drafter",
     reachPositions: [],
@@ -336,8 +336,8 @@ describe("calcOpportunityBoard", () => {
 
   it("detects DESPERATION opportunity when opponent has no RB through round 3", () => {
     const owners = [
-      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true }),
-      makeOwner({ ownerName: "John Smith", draftSlot: 1, isRod: false }),
+      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true }),
+      makeOwner({ ownerName: "John Smith", draftSlot: 1, isFocalOwner: false }),
     ];
     // John has no RBs in his picks
     const picks: DraftPickLite[] = [
@@ -354,8 +354,8 @@ describe("calcOpportunityBoard", () => {
 
   it("DESPERATION urgency is ACT_NOW when round >= threshold + 2", () => {
     const owners = [
-      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true }),
-      makeOwner({ ownerName: "Desperate Dan", draftSlot: 1, isRod: false }),
+      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true }),
+      makeOwner({ ownerName: "Desperate Dan", draftSlot: 1, isFocalOwner: false }),
     ];
     // Dan has no RBs; RB threshold = 3; round 5 >= 3+2 = 5 → ACT_NOW
     const picks: DraftPickLite[] = [
@@ -375,7 +375,7 @@ describe("calcOpportunityBoard", () => {
       makePlayer({ fpId: 32002, position: "WR", ecrRank: 12, adpRank: 7 }),  // ADP round 1
       makePlayer({ fpId: 32003, position: "WR", ecrRank: 14, adpRank: 9 }),  // ADP round 1
     ];
-    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true })];
+    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true })];
     const result = calcOpportunityBoard([], owners, latePlayers, 3, 0, 14);
     const valuePocket = result.find(o => o.type === "VALUE_POCKET");
     expect(valuePocket).toBeDefined();
@@ -386,7 +386,7 @@ describe("calcOpportunityBoard", () => {
     const rbPicks = Array.from({ length: 5 }, (_, i) =>
       makePick("Other Owner", makePlayer({ fpId: 33000 + i, position: "RB" }), i + 1)
     );
-    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true })];
+    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true })];
     const result = calcOpportunityBoard(rbPicks, owners, [], 1, 0, 14);
     const runExploit = result.find(o => o.type === "RUN_EXPLOIT");
     expect(runExploit).toBeDefined();
@@ -397,7 +397,7 @@ describe("calcOpportunityBoard", () => {
     const rbPicks = Array.from({ length: 7 }, (_, i) =>
       makePick("Other Owner", makePlayer({ fpId: 34000 + i, position: "RB" }), i + 1)
     );
-    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true })];
+    const owners = [makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true })];
     const result = calcOpportunityBoard(rbPicks, owners, [], 1, 0, 14);
     const runExploit = result.find(o => o.type === "RUN_EXPLOIT");
     expect(runExploit).toBeDefined();
@@ -408,12 +408,12 @@ describe("calcOpportunityBoard", () => {
     const tiltOwner = makeOwner({
       ownerName: "Tilter Jones",
       draftSlot: 1,
-      isRod: false,
+      isFocalOwner: false,
       tiltScore: 70,
       reachPositions: ["RB"],  // loves RBs
     });
     const owners = [
-      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true }),
+      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true }),
       tiltOwner,
     ];
     // Tilter just picked a WR (not their preferred RB)
@@ -430,7 +430,7 @@ describe("calcOpportunityBoard", () => {
     const rodOwner = makeOwner({
       ownerName: "Rod Sellers",
       draftSlot: 0,
-      isRod: true,
+      isFocalOwner: true,
       tiltScore: 90,
       reachPositions: ["RB"],
     });
@@ -446,8 +446,8 @@ describe("calcOpportunityBoard", () => {
   it("opportunities are sorted by urgency (ACT_NOW first)", () => {
     // Create both ACT_NOW and THIS_ROUND opportunities
     const owners = [
-      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true }),
-      makeOwner({ ownerName: "No RB Guy", draftSlot: 1, isRod: false }),
+      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true }),
+      makeOwner({ ownerName: "No RB Guy", draftSlot: 1, isFocalOwner: false }),
     ];
     const picks = [
       makePick("No RB Guy", makePlayer({ fpId: 37001, position: "WR" }), 1),
@@ -462,8 +462,8 @@ describe("calcOpportunityBoard", () => {
 
   it("each opportunity has required fields: type, urgency, title, detail", () => {
     const owners = [
-      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isRod: true }),
-      makeOwner({ ownerName: "No RB", draftSlot: 1, isRod: false }),
+      makeOwner({ ownerName: "Rod Sellers", draftSlot: 0, isFocalOwner: true }),
+      makeOwner({ ownerName: "No RB", draftSlot: 1, isFocalOwner: false }),
     ];
     const picks = [makePick("No RB", makePlayer({ fpId: 38001, position: "WR" }), 1)];
     const result = calcOpportunityBoard(picks, owners, [], 4, 0, 14);

@@ -1,0 +1,130 @@
+{
+  "engine": "championship_authority",
+  "league": "457622",
+  "payload": {
+    "bySeason": [
+      {
+        "championKey": "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+        "championName": "Rod Sellers",
+        "season": 2010,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{AE295BDF-FC02-479E-969E-0E712690503C}",
+        "championName": "LOZELL STYLES",
+        "season": 2011,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+        "championName": "Christian Graham",
+        "season": 2012,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+        "championName": "Christian Graham",
+        "season": 2013,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+        "championName": "Demetri Clark",
+        "season": 2014,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{F468B611-D262-466C-992F-23D7360C5CC0}",
+        "championName": "Nate West",
+        "season": 2015,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+        "championName": "Bruce Edwards",
+        "season": 2016,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+        "championName": "Demetri Clark",
+        "season": 2017,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+        "championName": "Christian Graham",
+        "season": 2018,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
+        "championName": "Randy Broner Jr",
+        "season": 2019,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
+        "championName": "Randy Broner Jr",
+        "season": 2020,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{AE295BDF-FC02-479E-969E-0E712690503C}",
+        "championName": "LOZELL STYLES",
+        "season": 2021,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{82E515D1-73FF-466C-A7A8-099B050278B5}",
+        "championName": "steven hibbard",
+        "season": 2022,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+        "championName": "Bruce Edwards",
+        "season": 2023,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+        "championName": "Demetri Clark",
+        "season": 2024,
+        "source": "medal"
+      },
+      {
+        "championKey": "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+        "championName": "Rod Sellers",
+        "season": 2025,
+        "source": "medal"
+      },
+      {
+        "championKey": null,
+        "championName": null,
+        "season": 2026,
+        "source": "unresolved"
+      }
+    ],
+    "fallbackSeasons": [],
+    "latestCompletedSeason": 2025,
+    "reigningKey": "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+    "titlesByKey": {
+      "id:{0C4B6DC7-265E-4A23-99DE-2B67369E9141}": 3,
+      "id:{34381793-095A-4099-B91E-04FB92B016A7}": 2,
+      "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}": 2,
+      "id:{82E515D1-73FF-466C-A7A8-099B050278B5}": 1,
+      "id:{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}": 3,
+      "id:{AE295BDF-FC02-479E-969E-0E712690503C}": 2,
+      "id:{B7DED29D-BF48-441C-91B8-34CCFBB09271}": 2,
+      "id:{F468B611-D262-466C-992F-23D7360C5CC0}": 1
+    },
+    "unresolvedSeasons": [
+      2026
+    ]
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T22:36:05.615Z",
+  "userId": 1
+}

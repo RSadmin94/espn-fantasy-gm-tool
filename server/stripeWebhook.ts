@@ -4,10 +4,6 @@
  * Handles Stripe webhook events at POST /api/stripe/webhook.
  * MUST be registered with express.raw() BEFORE express.json() to preserve
  * the raw body needed for signature verification.
- *
- * Events handled:
- *   - checkout.session.completed  → activate subscription, record funnel event
- *   - customer.subscription.deleted → cancel subscription
  */
 import type { Express, Request, Response } from "express";
 import { stripe } from "./stripe/client";
@@ -16,14 +12,13 @@ import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { recordFunnelEvent } from "./funnelService";
 import { ENV } from "./_core/env";
+import { intervalFromPriceId, planFromPriceId } from "./stripe/products";
 
 export function registerStripeWebhook(app: Express): void {
-  // CRITICAL: raw body parser must come before express.json() for this route
   app.post(
     "/api/stripe/webhook",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (req: any, res: Response, next: any) => {
-      // Use raw body for signature verification
       let data = "";
       req.setEncoding("utf8");
       req.on("data", (chunk: string) => { data += chunk; });
@@ -36,7 +31,6 @@ export function registerStripeWebhook(app: Express): void {
       const sig = req.headers["stripe-signature"] as string;
       const webhookSecret = ENV.stripeWebhookSecret;
 
-      // Test event bypass — required for Stripe webhook verification tests
       let event: import("stripe").Stripe.Event;
       try {
         if (!webhookSecret) {
@@ -51,7 +45,6 @@ export function registerStripeWebhook(app: Express): void {
         return;
       }
 
-      // Test events — return immediately
       if (event.id.startsWith("evt_test_")) {
         console.log("[Webhook] Test event detected, returning verification response");
         res.json({ verified: true });
@@ -66,6 +59,11 @@ export function registerStripeWebhook(app: Express): void {
             await handleCheckoutCompleted(event.data.object as import("stripe").Stripe.Checkout.Session);
             break;
           }
+          case "customer.subscription.updated":
+          case "customer.subscription.created": {
+            await handleSubscriptionUpsert(event.data.object as import("stripe").Stripe.Subscription);
+            break;
+          }
           case "customer.subscription.deleted": {
             await handleSubscriptionDeleted(event.data.object as import("stripe").Stripe.Subscription);
             break;
@@ -78,61 +76,134 @@ export function registerStripeWebhook(app: Express): void {
         console.error(`[Webhook] Error processing event ${event.type}:`, err);
         res.status(500).json({ error: "Webhook processing failed" });
       }
-    }
+    },
   );
+}
+
+async function persistSubscriptionFields(
+  userId: number,
+  subscriptionId: string | null,
+  customerId: string | null,
+  priceId: string | null,
+  currentPeriodEnd: Date | null,
+  status: "active" | "canceled" | "past_due" | "trialing" = "active",
+): Promise<void> {
+  const db = await getDb();
+  if (!db) {
+    console.error("[Webhook] Database unavailable");
+    return;
+  }
+
+  const plan = planFromPriceId(priceId);
+  const interval = intervalFromPriceId(priceId);
+
+  await db
+    .update(users)
+    .set({
+      subscriptionStatus: status,
+      stripeCustomerId: customerId ?? undefined,
+      stripeSubscriptionId: subscriptionId ?? undefined,
+      subscriptionPriceId: priceId ?? undefined,
+      subscriptionPlan: plan ?? undefined,
+      subscriptionInterval: interval ?? undefined,
+      currentPeriodEnd: currentPeriodEnd ?? undefined,
+    })
+    .where(eq(users.id, userId));
+
+  console.log(`[Webhook] User ${userId} subscription persisted — plan=${plan} interval=${interval}`);
+}
+
+/**
+ * Stripe moved `current_period_end` off the Subscription object and onto each
+ * subscription item. Read it from the item first, fall back to the legacy
+ * top-level field, and return null for any missing/invalid value so we never
+ * build an Invalid Date (which throws "Invalid time value" when persisted and
+ * aborts the whole upgrade).
+ */
+function periodEndFromSubscription(sub: import("stripe").Stripe.Subscription): Date | null {
+  const item = sub.items?.data?.[0] as unknown as { current_period_end?: number } | undefined;
+  const raw =
+    item?.current_period_end ??
+    (sub as unknown as { current_period_end?: number }).current_period_end ??
+    null;
+  if (raw == null || !Number.isFinite(raw)) return null;
+  const d = new Date(raw * 1000);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 async function handleCheckoutCompleted(session: import("stripe").Stripe.Checkout.Session): Promise<void> {
   const userId = session.metadata?.user_id ? parseInt(session.metadata.user_id, 10) : null;
   const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
-  const subscriptionId = typeof session.subscription === "string"
-    ? session.subscription
-    : session.subscription?.id ?? null;
 
   if (!userId) {
     console.error("[Webhook] checkout.session.completed: missing user_id in metadata");
     return;
   }
 
-  const db = await getDb();
-  if (!db) {
-    console.error("[Webhook] Database unavailable");
-    return;
-  }
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
 
-  // Fetch subscription to get current_period_end
+  let priceId = session.metadata?.price_id ?? null;
   let currentPeriodEnd: Date | null = null;
+
   if (subscriptionId) {
     try {
-      const sub = await stripe.subscriptions.retrieve(subscriptionId) as unknown as { current_period_end: number };
-      currentPeriodEnd = new Date(sub.current_period_end * 1000);
+      const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price"] });
+      currentPeriodEnd = periodEndFromSubscription(sub);
+      if (!priceId) {
+        priceId = sub.items.data[0]?.price?.id ?? null;
+      }
     } catch (err) {
       console.warn("[Webhook] Could not retrieve subscription:", err);
     }
   }
 
-  await db.update(users)
-    .set({
-      subscriptionStatus: "active",
-      stripeCustomerId: customerId ?? undefined,
-      stripeSubscriptionId: subscriptionId ?? undefined,
-      currentPeriodEnd: currentPeriodEnd ?? undefined,
-    })
-    .where(eq(users.id, userId));
+  await persistSubscriptionFields(userId, subscriptionId, customerId, priceId, currentPeriodEnd, "active");
 
   await recordFunnelEvent({
     userId,
     event: "completed_payment",
-    metadata: { sessionId: session.id, customerId, subscriptionId },
+    metadata: { sessionId: session.id, customerId, subscriptionId, priceId },
   });
+}
 
-  console.log(`[Webhook] User ${userId} activated — subscription ${subscriptionId}`);
+async function handleSubscriptionUpsert(subscription: import("stripe").Stripe.Subscription): Promise<void> {
+  const customerId =
+    typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+
+  const db = await getDb();
+  if (!db) return;
+
+  const [userRow] = await db.select().from(users).where(eq(users.stripeCustomerId, customerId));
+  if (!userRow) {
+    console.warn(`[Webhook] subscription upsert: no user for customer ${customerId}`);
+    return;
+  }
+
+  const priceId = subscription.items.data[0]?.price?.id ?? null;
+  const periodEnd = periodEndFromSubscription(subscription);
+  const status =
+    subscription.status === "active"
+      ? "active"
+      : subscription.status === "trialing"
+        ? "trialing"
+        : subscription.status === "past_due"
+          ? "past_due"
+          : "canceled";
+
+  await persistSubscriptionFields(
+    userRow.id,
+    subscription.id,
+    customerId,
+    priceId,
+    periodEnd,
+    status,
+  );
 }
 
 async function handleSubscriptionDeleted(subscription: import("stripe").Stripe.Subscription): Promise<void> {
-  const customerId = typeof subscription.customer === "string"
-    ? subscription.customer
-    : subscription.customer.id;
+  const customerId =
+    typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
 
   const db = await getDb();
   if (!db) {
@@ -140,8 +211,14 @@ async function handleSubscriptionDeleted(subscription: import("stripe").Stripe.S
     return;
   }
 
-  await db.update(users)
-    .set({ subscriptionStatus: "canceled" })
+  await db
+    .update(users)
+    .set({
+      subscriptionStatus: "canceled",
+      subscriptionPlan: null,
+      subscriptionInterval: null,
+      subscriptionPriceId: null,
+    })
     .where(eq(users.stripeCustomerId, customerId));
 
   console.log(`[Webhook] Subscription canceled for customer ${customerId}`);

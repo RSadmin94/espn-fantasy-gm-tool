@@ -1,0 +1,97 @@
+══════════════════════════════════════════════════════════════
+        DRAFT INTELLIGENCE VALIDATION REPORT
+══════════════════════════════════════════════════════════════
+Generated: 2026-07-05T17:13:00.402Z
+League 457622 · Season 2026
+
+OVERALL GRADE: A-
+  Owner Authenticity:  84%
+  League Authenticity: 90%
+  Stability:           98%
+  Explainability:      100%
+  Regression:          75%
+
+── Owner Authenticity (sortable) ──
+Owner | Authenticity | Pos Match | Round Match | QB hist→sim | TE hist→sim
+Christian Graham | 89.6% | 89% | 90.4% | 6.5→4 | 6.4→5
+Randy Broner Jr | 88.2% | 94.4% | 80.6% | 5.1→8 | 6.0→4
+Nate West | 87.5% | 89.7% | 84.9% | 2.7→9 | 7.7→6
+Tony Dorsey | 86.7% | 91.6% | 80.8% | 7.5→8 | 7.0→5
+Sheldon deRoux | 85.7% | 88.6% | 82.1% | 7.1→5 | 5.3→8
+Marlon Moore | 85% | 80.9% | 89.9% | 7.7→4 | 5.4→8
+Bruce Edwards | 84.1% | 76.8% | 93.1% | 7.5→4 | 8.0→2
+Rod Sellers | 83.4% | 88% | 77.7% | 4.6→2 | 6.9→—
+Jan Graham | 83.2% | 86.4% | 79.2% | 7.1→7 | 5.0→9
+Steffon Bizzell | 82.8% | 82.2% | 83.5% | 2.2→9 | 5.0→1
+Demetri Clark | 81.1% | 82.5% | 79.4% | 6.3→1 | 5.1→10
+LOZELL STYLES | 79.2% | 81.3% | 76.7% | 5.3→10 | 7.2→12
+Mark Deroux | 78.8% | 77.8% | 80.1% | 6.7→8 | 4.2→10
+Marcus Reese | 76.5% | 78.8% | 73.7% | —→3 | 3.0→5
+
+── League Authenticity ──
+Overall similarity: 89.6%
+QB timing: hist 1.6 → sim 1
+TE timing: hist 1.8 → sim 1
+First RB: hist 1.0 → sim 1
+First WR: hist 1.0 → sim 1
+First DP: hist 7.6 → sim 6
+Reach frequency (sim): 16.5%
+
+── Stability (100 stochastic simulations) ──
+Mean std dev: 0.6 picks · Flagged volatile (≥40 spread): 0
+  volatile: Trevor Lawrence σ=6.18 spread=24 (114-138)
+  volatile: Jake Ferguson σ=5.98 spread=25 (107-132)
+  volatile: Dak Prescott σ=5.12 spread=13 (95-108)
+  volatile: Dallas Goedert σ=4.26 spread=14 (92-106)
+  volatile: Travis Hunter σ=3.06 spread=11 (104-115)
+
+── DNA Influence ──
+Direct nudges: 16 · Cascaded diffs: 43
+Avg ADP movement: 1.8
+  Bruce Edwards: 2 nudge(s)
+  Christian Graham: 2 nudge(s)
+  Marlon Moore: 2 nudge(s)
+  Rod Sellers: 2 nudge(s)
+  Steffon Bizzell: 2 nudge(s)
+  Nate West: 2 nudge(s)
+  Randy Broner Jr: 2 nudge(s)
+  Sheldon deRoux: 1 nudge(s)
+  Mark Deroux: 1 nudge(s)
+
+── Explainability ──
+100% explained (118/118 non-BPA)
+Missing: 0 · Conflicts: 0
+
+── Decision Factor Influence ──
+  Owner DNA: applied 7.4% · supported 7.4% · blocked 32.3% · conf 0.94 · infl 0.1
+  Board: applied 73.1% · supported 85.7% · blocked 0% · conf 0.94 · infl 0.3
+  Roster Construction: applied 73.1% · supported 0% · blocked 49.5% · conf 0.94 · infl 0.22
+  League History: applied 0.5% · supported 7.7% · blocked 0% · conf 0.91 · infl 0.07
+  Need: applied 17.6% · supported 18.7% · blocked 0% · conf 0.94 · infl 0.11
+  Scarcity: applied 0% · supported 0% · blocked 0% · conf 0.94 · infl 0.1
+  Value: applied 73.1% · supported 100% · blocked 0% · conf 0.94 · infl 0.26
+
+── Regression vs production ──
+74 player changes vs 6405f04; Garrett 75→75; Warner 78→78; DP 14→14; first-20 unchanged: 15/20
+
+── Performance ──
+buildMockDraft: 29ms (DNA) / 26ms (baseline)
+Authenticity scoring: 21ms · 100 stability runs: 2062ms
+
+── Weakest owners ──
+  Marcus Reese: 76.5%
+  Mark Deroux: 78.8%
+  LOZELL STYLES: 79.2%
+  Demetri Clark: 81.1%
+  Steffon Bizzell: 82.8%
+
+── Strongest owners ──
+  Christian Graham: 89.6%
+  Randy Broner Jr: 88.2%
+  Nate West: 87.5%
+  Tony Dorsey: 86.7%
+  Sheldon deRoux: 85.7%
+
+── Remaining realism gaps ──
+  • 3 owner(s) below 80% authenticity: LOZELL STYLES, Mark Deroux, Marcus Reese
+══════════════════════════════════════════════════════════════

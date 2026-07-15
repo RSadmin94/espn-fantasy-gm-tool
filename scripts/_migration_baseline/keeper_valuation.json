@@ -1,0 +1,234 @@
+{
+  "engine": "keeper_valuation",
+  "league": "457622",
+  "payload": {
+    "count": 139,
+    "season": 2026,
+    "top20": [
+      {
+        "adpRound": 2,
+        "keeperRoundCost": 11,
+        "marketValue": 69.2,
+        "ownerName": "LOZELL STYLES",
+        "playerId": 4362238,
+        "playerName": "Chase Brown",
+        "position": "RB",
+        "roundSavings": 9,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 1,
+        "keeperRoundCost": 8,
+        "marketValue": 96,
+        "ownerName": "Jan Graham",
+        "playerId": 4430878,
+        "playerName": "Jaxon Smith-Njigba",
+        "position": "WR",
+        "roundSavings": 7,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 5,
+        "keeperRoundCost": 12,
+        "marketValue": 50,
+        "ownerName": "Bruce Edwards",
+        "playerId": 4685702,
+        "playerName": "Quinshon Judkins",
+        "position": "RB",
+        "roundSavings": 7,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 5,
+        "keeperRoundCost": 11,
+        "marketValue": 73.7,
+        "ownerName": "Marcus Reese",
+        "playerId": 4360248,
+        "playerName": "Kyle Pitts Sr.",
+        "position": "TE",
+        "roundSavings": 6,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 3,
+        "keeperRoundCost": 9,
+        "marketValue": 65.4,
+        "ownerName": "Jan Graham",
+        "playerId": 4361579,
+        "playerName": "Javonte Williams",
+        "position": "RB",
+        "roundSavings": 6,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 4,
+        "keeperRoundCost": 9,
+        "marketValue": 84.2,
+        "ownerName": "Christian Graham",
+        "playerId": 4723086,
+        "playerName": "Colston Loveland",
+        "position": "TE",
+        "roundSavings": 5,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 9,
+        "keeperRoundCost": 14,
+        "marketValue": 75,
+        "ownerName": "Marlon Moore",
+        "playerId": 2971573,
+        "playerName": "Ka'imi Fairbairn",
+        "position": "K",
+        "roundSavings": 5,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 6,
+        "keeperRoundCost": 11,
+        "marketValue": 53.8,
+        "ownerName": "Mark Deroux",
+        "playerId": 4882093,
+        "playerName": "Bhayshul Tuten",
+        "position": "RB",
+        "roundSavings": 5,
+        "valueTier": "elite"
+      },
+      {
+        "adpRound": 6,
+        "keeperRoundCost": 10,
+        "marketValue": 100,
+        "ownerName": "Jan Graham",
+        "playerId": 3953687,
+        "playerName": "Brandon Aubrey",
+        "position": "K",
+        "roundSavings": 4,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 2,
+        "keeperRoundCost": 6,
+        "marketValue": 94.7,
+        "ownerName": "LOZELL STYLES",
+        "playerId": 4432665,
+        "playerName": "Brock Bowers",
+        "position": "TE",
+        "roundSavings": 4,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 7,
+        "keeperRoundCost": 11,
+        "marketValue": 88.9,
+        "ownerName": "Steffon Bizzell",
+        "playerId": 12483,
+        "playerName": "Matthew Stafford",
+        "position": "QB",
+        "roundSavings": 4,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 4,
+        "keeperRoundCost": 8,
+        "marketValue": 83.3,
+        "ownerName": "Bruce Edwards",
+        "playerId": 4431452,
+        "playerName": "Drake Maye",
+        "position": "QB",
+        "roundSavings": 4,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 6,
+        "keeperRoundCost": 10,
+        "marketValue": 54,
+        "ownerName": "Bruce Edwards",
+        "playerId": 4685278,
+        "playerName": "Luther Burden III",
+        "position": "WR",
+        "roundSavings": 4,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 4,
+        "keeperRoundCost": 7,
+        "marketValue": 89.5,
+        "ownerName": "Demetri Clark",
+        "playerId": 4431459,
+        "playerName": "Tyler Warren",
+        "position": "TE",
+        "roundSavings": 3,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 2,
+        "keeperRoundCost": 5,
+        "marketValue": 88,
+        "ownerName": "Steffon Bizzell",
+        "playerId": 4428331,
+        "playerName": "Rashee Rice",
+        "position": "WR",
+        "roundSavings": 3,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 4,
+        "keeperRoundCost": 7,
+        "marketValue": 57.7,
+        "ownerName": "Mark Deroux",
+        "playerId": 4239996,
+        "playerName": "Travis Etienne Jr.",
+        "position": "RB",
+        "roundSavings": 3,
+        "valueTier": "strong"
+      },
+      {
+        "adpRound": 1,
+        "keeperRoundCost": 3,
+        "marketValue": 88.5,
+        "ownerName": "Nate West",
+        "playerId": 4379399,
+        "playerName": "James Cook III",
+        "position": "RB",
+        "roundSavings": 2,
+        "valueTier": "viable"
+      },
+      {
+        "adpRound": 3,
+        "keeperRoundCost": 5,
+        "marketValue": 82,
+        "ownerName": "LOZELL STYLES",
+        "playerId": 4361370,
+        "playerName": "Chris Olave",
+        "position": "WR",
+        "roundSavings": 2,
+        "valueTier": "viable"
+      },
+      {
+        "adpRound": 2,
+        "keeperRoundCost": 4,
+        "marketValue": 78,
+        "ownerName": "Nate West",
+        "playerId": 4426354,
+        "playerName": "George Pickens",
+        "position": "WR",
+        "roundSavings": 2,
+        "valueTier": "viable"
+      },
+      {
+        "adpRound": 2,
+        "keeperRoundCost": 4,
+        "marketValue": 73.1,
+        "ownerName": "Mark Deroux",
+        "playerId": 4567048,
+        "playerName": "Kenneth Walker III",
+        "position": "RB",
+        "roundSavings": 2,
+        "valueTier": "viable"
+      }
+    ]
+  },
+  "season": 2026,
+  "status": "ok",
+  "timestamp": "2026-07-10T22:36:05.615Z",
+  "userId": 1
+}

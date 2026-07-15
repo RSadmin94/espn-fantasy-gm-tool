@@ -1,0 +1,32 @@
+{
+  "fit": {
+    "coefficients": {
+      "value": -0.04195614538348075,
+      "need": 0.7388982972388051,
+      "scarcityTierCliff": 0.11926967145915145,
+      "herdFomo": 0.2696880730321569,
+      "contrarian": -0.28546261414584573,
+      "homerAffinity": 0,
+      "blockRevenge": 0,
+      "comfortAnchor": 0.3643702383214523,
+      "panic": 0.4681920423481257,
+      "rbEarlyRound": 0.4254519803107982,
+      "wrEarlyRound": -0.08867583032263407,
+      "rbEarlyLegacyEra": 0.4906904498161587,
+      "wrEarlyModernEra": 0.14610531187220457
+    },
+    "inverseTemperature": 1.0729911129740173,
+    "logLikelihood": -502.1517323164024,
+    "avgChosenProbability": 0.07133581753640884,
+    "choiceEventCount": 176,
+    "boardScopeNote": "Coefficients and choice probabilities computed against the real-but-partial league draft pool (~eventually-drafted players), not ESPN's full national board."
+  },
+  "thesisHolds": true,
+  "thesisNotes": [
+    "Data confirms RB-heavy R1 era before 2023 (67% RB).",
+    "Data confirms WR-heavier R1 era since 2023 (100% WR).",
+    "RB-early identity (+0.49 legacy-era) matches the old RB-first chapter.",
+    "WR-modern era coefficient (+0.15) / value (+-0.04) captures trusting WR value in early rounds.",
+    "Model rediscovers RB-history plus recent WR/value shift without being told your story."
+  ]
+}

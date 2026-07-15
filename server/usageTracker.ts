@@ -542,6 +542,43 @@ export async function getOnboardingFunnel(): Promise<FunnelStepRow[]> {
   }
 }
 
+/** Why-Haven't-I-Won freemium conversion funnel: snapshot -> paywall -> unlock -> checkout -> subscribe. */
+export async function getConversionFunnel(): Promise<FunnelStepRow[]> {
+  const FUNNEL_STEPS: Array<{ step: string; featureName: string }> = [
+    { step: "1. Career Report Viewed", featureName: "whyhavent_snapshot_viewed" },
+    { step: "2. Paywall Viewed",       featureName: "whyhavent_paywall_viewed" },
+    { step: "3. Unlock Clicked",       featureName: "whyhavent_unlock_clicked" },
+    { step: "4. Checkout Started",     featureName: "checkout" },
+    { step: "5. Subscription Active",  featureName: "subscription" },
+  ];
+
+  try {
+    const db = await getDb();
+    if (!db) return FUNNEL_STEPS.map((s) => ({ ...s, completions: 0, uniqueUsers: 0 }));
+    const { sql } = await import("drizzle-orm");
+
+    const results: FunnelStepRow[] = [];
+    for (const step of FUNNEL_STEPS) {
+      const rows = await db
+        .select({
+          completions: sql<number>`COUNT(*)`,
+          uniqueUsers: sql<number>`COUNT(DISTINCT ${usageEvents.userId})`,
+        })
+        .from(usageEvents)
+        .where(sql`${usageEvents.featureName} = ${step.featureName}`);
+      results.push({
+        step: step.step,
+        featureName: step.featureName,
+        completions: Number(rows[0]?.completions ?? 0),
+        uniqueUsers: Number(rows[0]?.uniqueUsers ?? 0),
+      });
+    }
+    return results;
+  } catch {
+    return FUNNEL_STEPS.map((s) => ({ ...s, completions: 0, uniqueUsers: 0 }));
+  }
+}
+
 // ─── Behavioral analytics queries (6-question dashboard) ─────────────────────
 
 export interface ActiveLeagueStatRow {

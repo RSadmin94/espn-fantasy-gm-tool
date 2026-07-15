@@ -16,6 +16,9 @@
  *   - calcLeagueAnalytics: Full league snapshot (all of the above combined)
  */
 
+import { classifyEspnDraftSlot, isDraftKeeperSlotPick } from "./draftTruth";
+import { expPickValueFromSnakeRound } from "./keeperDraftGeometry";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface PlayerRow {
@@ -66,8 +69,20 @@ export interface DraftPickRow {
   overallPickNumber: number;
   position: string;
   keeper: boolean;
+  /** ESPN `reservedForKeeper` when present — used with `keeper` for DraftTruth classification. */
+  reservedForKeeper?: boolean;
+  /** Open-draft selections only (Phase 3C — same as owner profile / DraftTruth). */
+  draftedForAnalytics?: boolean;
+  keeperSlot?: boolean;
+  retained?: boolean;
   playerId?: number;   // ESPN player ID — used for keeper efficiency cross-reference
   playerName?: string;
+}
+
+/** True when this row counts toward draft-tendency / positional DNA (not keeper or retained slot). */
+export function isOpenDraftAnalyticsPick(p: DraftPickRow): boolean {
+  if (typeof p.draftedForAnalytics === "boolean") return p.draftedForAnalytics;
+  return classifyEspnDraftSlot(p.keeper, p.reservedForKeeper).draftedForAnalytics;
 }
 
 // ─── Replacement level baselines (PPR, 14-team, 1 QB, 2 RB, 2 WR, 1 TE, 1 FLEX) ──
@@ -428,7 +443,7 @@ export function calcManagerBehavior(
     const avgDraftRoundByPosition: Record<string, number> = {};
     const positions = ["QB", "RB", "WR", "TE", "K", "D/ST"];
     for (const pos of positions) {
-      const posPicks = teamPicks.filter(p => p.position === pos && !p.keeper);
+      const posPicks = teamPicks.filter(p => p.position === pos && isOpenDraftAnalyticsPick(p));
       if (posPicks.length > 0) {
         avgDraftRoundByPosition[pos] = Math.round(
           (posPicks.reduce((s, p) => s + p.roundId, 0) / posPicks.length) * 10
@@ -439,9 +454,9 @@ export function calcManagerBehavior(
     const earlyQbTendency = (avgDraftRoundByPosition["QB"] ?? 10) <= 3;
     const earlyTeTendency = (avgDraftRoundByPosition["TE"] ?? 10) <= 4;
 
-    const nonKeeperPicks = teamPicks.filter(p => !p.keeper);
+    const openDraftPicks = teamPicks.filter(p => isOpenDraftAnalyticsPick(p));
     const byRoundPos: Record<number, Record<string, number>> = {};
-    for (const p of nonKeeperPicks) {
+    for (const p of openDraftPicks) {
       if (!byRoundPos[p.roundId]) byRoundPos[p.roundId] = {};
       byRoundPos[p.roundId][p.position] = (byRoundPos[p.roundId][p.position] || 0) + 1;
     }
@@ -458,7 +473,7 @@ export function calcManagerBehavior(
     roundTendencies.sort((a, b) => a.round - b.round);
 
     const playerSeasons = new Map<string, Set<number>>();
-    for (const p of nonKeeperPicks) {
+    for (const p of openDraftPicks) {
       const name = (p.playerName || `Player ${p.playerId || "?"}`).trim();
       if (!name || name.startsWith("Player ")) continue;
       if (!playerSeasons.has(name)) playerSeasons.set(name, new Set());
@@ -474,13 +489,13 @@ export function calcManagerBehavior(
       .sort((a, b) => b.draftCount - a.draftCount)
       .slice(0, 8);
 
-    const seasonsWithPicks = Array.from(new Set(nonKeeperPicks.map(p => p.season))).sort((a, b) => a - b);
+    const seasonsWithPicks = Array.from(new Set(openDraftPicks.map(p => p.season))).sort((a, b) => a - b);
     let draftStyleEvolution = "Insufficient draft history for evolution analysis.";
     if (seasonsWithPicks.length >= 2) {
       const earlySeason = seasonsWithPicks[0];
       const lateSeason = seasonsWithPicks[seasonsWithPicks.length - 1];
-      const earlyRounds = nonKeeperPicks.filter(p => p.season === earlySeason).map(p => p.roundId);
-      const lateRounds = nonKeeperPicks.filter(p => p.season === lateSeason).map(p => p.roundId);
+      const earlyRounds = openDraftPicks.filter(p => p.season === earlySeason).map(p => p.roundId);
+      const lateRounds = openDraftPicks.filter(p => p.season === lateSeason).map(p => p.roundId);
       const earlyAvg = earlyRounds.length
         ? earlyRounds.reduce((s, r) => s + r, 0) / earlyRounds.length
         : 0;
@@ -540,7 +555,8 @@ export function calcManagerBehavior(
     //   efficiency = 11 - 2 = +9 picks of value
     //
     const leagueSize = Math.max(teams.length, 10);
-    const keeperPicks = teamPicks.filter(p => p.keeper);
+    // Keeper / retained **board slots** (not open-draft picks) — cost basis for keeper efficiency vs ADP.
+    const keeperPicks = teamPicks.filter((p) => isDraftKeeperSlotPick(p));
     let keeperEfficiencyAvg = 0;
 
     if (keeperPicks.length > 0 && playerScoreMap && playerScoreMap.size > 0) {
@@ -731,11 +747,19 @@ export function calcTradeValue(
   vorpResult: VORPResult | undefined,
   rosResult: ROSValueResult | undefined,
   scarcity: PositionalScarcityResult | undefined,
-  keeperEfficiency: KeeperEfficiencyResult | undefined
+  keeperEfficiency: KeeperEfficiencyResult | undefined,
+  // V2: when the Market Value Engine has produced a value for this player, the
+  // composite delegates to it. The legacy avgPoints-based terms below are still
+  // computed and returned for display continuity (breakdown panels), but they no
+  // longer drive `compositeValue`. When absent (legacy callers / tests), the old
+  // behavior is preserved exactly.
+  marketValue?: import("./marketValue").MarketValueResult
 ): TradeValueResult {
-  const avgPoints = player.avgPoints;
-  const vorp = vorpResult?.vorp ?? 0;
-  const rosValue = rosResult?.rosAdjusted ?? (avgPoints * 10);
+  const avgPoints = Number.isFinite(player.avgPoints) ? player.avgPoints : 0;
+  const vorpRaw = vorpResult?.vorp;
+  const vorp = Number.isFinite(vorpRaw) ? (vorpRaw as number) : 0;
+  const rosRaw = rosResult?.rosAdjusted;
+  const rosValue = Number.isFinite(rosRaw) ? (rosRaw as number) : (avgPoints * 10);
 
   // Keeper bonus: if player is a good keeper deal, add value
   const keeperBonus = keeperEfficiency
@@ -747,8 +771,10 @@ export function calcTradeValue(
     ? Math.round(scarcity.scarcityScore * 0.3)
     : 0;
 
-  // Composite: ROS value + VORP premium + keeper bonus + scarcity bonus
-  const compositeValue = Math.round(rosValue + (vorp * 5) + keeperBonus + scarcityBonus);
+  // Composite: V2 delegates to the Market Value Engine when a value is present;
+  // otherwise the legacy avgPoints-based composite is preserved exactly.
+  const legacyComposite = Math.round(rosValue + (vorp * 5) + keeperBonus + scarcityBonus);
+  const compositeValue = marketValue ? marketValue.compositeValue : legacyComposite;
 
   const parts: string[] = [
     `ROS: ${rosValue.toFixed(0)}pts`,
@@ -756,6 +782,12 @@ export function calcTradeValue(
   ];
   if (keeperBonus > 0) parts.push(`Keeper bonus: +${keeperBonus}`);
   if (scarcityBonus > 0) parts.push(`Scarcity: +${scarcityBonus}`);
+
+  // When delegating, lead the breakdown with the market-value explanation so the
+  // report reflects what actually drove the number.
+  const valueBreakdown = marketValue
+    ? `MV ${marketValue.value} · ${marketValue.breakdown}`
+    : parts.join(" | ");
 
   return {
     playerId: player.playerId,
@@ -767,19 +799,20 @@ export function calcTradeValue(
     keeperBonus,
     positionalScarcityBonus: scarcityBonus,
     compositeValue,
-    valueBreakdown: parts.join(" | "),
+    valueBreakdown,
   };
 }
 
-// ─── Pick Value (canonical 14-team snake formula) ─────────────────────────────
+// ─── Pick Value (league-sized snake; same curve as pickTradeEval / keeperDraftGeometry) ──
 
-const PICK_BASE = 3000;
-const PICK_K = 0.028;
-const PICK_TEAMS = 14;
-
-export function calcPickValue(round: number, pickInRound: number): number {
-  const overallPick = (round - 1) * PICK_TEAMS + pickInRound;
-  return Math.round(PICK_BASE * Math.exp(-PICK_K * (overallPick - 1)));
+/**
+ * Exponential pick value for a snake slot.
+ * @param teamCount league team count (>0). No implicit 14-team default — callers must pass geometry.
+ */
+export function calcPickValue(round: number, pickInRound: number, teamCount: number): number {
+  if (!Number.isFinite(teamCount) || teamCount <= 0) return 0;
+  if (round < 1 || pickInRound < 1 || pickInRound > teamCount) return 0;
+  return expPickValueFromSnakeRound(round, pickInRound, teamCount);
 }
 
 // ─── Full League Analytics Snapshot ──────────────────────────────────────────

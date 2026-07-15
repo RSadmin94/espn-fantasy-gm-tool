@@ -36,8 +36,8 @@ export interface TeamStanding {
   projectedLineup: SimPlayer[];
   /** Remaining schedule: array of opponentTeamIds per week */
   remainingSchedule: number[];
-  /** Is this Rod's team? */
-  isRod: boolean;
+  /** Is this the current user's (focal) team? */
+  isFocalOwner: boolean;
 }
 
 export interface ChampionshipEquityResult {

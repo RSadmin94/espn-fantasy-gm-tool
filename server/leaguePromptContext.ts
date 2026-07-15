@@ -1,0 +1,284 @@
+﻿/**
+ * leaguePromptContext.ts
+ *
+ * Shared, ADDITIVE helper that resolves a neutral, league-agnostic context
+ * object for LLM prompt builders, plus a pure formatter that turns it into the
+ * boilerplate clauses prompts share.
+ *
+ * Design goals:
+ *   - Resolve the ACTIVE league + focal owner for the current user.
+ *   - Neutral fallbacks only. No hardcoded league name, id, team count, season
+ *     range, owner, or team. No focal-owner/league-name/league-id defaults.
+ *   - Pure computation for the formatter; the resolver reads cache/profile but
+ *     performs NO writes.
+ *
+ * The `season` argument is optional: when omitted, the resolver uses the latest
+ * cached season for the active league (falling back to the current calendar
+ * year), so callers without a season still get accurate league context.
+ */
+
+import {
+  resolveActiveLeagueId,
+  getAllCachedSeasons,
+  getCachedView,
+} from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import { normalizeSettings, normalizeTeams } from "./espnService";
+import { getSeasonSettings, getSeasonTeams } from "./leagueDataReads";
+import { getLeagueScoringSettings } from "./leagueScoringService";
+import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
+
+// -- Types ----------------------------------------------------------------------
+
+export interface LeaguePromptContext {
+  /** Resolved active league display name. Empty string when unknown (neutral). */
+  leagueName: string;
+  /** Resolved active league id. Empty string when unknown (neutral). */
+  leagueId: string;
+  /** Number of teams. 0 when unknown (neutral - never hardcoded). */
+  teamCount: number;
+  /** Discovered cached-season coverage. All zeros when unknown (neutral). */
+  seasonRange: { start: number; end: number; count: number };
+  /** Focal owner display name, or null when no profile/team is selected. */
+  focalOwnerName: string | null;
+  /** Focal team/franchise name, or null when not resolvable. */
+  focalTeamName: string | null;
+  /** Human-readable scoring type, or "custom scoring" when unavailable. */
+  scoringType: string;
+  /** League type, or "fantasy football league" when unavailable. */
+  leagueType: string;
+  /** Keepers per team, when known. */
+  keeperCount?: number;
+  /** Playoff team count, when known. */
+  playoffTeams?: number;
+}
+
+// -- Internal helpers -----------------------------------------------------------
+
+function toFiniteNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function humanizeScoringType(raw: unknown): string | null {
+  if (raw == null) return null;
+  const up = String(raw).trim().toUpperCase();
+  if (up === "") return null;
+  if (up === "PPR") return "PPR";
+  if (up === "HALF_PPR" || up === "HALFPPR" || up === "HALF") return "Half-PPR";
+  if (up === "STANDARD" || up === "NON_PPR" || up === "NONPPR") return "Standard";
+  return String(raw).trim();
+}
+
+/**
+ * Classify scoring from reception points (the reliable signal): 1 -> PPR,
+ * between 0 and 1 -> Half-PPR, 0 -> Standard. Returns null when not a number.
+ */
+function scoringTypeFromReceptionPoints(receptionPoints: unknown): string | null {
+  const rp = Number(receptionPoints);
+  if (!Number.isFinite(rp)) return null;
+  if (rp >= 1) return "PPR";
+  if (rp > 0) return "Half-PPR";
+  return "Standard";
+}
+
+// -- Resolver -------------------------------------------------------------------
+
+/**
+ * Resolve a neutral LeaguePromptContext for the given user (+ optional season).
+ * Reads the user active profile, the active league combined cache, the
+ * discovered cached-season range, and league scoring settings. Never throws on
+ * missing data - every field degrades to a neutral fallback.
+ */
+export async function resolveLeaguePromptContext(
+  userId: number | undefined,
+  season?: number,
+  leagueIdOverride?: string | null,
+): Promise<LeaguePromptContext> {
+  // Optional explicit league override (e.g. League Wire generators pass the
+  // active league key so the prompt framing matches where the article is saved).
+  // ADDITIVE: when omitted, behaviour is identical to the profile-resolved path.
+  const override =
+    leagueIdOverride != null && String(leagueIdOverride).trim() !== ""
+      ? String(leagueIdOverride).trim().slice(0, 32)
+      : null;
+
+  // Active profile (league id/name + focal owner/team identity).
+  const co = await resolveCurrentOwner(userId != null ? { id: userId } : null);
+
+  // -- Active league id ---------------------------------------------------------
+  // An explicit override always wins (validated by the caller's resolveLeagueId).
+  // Otherwise prefer the profile resolved league id; only fall back to the
+  // canonical resolver for an authenticated user. Never hardcode an id.
+  let leagueId = override ?? co.leagueId ?? "";
+  if (!leagueId && userId != null) {
+    try {
+      const resolved = await resolveActiveLeagueId({ user: { id: userId } }, null, season);
+      leagueId = resolved?.leagueId ?? "";
+    } catch {
+      leagueId = "";
+    }
+  }
+
+  // -- Season range from discovered cached seasons (active league) --------------
+  let seasonRange = { start: 0, end: 0, count: 0 };
+  try {
+    const seasons = (await getAllCachedSeasons(override ?? undefined, userId))
+      .map((s) => Number(s))
+      .filter((s) => Number.isFinite(s))
+      .sort((a, b) => a - b);
+    if (seasons.length > 0) {
+      seasonRange = {
+        start: seasons[0],
+        end: seasons[seasons.length - 1],
+        count: seasons.length,
+      };
+    }
+  } catch {
+    // Season coverage unavailable - keep neutral zeros.
+  }
+
+  // Effective season for cache/scoring lookups: caller-provided, else the latest
+  // cached season, else the current calendar year. Never hardcoded to a league.
+  const effectiveSeason =
+    season != null && Number.isFinite(season)
+      ? Number(season)
+      : seasonRange.end > 0
+        ? seasonRange.end
+        : new Date().getFullYear();
+
+  // -- Combined cache for keeper payload; teams/settings from provider-neutral reads --
+  let settings: ReturnType<typeof normalizeSettings> | null = null;
+  let teams: ReturnType<typeof normalizeTeams> = [];
+  let data: Record<string, unknown> | null = null;
+  try {
+    const leagueKey = leagueId.trim().slice(0, 32);
+    const seasonRef = leagueKey ? { leagueId: leagueKey, season: effectiveSeason } : null;
+    const [row, teamsRes, settingsRes] = await Promise.all([
+      getCachedView(effectiveSeason, "combined", override ?? undefined, { userId }),
+      seasonRef ? getSeasonTeams(seasonRef) : Promise.resolve({ count: 0, rows: [] as Record<string, unknown>[] }),
+      seasonRef ? getSeasonSettings(seasonRef) : Promise.resolve({ count: 0, rows: [] as Record<string, unknown>[] }),
+    ]);
+    data = (row?.payload as Record<string, unknown>) || null;
+
+    if (settingsRes.count > 0) {
+      settings = settingsRes.rows[0] as ReturnType<typeof normalizeSettings>;
+    } else if (data) {
+      settings = normalizeSettings(data);
+    }
+
+    if (teamsRes.count > 0) {
+      const cacheTeams = data ? normalizeTeams(data) : [];
+      const cacheTeamNameById = new Map(
+        cacheTeams.map((t) => [t.teamId as number, t.teamName as string]),
+      );
+      teams = teamsRes.rows.map((teamRow) => ({
+        ...teamRow,
+        teamName:
+          cacheTeamNameById.get(teamRow.teamId as number) ||
+          (teamRow.teamName as string) ||
+          String((teamRow as Record<string, unknown>).name || ""),
+      })) as ReturnType<typeof normalizeTeams>;
+    } else if (data) {
+      teams = normalizeTeams(data);
+    }
+  } catch {
+    // Cache unavailable - fall through to neutral fallbacks.
+  }
+
+  // -- League name --------------------------------------------------------------
+  // With an explicit override, the override league's cached settings name is the
+  // source of truth (co.* reflects the user's active profile league, which may differ).
+  let leagueName = override
+    ? (settings && settings.leagueName != null ? String(settings.leagueName).trim() : "")
+    : (co.leagueName ?? "").trim();
+  if (!leagueName && settings && settings.leagueName != null) {
+    leagueName = String(settings.leagueName).trim();
+  }
+
+  // -- Team count (settings.size -> team rows -> 0 neutral) ---------------------
+  let teamCount = toFiniteNumber(settings?.size) ?? 0;
+  if (teamCount <= 0 && teams.length > 0) teamCount = teams.length;
+  if (teamCount < 0) teamCount = 0;
+
+  // -- Focal owner + team (only when genuinely selected) -----------------------
+  const focalOwnerName =
+    co.isSetupComplete && co.displayName ? co.displayName : null;
+
+  let focalTeamName: string | null =
+    co.isSetupComplete && co.franchiseName
+      ? co.franchiseName
+      : null;
+  if (!focalTeamName && co.teamId != null && teams.length > 0) {
+    const match = teams.find((t) => toFiniteNumber(t.teamId) === Number(co.teamId));
+    if (match && match.teamName) focalTeamName = String(match.teamName);
+  }
+
+  // -- Scoring type (live only; "custom scoring" otherwise) --------------------
+  // Reception points are the reliable signal; the scoringType label upstream can
+  // be mislabeled, so prefer receptionPoints and fall back to the label.
+  let scoringType = "custom scoring";
+  try {
+    const scoring = await getLeagueScoringSettings(effectiveSeason, userId);
+    if (scoring && scoring.scoringDataSource !== "fallback_defaults") {
+      const fromRec = scoringTypeFromReceptionPoints(scoring.receptionPoints);
+      const fromLabel = humanizeScoringType(scoring.scoringType);
+      if (fromRec) scoringType = fromRec;
+      else if (fromLabel) scoringType = fromLabel;
+    }
+  } catch {
+    // Scoring unavailable - keep "custom scoring".
+  }
+
+  // -- League type + optional counts -------------------------------------------
+  const keeperCount = readKeeperSlotsPerTeamFromPayload(data);
+  const playoffTeams = toFiniteNumber(settings?.playoffTeamCount);
+  const leagueType = keepersEnabledFromSlots(keeperCount) ? "keeper league" : "fantasy football league";
+
+  const ctx: LeaguePromptContext = {
+    leagueName,
+    leagueId,
+    teamCount,
+    seasonRange,
+    focalOwnerName,
+    focalTeamName,
+    scoringType,
+    leagueType,
+  };
+  if (keeperCount != null) ctx.keeperCount = keeperCount;
+  if (playoffTeams != null) ctx.playoffTeams = playoffTeams;
+  return ctx;
+}
+
+// -- Formatter (pure) -----------------------------------------------------------
+
+/**
+ * Pure formatter: turn a LeaguePromptContext into the boilerplate clauses prompt
+ * builders share. No I/O. Neutral wording when fields are missing.
+ */
+export function buildLeaguePromptContext(ctx: LeaguePromptContext): {
+  leagueDescriptor: string;
+  historyClause: string;
+  focalClause: string;
+} {
+  const name = ctx.leagueName && ctx.leagueName.trim() ? ctx.leagueName.trim() : "this league";
+
+  // descriptor: "<name> (<N>-team <scoring> <type>)" - pieces omitted when unknown.
+  const inner: string[] = [];
+  if (ctx.teamCount > 0) inner.push(`${ctx.teamCount}-team`);
+  if (ctx.scoringType && ctx.scoringType.trim()) inner.push(ctx.scoringType.trim());
+  if (ctx.leagueType && ctx.leagueType.trim()) inner.push(ctx.leagueType.trim());
+  const leagueDescriptor = inner.length > 0 ? `${name} (${inner.join(" ")})` : name;
+
+  // history: "<count>-season league (<start>-<end>)" when known, else generic.
+  const { start, end, count } = ctx.seasonRange;
+  const historyClause =
+    count > 0 && start > 0 && end > 0
+      ? `${count}-season league (${start}-${end})`
+      : "this league history";
+
+  const focalClause =
+    ctx.focalOwnerName && ctx.focalOwnerName.trim() ? ctx.focalOwnerName.trim() : "the focal owner";
+
+  return { leagueDescriptor, historyClause, focalClause };
+}

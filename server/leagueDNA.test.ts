@@ -53,11 +53,17 @@ function makeTxnSeason(overrides: Partial<TxnSeason> = {}): TxnSeason {
 }
 
 function makeDraftPick(overrides: Partial<DraftPickRecord> = {}): DraftPickRecord {
+  const keeper = overrides.keeper ?? false;
+  const draftedForAnalytics =
+    typeof overrides.draftedForAnalytics === "boolean" ? overrides.draftedForAnalytics : !keeper;
   return {
     season: 2025,
     roundId: 3,
     position: "RB",
-    keeper: false,
+    keeper,
+    draftedForAnalytics,
+    keeperSlot: overrides.keeperSlot ?? keeper,
+    retained: overrides.retained ?? false,
     ...overrides,
   };
 }

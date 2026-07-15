@@ -1,0 +1,366 @@
+﻿node.exe : [Stripe] STRIPE_SECRET_KEY is not set ΓÇö billing features will be disabled.
+At C:\Users\RODERICK\AppData\Roaming\npm\pnpm.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/pnpm/bin/pnpm.cjs" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([Stripe] STRIPE...ll be disabled.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+=== Sample owner probability (round 3) ===
+
+christian graham (High, 75 picks, 8 seasons):
+  RB: blended=66% owner=71% league=33%
+  WR: blended=22% owner=18% league=46%
+  QB: blended=11% owner=11% league=11%
+  TE: blended=10% owner=11% league=9%
+
+mark deroux (High, 70 picks, 8 seasons):
+  WR: blended=56% owner=57% league=46%
+  RB: blended=36% owner=36% league=33%
+  QB: blended=18% owner=19% league=11%
+  TE: blended=7% owner=6% league=9%
+
+lozell styles (High, 65 picks, 8 seasons):
+  WR: blended=75% owner=80% league=46%
+  QB: blended=15% owner=15% league=11%
+  TE: blended=12% owner=13% league=9%
+  RB: blended=9% owner=5% league=33%
+
+bruce edwards (High, 65 picks, 8 seasons):
+  WR: blended=71% owner=75% league=46%
+  RB: blended=26% owner=25% league=33%
+  QB: blended=21% owner=22% league=11%
+  TE: blended=4% owner=3% league=9%
+
+demetri clark (High, 64 picks, 8 seasons):
+  WR: blended=71% owner=76% league=46%
+  QB: blended=43% owner=48% league=11%
+  RB: blended=39% owner=40% league=33%
+  TE: blended=22% owner=24% league=9%
+
+sheldon deroux (High, 62 picks, 8 seasons):
+  RB: blended=56% owner=61% league=33%
+  TE: blended=42% owner=48% league=9%
+  WR: blended=40% owner=39% league=46%
+  QB: blended=2% owner=0% league=11%
+[resolveActiveLeagueId] 
+{"requestedSeason":2026,"inputLeagueId":null,"resolvedLeagueId":"457622","source":"credentials"}
+[ESPN INFO] Cached 1025 players (adp/proj/pStart) from 1025 fetched
+[ESPN IDP] Cached 400 defensive players (real ADP) for league 457622
+
+=== DP timing check ===
+Total DPs: 14
+First DP: pick 75 (Myles Garrett)
+Garrett: pick 26 R2
+Warner: pick 78 R6
+Teams with 2+ DP: 0
+
+=== Owner DNA nudges applied: 48 ===
+  #5 Mark Deroux: Nico Collins (WR)
+    Mark Deroux had a 51% WR lean here based on recent draft history (82% tendency) ΓÇö Nico Collins (ADP 23.59) within reach.
+  #15 Bruce Edwards: A.J. Brown (WR)
+    Bruce Edwards had a 65% WR lean here based on recent draft history (79% tendency) ΓÇö A.J. Brown (ADP 27.38) within reach.
+  #19 Christian Graham: George Pickens (WR)
+    Christian Graham had a 61% WR lean here based on recent draft history (72% tendency) ΓÇö George Pickens (ADP 28) within reach.
+  #30 Bruce Edwards: Tetairoa McMillan (WR)
+    Bruce Edwards had a 58% WR lean here based on recent draft history (71% tendency) ΓÇö Tetairoa McMillan (ADP 40.47) within reach.
+  #33 Mark Deroux: Davante Adams (WR)
+    Mark Deroux had a 43% WR lean here based on recent draft history (56% tendency) ΓÇö Davante Adams (ADP 45.06) within reach.
+  #35 Marlon Moore: Emeka Egbuka (WR)
+    Marlon Moore had a 56% WR lean here based on recent draft history (65% tendency) ΓÇö Emeka Egbuka (ADP 50.69) within reach.
+  #41 Steffon Bizzell: Ladd McConkey (WR)
+    Steffon Bizzell had a 38% WR lean here based on recent draft history (44% tendency) ΓÇö Ladd McConkey (ADP 58.54) within reach.
+  #43 Bruce Edwards: Carnell Tate (WR)
+    Bruce Edwards had a 54% WR lean here based on recent draft history (75% tendency) ΓÇö Carnell Tate (ADP 59.1) within reach.
+  #44 Steffon Bizzell: Jaylen Waddle (WR)
+    Steffon Bizzell had a 62% WR lean here based on recent draft history (94% tendency) ΓÇö Jaylen Waddle (ADP 61.05) within reach.
+  #46 Rod Sellers: DJ Moore (WR)
+    Rod Sellers had a 78% WR lean here based on recent draft history (84% tendency) ΓÇö DJ Moore (ADP 66.89) within reach.
+  #47 Christian Graham: Jameson Williams (WR)
+    Christian Graham had a 44% WR lean here based on recent draft history (73% tendency) ΓÇö Jameson Williams (ADP 68.01) within reach.
+  #50 Marlon Moore: Harold Fannin Jr. (TE)
+    Marlon Moore had a 30% TE lean here based on recent draft history (38% tendency) ΓÇö Harold Fannin Jr. (ADP 67.12) within reach.
+  #57 Nate West: Luther Burden III (WR)
+    Nate West had a 57% WR lean here based on recent draft history (86% tendency) ΓÇö Luther Burden III (ADP 74.67) within reach.
+  #58 Bruce Edwards: Marvin Harrison Jr. (WR)
+    Bruce Edwards had a 38% WR lean here based on recent draft history (59% tendency) ΓÇö Marvin Harrison Jr. (ADP 80.11) within reach.
+  #62 Sheldon deRoux: Jaxson Dart (QB)
+    Sheldon deRoux had a 29% QB lean here based on recent draft history (26% tendency) ΓÇö Jaxson Dart (ADP 72.98) within reach.
+  #63 Marlon Moore: DK Metcalf (WR)
+    Marlon Moore had a 72% WR lean here based on recent draft history (93% tendency) ΓÇö DK Metcalf (ADP 85.79) within reach.
+  #66 Christian Graham: Courtland Sutton (WR)
+    Christian Graham had a 45% WR lean here based on recent draft history (69% tendency) ΓÇö Courtland Sutton (ADP 89.33) within reach.
+  #67 Sheldon deRoux: Alec Pierce (WR)
+    Sheldon deRoux had a 40% WR lean here based on recent draft history (50% tendency) ΓÇö Alec Pierce (ADP 89.52) within reach.
+  #70 Randy Broner Jr: Jordyn Tyson (WR)
+    Randy Broner Jr had a 51% WR lean here based on recent draft history (49% tendency) ΓÇö Jordyn Tyson (ADP 89.68) within reach.
+  #71 Randy Broner Jr: Christian Watson (WR)
+    Randy Broner Jr had a 54% WR lean here based on recent draft history (71% tendency) ΓÇö Christian Watson (ADP 94.32) within reach.
+  #84 Nate West: Brian Thomas Jr. (WR)
+    Nate West had a 44% WR lean here based on recent draft history (73% tendency) ΓÇö Brian Thomas Jr. (ADP 99.95) within reach.
+  #85 Nate West: Travis Kelce (TE)
+    Nate West had a 57% TE lean here based on recent draft history (60% tendency) ΓÇö Travis Kelce (ADP 91.21) within reach.
+  #86 Randy Broner Jr: Matthew Stafford (QB)
+    Randy Broner Jr had a 47% QB lean here based on recent draft history (46% tendency) ΓÇö Matthew Stafford (ADP 97.41) within reach.
+  #88 Tony Dorsey: Tony Pollard (RB)
+    Tony Dorsey had a 41% RB lean here based on league draft norms (45% tendency) ΓÇö Tony Pollard (ADP 89.65) within reach.
+  #90 Rod Sellers: Jaylen Warren (RB)
+    Rod Sellers had a 78% RB lean here based on recent draft history (44% tendency) ΓÇö Jaylen Warren (ADP 91.37) within reach.
+  #91 Marlon Moore: Parker Washington (WR)
+    Marlon Moore had a 52% WR lean here based on recent draft history (68% tendency) ΓÇö Parker Washington (ADP 104.34) within reach.
+  #92 Jan Graham: Dallas Goedert (TE)
+    Jan Graham had a 48% TE lean here based on recent draft history (55% tendency) ΓÇö Dallas Goedert (ADP 104.75) within reach.
+  #94 Christian Graham: Aaron Jones Sr. (RB)
+    Christian Graham had a 42% RB lean here based on recent draft history (36% tendency) ΓÇö Aaron Jones Sr. (ADP 96.16) within reach.
+  #95 Sheldon deRoux: Rico Dowdle (RB)
+    Sheldon deRoux had a 78% RB lean here based on recent draft history (75% tendency) ΓÇö Rico Dowdle (ADP 99.65) within reach.
+  #96 Marcus Reese: Makai Lemon (WR)
+    Marcus Reese had a 53% WR lean here based on league draft norms (50% tendency) ΓÇö Makai Lemon (ADP 106.68) within reach.
+  #99 Bruce Edwards: Dak Prescott (QB)
+    Bruce Edwards had a 66% QB lean here based on recent draft history (49% tendency) ΓÇö Dak Prescott (ADP 98.18) within reach.
+  #101 Marcus Reese: J.K. Dobbins (RB)
+    Marcus Reese had a 53% RB lean here based on league draft norms (27% tendency) ΓÇö J.K. Dobbins (ADP 105.61) within reach.
+  #103 Christian Graham: Caleb Williams (QB)
+    Christian Graham had a 56% QB lean here based on recent draft history (60% tendency) ΓÇö Caleb Williams (ADP 102.24) within reach.
+  #106 Marlon Moore: Kenneth Gainwell (RB)
+    Marlon Moore had a 45% RB lean here based on recent draft history (12% tendency) ΓÇö Kenneth Gainwell (ADP 105.63) within reach.
+  #107 Sheldon deRoux: Tucker Kraft (TE)
+    Sheldon deRoux had a 38% TE lean here based on recent draft history (31% tendency) ΓÇö Tucker Kraft (ADP 108.47) within reach.
+  #108 Mark Deroux: Rachaad White (RB)
+    Mark Deroux had a 75% RB lean here based on recent draft history (54% tendency) ΓÇö Rachaad White (ADP 106.36) within reach.
+  #109 Tony Dorsey: Rhamondre Stevenson (RB)
+    Tony Dorsey had a 41% RB lean here based on league draft norms (47% tendency) ΓÇö Rhamondre Stevenson (ADP 107.68) within reach.
+  #111 Randy Broner Jr: RJ Harvey (RB)
+    Randy Broner Jr had a 66% RB lean here based on recent draft history (53% tendency) ΓÇö RJ Harvey (ADP 113.55) within reach.
+  #112 Nate West: Kyle Monangai (RB)
+    Nate West had a 63% RB lean here based on recent draft history (58% tendency) ΓÇö Kyle Monangai (ADP 115.15) within reach.
+  #113 Nate West: Travis Hunter (WR)
+    Nate West had a 50% WR lean here based on recent draft history (27% tendency) ΓÇö Travis Hunter (ADP 116.24) within reach.
+  #117 Mark Deroux: Blake Corum (RB)
+    Mark Deroux had a 76% RB lean here based on recent draft history (89% tendency) ΓÇö Blake Corum (ADP 123.52) within reach.
+  #118 Sheldon deRoux: Ricky Pearsall (WR)
+    Sheldon deRoux had a 88% WR lean here based on recent draft history (73% tendency) ΓÇö Ricky Pearsall (ADP 119.11) within reach.
+  #119 Marlon Moore: KC Concepcion (WR)
+    Marlon Moore had a 63% WR lean here based on recent draft history (92% tendency) ΓÇö KC Concepcion (ADP 125.16) within reach.
+  #120 Jan Graham: Jonathon Brooks (RB)
+    Jan Graham had a 80% RB lean here based on recent draft history (70% tendency) ΓÇö Jonathon Brooks (ADP 125.87) within reach.
+  #134 Marlon Moore: Patrick Mahomes (QB)
+    Marlon Moore had a 70% QB lean here based on recent draft history (39% tendency) ΓÇö Patrick Mahomes (ADP 111.52) within reach.
+  #138 LOZELL STYLES: Trevor Lawrence (QB)
+    LOZELL STYLES had a 73% QB lean here based on recent draft history (5% tendency) ΓÇö Trevor Lawrence (ADP 116.8) within reach.
+  #140 Nate West: Bo Nix (QB)
+    Nate West had a 100% QB lean here based on recent draft history (9% tendency) ΓÇö Bo Nix (ADP 119.55) within reach.
+  #157 Marcus Reese: Justin Herbert (QB)
+    Marcus Reese had a 63% QB lean here based on league draft norms (10% tendency) ΓÇö Justin Herbert (ADP 123.98) within reach.
+
+=== DNA evaluated but value held (sample) ===
+  #1 Nate West: Jahmyr Gibbs (RB)
+    Owner lean did not override best available.
+  #2 Randy Broner Jr: Ja'Marr Chase (WR)
+    Owner lean did not override best available.
+  #6 Sheldon deRoux: Christian McCaffrey (RB)
+    Owner lean did not override best available.
+  #8 Jan Graham: Jonathan Taylor (RB)
+    Owner lean did not override best available.
+  #11 Sheldon deRoux: De'Von Achane (RB)
+    Owner lean did not override best available.
+  #16 Steffon Bizzell: Ashton Jeanty (RB)
+    QB best available (ADP slot +13) is too far behind BPA ΓÇö owner lean not applied.
+
+=== Full mock (pick, owner, player, pos, factor) ===
+#  1 R1 Nate West          Jahmyr Gibbs             RB  ESPN_ADP
+#  2 R1 Randy Broner Jr    Ja'Marr Chase            WR  ESPN_ADP
+#  3 R1 LOZELL STYLES      Drake London             WR  ΓÇö
+#  4 R1 Tony Dorsey        Amon-Ra St. Brown        WR  ΓÇö
+#  5 R1 Mark Deroux        Nico Collins             WR  OWNER_DNA
+#  6 R1 Sheldon deRoux     Christian McCaffrey      RB  ESPN_ADP
+#  7 R1 Marlon Moore       Justin Jefferson         WR  ΓÇö
+#  8 R1 Jan Graham         Jonathan Taylor          RB  ESPN_ADP
+#  9 R1 Demetri Clark      Josh Allen               QB  ΓÇö
+# 10 R1 Christian Graham   CeeDee Lamb              WR  ΓÇö
+# 11 R1 Sheldon deRoux     De'Von Achane            RB  ESPN_ADP
+# 12 R1 Marcus Reese       Puka Nacua               WR  ΓÇö
+# 13 R1 Steffon Bizzell    Colston Loveland         TE  ΓÇö
+# 14 R1 Randy Broner Jr    Bijan Robinson           RB  ΓÇö
+# 15 R2 Bruce Edwards      A.J. Brown               WR  OWNER_DNA
+# 16 R2 Steffon Bizzell    Ashton Jeanty            RB  ESPN_ADP
+# 17 R2 Marcus Reese       Saquon Barkley           RB  ESPN_ADP
+# 18 R2 Rod Sellers        Lamar Jackson            QB  ΓÇö
+# 19 R2 Christian Graham   George Pickens           WR  OWNER_DNA
+# 20 R2 Demetri Clark      Chris Olave              WR  ΓÇö
+# 21 R2 Jan Graham         Jeremiyah Love           RB  ESPN_ADP
+# 22 R2 Marlon Moore       Derrick Henry            RB  ESPN_ADP
+# 23 R2 Rod Sellers        Trey McBride             TE  ΓÇö
+# 24 R2 Mark Deroux        Omarion Hampton          RB  ESPN_ADP
+# 25 R2 Tony Dorsey        Chase Brown              RB  ESPN_ADP
+# 26 R2 LOZELL STYLES      Garrett Wilson           WR  ΓÇö
+# 27 R2 Bruce Edwards      Tyler Warren             TE  ΓÇö
+# 28 R2 Nate West          Josh Jacobs              RB  ESPN_ADP
+# 29 R3 Nate West          James Cook III           RB  ΓÇö
+# 30 R3 Bruce Edwards      Tetairoa McMillan        WR  OWNER_DNA
+# 31 R3 LOZELL STYLES      Zay Flowers              WR  ΓÇö
+# 32 R3 Tony Dorsey        Kenneth Walker III       RB  ESPN_ADP
+# 33 R3 Mark Deroux        Davante Adams            WR  OWNER_DNA
+# 34 R3 Rod Sellers        Breece Hall              RB  ESPN_ADP
+# 35 R3 Marlon Moore       Emeka Egbuka             WR  OWNER_DNA
+# 36 R3 Jan Graham         Kyren Williams           RB  ESPN_ADP
+# 37 R3 Demetri Clark      Terry McLaurin           WR  ΓÇö
+# 38 R3 Christian Graham   Javonte Williams         RB  ESPN_ADP
+# 39 R3 Rod Sellers        Cam Skattebo             RB  ESPN_ADP
+# 40 R3 Marcus Reese       Drake Maye               QB  ESPN_ADP
+# 41 R3 Steffon Bizzell    Ladd McConkey            WR  OWNER_DNA
+# 42 R3 Bruce Edwards      Malik Nabers             WR  ΓÇö
+# 43 R4 Bruce Edwards      Carnell Tate             WR  OWNER_DNA
+# 44 R4 Steffon Bizzell    Jaylen Waddle            WR  OWNER_DNA
+# 45 R4 Marcus Reese       Bucky Irving             RB  ESPN_ADP
+# 46 R4 Rod Sellers        DJ Moore                 WR  OWNER_DNA
+# 47 R4 Christian Graham   Jameson Williams         WR  OWNER_DNA
+# 48 R4 Demetri Clark      Tee Higgins              WR  ΓÇö
+# 49 R4 Jan Graham         Jayden Daniels           QB  ESPN_ADP
+# 50 R4 Marlon Moore       Harold Fannin Jr.        TE  OWNER_DNA
+# 51 R4 Sheldon deRoux     DeVonta Smith            WR  ΓÇö
+# 52 R4 Mark Deroux        Quinshon Judkins         RB  ESPN_ADP
+# 53 R4 Tony Dorsey        Joe Burrow               QB  ESPN_ADP
+# 54 R4 LOZELL STYLES      Rome Odunze              WR  ΓÇö
+# 55 R4 Randy Broner Jr    Kyle Pitts Sr.           TE  ΓÇö
+# 56 R4 Nate West          TreVeyon Henderson       RB  ESPN_ADP
+# 57 R5 Nate West          Luther Burden III        WR  OWNER_DNA
+# 58 R5 Bruce Edwards      Marvin Harrison Jr.      WR  OWNER_DNA
+# 59 R5 LOZELL STYLES      Mike Evans               WR  ΓÇö
+# 60 R5 Tony Dorsey        Jadarian Price           RB  ESPN_ADP
+# 61 R5 Mark Deroux        Jalen Hurts              QB  ESPN_ADP
+# 62 R5 Sheldon deRoux     Jaxson Dart              QB  OWNER_DNA
+# 63 R5 Marlon Moore       DK Metcalf               WR  OWNER_DNA
+# 64 R5 Jan Graham         D'Andre Swift            RB  ESPN_ADP
+# 65 R5 Demetri Clark      Michael Pittman Jr.      WR  ΓÇö
+# 66 R5 Christian Graham   Courtland Sutton         WR  OWNER_DNA
+# 67 R5 Sheldon deRoux     Alec Pierce              WR  OWNER_DNA
+# 68 R5 Marcus Reese       David Montgomery         RB  ESPN_ADP
+# 69 R5 Steffon Bizzell    Rashee Rice              WR  ΓÇö
+# 70 R5 Randy Broner Jr    Jordyn Tyson             WR  OWNER_DNA
+# 71 R6 Randy Broner Jr    Christian Watson         WR  OWNER_DNA
+# 72 R6 Steffon Bizzell    Bhayshul Tuten           RB  ESPN_ADP
+# 73 R6 Marcus Reese       Sam LaPorta              TE  ESPN_ADP
+# 74 R6 Rod Sellers        Chuba Hubbard            RB  ESPN_ADP
+# 75 R6 Christian Graham   Myles Garrett            DP  ESPN_ADP
+# 76 R6 Demetri Clark      Jordyn Brooks            DP  ROSTER_NEED
+# 77 R6 Jan Graham         Maxx Crosby              DP  ESPN_ADP
+# 78 R6 Marlon Moore       Fred Warner              DP  ESPN_ADP
+# 79 R6 Sheldon deRoux     Blake Cashman            DP  ESPN_ADP
+# 80 R6 Mark Deroux        George Kittle            TE  ESPN_ADP
+# 81 R6 Tony Dorsey        Jack Campbell            DP  POSITION_CAP
+# 82 R6 LOZELL STYLES      Brock Bowers             TE  ΓÇö
+# 83 R6 Randy Broner Jr    Will Anderson Jr.        DP  ROSTER_NEED
+# 84 R6 Nate West          Brian Thomas Jr.         WR  OWNER_DNA
+# 85 R7 Nate West          Travis Kelce             TE  OWNER_DNA
+# 86 R7 Randy Broner Jr    Matthew Stafford         QB  OWNER_DNA
+# 87 R7 LOZELL STYLES      Chris Godwin Jr.         WR  ΓÇö
+# 88 R7 Tony Dorsey        Tony Pollard             RB  OWNER_DNA
+# 89 R7 Mark Deroux        Travis Etienne Jr.       RB  ΓÇö
+# 90 R7 Rod Sellers        Jaylen Warren            RB  OWNER_DNA
+# 91 R7 Marlon Moore       Parker Washington        WR  OWNER_DNA
+# 92 R7 Jan Graham         Dallas Goedert           TE  OWNER_DNA
+# 93 R7 Demetri Clark      Jakobi Meyers            WR  ΓÇö
+# 94 R7 Christian Graham   Aaron Jones Sr.          RB  OWNER_DNA
+# 95 R7 Sheldon deRoux     Rico Dowdle              RB  OWNER_DNA
+# 96 R7 Marcus Reese       Makai Lemon              WR  OWNER_DNA
+# 97 R7 Steffon Bizzell    Jeffery Simmons          DP  ROSTER_NEED
+# 98 R7 Bruce Edwards      Nick Bolton              DP  ROSTER_NEED
+# 99 R8 Bruce Edwards      Dak Prescott             QB  OWNER_DNA
+#100 R8 Steffon Bizzell    Brock Purdy              QB  ESPN_ADP
+#101 R8 Marcus Reese       J.K. Dobbins             RB  OWNER_DNA
+#102 R8 Rod Sellers        Carson Schwesinger       DP  ROSTER_NEED
+#103 R8 Christian Graham   Caleb Williams           QB  OWNER_DNA
+#104 R8 Demetri Clark      Wan'Dale Robinson        WR  ΓÇö
+#105 R8 Jan Graham         Jaxon Smith-Njigba       WR  ΓÇö
+#106 R8 Marlon Moore       Kenneth Gainwell         RB  OWNER_DNA
+#107 R8 Sheldon deRoux     Tucker Kraft             TE  OWNER_DNA
+#108 R8 Mark Deroux        Rachaad White            RB  OWNER_DNA
+#109 R8 Tony Dorsey        Rhamondre Stevenson      RB  OWNER_DNA
+#110 R8 LOZELL STYLES      Brian Burns              DP  ROSTER_NEED
+#111 R8 Randy Broner Jr    RJ Harvey                RB  OWNER_DNA
+#112 R8 Nate West          Kyle Monangai            RB  OWNER_DNA
+#113 R9 Nate West          Travis Hunter            WR  OWNER_DNA
+#114 R9 Randy Broner Jr    Matthew Golden           WR  ESPN_ADP
+#115 R9 LOZELL STYLES      Michael Wilson           WR  ΓÇö
+#116 R9 Tony Dorsey        Jake Ferguson            TE  ESPN_ADP
+#117 R9 Mark Deroux        Blake Corum              RB  OWNER_DNA
+#118 R9 Sheldon deRoux     Ricky Pearsall           WR  OWNER_DNA
+#119 R9 Marlon Moore       KC Concepcion            WR  OWNER_DNA
+#120 R9 Jan Graham         Jonathon Brooks          RB  OWNER_DNA
+#121 R9 Demetri Clark      Xavier Worthy            WR  ΓÇö
+#122 R9 Christian Graham   Josh Downs               WR  ESPN_ADP
+#123 R9 Rod Sellers        Jordan Addison           WR  ESPN_ADP
+#124 R9 Marcus Reese       Aidan Hutchinson         DP  POSITION_CAP
+#125 R9 Steffon Bizzell    Jacory Croskey-Merritt   RB  ESPN_ADP
+#126 R9 Bruce Edwards      Khalil Shakir            WR  ESPN_ADP
+#127 R10 Bruce Edwards      Quentin Johnston         WR  ESPN_ADP
+#128 R10 Steffon Bizzell    Zach Charbonnet          RB  ESPN_ADP
+#129 R10 Marcus Reese       Woody Marks              RB  ESPN_ADP
+#130 R10 Rod Sellers        Jayden Reed              WR  ESPN_ADP
+#131 R10 Christian Graham   Isaiah Likely            TE  ESPN_ADP
+#132 R10 Demetri Clark      Mark Andrews             TE  ESPN_ADP
+#133 R10 Jan Graham         Isiah Pacheco            RB  ESPN_ADP
+#134 R10 Marlon Moore       Patrick Mahomes          QB  OWNER_DNA
+#135 R10 Sheldon deRoux     Romeo Doubs              WR  ESPN_ADP
+#136 R10 Mark Deroux        Cedric Gray              DP  POSITION_CAP
+#137 R10 Tony Dorsey        Tyjae Spears             RB  ESPN_ADP
+#138 R10 LOZELL STYLES      Trevor Lawrence          QB  OWNER_DNA
+#139 R10 Randy Broner Jr    Alvin Kamara             RB  ESPN_ADP
+#140 R10 Nate West          Bo Nix                   QB  OWNER_DNA
+#141 R11 Nate West          Foyesade Oluokun         DP  POSITION_CAP
+#142 R11 Randy Broner Jr    Jordan Mason             RB  ESPN_ADP
+#143 R11 LOZELL STYLES      Chris Rodriguez Jr.      RB  ESPN_ADP
+#144 R11 Tony Dorsey        Jalen Coker              WR  ESPN_ADP
+#145 R11 Mark Deroux        Jayden Higgins           WR  ESPN_ADP
+#146 R11 Sheldon deRoux     Omar Cooper Jr.          WR  ESPN_ADP
+#147 R11 Marlon Moore       Rashid Shaheed           WR  ESPN_ADP
+#148 R11 Jan Graham         Stefon Diggs             WR  ESPN_ADP
+#149 R11 Demetri Clark      Tyler Allgeier           RB  ESPN_ADP
+#150 R11 Christian Graham   Jalen McMillan           WR  ESPN_ADP
+#151 R11 Rod Sellers        Calvin Ridley            WR  ESPN_ADP
+#152 R11 Marcus Reese       Tyreek Hill              WR  ESPN_ADP
+#153 R11 Steffon Bizzell    Tank Bigsby              RB  ESPN_ADP
+#154 R11 Bruce Edwards      Tyrone Tracy Jr.         RB  ESPN_ADP
+#155 R12 Bruce Edwards      Kenyon Sadiq             TE  ΓÇö
+#156 R12 Steffon Bizzell    T.J. Hockenson           TE  ΓÇö
+#157 R12 Marcus Reese       Justin Herbert           QB  OWNER_DNA
+#158 R12 Rod Sellers        Jared Goff               QB  ΓÇö
+#159 R12 Christian Graham   Dalton Kincaid           TE  ESPN_ADP
+#160 R12 Demetri Clark      Tyler Shough             QB  ΓÇö
+#161 R12 Jan Graham         Kyler Murray             QB  ESPN_ADP
+#162 R12 Marlon Moore       Baker Mayfield           QB  ESPN_ADP
+#163 R12 Sheldon deRoux     Hunter Henry             TE  ESPN_ADP
+#164 R12 Mark Deroux        Jordan Love              QB  ESPN_ADP
+#165 R12 Tony Dorsey        Fernando Mendoza         QB  ESPN_ADP
+#166 R12 LOZELL STYLES      Juwan Johnson            TE  ESPN_ADP
+#167 R12 Randy Broner Jr    Sam Darnold              QB  ESPN_ADP
+#168 R12 Nate West          Daniel Jones             QB  ESPN_ADP
+#169 R13 Nate West          Brandon Aubrey           K   ΓÇö
+#170 R13 Randy Broner Jr    Cameron Dicker           K   ΓÇö
+#171 R13 LOZELL STYLES      Jason Myers              K   ΓÇö
+#172 R13 Tony Dorsey        Ka'imi Fairbairn         K   ΓÇö
+#173 R13 Mark Deroux        Cam Little               K   ΓÇö
+#174 R13 Sheldon deRoux     Harrison Mevis           K   ΓÇö
+#175 R13 Marlon Moore       Eddy Pineiro             K   ΓÇö
+#176 R13 Jan Graham         Jake Bates               K   ΓÇö
+#177 R13 Demetri Clark      Harrison Butker          K   ΓÇö
+#178 R13 Christian Graham   Tyler Loop               K   ΓÇö
+#179 R13 Rod Sellers        Chris Boswell            K   ΓÇö
+#180 R13 Marcus Reese       Will Reichard            K   ΓÇö
+#181 R13 Steffon Bizzell    Cairo Santos             K   ΓÇö
+#182 R13 Bruce Edwards      C.J. Stroud              QB  ESPN_ADP
+#183 R14 Bruce Edwards      Brenton Strange          TE  ESPN_ADP
+#184 R14 Steffon Bizzell    Jerry Jeudy              WR  ESPN_ADP
+#185 R14 Marcus Reese       Brian Robinson Jr.       RB  ESPN_ADP
+#186 R14 Rod Sellers        Denzel Boston            WR  ESPN_ADP
+#187 R14 Christian Graham   Cam Ward                 QB  ESPN_ADP
+#188 R14 Demetri Clark      Nick Bellore             RB  ESPN_ADP
+#189 R14 Jan Graham         Jauan Jennings           WR  ESPN_ADP
+#190 R14 Marlon Moore       Cooper Kupp              WR  ESPN_ADP
+#191 R14 Sheldon deRoux     Malik Willis             QB  ESPN_ADP
+#192 R14 Mark Deroux        Germie Bernard           WR  ESPN_ADP
+#193 R14 Tony Dorsey        Brandon Aiyuk            WR  ESPN_ADP
+#194 R14 LOZELL STYLES      Bryce Young              QB  ESPN_ADP
+#195 R14 Randy Broner Jr    Deebo Samuel             WR  ESPN_ADP
+#196 R14 Nate West          Chig Okonkwo             TE  ESPN_ADP

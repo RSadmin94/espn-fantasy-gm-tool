@@ -1,5 +1,6 @@
-import { getDb } from "./server/db.js";
-import { espnSeasonCache } from "./drizzle/schema.js";
+import { getDb, parseEspnFantasyDataCacheKey } from "./server/db.js";
+import { fantasyDataCache } from "./drizzle/schema.js";
+import { like } from "drizzle-orm";
 
 // Member ID → name mapping (from our analysis)
 const MEMBER_NAMES: Record<string, string> = {
@@ -41,13 +42,18 @@ interface PickData {
 
 async function main() {
   const db = await getDb();
-  const rows = await db.select().from(espnSeasonCache);
+  const rows = await db
+    .select()
+    .from(fantasyDataCache)
+    .where(like(fantasyDataCache.cacheKey, "espn:%:%:combined"));
 
-  // Group by season
-  const bySeason: Record<number, typeof rows> = {};
+  // Group by season (prefer `default` league row when multiple exist)
+  const bySeason: Record<number, (typeof rows)[number][]> = {};
   for (const row of rows) {
-    if (!bySeason[row.season]) bySeason[row.season] = [];
-    bySeason[row.season].push(row);
+    const meta = parseEspnFantasyDataCacheKey(row.cacheKey);
+    if (!meta) continue;
+    if (!bySeason[meta.season]) bySeason[meta.season] = [];
+    bySeason[meta.season].push(row);
   }
 
   const allPicks: PickData[] = [];
@@ -55,11 +61,16 @@ async function main() {
 
   for (const season of seasons) {
     const seasonRows = bySeason[season] || [];
-    const combined = seasonRows.find(r => r.viewName === "combined");
-    if (!combined) { console.log(`No combined for ${season}`); continue; }
+    const combined =
+      seasonRows.find((r) => parseEspnFantasyDataCacheKey(r.cacheKey)?.leagueId === "default") ??
+      seasonRows[0];
+    if (!combined) {
+      console.log(`No combined for ${season}`);
+      continue;
+    }
 
-    const payload = typeof combined.payload === "string"
-      ? JSON.parse(combined.payload) : combined.payload;
+    const payload =
+      typeof combined.payload === "string" ? JSON.parse(combined.payload) : combined.payload;
 
     const teams: any[] = payload.teams || [];
     const members: any[] = payload.members || [];

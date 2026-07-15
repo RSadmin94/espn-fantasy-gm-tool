@@ -59,14 +59,16 @@ export async function runMigrations(): Promise<void> {
   const connection = await mysql.createConnection(process.env.DATABASE_URL);
 
   try {
-    await connection.execute(`
+    // DDL must use query() not execute() — prepared statement protocol
+    // does not support CREATE TABLE on Railway/TiDB MySQL setups.
+    await connection.query(`
       CREATE TABLE IF NOT EXISTS \`${MIGRATIONS_TABLE}\` (
         \`name\` VARCHAR(255) NOT NULL PRIMARY KEY,
         \`applied_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-    const [rows] = await connection.execute<mysql.RowDataPacket[]>(
+    const [rows] = await connection.query<mysql.RowDataPacket[]>(
       `SELECT name FROM \`${MIGRATIONS_TABLE}\``
     );
     const applied = new Set(rows.map((r) => r.name as string));
@@ -92,7 +94,7 @@ export async function runMigrations(): Promise<void> {
 
       for (const stmt of statements) {
         try {
-          await connection.execute(stmt);
+          await connection.query(stmt);
         } catch (err: unknown) {
           if (isSkippable(err)) {
             console.log(`[migrations]   ↳ Already applied or not needed, skipping: ${(err as Error).message}`);
@@ -103,7 +105,7 @@ export async function runMigrations(): Promise<void> {
         }
       }
 
-      await connection.execute(
+      await connection.query(
         `INSERT INTO \`${MIGRATIONS_TABLE}\` (name) VALUES (?)`,
         [file]
       );

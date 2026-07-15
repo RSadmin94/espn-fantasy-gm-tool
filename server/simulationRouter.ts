@@ -39,6 +39,7 @@ import {
   computeBeatReporterAdjustment,
   formatSignalsForPrompt,
 } from "./beatReporterSignalExtractor";
+import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Shared input schema ──────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ export const simulationRouter = router({
       opponentLineup: z.array(SimPlayerInput).default([]),
       context: z.string().optional().default(""),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       // Step 1: Enrich all players with injury data
       const injuryEnriched = await enrichWithInjury([
         input.playerA as SimPlayer,
@@ -278,12 +279,15 @@ export const simulationRouter = router({
       const beatSection = beatBlock ? `\n\nBEAT REPORTER INTELLIGENCE:\n${beatBlock}` : "";
 
       // Step 4: Load league scoring settings for LLM context
-      const leagueScoring = await getLeagueScoringSettings().catch(() => null);
+      const leagueScoring = await getLeagueScoringSettings(undefined, ctx.user?.id).catch(() => null);
       const scoringLine = leagueScoring?.scoringDescription
         ? `\n\nLEAGUE SCORING: ${leagueScoring.scoringDescription}`
         : "";
 
-      const systemPrompt = `You are an expert Fantasy Football analyst for "ATLANTAS FINEST FF" (14-team PPR keeper league).
+      const leagueCtx = await resolveLeaguePromptContext(ctx.user?.id);
+      const { leagueDescriptor } = buildLeaguePromptContext(leagueCtx);
+
+      const systemPrompt = `You are an expert Fantasy Football analyst for ${leagueDescriptor}.
 The Monte Carlo simulation below ran 10,000 matchups — treat these numbers as ground truth. Do not contradict them.${scoringLine}
 ${simResult.summaryText}${vegasBlock}${beatSection}
 

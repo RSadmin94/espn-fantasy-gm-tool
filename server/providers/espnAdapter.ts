@@ -22,6 +22,7 @@ import {
   fetchEspnViews,
   ALL_VIEWS,
 } from "../espnService";
+import { matchupIsPlayoffFromEspnTier } from "../matchupPlayoffTier";
 import { getCachedView } from "../db";
 import type {
   ProviderAdapter,
@@ -171,7 +172,7 @@ function buildUniversalLeague(
     homeProjectedScore: m.homeProjectedPoints as number | undefined,
     awayProjectedScore: m.awayProjectedPoints as number | undefined,
     winner: mapMatchupWinner(m.winner, m.homeTeamId, m.awayTeamId),
-    isPlayoff: (m.playoffTierType as string) !== "NONE" && Boolean(m.playoffTierType),
+    isPlayoff: matchupIsPlayoffFromEspnTier(m.playoffTierType),
   }));
 
   // ── Transactions ──
@@ -215,7 +216,7 @@ export class EspnAdapter implements ProviderAdapter {
 
   constructor(config?: Partial<EspnAdapterConfig>) {
     this.config = {
-      leagueId: config?.leagueId || process.env.ESPN_LEAGUE_ID || "457622",
+      leagueId: config?.leagueId || process.env.ESPN_LEAGUE_ID || "",
       swid: config?.swid || process.env.ESPN_SWID || "",
       espnS2: config?.espnS2 || process.env.ESPN_S2 || "",
     };
@@ -258,5 +259,7 @@ export const defaultEspnAdapter = new EspnAdapter();
  *   ...
  */
 export async function getUniversalLeague(season: number): Promise<UniversalLeague | null> {
-  return defaultEspnAdapter.normalizeFromCache(process.env.ESPN_LEAGUE_ID || "457622", season);
+  const leagueId = process.env.ESPN_LEAGUE_ID ?? "";
+  if (!leagueId) return null;
+  return defaultEspnAdapter.normalizeFromCache(leagueId, season);
 }

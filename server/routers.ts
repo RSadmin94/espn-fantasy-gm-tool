@@ -4,7 +4,10 @@ import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { TRPCError } from "@trpc/server";
-import { publicProcedure, protectedProcedure, subscribedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, subscribedProcedure, router, resolvePremiumAccess } from "./_core/trpc";
+import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateOwnerList, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
+import { assertUserLeagueAccess } from "./leagueAccess";
+import { computeBiggestThreat } from "./biggestThreatService";
 import { invokeLLM, type Message } from "./_core/llm";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
@@ -13,6 +16,7 @@ import { simulationRouter } from "./simulationRouter";
 import { dnaRouter } from "./dnaRouter";
 import { agentRouter } from "./agentRouter";
 import { champRouter } from "./champRouter";
+import { dynastyRouter } from "./dynastyRouter";
 import { backtestingRouter } from "./backtestingRouter";
 import { vegasRouter } from "./vegasRouter";
 import { beatReporterRouter } from "./beatReporterRouter";
@@ -21,13 +25,88 @@ import { mlRouter } from "./mlRouter";
 import { weeklyAssessmentRouter } from "./weeklyAssessmentRouter";
 import { providerRouter } from "./providerRouter";
 import { billingRouter } from "./billingRouter";
+import { funnelRouter } from "./funnelRouter";
 import { onboardingRouter } from "./onboardingRouter";
+import { meRouter } from "./meRouter";
+import { draftRealityRouter } from "./draftRealityRouter";
+import { leagueIntelRouter } from "./leagueIntelRouter";
+import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
+import { rivalryStoryRouter } from "./rivalryStoryRouter";
+import { rivalryShareRouter } from "./rivalryShareRouter";
+import { sofiaRouter } from "./sofiaRouter";
+import { demoRouter } from "./demoRouter";
+import { activityDnaRouter } from "./activityDnaRouter";
+import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
+import { getActivityDnaForOwner } from "./activityDnaService";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
-import { getPickTrades, addPickTrade, removePickTrade, upsertViewHealth, getViewHealthForSeason, getAllViewHealth, getScheduledJobs, upsertScheduledJob, getDb, upsertScrapedTrades, getScrapedTrades, upsertLeagueEvents, getLeagueEvents, getLeagueEventsSummary } from "./db";
-import { leagueConnections as lcTable } from "../drizzle/schema";
-import { eq as eqDrizzle, and as andDrizzle, desc as descDrizzle } from "drizzle-orm";
+import {
+  getPickTrades,
+  addPickTrade,
+  removePickTrade,
+  upsertViewHealth,
+  getViewHealthForSeason,
+  getAllViewHealth,
+  getScheduledJobs,
+  upsertScheduledJob,
+  getUserEspnLeagueIds,
+  getActiveEspnCredentials,
+  getDb,
+  upsertScrapedTrades,
+  getScrapedTrades,
+  upsertLeagueEvents,
+  getLeagueEvents,
+  getLeagueEventsSummary,
+  getCachedView,
+  getCachedViewWithTier,
+  getAllCachedSeasons,
+  getRefreshManifests,
+  hasActiveEspnLeagueConnection,
+  isHistoricalCompletedSeason,
+  isHistoricallyFullyNormalizedFromManifest,
+  getChatHistory,
+  addChatMessage,
+  clearChatHistory,
+  sanitizeAdvisorChatLeagueId,
+  getUserMemory,
+  upsertUserMemory,
+  getActiveLeagueForUser,
+  setActiveLeagueForUser,
+  isDemoAppUserId,
+  demoLeagueId,
+  resolveActiveProfile,
+  reconcileActiveLeague,
+  resolveActiveLeagueId,
+  persistLlmUsage,
+  getLlmUsageSummary,
+} from "./db";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import { resolveLeagueDisplayName } from "./leagueDisplayName";
+import {
+  buildCombinedPayloadFromNormalized,
+  buildHistoricalReadAudit,
+  distinctNormalizedSeasons,
+  getHistoricalCoverageReport,
+  getSeasonDraftPicks,
+  getSeasonTeams,
+} from "./historicalDataService";
+import { getSeasonDraftPicks as getNormalizedSeasonDraftPicks, getSeasonMatchups as getNormalizedSeasonMatchups, getSeasonTeams as getNormalizedSeasonTeams } from "./leagueDataReads";
+import { upsertMatchups } from "./espnPersistence";
+import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
+import { resolveShareMeta } from "./receiptShare";
+import {
+  eq as eqDrizzle,
+  and as andDrizzle,
+  desc as descDrizzle,
+  asc as ascDrizzle,
+  inArray as inArrayDrizzle,
+  sql,
+  max as maxDrizzle,
+  count as sqlCount,
+  like as likeDrizzle,
+} from "drizzle-orm";
+import { computeLeagueIdpDraftProfile, normalizeDefensivePosition } from "./leagueIdpDraftProfile";
 import { getDraftBoard, getPFRStats, getAdpTrend, type MergedPlayer } from "./fantasyDataService";
 import { createHeartbeatJob, updateHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { parse as parseCookie } from "cookie";
@@ -51,7 +130,78 @@ import {
   isStale,
   staleSummary,
   hasCookies,
+  resolveEspnCreds,
 } from "./espnService";
+import { buildLeagueCapabilities } from "./leagueCapabilities";
+import {
+  getManualKeeperSelections as svcGetManualKeepers,
+  setManualKeeperSelection as svcSetManualKeeper,
+} from "./manualKeeperSelections";
+import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
+import {
+  resolveKeeperDraftGeometryForSeason,
+  defaultMidPickInRound,
+  keeperDecayRoundValue,
+  expPickValueFromSnakeRound,
+  snakeRoundAndPickFromOverall,
+  snakeOverallPick,
+} from "./keeperDraftGeometry";
+import {
+  backfillNormalizedTablesFromPayload,
+  syncEspnCombinedFullPipeline,
+  normalizeEspnPayload,
+  createSyncRun,
+  finishSyncRun,
+  runEspnRawCacheNormalizedBackfill,
+  countNormalizedGmRowsForSeason,
+  importEspnBrowserSeasonBundle,
+  ingestParsedDraftPicks,
+  importSeasonDraftFromEspnApi,
+  ingestParsedStandings,
+  ingestParsedMatchups,
+  getBrowserSyncStatusForLeague,
+  debugHistoricalDraftIngest,
+} from "./espnPersistence";
+import { runHistoricalEnrichment } from "./espnHistoricalEnrichment";
+import { getDraftRecapCanonicalBoard } from "./draftRecapCanonical";
+import {
+  buildTeamsBySeason,
+  parseDraftPickTeamNameFromRawPick,
+  resolveDraftPickOwner,
+} from "./resolveDraftPickOwner";
+import {
+  buildOwnerProfilePayload,
+  loadOwnerProfileSharedData,
+  loadFlatRegularSeasonMatchups,
+  computeOwnerProfileRecordBundle,
+  flatMatchupsToIntelRows,
+  resolveOwnerTeamsForProfile,
+  attributeOwnedPicks,
+  computeDraftDnaFromOwnedPicks,
+  normalizeOwnerStr,
+  personMergeKey,
+  cleanOwnerDisplay,
+  resolveOwnerKey,
+  buildNameToOwnerId,
+  buildTeamToCanonicalProfileKey,
+  buildRawKeyToCanonicalProfileKey,
+  buildTeamNameResolver,
+  resolveMedalTeamToOwnerKey,
+  buildApprovedAliasLabelToOwnerKey,
+  aggregateMatchupWLByOwnerSeason,
+  type GmTeamRow,
+} from "./ownerProfileService";
+import { loadRivalryDossier } from "./rivalryDossierService";
+import { loadRecentLeagueTransactionEvents } from "./recentLeagueEventsService";
+import { computeKeeperValuations, type KeeperValuation } from "./keeperValuationService";
+import { computeLeagueKeeperForecast, type KeeperForecastRow } from "./keeperForecastService";
+import { buildHallOfFamePayload } from "./hallOfFameService";
+import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
+import { playerStatsRouter } from "./playerStatsRouter";
+import { leagueWireRouter } from "./leagueWireRouter";
+import { rfsnBroadcastRouter } from "./rfsnBroadcastRouter";
+import { leagueNewsroomRouter } from "./leagueNewsroomRouter";
+import { draftWarRoomRouter }    from "./draftWarRoomRouter";
 import {
   calcVORP,
   calcPositionalScarcity,
@@ -59,40 +209,283 @@ import {
   calcKeeperEfficiency,
   calcManagerBehavior,
   calcROSValue,
-  calcPickValue,
   type PlayerRow,
   type TeamRow,
   type TransactionRow,
   type DraftPickRow,
   type ManagerBehaviorStats,
+  isOpenDraftAnalyticsPick,
 } from "./analytics";
-import {
-  getCachedView,
-  upsertCachedView,
-  getAllCachedSeasons,
-  getRefreshManifests,
-  upsertRefreshManifest,
-  getChatHistory,
-  addChatMessage,
-  clearChatHistory,
-  getUserMemory,
-  upsertUserMemory,
-  getActiveLeagueForUser,
-  setActiveLeagueForUser,
-  resolveActiveLeagueId,
-  persistLlmUsage,
-  getLlmUsageSummary,
-} from "./db";
+import { classifyDraftPickRawPick, isDraftKeeperSlotPick, SlotClass } from "./draftTruth";
+import type { RequestHandler } from "express";
 
-const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
+/** Exact origins allowed for credentialed browser requests (e.g. extension / cross-site tRPC). */
+const WAR_ROOM_CORS_ORIGINS = new Set([
+  "https://gmwarroom.online",
+  "http://gmwarroom.online",
+  "https://fantasyfootballrivals.com",
+  "https://www.fantasyfootballrivals.com",
+]);
+
+const GM_WAR_ROOM_ORIGIN_RE = /^https?:\/\/([\w-]+\.)*gmwarroom\.online$/;
+const FANTASY_FOOTBALL_RIVALS_ORIGIN_RE = /^https?:\/\/([\w-]+\.)*fantasyfootballrivals\.com$/;
+
+function isAllowedGmWarRoomOrigin(origin: string): boolean {
+  if (WAR_ROOM_CORS_ORIGINS.has(origin)) return true;
+  return GM_WAR_ROOM_ORIGIN_RE.test(origin) || FANTASY_FOOTBALL_RIVALS_ORIGIN_RE.test(origin);
+}
+
+/**
+ * Express CORS middleware for GM War Room production origins.
+ * Defined here per server routing config; wired in `server/_core/index.ts`.
+ */
+export function createWarRoomCorsMiddleware(): RequestHandler {
+  return (req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && isAllowedGmWarRoomOrigin(origin)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+      res.setHeader("Vary", "Origin");
+    }
+
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Methods", "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS");
+      const reqHdr = req.headers["access-control-request-headers"];
+      res.setHeader(
+        "Access-Control-Allow-Headers",
+        typeof reqHdr === "string" ? reqHdr : "Authorization,Content-Type,X-Requested-With,x-trpc-source"
+      );
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  };
+}
+
+const LEAGUE_ID = process.env.ESPN_LEAGUE_ID ?? "";
 const ALL_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025,2026];
 
 async function getSeasonData(season: number, leagueId?: string, userId?: number) {
-  const lid = leagueId ?? (await resolveActiveLeagueId(userId));
+  const { leagueId: lid } = await resolveActiveLeagueId(
+    { user: userId != null ? { id: userId } : undefined },
+    leagueId ?? null,
+    season
+  );
   return memCache(`seasonData:${lid}:${season}`, 10 * 60_000, async () => {
     const cached = await getCachedView(season, "combined", lid);
     return cached ? (cached.payload as Record<string, unknown>) : null;
   });
+}
+
+type RivalryH2HPairAcc = {
+  a: string;
+  b: string;
+  aWins: number;
+  aLosses: number;
+  ties: number;
+  meetings: number;
+  playoff: number;
+  close10: number;
+  close5: number;
+  firstSeason: number;
+  lastSeason: number;
+};
+
+function processRivalryH2HMatchup(args: {
+  season: number;
+  homeName: string;
+  awayName: string;
+  homeScore: number;
+  awayScore: number;
+  winner: string;
+  playoffTierType: unknown;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  ownerSet: Set<string>;
+  seasonsByOwner: Map<string, Set<number>>;
+}): void {
+  const { season, homeName, awayName, homeScore, awayScore, winner, playoffTierType, pairMap, ownerSet, seasonsByOwner } =
+    args;
+  if (winner !== "HOME" && winner !== "AWAY") return;
+  ownerSet.add(homeName);
+  ownerSet.add(awayName);
+  if (!seasonsByOwner.has(homeName)) seasonsByOwner.set(homeName, new Set());
+  if (!seasonsByOwner.has(awayName)) seasonsByOwner.set(awayName, new Set());
+  seasonsByOwner.get(homeName)!.add(season);
+  seasonsByOwner.get(awayName)!.add(season);
+  const [A, B] = [homeName, awayName].sort();
+  const key = `${A}\u0000${B}`;
+  let p = pairMap.get(key);
+  if (!p) {
+    p = {
+      a: A,
+      b: B,
+      aWins: 0,
+      aLosses: 0,
+      ties: 0,
+      meetings: 0,
+      playoff: 0,
+      close10: 0,
+      close5: 0,
+      firstSeason: season,
+      lastSeason: season,
+    };
+    pairMap.set(key, p);
+  }
+  p.meetings += 1;
+  if (matchupIsPlayoffFromEspnTier(playoffTierType)) p.playoff += 1;
+  const margin = Math.abs(homeScore - awayScore);
+  if (margin < 10) p.close10 += 1;
+  if (margin < 5) p.close5 += 1;
+  if (season < p.firstSeason) p.firstSeason = season;
+  if (season > p.lastSeason) p.lastSeason = season;
+  const homeWon = winner === "HOME";
+  const aWon = (homeWon && homeName === A) || (!homeWon && homeName !== A);
+  if (aWon) p.aWins += 1;
+  else p.aLosses += 1;
+}
+
+async function buildRivalryH2HData(args: {
+  lid: string;
+  userId: number | undefined;
+  seasons: number[];
+}): Promise<{
+  memberName: Map<string, string>;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  seasonsByOwner: Map<string, Set<number>>;
+}> {
+  const memberName = new Map<string, string>();
+  const pairMap = new Map<string, RivalryH2HPairAcc>();
+  const ownerSet = new Set<string>();
+  const seasonsByOwner = new Map<string, Set<number>>();
+
+  for (const season of args.seasons) {
+    const teamsRes = await getNormalizedSeasonTeams({ leagueId: args.lid, season });
+    const matchupsRes = await getNormalizedSeasonMatchups({ leagueId: args.lid, season });
+
+    if (teamsRes.count > 0 && matchupsRes.count > 0) {
+      const teamToMember = new Map<number, string>();
+      for (const t of teamsRes.rows) {
+        const tid = Number(t.teamId);
+        const ownerId = String(t.primaryOwner ?? (t.memberIds as string[])?.[0] ?? "").trim();
+        const display = String(t.ownerDisplay ?? t.owners ?? "").trim() || ownerId;
+        if (ownerId) {
+          teamToMember.set(tid, ownerId);
+          memberName.set(ownerId, display);
+        }
+      }
+      for (const m of matchupsRes.rows) {
+        const hMid = teamToMember.get(Number(m.homeTeamId));
+        const aMid = teamToMember.get(Number(m.awayTeamId));
+        if (!hMid || !aMid || hMid === aMid) continue;
+        const hName = memberName.get(hMid) ?? hMid;
+        const aName = memberName.get(aMid) ?? aMid;
+        processRivalryH2HMatchup({
+          season,
+          homeName: hName,
+          awayName: aName,
+          homeScore: Number(m.homeTotalPoints ?? 0),
+          awayScore: Number(m.awayTotalPoints ?? 0),
+          winner: String(m.winner ?? "UNDECIDED"),
+          playoffTierType: m.playoffTierType,
+          pairMap,
+          ownerSet,
+          seasonsByOwner,
+        });
+      }
+      continue;
+    }
+
+    const row = await getCachedView(season, "combined", args.lid, { userId: args.userId });
+    if (!row) continue;
+    const data = row.payload as Record<string, unknown>;
+    const members = (data.members as Record<string, unknown>[]) || [];
+    for (const mb of members) {
+      const mid = mb.id as string;
+      const nm = `${mb.firstName || ""} ${mb.lastName || ""}`.trim() || (mb.displayName as string) || mid;
+      if (mid) memberName.set(String(mid), nm);
+    }
+    const teams = normalizeTeams(data) as Array<Record<string, unknown>>;
+    const teamToMember = new Map<number, string>();
+    for (const t of teams) {
+      const po = (t.primaryOwner as string) || ((t.memberIds as string[])?.[0] ?? "");
+      if (po) teamToMember.set(Number(t.teamId), String(po));
+    }
+    const matchups = normalizeMatchups(data) as Array<Record<string, unknown>>;
+    for (const m of matchups) {
+      const hMid = teamToMember.get(Number(m.homeTeamId));
+      const aMid = teamToMember.get(Number(m.awayTeamId));
+      if (!hMid || !aMid || hMid === aMid) continue;
+      const winner = String(m.winner ?? "UNDECIDED");
+      if (winner !== "HOME" && winner !== "AWAY") continue;
+      const hName = memberName.get(hMid) ?? hMid;
+      const aName = memberName.get(aMid) ?? aMid;
+      processRivalryH2HMatchup({
+        season,
+        homeName: hName,
+        awayName: aName,
+        homeScore: Number(m.homeTotalPoints ?? 0),
+        awayScore: Number(m.awayTotalPoints ?? 0),
+        winner,
+        playoffTierType: m.playoffTierType,
+        pairMap,
+        ownerSet,
+        seasonsByOwner,
+      });
+    }
+  }
+
+  return { memberName, pairMap, seasonsByOwner };
+}
+
+async function finalizeRivalryH2HResult(args: {
+  lid: string;
+  memberName: Map<string, string>;
+  pairMap: Map<string, RivalryH2HPairAcc>;
+  seasonsByOwner: Map<string, Set<number>>;
+}): Promise<{
+  owners: Array<{ name: string; seasons: number; ownerKey: string }>;
+  pairs: Array<Record<string, unknown>>;
+}> {
+  const db = await getDb();
+  const allGmRows = db
+    ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, args.lid))) as GmTeamRow[])
+    : [];
+  const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
+  const nameToOwnerId = buildNameToOwnerId(allGmRows);
+  const canonicalForMember = (mid: string, nm: string): string => {
+    const direct = remap.get(`id:${mid}`);
+    if (direct) return direct;
+    const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+    return remap.get(raw) ?? raw;
+  };
+  const canonByName = new Map<string, string>();
+  for (const [mid, nm] of args.memberName) {
+    if (!canonByName.has(nm)) canonByName.set(nm, canonicalForMember(String(mid), nm));
+  }
+  const owners = [...args.seasonsByOwner.entries()]
+    .map(([name, set]) => ({ name, seasons: set.size, ownerKey: canonByName.get(name) ?? "" }))
+    .sort((x, y) => x.name.localeCompare(y.name));
+  const pairs = [...args.pairMap.values()].map((p) => ({
+    ...p,
+    aKey: canonByName.get(p.a) ?? "",
+    bKey: canonByName.get(p.b) ?? "",
+  }));
+  return { owners, pairs };
+}
+
+/** Active league draft geometry for pick-value / keeper charts (settings + draft payload). */
+async function resolvePickValueGeometryForUser(ctx: { user?: { id: number } | null }) {
+  const uid = ctx.user?.id ?? undefined;
+  const cachedSeasons = (await getAllCachedSeasons(undefined, uid)).sort((a, b) => a - b);
+  const anchorSeason = cachedSeasons.length ? cachedSeasons[cachedSeasons.length - 1]! : new Date().getFullYear();
+  const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, anchorSeason);
+  if (!leagueId) {
+    return { leagueId: "", teamCount: 0, roundCount: 0, draftSlotCount: 0, anchorSeason };
+  }
+  const payload = await getSeasonData(anchorSeason, undefined, uid);
+  const geo = await resolveKeeperDraftGeometryForSeason(leagueId, anchorSeason, uid, payload);
+  return { leagueId, anchorSeason, ...geo };
 }
 
 /**
@@ -145,15 +538,241 @@ function findChampionshipMatchup(schedule: any[]): any | null {
   return finalRound[finalRound.length - 1];
 }
 
+// Owner canonicalization: normalizeOwnerStr, cleanOwnerDisplay, resolveOwnerKey, buildNameToOwnerId,
+// buildTeamToCanonicalProfileKey, resolveMedalTeamToOwnerKey — imported from `./ownerProfileService`.
+
+/** Normalize ESPN `memberIds` / owner id lists for standings (arrays, strings, or sparse objects). */
+function coerceOwnerIdList(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x).trim()).filter(Boolean);
+  if (typeof raw === "string") return raw.split(/[;,]/).map((s) => s.trim()).filter(Boolean);
+  if (typeof raw === "object") {
+    const vals = Object.values(raw as Record<string, unknown>).filter(
+      (v) => v != null && String(v).trim() !== "",
+    );
+    if (vals.length > 0) return vals.map((v) => String(v).trim()).filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * Normalize a player name for keeper cross-referencing.
+ * Strips punctuation, suffixes (Jr/Sr/III/IV/II), and collapses whitespace.
+ * "A.J. Brown" → "aj brown", "Odell Beckham Jr." → "odell beckham"
+ */
+function normKeeperName(name: string): string {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/\bjr\.?$|\bsr\.?$|\bii$|\biii$|\biv$|\bv$/i, "")
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type KeeperPoolEntry = {
+  ownerName:           string;
+  ownerKey:            string;   // canonical merge-aware owner key (id:{GUID}/name:...); identity join
+  teamName:            string;
+  playerId:            number;   // ESPN player id (0 = unresolved); identity join to ADP / market value
+  playerName:          string;
+  nflTeam:             string;
+  position:            string;
+  slot:                string;
+  acquisitionType:     string;
+  keepYear:            0 | 1;
+  isLastKeeperYear:    boolean;
+  keeperRoundCost:     number;
+  costSource:          "espn_stored" | "draft_history_round" | "fa_fixed";
+  originalDraftRound:  number | null;
+  originalDraftSeason: number | null;
+  lastKeptSeason:      number | null;
+  lastKeptRound:       number | null;
+  /** UI: roster vs draft/keeper/cache provenance for this row. */
+  sourceLabel:         string;
+};
+
+type OwnerSummaryRow = {
+  /** Stable canonical key (`id:…` or `name:…`). */
+  ownerKey: string;
+  /** Human-facing label. */
+  ownerName: string;
+  seasons: number[];
+  currentTeam: string;
+  totalWins: number;
+  totalLosses: number;
+  totalTies: number;
+  winPct: number;
+  championships: number;
+  runnerUps: number;
+  thirdPlace: number;
+};
+
+/** Deterministic power ranking row (Owner Profiles V1). */
+type OwnerPowerRankingRow = {
+  rank: number;
+  /** Canonical key for `owners.ownerProfile` input (same as `OwnerSummaryRow.ownerKey`). */
+  ownerKey: string;
+  ownerName: string;
+  currentTeam: string;
+  score: number;
+  record: string;
+  winPct: number;
+  championships: number;
+  medals: { runnerUps: number; thirdPlace: number };
+  reason: string;
+};
+
+/** Deterministic league award (Owner Awards V1). */
+type OwnerAwardRow = {
+  awardName: string;
+  ownerKey: string;
+  ownerName: string;
+  value: string | number;
+  reason: string;
+};
+
+function h2hWinPctForPower(w: number, l: number, t: number): number {
+  const g = w + l + t;
+  if (g <= 0) return 0;
+  return Number((((w + 0.5 * t) / g) * 100).toFixed(1));
+}
+
+/** Short deterministic copy from fixed phrase bank (no LLM). */
+function buildOwnerPowerReason(input: {
+  winPct: number;
+  championships: number;
+  runnerUps: number;
+  thirdPlace: number;
+  h2hWins: number;
+  h2hLosses: number;
+  h2hTies: number;
+  activityAvgPerSeason: number;
+}): string {
+  const parts: string[] = [];
+  if (input.championships >= 2) parts.push("repeat champion");
+  else if (input.championships === 1) parts.push("title ceiling");
+  if (input.runnerUps >= 2) parts.push("finals regular");
+  else if (input.runnerUps === 1 && input.championships === 0) parts.push("deep playoff run");
+  if (input.thirdPlace >= 2) parts.push("podium staple");
+  else if (input.thirdPlace >= 1 && input.championships === 0 && input.runnerUps === 0) {
+    parts.push("medaled season");
+  }
+  if (input.winPct >= 58) parts.push("elite win rate");
+  else if (input.winPct >= 52) parts.push("winning record");
+  else if (input.winPct < 45) parts.push("below-.500 ledger");
+  const hg = input.h2hWins + input.h2hLosses + input.h2hTies;
+  const h2hPct = h2hWinPctForPower(input.h2hWins, input.h2hLosses, input.h2hTies);
+  if (hg >= 10 && h2hPct >= 56) parts.push("H2H bully");
+  else if (hg >= 10 && h2hPct <= 42) parts.push("H2H underdog");
+  if (input.activityAvgPerSeason >= 55) parts.push("high motor");
+  else if (input.activityAvgPerSeason <= 12 && hg >= 6) parts.push("low-volume operator");
+  if (parts.length === 0) parts.push("balanced résumé");
+  return parts.slice(0, 3).join(" · ");
+}
+
+// ── buildPlayerStory ── Deterministic league story from aggregated data ───────
+function buildPlayerStory(args: {
+  playerName: string; position: string; nflTeam: string;
+  ownershipTimeline: Array<{ ownerName: string; season: number; isKeeper: boolean; isChampionSeason: boolean }>;
+  enrichedDraft:  Array<{ season: number; round: number; ownerName: string; isKeeper: boolean; isChampionSeason: boolean }>;
+  enrichedTrades: Array<{ season: number; fromOwner: string; toOwner: string }>;
+  keeperHistory:  Array<{ season: number; round: number; ownerName: string }>;
+  champSeasons:   number[];
+  uniqueOwners:   string[];
+  firstSeason:    number | null;
+  lastSeason:     number | null;
+}): string {
+  const { playerName, position, nflTeam, ownershipTimeline, enrichedDraft, enrichedTrades, keeperHistory, champSeasons, uniqueOwners, firstSeason, lastSeason } = args;
+  if (ownershipTimeline.length === 0 && enrichedDraft.length === 0) {
+    return `${playerName} has been searched in this league but no draft or roster history was found in the database.`;
+  }
+  const parts: string[] = [];
+  const nfl = nflTeam ? ` (${nflTeam})` : "";
+  const pos = position || "player";
+  const seasons = lastSeason && firstSeason ? (firstSeason === lastSeason ? `${firstSeason}` : `${firstSeason}–${lastSeason}`) : (firstSeason ? String(firstSeason) : "");
+  const origDraft = [...enrichedDraft].sort((a,b) => a.season - b.season)[0];
+  if (origDraft) {
+    parts.push(`${playerName}${nfl} first appeared in this league in ${origDraft.season}, originally drafted in Round ${origDraft.round} by ${origDraft.ownerName}.`);
+  }
+  if (uniqueOwners.length > 1) {
+    parts.push(`Over ${ownershipTimeline.length} season${ownershipTimeline.length === 1 ? "" : "s"}, ${playerName} passed through ${uniqueOwners.length} different managers: ${uniqueOwners.slice(0, 3).join(", ")}${uniqueOwners.length > 3 ? `, and ${uniqueOwners.length - 3} more` : ""}.`);
+  } else if (uniqueOwners.length === 1) {
+    parts.push(`${uniqueOwners[0]} has owned ${playerName} for ${ownershipTimeline.length === 1 ? "one season" : `all ${ownershipTimeline.length} seasons`} tracked in this league.`);
+  }
+  if (enrichedTrades.length > 0) {
+    const lastTrade = enrichedTrades[0];
+    parts.push(`The most recent trade moved ${playerName} from ${lastTrade.fromOwner} to ${lastTrade.toOwner} in ${lastTrade.season}.`);
+  }
+  if (keeperHistory.length > 0) {
+    const mostKeptOwner = (() => {
+      const cnt: Record<string, number> = {};
+      for (const k of keeperHistory) cnt[k.ownerName] = (cnt[k.ownerName] ?? 0) + 1;
+      return Object.entries(cnt).sort((a,b) => b[1]-a[1])[0];
+    })();
+    if (mostKeptOwner) {
+      parts.push(`${mostKeptOwner[0]} has kept ${playerName} ${mostKeptOwner[1] === 1 ? "once" : `${mostKeptOwner[1]} times`} — the longest keeper tenure in league history for this ${pos}.`);
+    }
+    const expensiveKeep = [...keeperHistory].sort((a,b) => a.round - b.round)[0];
+    if (expensiveKeep && expensiveKeep.round <= 3) {
+      parts.push(`The most expensive keeper slot used for ${playerName} was Round ${expensiveKeep.round} in ${expensiveKeep.season} by ${expensiveKeep.ownerName} — signaling high confidence in their value.`);
+    }
+  }
+  if (champSeasons.length > 0) {
+    const champOwner = ownershipTimeline.find(t => t.isChampionSeason && champSeasons.includes(t.season));
+    if (champOwner) {
+      parts.push(`${playerName} was on the championship roster in ${champSeasons.join(" and ")} — ${champOwner.ownerName} rode their ${pos} performance to a title.`);
+    }
+  } else if (seasons) {
+    parts.push(`Across ${seasons}, ${playerName} has yet to be on a championship roster in this league.`);
+  }
+  return parts.length > 0 ? parts.join(" ") : `${playerName} has a presence in league records spanning ${seasons || "multiple seasons"}.`;
+}
+
+/** Explicit return type for espn.keeperValuation — breaks the appRouter self-reference
+ * inference cycle created by calling the sibling keeperPool procedure via createCaller. */
+type KeeperValuationResponse = {
+  valuations: KeeperValuation[];
+  pool?: KeeperPoolEntry[];
+  draftYear?: number;
+  rosterSeason?: number;
+  leagueId?: string;
+  prevSeason?: number;
+  prev2Season?: number;
+  error?: string;
+  hint?: string;
+  disabled?: boolean;
+  reason?: string;
+  keeperSlotsPerTeam?: number | null;
+  rosterProvenance?: unknown;
+};
+
 export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
+  funnel: funnelRouter,
+  me: meRouter,
+  draftReality: draftRealityRouter,
+  leagueIntel: leagueIntelRouter,
+  completedTradeIntel: completedTradeIntelRouter,
+  rivalryStory: rivalryStoryRouter,
+  sofia: sofiaRouter,
+  rivalryShare: rivalryShareRouter,
+  demo: demoRouter,
+  activityDna: activityDnaRouter,
+  transactionAnalysis: transactionAnalysisRouter,
   onboarding: onboardingRouter,
   injury: injuryRouter,
   simulation: simulationRouter,
+  playerStats: playerStatsRouter,
+  playerStatsCache: playerStatsCacheRouter,
+  leagueWire: leagueWireRouter,
+  rfsnBroadcast: rfsnBroadcastRouter,
+  leagueNewsroom: leagueNewsroomRouter,
+  draftWarRoom: draftWarRoomRouter,
   dna: dnaRouter,
   agents: agentRouter,
   champ: champRouter,
+  dynasty: dynastyRouter,
   backtest: backtestingRouter,
   vegas: vegasRouter,
   beatReporter: beatReporterRouter,
@@ -163,28 +782,75 @@ export const appRouter = router({
   providers: providerRouter,
   rivalry: router({
     /** Get cached rivalry scores for the current user (Rod) from DB */
-    getScores: publicProcedure.query(async () => {
-      const { getRivalryScoresFromDb } = await import("./rivalryService");
-      const ROD_NAMES = ["rod sellers", "rodzilla", "str8frmhell"];
-      const seasons = await getAllCachedSeasons();
+    getScores: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return [];
+      const { getRivalryScoresFromDb, computeRivalryScores } = await import("./rivalryService");
+      const seasons = await getAllCachedSeasons(undefined, ctx.user.id);
       if (seasons.length === 0) return [];
-      const latestSeason = Math.max(...seasons);
-      const row = await getCachedView(latestSeason, "combined");
-      if (!row) return [];
-      const data = row.payload as Record<string, unknown>;
-      const members = (data.members as Record<string, unknown>[]) || [];
-      let rodMemberId: string | null = null;
-      for (const m of members) {
-        const name = `${m.firstName || ""} ${m.lastName || ""}`.trim() || (m.displayName as string) || "";
-        if (ROD_NAMES.some(n => name.toLowerCase().includes(n))) { rodMemberId = m.id as string; break; }
+      const co = await resolveCurrentOwner(ctx.user ? { id: ctx.user.id } : null);
+      const focalMemberId: string | null = co.isSetupComplete ? co.ownerId : null;
+      if (!focalMemberId) return [];
+      const { leagueId: scoreLid } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } }, null, undefined,
+      );
+      if (!scoreLid) return [];
+      const lid = scoreLid;
+      let scores = await getRivalryScoresFromDb(focalMemberId, lid);
+      if (scores.length === 0) {
+        scores = await computeRivalryScores(ctx.user.id, lid);
       }
-      if (!rodMemberId) return [];
-      return getRivalryScoresFromDb(rodMemberId);
+      const focalName = (co.displayName ?? "").trim();
+      const db = await getDb();
+      const allGmRows = db
+        ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
+        : [];
+      const remap = buildRawKeyToCanonicalProfileKey(allGmRows);
+      const nameToOwnerId = buildNameToOwnerId(allGmRows);
+      const canonicalForMember = (mid: string, nm: string): string => {
+        const direct = remap.get(`id:${mid}`);
+        if (direct) return direct;
+        const raw = resolveOwnerKey("", nm, nm, nameToOwnerId);
+        return remap.get(raw) ?? raw;
+      };
+      const focalKey = canonicalForMember(focalMemberId, focalName);
+      const mappedScores = scores.map((p) => ({
+        ...p,
+        focalKey,
+        rivalKey: canonicalForMember(String(p.rivalId), String(p.rivalName ?? "")),
+      }));
+      return gateRivalryScores(mappedScores, await resolvePremiumAccess(ctx.user));
     }),
     /** Compute and persist rivalry scores (manual trigger) */
-    refresh: protectedProcedure.mutation(async () => {
+    /** All-time head-to-head by owner identity, computed from the ESPN combined cache (same source the Matchups tab falls back to). */
+    h2h: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      const userId = ctx.user?.id ?? undefined;
+      if (!userId) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
+      const { leagueId: h2hLid } = await resolveActiveLeagueId(
+        { user: { id: userId } }, null, undefined,
+      );
+      if (!h2hLid) return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
+      const lid = h2hLid;
+      const salt = input?.activeLeagueKey ?? "__none__";
+      const h2hResult = await memCache(`rivalryH2H:${lid}:${userId ?? "anon"}:${salt}`, 10 * 60_000, async () => {
+        const seasons = await getAllCachedSeasons(undefined, userId);
+        if (!seasons.length) {
+          return { owners: [] as Array<{ name: string; seasons: number; ownerKey: string }>, pairs: [] as Array<Record<string, unknown>> };
+        }
+        const { memberName, pairMap, seasonsByOwner } = await buildRivalryH2HData({ lid, userId, seasons });
+        return finalizeRivalryH2HResult({ lid, memberName, pairMap, seasonsByOwner });
+      });
+      return gateH2H(h2hResult, await resolvePremiumAccess(ctx.user));
+    }),
+
+    refresh: protectedProcedure.mutation(async ({ ctx }) => {
       const { refreshRivalryScores } = await import("./rivalryService");
-      const pairs = await refreshRivalryScores();
+      const pairs = await refreshRivalryScores(ctx.user.id);
       return { ok: true, count: pairs.length };
     }),
   }),
@@ -228,8 +894,14 @@ export const appRouter = router({
       }),
     /** Get the latest cached storylines for a season (most recent week) */
     getLatest: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
+      .input(
+        z.object({
+          season: z.number().int().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
       .query(async ({ input }) => {
+        void input.activeLeagueKey;
         const { getLatestWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
         const season = input.season ?? 2025;
         return getLatestWeeklyStorylinesFromDb(season);
@@ -237,10 +909,10 @@ export const appRouter = router({
     /** Manually trigger storylines refresh for a season (no new ESPN calls) */
     refresh: publicProcedure
       .input(z.object({ season: z.number().int().optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
         const season = input.season ?? 2025;
-        const rows = await refreshWeeklyStorylines(season);
+        const rows = await refreshWeeklyStorylines(season, ctx.user?.id);
         return { ok: true, count: rows.length, season };
       }),
   }),
@@ -254,19 +926,50 @@ export const appRouter = router({
       }),
     /** Get the latest fear index for a season (most recent week with data) */
     getLatest: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
-      .query(async ({ input }) => {
-        const { getLatestFearIndexFromDb } = await import("./fearIndexService");
-        const season = input.season ?? 2025;
-        return getLatestFearIndexFromDb(season);
+      .input(
+        z.object({
+          season: z.number().int().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const {
+          getLatestFearIndexFromDb,
+          getLatestFearIndexAnySeason,
+          refreshFearIndex,
+        } = await import("./fearIndexService");
+
+        // 1. Requested/active season, if it already has data.
+        if (input.season) {
+          const rows = await getLatestFearIndexFromDb(input.season);
+          if (rows.length) return rows;
+        }
+
+        // 2. Fall back to the latest season that has any data (e.g. the last
+        //    in-season week), so the page isn't blank in the offseason.
+        const anyRows = await getLatestFearIndexAnySeason();
+        if (anyRows.length) return anyRows;
+
+        // 3. Table empty → compute on demand (deterministic, no LLM) for the
+        //    most recent cached season that yields entries.
+        const { getAllCachedSeasons } = await import("./db");
+        const cached = (await getAllCachedSeasons(undefined, ctx.user?.id))
+          .filter((s) => s > 2000)
+          .sort((a, b) => b - a);
+        for (const s of cached) {
+          const computed = await refreshFearIndex(s, undefined, ctx.user?.id);
+          if (computed.length) return computed;
+        }
+        return [];
       }),
     /** Manually trigger fear index refresh (no new ESPN calls) */
     refresh: publicProcedure
       .input(z.object({ season: z.number().int().optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { refreshFearIndex } = await import("./fearIndexService");
         const season = input.season ?? 2025;
-        const entries = await refreshFearIndex(season);
+        const entries = await refreshFearIndex(season, undefined, ctx.user?.id);
         return { ok: true, count: entries.length, season };
       }),
   }),
@@ -293,9 +996,9 @@ export const appRouter = router({
       }),
     /** Manually trigger reputation event detection (no new ESPN calls) */
     refresh: publicProcedure
-      .mutation(async () => {
+      .mutation(async ({ ctx }) => {
         const { refreshReputationEvents } = await import("./reputationService");
-        const result = await refreshReputationEvents({ generateLLM: false });
+        const result = await refreshReputationEvents({ generateLLM: false, userId: ctx.user?.id });
         return { ok: true, ...result };
       }),
   }),
@@ -403,6 +1106,14 @@ export const appRouter = router({
         if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
         const { getOnboardingFunnel } = await import("./usageTracker");
         return getOnboardingFunnel();
+      }),
+
+    /** Why-Haven't-I-Won freemium conversion funnel: snapshot -> paywall -> unlock -> checkout -> subscribe */
+    getConversionFunnel: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { getConversionFunnel } = await import("./usageTracker");
+        return getConversionFunnel();
       }),
 
     // ── Behavioral analytics (6-question dashboard) ──────────────────────────
@@ -555,7 +1266,7 @@ export const appRouter = router({
       }),
 
     /**
-     * Get the full draft context for Rod's current pick:
+     * Get the full draft context for the focal manager's current pick:
      * available players, positional needs, owner tendencies, recent picks.
      */
     getDraftContext: publicProcedure
@@ -579,28 +1290,27 @@ export const appRouter = router({
           round: z.number(),
         })).default([]),
       }))
-      .query(async ({ input }) => {
-        const {
-          scorePositionalNeed, buildOwnerTendencies, calcSurvivalRisk,
-          detectPositionRun,
-        } = await import("./draftHelperService");
-
-        // 1. Get available players from the draft board
-        const board = await getDraftBoard(false);
+      .query(async ({ ctx, input }) => {
+        const { buildOwnerTendencies, scorePositionalNeed, calcSurvivalRisk, detectPositionRun } = await import("./draftHelperService");
+        const board = await getDraftBoard();
         const draftedNames = new Set(input.picksAlreadyMade.map((p: { playerName: string }) => p.playerName.toLowerCase()));
         const available = board.players
           .filter((p: MergedPlayer) => !draftedNames.has(p.name.toLowerCase()))
           .slice(0, 200);
 
+        const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
+        const latestSeason = cachedSeasons[cachedSeasons.length - 1];
+
         // 2. Get owner tendencies from DNA profiles
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const managers = await buildManagerRawData();
-        const dnaProfiles = calcLeagueDNA(managers);
+        const { resolveLeaguePromptContext } = await import("./leaguePromptContext");
+        const managers = await buildManagerRawData(ctx.user?.id);
+        const draftPromptCtx = await resolveLeaguePromptContext(ctx.user?.id, latestSeason ?? new Date().getFullYear());
+        const focalH2hLabelDraft = draftPromptCtx.focalOwnerName?.trim() || "the focal manager";
+        const dnaProfiles = calcLeagueDNA(managers, focalH2hLabelDraft);
 
-        const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
-        const latestSeason = cachedSeasons[cachedSeasons.length - 1];
-        const latestData = latestSeason ? await getSeasonData(latestSeason) : null;
+        const latestData = latestSeason ? await getSeasonData(latestSeason, undefined, ctx.user?.id) : null;
         const pickOrder: Record<string, unknown>[] = latestData ? (normalizeDraftOrder(latestData)?.pickOrder ?? []) : [];
 
         const ownerInputs = pickOrder.map((slot: Record<string, unknown>) => {
@@ -685,7 +1395,7 @@ export const appRouter = router({
       }),
 
     /**
-     * LLM-powered pick recommendation for Rod's current draft position.
+     * LLM-powered pick recommendation for the user's current draft position.
      */
     getPickRecommendation: protectedProcedure
       .input(z.object({
@@ -718,11 +1428,15 @@ export const appRouter = router({
         })),
         positionRun: z.object({ position: z.string(), count: z.number(), alert: z.string() }).nullable(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         const { buildPickRecommendationPrompt, parsePickRecommendation } = await import("./draftHelperService");
         const { invokeLLM: llm } = await import("./_core/llm");
+        const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
 
-        const leagueContext = "14-team PPR snake draft, 15 rounds. Rod Sellers (Str8 Jacket / Rodzilla) is the user. This is the ATLANTAS FINEST FF league running since 2009. Rod has won multiple championships and is a top-tier manager.";
+        // Resolved, non-hardcoded league + focal-owner context (same helper used by other prompts).
+        const lpc = await resolveLeaguePromptContext(ctx.user?.id);
+        const fmt = buildLeaguePromptContext(lpc);
+        const leagueContext = `${fmt.leagueDescriptor}. ${fmt.historyClause}. Use the structured roster, pick, and owner-tendency data in this request as the source of truth for draft order and league shape.`;
 
         const prompt = buildPickRecommendationPrompt({
           currentOverall: input.currentOverall,
@@ -737,6 +1451,7 @@ export const appRouter = router({
           recentPicks: input.recentPicks,
           positionRun: input.positionRun,
           leagueContext,
+          focalOwnerName: lpc.focalOwnerName,
         });
 
         const response = await llm({
@@ -761,12 +1476,35 @@ export const appRouter = router({
     // Get the user's active league connection
     getActive: protectedProcedure.query(async ({ ctx }) => {
       const row = await getActiveLeagueForUser(ctx.user.id);
-      if (!row) return null;
+      if (!row) {
+        // Demo account has no league_connections row — synthesize a read-only pointer to the
+        // curated demo league so the client loads it (data served from existing synced tables).
+        if (await isDemoAppUserId(ctx.user.id)) {
+          const prof = await resolveActiveProfile({ id: ctx.user.id, openId: ctx.user.openId });
+          if (prof.leagueId) {
+            return {
+              id: -1,
+              provider: "espn",
+              leagueId: prof.leagueId,
+              leagueName: prof.leagueName ?? "Demo League",
+              season: prof.selectedSeason ?? new Date().getFullYear(),
+              syncStatus: "ok" as const,
+              lastSyncedAt: null as Date | null,
+            };
+          }
+        }
+        return null;
+      }
       return {
         id: row.id,
         provider: row.provider,
         leagueId: row.leagueId,
-        leagueName: row.leagueName,
+        leagueName: await (async () => {
+          const canonical = await resolveLeagueDisplayName(row, ctx.user.id);
+          const { getUserDisplayName, resolveConnectedLeagueLabel } = await import("./connectedLeagueDisplayName");
+          const custom = await getUserDisplayName(ctx.user.id, row.provider, row.leagueId);
+          return resolveConnectedLeagueLabel(custom, canonical, row.leagueId);
+        })(),
         season: row.season,
         syncStatus: row.syncStatus,
         lastSyncedAt: row.lastSyncedAt,
@@ -791,58 +1529,323 @@ export const appRouter = router({
           leagueName: lcTable.leagueName,
           season: lcTable.season,
           isActive: lcTable.isActive,
+          selectedTeamId: lcTable.selectedTeamId,
+          selectedOwnerName: lcTable.selectedOwnerName,
           syncStatus: lcTable.syncStatus,
           lastSyncedAt: lcTable.lastSyncedAt,
         })
         .from(lcTable)
         .where(eqDrizzle(lcTable.userId, ctx.user.id))
         .orderBy(lcTable.updatedAt);
-      return rows;
+      if (rows.length === 0 && (await isDemoAppUserId(ctx.user.id))) {
+        const prof = await resolveActiveProfile({ id: ctx.user.id, openId: ctx.user.openId });
+        const lid = prof.leagueId ?? demoLeagueId();
+        return [
+          {
+            id: -1,
+            provider: "espn" as const,
+            leagueId: lid,
+            leagueName: prof.leagueName ?? "Demo League",
+            season: prof.selectedSeason ?? new Date().getFullYear(),
+            isActive: true,
+            selectedTeamId: prof.selectedTeamId,
+            selectedOwnerName: prof.selectedOwnerName,
+            syncStatus: "ok" as const,
+            lastSyncedAt: null as Date | null,
+            isSetupComplete: prof.isSetupComplete,
+          },
+        ];
+      }
+      const { connectedLeagueKey } = await import("./connectedLeagueLimits");
+      const { listUserDisplayNamesForKeys, resolveConnectedLeagueLabel } = await import(
+        "./connectedLeagueDisplayName"
+      );
+      const keys = [...new Set(rows.map((row) => connectedLeagueKey(row.provider, row.leagueId)))];
+      const customMap = await listUserDisplayNamesForKeys(ctx.user.id, keys);
+      return Promise.all(
+        rows.map(async (r) => {
+          const canonical = await resolveLeagueDisplayName(r, ctx.user.id);
+          const custom = customMap.get(connectedLeagueKey(r.provider, r.leagueId)) ?? null;
+          return {
+            ...r,
+            isSetupComplete: r.selectedTeamId != null,
+            leagueName: resolveConnectedLeagueLabel(custom, canonical, r.leagueId),
+          };
+        }),
+      );
     }),
-    // Remove a league connection (hard delete — user owns the row)
     removeLeague: protectedProcedure
       .input(z.object({ leagueConnectionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getDb();
-        if (!db) return { success: false };
-        // Only delete rows owned by this user
-        await db
-          .delete(lcTable)
+        if (!db) return { success: false, removedRows: 0 };
+        const [row] = await db
+          .select({ provider: lcTable.provider, leagueId: lcTable.leagueId })
+          .from(lcTable)
           .where(
             andDrizzle(
               eqDrizzle(lcTable.id, input.leagueConnectionId),
-              eqDrizzle(lcTable.userId, ctx.user.id)
-            )
-          );
-        // If the deleted row was the active one, clear activeLeagueId
-        const usersTable = (await import("../drizzle/schema")).users;
-        const userRow = await db
-          .select({ activeLeagueId: usersTable.activeLeagueId })
-          .from(usersTable)
-          .where(eqDrizzle(usersTable.id, ctx.user.id))
-          .then(r => r[0]);
-        if (userRow?.activeLeagueId === input.leagueConnectionId) {
-          // Pick the next available league, or set to 0
-          const remaining = await db
-            .select({ id: lcTable.id })
-            .from(lcTable)
-            .where(eqDrizzle(lcTable.userId, ctx.user.id))
-            .limit(1);
-          const nextId = remaining[0]?.id ?? 0;
-          await db
-            .update(usersTable)
-            .set({ activeLeagueId: nextId })
-            .where(eqDrizzle(usersTable.id, ctx.user.id));
+              eqDrizzle(lcTable.userId, ctx.user.id),
+            ),
+          )
+          .limit(1);
+        if (!row) return { success: false, removedRows: 0 };
+        const { disconnectConnectedLeague } = await import("./connectedLeagueService");
+        return disconnectConnectedLeague(ctx.user.id, row.provider, row.leagueId);
+      }),
+    getConnectionLimits: protectedProcedure.query(async ({ ctx }) => {
+      const { getConnectedLeagueUsage } = await import("./connectedLeagueLimits");
+      return getConnectedLeagueUsage(ctx.user.id);
+    }),
+    getConnectedLeagueManagement: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) {
+        const { getConnectedLeagueUsage } = await import("./connectedLeagueLimits");
+        const usage = await getConnectedLeagueUsage(ctx.user.id);
+        return { usage, leagues: [] as const };
+      }
+      const usersTable = (await import("../drizzle/schema")).users;
+      const [userRow] = await db
+        .select({ activeLeagueId: usersTable.activeLeagueId })
+        .from(usersTable)
+        .where(eqDrizzle(usersTable.id, ctx.user.id))
+        .limit(1);
+      const { getConnectedLeagueManagementSummary } = await import("./connectedLeagueService");
+      return getConnectedLeagueManagementSummary(ctx.user.id, userRow?.activeLeagueId ?? null);
+    }),
+    disconnectConnectedLeague: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { disconnectConnectedLeague } = await import("./connectedLeagueService");
+        return disconnectConnectedLeague(ctx.user.id, input.provider, input.leagueId);
+      }),
+    renameConnectedLeagueNickname: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+        displayName: z.string().max(256).nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { renameConnectedLeague } = await import("./connectedLeagueService");
+        return renameConnectedLeague(ctx.user.id, input.provider, input.leagueId, input.displayName);
+      }),
+    clearConnectedLeagueDisplayName: protectedProcedure
+      .input(z.object({
+        provider: z.string().min(1).max(32),
+        leagueId: z.string().min(1).max(128),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { renameConnectedLeague } = await import("./connectedLeagueService");
+        return renameConnectedLeague(ctx.user.id, input.provider, input.leagueId, null);
+      }),
+    getEspnTeamSelection: protectedProcedure
+      .input(z.object({ leagueId: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const { getEspnTeamSelectionContext } = await import("./espnTeamSelection");
+        return getEspnTeamSelectionContext(ctx.user.id, input.leagueId);
+      }),
+    selectEspnTeam: protectedProcedure
+      .input(z.object({
+        leagueId: z.string().min(1).max(128),
+        teamId: z.number().int(),
+        season: z.number().int().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { runSelectEspnTeam } = await import("./espnTeamSelection");
+        return runSelectEspnTeam({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          teamId: input.teamId,
+          season: input.season,
+        });
+      }),
+    connectByLeagueId: protectedProcedure
+      .input(z.object({ leagueId: z.string().min(1).max(20) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { ok: false as const, error: "no_db" };
+        const lid = input.leagueId.trim();
+        const yr  = new Date().getFullYear();
+        let nm = `League ${lid}`;
+        const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+        await assertCanConnectLeague(ctx.user.id, "espn", lid);
+        try {
+          const resp = await fetch(`https://fantasy.espn.com/apis/v3/games/ffl/seasons/${yr}/segments/0/leagues/${lid}?view=mSettings`);
+          if (resp.ok) {
+            const dj = await resp.json() as any;
+            if (dj?.settings?.name) nm = String(dj.settings.name);
+          }
+        } catch { /**/ }
+        const existing = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(
+            eqDrizzle(lcTable.userId, ctx.user.id),
+            eqDrizzle(lcTable.provider, "espn"),
+            eqDrizzle(lcTable.leagueId, lid),
+          )).limit(1);
+        if (existing.length > 0)
+          return { ok: true as const, leagueConnectionId: existing[0]!.id, leagueName: nm, alreadyExisted: true };
+        await db.insert(lcTable).values({ userId: ctx.user.id, provider: "espn", leagueId: lid,
+          leagueName: nm, season: yr, isActive: true, syncStatus: "pending" } as any);
+        const nr = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(
+            eqDrizzle(lcTable.userId, ctx.user.id),
+            eqDrizzle(lcTable.provider, "espn"),
+            eqDrizzle(lcTable.leagueId, lid),
+          )).limit(1);
+        return { ok: true as const, leagueConnectionId: nr[0]?.id ?? 0, leagueName: nm, alreadyExisted: false };
+      }),
+
+    // Preview the owner grid for an already-synced league (identity only, no auth).
+    // With a receipt `code`, preselects the league + owner the founder published.
+    previewClaim: publicProcedure
+      .input(z.object({ code: z.string().min(1).max(16) }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        // A claim must be backed by a valid source. Today that is a receipt /r/:code;
+        // Cast/League invite resolvers slot in here in Phase 2. No valid source => no grid,
+        // so there is no free-form "enter a league id and list its owners" path.
+        const meta = await resolveShareMeta(input.code);
+        if (!meta) return null;
+        // The receipt's subject member is used to RESOLVE THE LEAGUE only (for legacy shares
+        // that stored no leagueId). It is intentionally NOT surfaced as a suggested identity:
+        // a share identifies the league; the viewer picks their own team on the claim grid.
+        const subjectMemberId: string | null = meta.memberId;
+        let leagueId: string | null = meta.leagueId;
+        // Legacy shares stored no leagueId: infer from synced data if unambiguous.
+        if (!leagueId && subjectMemberId) {
+          const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
+            .where(eqDrizzle(gmTeams.ownerId, subjectMemberId));
+          const distinct = [...new Set(rows.map((r) => r.leagueId))];
+          if (distinct.length === 1) leagueId = distinct[0]!;
         }
-        return { success: true };
+        if (!leagueId) return null;
+        const seasonRows = await db.select({ season: gmTeams.season }).from(gmTeams)
+          .where(eqDrizzle(gmTeams.leagueId, leagueId)).orderBy(descDrizzle(gmTeams.season)).limit(1);
+        const season = seasonRows[0]?.season ?? null;
+        if (season == null) return null;
+        const teams = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName, ownerId: gmTeams.ownerId })
+          .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, season)));
+        // Per-owner claimed status mirrors the claimOwner slot guard (a slot is taken when a
+        // league_connection in this league holds it via selectedOwnerKey). Display-only — the
+        // authoritative guard still runs in claimOwner on submit; this never gates security.
+        const claimedRows = await db.select({ ownerKey: lcTable.selectedOwnerKey }).from(lcTable)
+          .where(eqDrizzle(lcTable.leagueId, leagueId));
+        const claimedKeys = new Set(claimedRows.map((r) => r.ownerKey).filter((k): k is string => !!k));
+        const owners = teams.filter((t) => t.ownerId).map((t) => ({
+          teamId: t.teamId, ownerKey: `id:${t.ownerId}`, ownerName: t.ownerName || "Unknown", franchiseName: t.name || "",
+          claimed: claimedKeys.has(`id:${t.ownerId}`),
+        }));
+        const lc = await db.select({ leagueName: lcTable.leagueName }).from(lcTable)
+          .where(eqDrizzle(lcTable.leagueId, leagueId)).limit(1);
+        const leagueName = lc[0]?.leagueName || `League ${leagueId}`;
+        // Identify the league + owner grid only. No suggested identity: the viewer selects
+        // their own team, and claimOwner enforces source + slot guards on that selection.
+        return { leagueId, leagueName, season, owners };
+      }),
+
+    // Claim an owner profile in an already-synced league WITHOUT ESPN credentials.
+    // Sets selectedTeamId (=> isSetupComplete) and activates the league. Identity tier only;
+    // credentials stay null (claimed, not verified). Refuses if another user holds the slot.
+    claimOwner: protectedProcedure
+      .input(z.object({
+        leagueId: z.string().min(1).max(32),
+        ownerKey: z.string().min(1).max(64),
+        teamId: z.number().int(),
+        season: z.number().int(),
+        code: z.string().min(1).max(16),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) return { success: false as const, error: "no_db" };
+        const leagueId = input.leagueId.trim();
+        const ownerKey = input.ownerKey.trim();
+        const memberId = ownerKey.replace(/^id:/, "");
+
+        // 0) Source gate: the claim must be authorized by a valid source that resolves to
+        // THIS league. Today that is a receipt /r/:code; Cast/League invites slot in here later.
+        // No valid source, or a source for a different league => reject. This is the security
+        // boundary that prevents free-form league lookup + claiming any owner.
+        const source = await resolveShareMeta(input.code);
+        let sourceLeagueId = source?.leagueId ?? null;
+        if (source && !sourceLeagueId && source.memberId) {
+          const rows = await db.select({ leagueId: gmTeams.leagueId }).from(gmTeams)
+            .where(eqDrizzle(gmTeams.ownerId, source.memberId));
+          const distinct = [...new Set(rows.map((r) => r.leagueId))];
+          if (distinct.length === 1) sourceLeagueId = distinct[0]!;
+        }
+        if (!source || !sourceLeagueId) return { success: false as const, error: "invalid_source" };
+        if (sourceLeagueId !== leagueId) return { success: false as const, error: "source_league_mismatch" };
+
+        // 1) Validate the owner+team exists in synced data for this league/season.
+        const match = await db.select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, leagueId), eqDrizzle(gmTeams.season, input.season), eqDrizzle(gmTeams.ownerId, memberId)))
+          .limit(1);
+        const team = match[0];
+        if (!team || team.teamId !== input.teamId) return { success: false as const, error: "owner_not_found" };
+
+        // 2) Slot guard: refuse if another user already holds this owner slot (claimed or verified).
+        const holders = await db.select({ userId: lcTable.userId }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.selectedOwnerKey, ownerKey)))
+          .limit(5);
+        if (holders.some((h) => h.userId !== ctx.user.id)) return { success: false as const, error: "already_claimed" };
+
+        // 3) Find-or-create the user's credential-free connection for this league+season.
+        const existing = await db.select({ id: lcTable.id }).from(lcTable)
+          .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.provider, "espn"), eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.season, input.season)))
+          .limit(1);
+        let connId: number;
+        if (existing[0]) {
+          connId = existing[0].id;
+          await db.update(lcTable).set({
+            selectedTeamId: input.teamId, selectedOwnerKey: ownerKey, selectedOwnerName: team.ownerName || null,
+            selectedFranchiseName: team.name || null, selectedSeason: input.season, updatedAt: new Date(),
+          }).where(eqDrizzle(lcTable.id, connId));
+        } else {
+          let nm = `League ${leagueId}`;
+          const ln = await db.select({ leagueName: lcTable.leagueName }).from(lcTable).where(eqDrizzle(lcTable.leagueId, leagueId)).limit(1);
+          if (ln[0]?.leagueName) nm = ln[0].leagueName;
+          await db.insert(lcTable).values({
+            userId: ctx.user.id, provider: "espn", leagueId, leagueName: nm, season: input.season,
+            isActive: true, syncStatus: "pending",
+            selectedTeamId: input.teamId, selectedOwnerKey: ownerKey, selectedOwnerName: team.ownerName || null,
+            selectedFranchiseName: team.name || null, selectedSeason: input.season,
+          } as any);
+          const nr = await db.select({ id: lcTable.id }).from(lcTable)
+            .where(andDrizzle(eqDrizzle(lcTable.userId, ctx.user.id), eqDrizzle(lcTable.provider, "espn"), eqDrizzle(lcTable.leagueId, leagueId), eqDrizzle(lcTable.season, input.season)))
+            .limit(1);
+          connId = nr[0]?.id ?? 0;
+        }
+        if (!connId) return { success: false as const, error: "create_failed" };
+
+        // 4) Activate the claimed league.
+        await setActiveLeagueForUser(ctx.user.id, connId);
+
+        // 5) Confidence: high when the source points at this exact owner; low for a
+        // same-league grid pick (still authorized, just self-selected).
+        const confidence: "high" | "low" = source.memberId === memberId ? "high" : "low";
+        return { success: true as const, leagueConnectionId: connId, confidence, isSetupComplete: true };
       }),
   }),
   offseason: offseasonRouter,
   leagueScoring: router({
     getSettings: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
-        const settings = await getLeagueScoringSettings(input.season);
+      .query(async ({ ctx, input }) => {
+        const settings = await getLeagueScoringSettings(input.season, ctx.user?.id);
+        // Scoring validation: raw cache stat ID → parsed displayed value
+        const scoringValidation = settings.scoringDataSource !== "fallback_defaults" ? [
+          { statId: 4,  label: "Passing TD",       cached: settings.scoringMap[4]  ?? null, displayed: settings.passingTDPoints,       status: settings.scoringMap[4]  !== undefined ? "live" : "fallback" },
+          { statId: 3,  label: "Passing Yds/yd",  cached: settings.scoringMap[3]  ?? null, displayed: settings.passingYardsPerPoint,  status: settings.scoringMap[3]  !== undefined ? "live" : "fallback" },
+          { statId: 25, label: "Rushing TD",       cached: settings.scoringMap[25] ?? null, displayed: settings.rushingTDPoints,       status: settings.scoringMap[25] !== undefined ? "live" : "fallback" },
+          { statId: 43, label: "Receiving TD",     cached: settings.scoringMap[43] ?? null, displayed: settings.receivingTDPoints,     status: settings.scoringMap[43] !== undefined ? "live" : "fallback" },
+          { statId: 53, label: "Receptions",       cached: settings.scoringMap[53] ?? null, displayed: settings.receptionPoints,       status: settings.scoringMap[53] !== undefined ? "live" : "fallback" },
+          { statId: 57, label: "INT Thrown",       cached: settings.scoringMap[57] ?? null, displayed: settings.interceptionPoints,    status: settings.scoringMap[57] !== undefined ? "live" : "fallback" },
+        ] : null;
         return {
           scoringType: settings.scoringType,
           scoringDescription: settings.scoringDescription,
@@ -855,7 +1858,13 @@ export const appRouter = router({
           receivingYardsPerPoint: settings.receivingYardsPerPoint,
           interceptionPoints: settings.interceptionPoints,
           breakdown: getScoringBreakdown(settings),
-          fetchedAt: settings.fetchedAt,
+          scoringValidation,
+          scoringMap: settings.scoringMap,
+          fetchedAt: settings.fetchedAt.toISOString(),
+          scoringDataSource: settings.scoringDataSource,
+          scoringCacheSeason: settings.scoringCacheSeason,
+          scoringSyncedAt: settings.scoringSyncedAt?.toISOString() ?? null,
+          scoringStorageTier: settings.scoringStorageTier,
         };
       }),
   }),
@@ -871,8 +1880,8 @@ export const appRouter = router({
   espn: router({
     diagnoseTrades: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return { error: "no data", season: input.season };
         const txs = (data.transactions as Record<string, unknown>[]) || [];
         const typeCounts: Record<string, number> = {};
@@ -996,38 +2005,32 @@ export const appRouter = router({
         seasons: z.array(z.number()).optional(),
         forceRefresh: z.boolean().optional(), // override closed-season skip
       }))
-      .mutation(async ({ input }) => {
-        const CURRENT_SEASON = 2026;
-        const CLOSED_SEASONS = ALL_SEASONS.filter(s => s < CURRENT_SEASON); // 2009–2025 are closed
+      .mutation(async ({ ctx, input }) => {
         const seasonsToRefresh = input.seasons ?? (input.season ? [input.season] : [ALL_SEASONS[ALL_SEASONS.length - 1]]);
-        const results: Record<number, { status: string; error?: string; viewHealth?: Record<string, string>; qualityWarnings?: string[]; skipped?: boolean }> = {};
-
-        // Resolve active league credentials for multi-league isolation.
-        // For public procedures (no ctx.user), we read the first active ESPN connection.
-        let activeCreds: import('./espnService').EspnCreds | undefined;
-        try {
-          const db = await getDb();
-          if (db) {
-            const activeRows = await db
-              .select()
-              .from(lcTable)
-              .where(andDrizzle(eqDrizzle(lcTable.isActive, true), eqDrizzle(lcTable.provider, 'espn')))
-              .orderBy(descDrizzle(lcTable.updatedAt))
-              .limit(1);
-            if (activeRows[0]) {
-              const { decryptCredentialsFromDb } = await import('./_core/crypto');
-              const rawCreds = decryptCredentialsFromDb(activeRows[0].credentials) as Record<string, string> | null;
-              if (rawCreds?.swid && rawCreds?.espnS2) {
-                activeCreds = {
-                  leagueId: (rawCreds.leagueId as string) ?? activeRows[0].leagueId,
-                  swid: rawCreds.swid,
-                  espnS2: rawCreds.espnS2,
-                };
-              }
-            }
+        const results: Record<
+          number,
+          {
+            status: string;
+            error?: string;
+            message?: string;
+            viewHealth?: Record<string, string>;
+            qualityWarnings?: string[];
+            skipped?: boolean;
           }
-        } catch (_e) { /* non-fatal — fall back to env-var league */ }
+        > = {};
+
+        const activeCreds = await resolveEspnCreds(undefined, ctx.user?.id);
         const activeLeagueId = activeCreds?.leagueId ?? LEAGUE_ID;
+
+        if (!activeCreds?.swid || !activeCreds?.espnS2) {
+          throw new Error("No ESPN credentials found. Please connect your ESPN account first.");
+        }
+
+        // Fetch identity MUST equal storage identity: every ESPN fetch below uses the SAME
+        // league we persist under (activeLeagueId). Never let the trade-proposal or activity-
+        // feed fetches fall back to the module default LEAGUE_ID — that is the cross-league leak
+        // that wrote 457622's transactions into other leagues' caches.
+        const fetchCreds = { ...activeCreds, leagueId: activeLeagueId };
 
         // ─── DIAGNOSTIC LOGGING ───
         console.log('[ESPN Refresh] Credential resolution:', JSON.stringify({
@@ -1038,13 +2041,17 @@ export const appRouter = router({
           seasonsToRefresh,
         }));
 
+        const manifestSnapshot = await getRefreshManifests();
+
         for (const season of seasonsToRefresh) {
-          // Skip closed seasons that are already successfully cached (unless forceRefresh)
-          if (!input.forceRefresh && CLOSED_SEASONS.includes(season)) {
-            const existing = await getRefreshManifests();
-            const manifest = (existing as { season: number; status: string }[]).find(m => m.season === season);
-            if (manifest?.status === "success") {
-              results[season] = { status: "skipped", skipped: true };
+          // Completed historical seasons (2009–2025): skip ESPN re-fetch when already fully normalized, unless forceRefresh.
+          if (!input.forceRefresh && isHistoricalCompletedSeason(season)) {
+            const manifest = manifestSnapshot.find(m => m.season === season);
+            if (manifest && isHistoricallyFullyNormalizedFromManifest(manifest)) {
+              results[season] = {
+                status: "complete",
+                message: "Complete — not reprocessed",
+              };
               continue;
             }
           }
@@ -1055,11 +2062,15 @@ export const appRouter = router({
 
             // Persist per-view health records
             for (const vr of pipelineResult.viewResults) {
-              await upsertViewHealth(season, vr.viewName, {
-                status: vr.status === "auth_error" ? "error" : vr.status,
-                errorMessage: vr.error,
-                recordCount: vr.recordCount,
-              });
+              try {
+                await upsertViewHealth(season, vr.viewName, {
+                  status: vr.status === "auth_error" ? "error" : vr.status,
+                  errorMessage: vr.error,
+                  recordCount: vr.recordCount,
+                });
+              } catch (vhErr) {
+                console.warn("[ESPN Refresh] upsertViewHealth failed:", season, vr.viewName, vhErr);
+              }
             }
 
             // Enrich transactions:
@@ -1069,40 +2080,34 @@ export const appRouter = router({
             //    as messageTypeId 246 topics, which we reconstruct into synthetic TRADE_PROPOSAL rows)
             let enrichedData = data;
             try {
-              const proposals = await fetchTradeProposals(season);
+              const proposals = await fetchTradeProposals(season, fetchCreds);
               enrichedData = mergeTradeProposalsIntoTransactions(data, proposals);
             } catch (_e) { /* non-fatal — fall back to unmerged data */ }
             try {
-              const activityTrades = await fetchRecentActivityTrades(season, enrichedData);
+              const activityTrades = await fetchRecentActivityTrades(season, enrichedData, fetchCreds);
               if (activityTrades.length > 0) {
                 enrichedData = mergeTradeProposalsIntoTransactions(enrichedData, activityTrades);
               }
             } catch (_e) { /* non-fatal — fall back without activity trades */ }
 
-            await upsertCachedView(season, "combined", enrichedData, activeLeagueId);
+            const quality = validateDataQuality(season, data);
+            try {
+              await syncEspnCombinedFullPipeline(activeLeagueId, season, enrichedData as Record<string, unknown>, {
+                pipelineAllOk: pipelineResult.allViewsOk,
+                qualityUsable: quality.isUsable,
+              });
+            } catch (persistErr) {
+              console.warn("[ESPN Refresh] syncEspnCombinedFullPipeline failed:", season, persistErr);
+              throw persistErr;
+            }
             // Persist static identity data (team names, draft order, settings) to league_identity table.
             // All consumers (offseasonRouter, draftBoard, etc.) read from here instead of re-fetching ESPN.
             try { await upsertLeagueIdentity(season, enrichedData); } catch (_e) { /* non-fatal — don't block the refresh */ }
-            const teams = normalizeTeams(enrichedData);
-            const rosters = normalizeRosters(enrichedData);
-            const matchups = normalizeMatchups(enrichedData);
-            const picks = normalizeDraftPicks(enrichedData);
-            const txs = normalizeTransactions(enrichedData);
 
-            // Data quality validation
-            const quality = validateDataQuality(season, data);
-
+            // Data quality validation (meta already passed into pipeline; counts use enriched payload)
             const overallStatus = pipelineResult.allViewsOk && quality.isUsable ? "success"
               : pipelineResult.hasPartialData || !quality.isUsable ? "partial"
               : "success";
-
-            await upsertRefreshManifest(season, {
-              teamCount: teams.length, rosterCount: rosters.length,
-              matchupCount: matchups.length, draftPickCount: picks.length,
-              transactionCount: txs.length, status: overallStatus,
-              viewsRefreshed: pipelineResult.viewResults.filter(v => v.status === "ok").map(v => v.viewName),
-              errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-            });
 
             const viewHealth: Record<string, string> = {};
             for (const vr of pipelineResult.viewResults) viewHealth[vr.viewName] = vr.status;
@@ -1114,7 +2119,6 @@ export const appRouter = router({
             };
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            await upsertRefreshManifest(season, { status: "failed", errorMessage: msg });
             results[season] = { status: "failed", error: msg };
           }
         }
@@ -1123,16 +2127,16 @@ export const appRouter = router({
         // Recompute rivalry scores after data refresh (non-fatal)
         try {
           const { refreshRivalryScores } = await import("./rivalryService");
-          await refreshRivalryScores();
+          await refreshRivalryScores(ctx.user?.id);
         } catch (_e) { /* non-fatal — rivalry scores are a bonus layer */ }
         // Recompute trade narratives after data refresh (non-fatal, deterministic labels only — LLM deferred)
         try {
           const { refreshTradeNarratives } = await import("./tradeNarrativeService");
           // Build lightweight NarrativeTradeInput list from all cached seasons
           const narrativeInputs: import("./tradeNarrativeService").NarrativeTradeInput[] = [];
-          for (const season of await getAllCachedSeasons()) {
+          for (const season of await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)) {
             try {
-              const raw = await getCachedView(season, "combined");
+              const raw = await getCachedView(season, "combined", undefined, { userId: ctx.user?.id });
               if (!raw) continue;
               const payload = raw.payload as Record<string, unknown>;
               const teams = normalizeTeams(payload);
@@ -1190,90 +2194,2107 @@ export const appRouter = router({
         return results;
       }),
 
-    manifests: publicProcedure.query(async () => getRefreshManifests()),
-    cachedSeasons: publicProcedure.query(async () => getAllCachedSeasons()),
-    allSeasons: publicProcedure.query(() => ALL_SEASONS),
+    backfillNormalized: protectedProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        type Row = {
+          status: "success" | "partial" | "failed" | "skipped" | "complete";
+          error?: string;
+          message?: string;
+          matchupsSaved?: number;
+          transactionsSaved?: number;
+          rosterEntriesSaved?: number;
+          standingsSaved?: number;
+          errors?: string[];
+          syncRunId?: number | null;
+        };
+        const out: Record<number, Row> = {};
+        const force = input.force === true;
+        const manifestSnapshotBf = await getRefreshManifests();
+        for (const season of input.seasons) {
+          if (isHistoricalCompletedSeason(season) && !force) {
+            const m = manifestSnapshotBf.find(x => x.season === season);
+            if (m && isHistoricallyFullyNormalizedFromManifest(m)) {
+              out[season] = {
+                status: "complete",
+                message: "Complete — not reprocessed",
+              };
+              continue;
+            }
+          }
+          const { leagueId } = await resolveActiveLeagueId(
+            { user: { id: ctx.user.id } },
+            null,
+            season
+          );
+          const cached = await getCachedView(season, "combined", leagueId, { userId: ctx.user.id });
+          const rawPayload = cached?.payload;
+          if (rawPayload == null || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+            out[season] = {
+              status: "skipped",
+              error:
+                "No combined payload in fantasy_data_cache / espn_raw_cache / espn_season_cache for this league and season.",
+            };
+            continue;
+          }
+          const payload = rawPayload as Record<string, unknown>;
+          try {
+            const r = await backfillNormalizedTablesFromPayload(leagueId, season, payload);
+            out[season] = {
+              status: r.errors.length > 0 ? "partial" : "success",
+              matchupsSaved: r.matchupsSaved,
+              transactionsSaved: r.transactionsSaved,
+              rosterEntriesSaved: r.rosterEntriesSaved,
+              standingsSaved: r.standingsSaved,
+              errors: r.errors.length ? r.errors : undefined,
+              syncRunId: r.syncRunId,
+            };
+          } catch (e) {
+            out[season] = {
+              status: "failed",
+              error: e instanceof Error ? e.message : String(e),
+            };
+          }
+        }
+        memCache.invalidateAll();
+        return out;
+      }),
+
+    /**
+     * Backfill normalized GM tables from **espn_raw_cache** `combined` JSON only (no ESPN API, no cookies).
+     * Per category: skips when DB already has rows (unless `force`) and skips when the cache slice is empty
+     * so populated tables are not replaced by empty writes.
+     */
+    backfillFromRawCache: protectedProcedure
+      .input(
+        z.object({
+          startSeason: z.number().int().min(1990).max(2100).optional(),
+          endSeason: z.number().int().min(1990).max(2100).optional(),
+          seasons: z.array(z.number().int().min(1990).max(2100)).max(50).optional(),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        let seasonList: number[];
+        if (input.seasons != null && input.seasons.length > 0) {
+          seasonList = [...new Set(input.seasons.map((s) => Math.floor(Number(s))))].sort((a, b) => a - b);
+        } else {
+          const lo = Math.floor(input.startSeason ?? 2009);
+          const hi = Math.floor(input.endSeason ?? 2026);
+          const a = Math.min(lo, hi);
+          const b = Math.max(lo, hi);
+          seasonList = [];
+          for (let y = a; y <= b; y++) seasonList.push(y);
+        }
+
+        let { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          seasonList[0] ?? 2026
+        );
+        // Phase B: env/457622 override removed — authenticated users with no active league
+        // must connect a league before backfilling.
+        if (!leagueId || leagueId === "default") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No active league — connect a league in Settings before backfilling.",
+          });
+        }
+
+        const results = await runEspnRawCacheNormalizedBackfill(leagueId, seasonList, {
+          force: input.force === true,
+        });
+        memCache.invalidateAll();
+        return { leagueId, results };
+      }),
+
+    /**
+     * Targeted live ESPN fetches for missing draft / matchups / transactions (does not touch `combined`).
+     */
+    enrichHistoricalSeason: protectedProcedure
+      .input(
+        z.object({
+          startSeason: z.number().int().min(1990).max(2100).optional(),
+          endSeason: z.number().int().min(1990).max(2100).optional(),
+          seasons: z.array(z.number().int().min(1990).max(2100)).max(50).optional(),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const creds = await resolveEspnCreds(undefined, ctx.user.id);
+        if (!hasCookies(creds)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "ESPN credentials (SWID / espn_s2) required for historical enrichment.",
+          });
+        }
+
+        let seasonList: number[];
+        if (input.seasons != null && input.seasons.length > 0) {
+          seasonList = [...new Set(input.seasons.map((s) => Math.floor(Number(s))))].sort((a, b) => a - b);
+        } else {
+          const lo = Math.floor(input.startSeason ?? 2010);
+          const hi = Math.floor(input.endSeason ?? 2025);
+          const a = Math.min(lo, hi);
+          const b = Math.max(lo, hi);
+          seasonList = [];
+          for (let y = a; y <= b; y++) seasonList.push(y);
+        }
+
+        let { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          seasonList[0] ?? 2025
+        );
+        // Phase B: env/457622 override removed — authenticated users with no active league
+        // must connect a league before enriching.
+        if (!leagueId || leagueId === "default") {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "No active league — connect a league in Settings before enriching seasons.",
+          });
+        }
+
+        const mergedCreds = { ...creds, leagueId };
+        const results = await runHistoricalEnrichment(leagueId, seasonList, mergedCreds, {
+          force: input.force === true,
+        });
+        memCache.invalidateAll();
+        return { leagueId, results };
+      }),
+
+    /**
+     * Re-run full normalization from stored combined JSON (no ESPN fetch, no raw re-write).
+     * Upserts teams, matchups, transactions, roster entries, draft picks, players, standings; updates sync_runs.
+     */
+    reprocessCachedSeasons: protectedProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int().min(2000).max(2100)).min(1).max(32),
+          force: z.boolean().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const db = await getDb();
+        type Row = {
+          season: number;
+          status: "success" | "partial" | "failed" | "skipped" | "complete";
+          teamCount: number;
+          matchupCount: number;
+          transactionCount: number;
+          error?: string;
+          message?: string;
+        };
+        const results: Row[] = [];
+        const force = input.force === true;
+        const manifestSnapshotRp = await getRefreshManifests();
+
+        for (const season of input.seasons) {
+          if (isHistoricalCompletedSeason(season) && !force) {
+            const m = manifestSnapshotRp.find(x => x.season === season);
+            if (m && isHistoricallyFullyNormalizedFromManifest(m)) {
+              results.push({
+                season,
+                status: "complete",
+                teamCount: m.teamCount ?? 0,
+                matchupCount: m.matchupCount ?? 0,
+                transactionCount: m.transactionCount ?? 0,
+                message: "Complete — not reprocessed",
+              });
+              continue;
+            }
+          }
+          const cached = await getCachedView(season, "combined", undefined, { userId });
+          const rawPayload = cached?.payload;
+          if (!cached || rawPayload == null || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+            results.push({
+              season,
+              status: "skipped",
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
+              error:
+                "No combined cache for this league/season (fantasy_data_cache / espn_raw_cache / espn_season_cache).",
+            });
+            continue;
+          }
+          const leagueId = String(cached.leagueId ?? "").trim().slice(0, 32) || "default";
+          const payload = rawPayload as Record<string, unknown>;
+          if (!db) {
+            results.push({
+              season,
+              status: "failed",
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
+              error: "Database unavailable",
+            });
+            continue;
+          }
+
+          const syncRunId = await createSyncRun(leagueId, season);
+          try {
+            const norm = await normalizeEspnPayload(db, leagueId, season, payload);
+            const allZero =
+              norm.teamsSaved === 0 &&
+              norm.matchupsSaved === 0 &&
+              norm.transactionsSaved === 0 &&
+              norm.rosterEntriesSaved === 0 &&
+              norm.draftPicksSaved === 0 &&
+              norm.standingsSaved === 0;
+            const st = allZero ? "partial" : "success";
+            await finishSyncRun(
+              syncRunId,
+              st,
+              {
+                rawViewsSaved: 0,
+                teamsSaved: norm.teamsSaved,
+                matchupsSaved: norm.matchupsSaved,
+                draftPicksSaved: norm.draftPicksSaved,
+                transactionsSaved: norm.transactionsSaved,
+                rosterEntriesSaved: norm.rosterEntriesSaved,
+                playersSaved: norm.playersSaved,
+                standingsSaved: norm.standingsSaved,
+              },
+              allZero ? "Normalization produced zero rows (check cache payload)." : null
+            );
+            results.push({
+              season,
+              status: st,
+              teamCount: norm.teamsSaved,
+              matchupCount: norm.matchupsSaved,
+              transactionCount: norm.transactionsSaved,
+              ...(allZero ? { error: "Normalization produced zero rows (check cache payload)." } : {}),
+            });
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await finishSyncRun(
+              syncRunId,
+              "failed",
+              {
+                rawViewsSaved: 0,
+                teamsSaved: 0,
+                matchupsSaved: 0,
+                draftPicksSaved: 0,
+                transactionsSaved: 0,
+                rosterEntriesSaved: 0,
+                playersSaved: 0,
+                standingsSaved: 0,
+              },
+              msg
+            );
+            results.push({
+              season,
+              status: "failed",
+              teamCount: 0,
+              matchupCount: 0,
+              transactionCount: 0,
+              error: msg,
+            });
+          }
+        }
+        memCache.invalidateAll();
+        return { results };
+      }),
+
+    manifests: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const [manifests, hasConn] = await Promise.all([
+          getRefreshManifests(undefined, ctx.user?.id ?? undefined),
+          hasActiveEspnLeagueConnection(ctx.user?.id ?? undefined),
+        ]);
+        return { manifests, leagueConnectionMissing: !hasConn };
+      }),
+    cachedSeasons: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        return getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
+      }),
+    // W1: league-aware season discovery. Returns the seasons that actually have
+    // data for the active league (newest-first), or [] when none exist. No longer
+    // returns the hardcoded ALL_SEASONS range, which leaked one league's window
+    // (2009-2026) into every league.
+    allSeasons: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        return getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
+      }),
+
+    // Discover the active league's true season range (available vs synced) so the
+    // Sync page can prompt the user to backfill missing history. Active league only;
+    // reads status.previousSeasons from the cached payload first, no DB writes.
+    discoverLeagueHistory: protectedProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const { discoverLeagueHistory } = await import("./leagueHistoryDiscovery");
+        return discoverLeagueHistory(undefined, ctx.user.id);
+      }),
 
     settings: publicProcedure
-      .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeSettings(data);
       }),
 
     teams: publicProcedure
-      .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         return normalizeTeams(data);
       }),
 
     standings: publicProcedure
-      .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(
+        z.object({
+          season: z.number(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const resolved = await resolveActiveLeagueId(
+          { user: ctx.user ? { id: ctx.user.id } : undefined },
+          null,
+          input.season
+        );
+        const teamsRes = await getSeasonTeams(input.season, resolved.leagueId, ctx.user?.id ?? undefined);
+        if (teamsRes.count > 0) {
+          const mapped = teamsRes.rows
+            .map((t) => {
+            const teamIdRaw = Number(t.teamId ?? t.id);
+            if (!Number.isFinite(teamIdRaw) || teamIdRaw <= 0) return null;
+            const teamId = teamIdRaw;
+            const wins = Number(t.wins ?? 0) || 0;
+            const losses = Number(t.losses ?? 0) || 0;
+            const ties = Number(t.ties ?? 0) || 0;
+            const pointsFor = Number(t.pointsFor ?? t.points ?? 0) || 0;
+            const pointsAgainst = Number(t.pointsAgainst ?? 0) || 0;
+            const rankFinal = Number(t.rankCalculatedFinal ?? t.rankFinal ?? 99) || 99;
+            const memberIds = coerceOwnerIdList(t.memberIds);
+            const ownerDisplay = String(t.ownerDisplay ?? "").trim();
+            const ownersStr = String(t.owners ?? "").trim();
+            // Prefer the resolved owner display name; never surface raw member
+            // GUIDs as the label (they stay in `memberIds`). teamRowFromGmTeam sets
+            // ownerDisplay = gm_teams.ownerName; ownersStr falls back to the GUID,
+            // so GUID-like tokens are filtered out of the display list.
+            const looksLikeGuid = (s: string) => /^\{?[0-9a-f]{8}-[0-9a-f]{4}-/i.test(s);
+            const ownerNames = ownerDisplay
+              ? ownerDisplay.split(";").map((s) => s.trim()).filter(Boolean)
+              : ownersStr.split(";").map((s) => s.trim()).filter((s) => s && !looksLikeGuid(s));
+            return {
+              season: input.season,
+              teamId,
+              abbrev: t.abbrev ?? "",
+              teamName: String(t.name ?? t.nickname ?? `Team ${teamId}`),
+              location: String(t.location ?? ""),
+              nickname: String(t.nickname ?? ""),
+              owners: ownerNames.length > 0 ? ownerNames : `Team ${teamId}`,
+              memberIds,
+              wins,
+              losses,
+              ties,
+              pointsFor,
+              pointsAgainst,
+              percentage: t.percentage,
+              rankFinal,
+              playoffSeed: t.playoffSeed,
+              draftDayProjectedRank: t.draftDayProjectedRank,
+              currentProjectedRank: t.currentProjectedRank,
+              logoUrl: t.logoUrl,
+              primaryColor: t.primaryColor,
+              record: t.record ?? {
+                overall: { wins, losses, ties, pointsFor, pointsAgainst },
+              },
+            };
+          })
+            .filter((row): row is NonNullable<typeof row> => row != null);
+          return mapped.sort((a, b) => (a.rankFinal || 99) - (b.rankFinal || 99));
+        }
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const teams = normalizeTeams(data);
         return teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
       }),
 
     rosters: publicProcedure
-      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(
+        z.object({
+          season: z.number(),
+          teamId: z.number().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data);
         if (input.teamId !== undefined) return rosters.filter((r: unknown) => (r as Record<string, unknown>).teamId === input.teamId);
         return rosters;
       }),
 
+    /**
+     * Draft History (Manus): normalized gm_draft_picks first, then combined ESPN cache.
+     */
     draftPicks: publicProcedure
-      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(
+        z.object({
+          season: z.number(),
+          teamId: z.number().optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+
+        const ownerByTeamId = new Map<number, string>();
+        let resolvedLeagueId: string | null = null;
+        if (ctx.user?.id) {
+          try {
+            const { leagueId: ownerLid } = await resolveActiveLeagueId(
+              { user: { id: ctx.user.id } },
+              null,
+              input.season,
+            );
+            resolvedLeagueId = ownerLid || null;
+            const ownerDb = await getDb();
+            if (ownerLid && ownerDb) {
+              const ownerTeamRows = await ownerDb
+                .select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
+                .from(gmTeams)
+                .where(
+                  andDrizzle(
+                    eqDrizzle(gmTeams.leagueId, ownerLid),
+                    eqDrizzle(gmTeams.season, input.season),
+                  ),
+                );
+              for (const t of ownerTeamRows) {
+                const nm = String(t.ownerName ?? "").trim();
+                if (nm) ownerByTeamId.set(Number(t.teamId), nm);
+              }
+            }
+          } catch {
+            /* best-effort; client falls back to teamName when ownerName is absent */
+          }
+        }
+
+        const mapPickToResponse = (p: {
+          overallPickNumber?: number | null;
+          roundId?: number | null;
+          roundPickNumber?: number | null;
+          playerName?: string | null;
+          position?: string | null;
+          proTeam?: string | null;
+          teamName?: string | null;
+          teamId?: number | null;
+          keeper?: boolean;
+          reservedForKeeper?: boolean;
+        }) => ({
+          overallPick: p.overallPickNumber,
+          roundId: p.roundId,
+          roundPick: p.roundPickNumber,
+          playerName: p.playerName,
+          position: p.position,
+          nflTeam: p.proTeam ?? "",
+          teamName: p.teamName,
+          ownerName: ownerByTeamId.get(Number(p.teamId)) ?? null,
+          teamId: p.teamId,
+          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+        });
+
+        if (resolvedLeagueId) {
+          const normalized = await getNormalizedSeasonDraftPicks({
+            leagueId: resolvedLeagueId,
+            season: input.season,
+          });
+          if (normalized.count > 0) {
+            const picks = normalized.rows.map((row) =>
+              mapPickToResponse({
+                overallPickNumber: Number(row.overallPickNumber),
+                roundId: Number(row.roundId),
+                roundPickNumber: Number(row.roundPickNumber),
+                playerName: row.playerName != null ? String(row.playerName) : null,
+                position: row.position != null ? String(row.position) : null,
+                proTeam: row.proTeam != null ? String(row.proTeam) : "",
+                teamName: row.teamName != null ? String(row.teamName) : "",
+                teamId: Number(row.teamId),
+                keeper: Boolean(row.keeper),
+                reservedForKeeper: Boolean(row.reservedForKeeper),
+              }),
+            );
+            if (input.teamId !== undefined) {
+              return picks.filter((p) => p.teamId === input.teamId);
+            }
+            return picks;
+          }
+        }
+
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
-        const rawPicks = normalizeDraftPicks(data) as unknown[];
-        // Resolve any player IDs that weren't in the roster map
+        const rawPicks = normalizeDraftPicks(data);
         const unknownIds = rawPicks
-          .filter((p: unknown) => !(p as Record<string, unknown>).playerName)
-          .map((p: unknown) => (p as Record<string, unknown>).playerId as number)
-          .filter(Boolean);
-        let picks: unknown[] = rawPicks;
+          .filter((p) => !p.playerName && p.playerId)
+          .map((p) => p.playerId as number);
+        let enriched = rawPicks;
         if (unknownIds.length > 0) {
           const resolved = await resolveUnknownPlayerIds(unknownIds);
-          picks = rawPicks.map((p: unknown) => {
-            const pick = p as Record<string, unknown>;
-            if (!pick.playerName && resolved.has(pick.playerId as number)) {
-              const info = resolved.get(pick.playerId as number)!;
-              return { ...pick, playerName: info.name, position: pick.position === "?" ? info.position : pick.position };
+          enriched = rawPicks.map((pick) => {
+            if (!pick.playerName && pick.playerId && resolved.has(pick.playerId)) {
+              const info = resolved.get(pick.playerId)!;
+              return {
+                ...pick,
+                playerName: info.name,
+                position: pick.position === "?" ? info.position : pick.position,
+              };
             }
             return pick;
           });
         }
-        if (input.teamId !== undefined) return picks.filter((p: unknown) => (p as Record<string, unknown>).teamId === input.teamId);
+        const picks = enriched.map((p) => mapPickToResponse(p));
+        if (input.teamId !== undefined) {
+          return picks.filter((p) => p.teamId === input.teamId);
+        }
         return picks;
       }),
 
+    /**
+     * Legacy Draft Recap: reads draft_picks rows with rawPick.source="legacy_draft_recap" for seasons 2010–2017.
+     * Fallback path for DraftHistory when the combined ESPN cache has no mDraftDetail picks.
+     */
+    legacyDraftPicks: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2010).max(2017),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const yr = input.season;
+        if (!ctx.user?.id) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          yr,
+        );
+        if (!leagueId) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return { picks: [] as Array<{ overallPick: number; roundId: number; roundPick: number; playerName: string | null; position: string | null; nflTeam: string; teamName: string; ownerName: string; teamId: number; isKeeper: boolean }>, source: "legacy_draft_recap" as const };
+        const rows = await db
+          .select()
+          .from(gmDraftPicks)
+          .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, lid), eqDrizzle(gmDraftPicks.season, yr)))
+          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
+
+        // Build teamName → ownerName lookup from gmTeams for this season.
+        // Normalise both sides so minor case/spacing differences still match.
+        const teamRows = await db
+          .select({ name: gmTeams.name, abbreviation: gmTeams.abbreviation, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, yr)));
+
+        const norm = (s: unknown) =>
+          String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+
+        const ownerByName = new Map<string, string>();
+        for (const t of teamRows) {
+          if (t.ownerName) {
+            ownerByName.set(norm(t.name), t.ownerName);
+            if (t.abbreviation) ownerByName.set(norm(t.abbreviation), t.ownerName);
+          }
+        }
+
+        const picks = rows
+          .map((r) => {
+            let raw: Record<string, unknown> = {};
+            try { raw = JSON.parse(r.rawPick) as Record<string, unknown>; } catch { /* ignore */ }
+            if (raw.source !== "legacy_draft_recap") return null;
+            const fantasyTeamName = String(raw.teamName ?? "");
+            const ownerName = ownerByName.get(norm(fantasyTeamName)) ?? "";
+            return {
+              overallPick: r.overallPick,
+              roundId: r.roundId,
+              roundPick: r.roundPick,
+              playerName: r.playerName ?? null,
+              position: r.position ?? null,
+              nflTeam: String(raw.nflTeam ?? ""),
+              teamName: fantasyTeamName,
+              ownerName,
+              teamId: r.teamId,
+              isKeeper: r.isKeeper === 1,
+            };
+          })
+          .filter((p): p is NonNullable<typeof p> => p !== null);
+        return { picks, source: "legacy_draft_recap" as const };
+      }),
+
+    /**
+     * Ingest manually-pasted or HTML-scraped ESPN Draft Recap rows for legacy seasons (2010–2017).
+     * Stores in draft_picks with rawPick.source = "legacy_draft_recap" and captureMethod = "manual_paste_or_html".
+     * teamName from the Draft Recap column is the canonical owner/team truth — do not infer from gmTeams.
+     */
+    ingestLegacyDraftRecap: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2010).max(2017),
+          picks: z
+            .array(
+              z.object({
+                overallPick: z.number().int().min(1).max(500),
+                roundId: z.number().int().min(1).max(30),
+                roundPick: z.number().int().min(0).max(30),
+                playerName: z.string().max(255),
+                position: z.string().max(16),
+                nflTeam: z.string().max(32).default(""),
+                teamName: z.string().max(255),
+              }),
+            )
+            .min(1)
+            .max(500),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const yr = input.season;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
+        }
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          null,
+          yr,
+        );
+        if (!leagueId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No active league found. Connect your ESPN league first." });
+        }
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+        // Validate uniqueness within the submitted batch
+        const seenOverall = new Set<number>();
+        const seenRoundPick = new Set<string>();
+        for (const p of input.picks) {
+          if (seenOverall.has(p.overallPick))
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Duplicate overall pick ${p.overallPick} in submitted batch` });
+          seenOverall.add(p.overallPick);
+          const rk = `${p.roundId}:${p.roundPick}`;
+          if (p.roundPick > 0 && seenRoundPick.has(rk))
+            throw new TRPCError({ code: "BAD_REQUEST", message: `Duplicate round ${p.roundId} pick ${p.roundPick} in submitted batch` });
+          if (p.roundPick > 0) seenRoundPick.add(rk);
+        }
+
+        const now = new Date();
+        let upserted = 0;
+        for (const p of input.picks) {
+          const rawPick = JSON.stringify({
+            source: "legacy_draft_recap",
+            captureMethod: "manual_paste_or_html",
+            teamName: p.teamName,
+            nflTeam: p.nflTeam ?? "",
+          });
+          await db
+            .insert(gmDraftPicks)
+            .values({
+              leagueId: lid,
+              season: yr,
+              overallPick: p.overallPick,
+              roundId: p.roundId,
+              roundPick: p.roundPick,
+              teamId: 0,
+              owningTeamId: null,
+              playerId: null,
+              playerName: p.playerName || null,
+              position: p.position || null,
+              isKeeper: 0,
+              bidAmount: 0,
+              rawPick,
+              updatedAt: now,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                roundId: p.roundId,
+                roundPick: p.roundPick,
+                playerName: p.playerName || null,
+                position: p.position || null,
+                rawPick,
+                updatedAt: now,
+              },
+            });
+          upserted++;
+        }
+        return { ok: true, season: yr, leagueId: lid, upserted };
+      }),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Season Roster Capture  (2010–2025, scraped from ESPN League Rosters page)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Write a full end-of-season roster snapshot for one season.
+     * Called by the Chrome extension after scraping the ESPN League Rosters page.
+     * publicProcedure + 457622 bypass so the extension can POST without Clerk JWT.
+     */
+    ingestSeasonRosters: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2010).max(2030),
+          players: z
+            .array(
+              z.object({
+                teamName:        z.string().max(255),
+                playerName:      z.string().min(1).max(255),
+                nflTeam:         z.string().max(32).default(""),
+                position:        z.string().max(16).default(""),
+                slot:            z.string().max(32).default(""),
+                acquisitionType: z.string().max(64).default(""),
+                injuryStatus:    z.string().max(16).default(""),
+              }),
+            )
+            .min(1)
+            .max(2000),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const yr = input.season;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be signed in." });
+        }
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          null,
+          yr,
+        );
+        if (!leagueId) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "No active league found. Connect your ESPN league first." });
+        }
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+
+        // Resolve ownerName from gmTeams for this season
+        const teamRows = await db
+          .select({ name: gmTeams.name, abbreviation: gmTeams.abbreviation, ownerName: gmTeams.ownerName })
+          .from(gmTeams)
+          .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, yr)));
+
+        const norm = (s: unknown) => String(s ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+        const ownerByTeam = new Map<string, string>();
+        for (const t of teamRows) {
+          if (t.ownerName) {
+            ownerByTeam.set(norm(t.name), t.ownerName);
+            if (t.abbreviation) ownerByTeam.set(norm(t.abbreviation), t.ownerName);
+          }
+        }
+
+        const now = new Date();
+        let upserted = 0;
+        for (const p of input.players) {
+          const ownerName = ownerByTeam.get(norm(p.teamName)) ?? "";
+          await db
+            .insert(gmSeasonRosters)
+            .values({
+              leagueId: lid,
+              season: yr,
+              teamName: p.teamName,
+              ownerName,
+              playerName: p.playerName,
+              nflTeam: p.nflTeam ?? "",
+              position: p.position ?? "",
+              slot: p.slot ?? "",
+              acquisitionType: p.acquisitionType ?? "",
+              injuryStatus: p.injuryStatus ?? "",
+              capturedAt: now,
+            })
+            .onDuplicateKeyUpdate({
+              set: {
+                ownerName,
+                nflTeam: p.nflTeam ?? "",
+                position: p.position ?? "",
+                slot: p.slot ?? "",
+                acquisitionType: p.acquisitionType ?? "",
+                injuryStatus: p.injuryStatus ?? "",
+                capturedAt: now,
+              },
+            });
+          upserted++;
+        }
+        return { ok: true, season: yr, leagueId: lid, upserted };
+      }),
+
+    /** Return roster snapshot for a season, optionally filtered to one team. */
+    seasonRosters: publicProcedure
+      .input(z.object({
+        season: z.number().int().min(2010).max(2030),
+        teamName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const yr = input.season;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return { players: [], season: yr, leagueId: "" };
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          null,
+          yr,
+        );
+        if (!leagueId) return { players: [], season: yr, leagueId: "" };
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return { players: [], season: yr, leagueId: lid };
+
+        const where = input.teamName
+          ? andDrizzle(
+              eqDrizzle(gmSeasonRosters.leagueId, lid),
+              eqDrizzle(gmSeasonRosters.season, yr),
+              eqDrizzle(gmSeasonRosters.teamName, input.teamName),
+            )
+          : andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, yr));
+
+        const rows = await db
+          .select()
+          .from(gmSeasonRosters)
+          .where(where)
+          .orderBy(ascDrizzle(gmSeasonRosters.teamName), ascDrizzle(gmSeasonRosters.slot));
+
+        return { players: rows, season: yr, leagueId: lid };
+      }),
+
+    /** Which seasons have at least one scraped roster row. Used by the extension popup DB status. */
+    seasonRosterCoverage: publicProcedure.query(async ({ ctx }) => {
+      const userId = ctx.user?.id ?? 0;
+      if (!userId) return { seasons: [] };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: userId } },
+        null,
+        undefined,
+      );
+      if (!leagueId) return { seasons: [] };
+      const lid = leagueId;
+      const db = await getDb();
+      if (!db) return { seasons: [] };
+
+      const rows = await db
+        .selectDistinct({ season: gmSeasonRosters.season })
+        .from(gmSeasonRosters)
+        .where(eqDrizzle(gmSeasonRosters.leagueId, lid))
+        .orderBy(ascDrizzle(gmSeasonRosters.season));
+
+      return { seasons: rows.map((r) => r.season) };
+    }),
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Keeper Pool (draftYear = season being drafted, e.g. 2026):
+    //   • Candidates = **current** `draftYear` rosters (ESPN combined cache vs `season_rosters` — pick newer snapshot).
+    //   • Keeper cost / two-year rule = **prior** season `draftYear-1` draft via `normalizeDraftPicks` (draft / keeper).
+    //   • FA / missing draft row → Round 7 (`fa_fixed`).
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Build the full keeper-eligible pool for the upcoming draft.
+     * draftYear = the season ABOUT TO BE drafted (default: current year).
+     * The previous two completed seasons are examined for keeper rules (draftYear-1, draftYear-2).
+     */
+    keeperPool: publicProcedure
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const currentYear = new Date().getFullYear();
+        const draftYear = input.draftYear ?? currentYear;
+        const rosterSeason = draftYear;
+        const prevSeason = draftYear - 1;
+        const prev2Season = draftYear - 2;
+
+        if (!ctx.user?.id) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: "",
+            prevSeason,
+            prev2Season,
+            error: "no_active_league",
+            hint: "Connect your ESPN league to use the Keeper Advisor.",
+            rosterProvenance: null as null,
+          };
+        }
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          rosterSeason,
+        );
+        if (!leagueId) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: "",
+            prevSeason,
+            prev2Season,
+            error: "no_active_league",
+            hint: "Connect your ESPN league to use the Keeper Advisor.",
+            rosterProvenance: null as null,
+          };
+        }
+        const lid = leagueId;
+        const db = await getDb();
+
+        // Redraft gate (single source of truth = LeagueCapabilities). Only disables when a
+        // season payload is present AND reports no keeper slots; a missing payload falls through
+        // to the normal no-cache handling below, so a real keeper league is never mis-gated.
+        const capSeasonData = await getSeasonData(rosterSeason, undefined, ctx.user.id);
+        if (capSeasonData) {
+          const capabilities = buildLeagueCapabilities(lid, rosterSeason, capSeasonData as Record<string, unknown>);
+          if (!capabilities.keepers) {
+            return {
+              pool: [] as KeeperPoolEntry[],
+              draftYear,
+              rosterSeason,
+              leagueId: lid,
+              prevSeason,
+              prev2Season,
+              disabled: true as const,
+              reason: `Redraft league — ESPN reports ${capabilities.keeperSlotsPerTeam ?? 0} keeper slot(s) per team. Keeper tools are unavailable.`,
+              keeperSlotsPerTeam: capabilities.keeperSlotsPerTeam,
+              rosterProvenance: null as null,
+            };
+          }
+        }
+
+        const draftData = await getSeasonData(prevSeason, undefined, ctx.user.id);
+        if (!draftData) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: lid,
+            prevSeason,
+            prev2Season,
+            error: "no_espn_cache",
+            hint: `Sync the ${prevSeason} season from the dashboard first (needed for draft-based keeper costs).`,
+            rosterProvenance: null as null,
+          };
+        }
+
+        const rawPicks = normalizeDraftPicks(draftData) as Array<Record<string, unknown>>;
+        if (rawPicks.length === 0) {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: lid,
+            prevSeason,
+            prev2Season,
+            error: "no_draft_picks",
+            hint: `Draft History for ${prevSeason} is empty. Open Draft History to confirm picks load.`,
+            rosterProvenance: null as null,
+          };
+        }
+
+        const pickByPlayerId = new Map<number, Record<string, unknown>>();
+        const pickByName = new Map<string, Record<string, unknown>>();
+        for (const p of rawPicks) {
+          const pid = Number(p.playerId);
+          if (Number.isFinite(pid) && pid > 0) pickByPlayerId.set(pid, p);
+          const kn = normKeeperName(String(p.playerName ?? ""));
+          if (kn) pickByName.set(kn, p);
+        }
+
+        const dataPrev2 = await getSeasonData(prev2Season, undefined, ctx.user.id);
+        const keptPrev2 = new Set<string>();
+        if (dataPrev2) {
+          // Two-year keeper signal: any **keeperSlot** (ESPN keeper or retained) in draftYear-2.
+          for (const p of normalizeDraftPicks(dataPrev2) as Array<Record<string, unknown>>) {
+            if (!isDraftKeeperSlotPick(p)) continue;
+            const k = normKeeperName(String(p.playerName ?? ""));
+            if (k) keptPrev2.add(k);
+          }
+        }
+
+        type RosterLite = {
+          teamId: number;
+          teamName: string;
+          playerId: number;
+          playerName: string;
+          nflTeam: string;
+          position: string;
+          slot: string;
+          acquisitionType: string;
+          ownerHint?: string;
+        };
+
+        const normTeam = (s: string) =>
+          String(s ?? "")
+            .toLowerCase()
+            .replace(/[^a-z0-9 ]/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const cacheHit = await getCachedViewWithTier(rosterSeason, "combined", lid, { userId: ctx.user.id });
+        const cachePayload = cacheHit?.row?.payload as Record<string, unknown> | undefined;
+        const cacheUpdatedAt = cacheHit?.row?.updatedAt ?? null;
+        const cacheRosters: RosterLite[] = [];
+        if (cachePayload) {
+          for (const r of normalizeRosters(cachePayload) as Array<Record<string, unknown>>) {
+            const teamId = Number(r.teamId);
+            const playerId = Number(r.playerId);
+            const playerName = String(r.playerName ?? "").trim();
+            if (!playerName) continue;
+            cacheRosters.push({
+              teamId: Number.isFinite(teamId) ? teamId : 0,
+              teamName: String(r.teamName ?? "").trim() || `Team ${teamId}`,
+              playerId: Number.isFinite(playerId) && playerId > 0 ? playerId : 0,
+              playerName,
+              nflTeam: String(r.proTeam ?? ""),
+              position: String(r.position ?? ""),
+              slot: String(r.lineupSlot ?? ""),
+              acquisitionType: String(r.acquisitionType ?? ""),
+            });
+          }
+        }
+
+        let dbMaxAt: Date | null = null;
+        let dbCount = 0;
+        let dbRows: (typeof gmSeasonRosters.$inferSelect)[] = [];
+        if (db) {
+          const [agg] = await db
+            .select({
+              mx: maxDrizzle(gmSeasonRosters.capturedAt),
+              cnt: sqlCount(),
+            })
+            .from(gmSeasonRosters)
+            .where(
+              andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, rosterSeason)),
+            );
+          dbMaxAt = agg?.mx ?? null;
+          dbCount = Number(agg?.cnt ?? 0);
+          if (dbCount > 0) {
+            dbRows = await db
+              .select()
+              .from(gmSeasonRosters)
+              .where(
+                andDrizzle(eqDrizzle(gmSeasonRosters.leagueId, lid), eqDrizzle(gmSeasonRosters.season, rosterSeason)),
+              );
+          }
+        }
+
+        const cacheTimeMs = cacheUpdatedAt ? new Date(cacheUpdatedAt).getTime() : 0;
+        const dbTimeMs = dbMaxAt ? new Date(dbMaxAt).getTime() : 0;
+        const useDb =
+          dbRows.length > 0 && (cacheRosters.length === 0 || (dbTimeMs > 0 && dbTimeMs > cacheTimeMs));
+
+        let chosenRoster: RosterLite[] = [];
+        let rosterProvenance: {
+          rosterLayer: "espn_combined_cache" | "season_rosters_db";
+          storageTier: string | null;
+          cacheUpdatedAt: string | null;
+          dbSnapshotAt: string | null;
+          label: string;
+        };
+
+        if (useDb) {
+          const teamRows = await db!
+            .select({ teamId: gmTeams.teamId, name: gmTeams.name, ownerName: gmTeams.ownerName })
+            .from(gmTeams)
+            .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, rosterSeason)));
+          const teamIdByNormName = new Map<string, number>();
+          for (const t of teamRows) {
+            const nn = normTeam(t.name);
+            if (nn && !teamIdByNormName.has(nn)) teamIdByNormName.set(nn, t.teamId);
+          }
+          for (const row of dbRows) {
+            const playerName = row.playerName.trim();
+            if (!playerName) continue;
+            const tn = row.teamName.trim();
+            const tid = teamIdByNormName.get(normTeam(tn)) ?? 0;
+            chosenRoster.push({
+              teamId: tid,
+              teamName: tn || `Team ${tid || "?"}`,
+              playerId: 0,
+              playerName,
+              nflTeam: row.nflTeam,
+              position: row.position,
+              slot: row.slot,
+              acquisitionType: row.acquisitionType || "",
+              ownerHint: row.ownerName || "",
+            });
+          }
+          rosterProvenance = {
+            rosterLayer: "season_rosters_db",
+            storageTier: cacheHit?.tier != null ? String(cacheHit.tier) : null,
+            cacheUpdatedAt: cacheUpdatedAt ? new Date(cacheUpdatedAt).toISOString() : null,
+            dbSnapshotAt: dbMaxAt ? new Date(dbMaxAt).toISOString() : null,
+            label: "Current roster · DB snapshot (newer than ESPN cache row, or cache missing)",
+          };
+        } else if (cacheRosters.length > 0) {
+          chosenRoster = cacheRosters;
+          rosterProvenance = {
+            rosterLayer: "espn_combined_cache",
+            storageTier: cacheHit?.tier != null ? String(cacheHit.tier) : null,
+            cacheUpdatedAt: cacheUpdatedAt ? new Date(cacheUpdatedAt).toISOString() : null,
+            dbSnapshotAt: dbMaxAt ? new Date(dbMaxAt).toISOString() : null,
+            label: "Current roster · ESPN combined cache",
+          };
+        } else {
+          return {
+            pool: [] as KeeperPoolEntry[],
+            draftYear,
+            rosterSeason,
+            leagueId: lid,
+            prevSeason,
+            prev2Season,
+            error: "no_current_roster",
+            hint: `Sync the ${rosterSeason} combined season (or season roster scrape) so keeper candidates use current teams.`,
+            rosterProvenance: null as null,
+          };
+        }
+
+        const dedup = new Map<string, RosterLite>();
+        for (const r of chosenRoster) {
+          const k = `${r.teamId}:${normKeeperName(r.playerName)}`;
+          if (!dedup.has(k)) dedup.set(k, r);
+        }
+        chosenRoster = [...dedup.values()];
+
+        const ownerByTeamId = new Map<number, string>();
+        if (db) {
+          const teamRowsCur = await db
+            .select({ teamId: gmTeams.teamId, ownerName: gmTeams.ownerName })
+            .from(gmTeams)
+            .where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), eqDrizzle(gmTeams.season, rosterSeason)));
+          for (const t of teamRowsCur) ownerByTeamId.set(t.teamId, t.ownerName ?? "");
+        }
+
+        // Canonical, merge-aware ownerKey per team — the SAME resolver owners.ownerList and
+        // dynasty.powerRankings use (buildRawKeyToCanonicalProfileKey + resolveOwnerKey over
+        // gmTeams, where gmTeams.ownerId === ESPN memberId). Identity ONLY: this does not
+        // change keeper cost, eligibility, or the candidate set.
+        const allGmRowsForKey: GmTeamRow[] = db
+          ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as GmTeamRow[])
+          : [];
+        const keeperRemap = buildRawKeyToCanonicalProfileKey(allGmRowsForKey);
+        const keeperNameToOwnerId = buildNameToOwnerId(allGmRowsForKey);
+        const memberIdByTeamIdCur = new Map<number, string>();
+        for (const t of allGmRowsForKey) {
+          if (t.season === rosterSeason) memberIdByTeamIdCur.set(t.teamId, String(t.ownerId ?? ""));
+        }
+        const resolveKeeperOwnerKey = (teamId: number, nm: string): string => {
+          const mid = teamId > 0 ? memberIdByTeamIdCur.get(teamId) : "";
+          const direct = mid ? keeperRemap.get(`id:${mid}`) : undefined;
+          if (direct) return direct;
+          const raw = resolveOwnerKey("", nm, nm, keeperNameToOwnerId);
+          return keeperRemap.get(raw) ?? raw;
+        };
+
+        const rosterPartLabel =
+          rosterProvenance.rosterLayer === "season_rosters_db"
+            ? "Current roster (DB)"
+            : "Current roster (ESPN cache)";
+
+        const pool: KeeperPoolEntry[] = [];
+        for (const r of chosenRoster) {
+          const playerName = r.playerName;
+          const nkey = normKeeperName(playerName);
+          const pick =
+            (r.playerId > 0 ? pickByPlayerId.get(r.playerId) : undefined) ??
+            (nkey ? pickByName.get(nkey) : undefined);
+
+          const ownerName =
+            (r.teamId > 0 ? ownerByTeamId.get(r.teamId) : undefined)?.trim() ||
+            (r.ownerHint ?? "").trim() ||
+            r.teamName;
+
+          // Identity fields (additive — do NOT affect keeper cost, eligibility, or candidacy).
+          // playerId: real ESPN id from the current roster row, else from the matched draft
+          // pick; 0 only when neither upstream source carries one (no name→id lookup added).
+          const resolvedPlayerId =
+            r.playerId && r.playerId > 0
+              ? r.playerId
+              : pick && Number(pick.playerId) > 0
+                ? Number(pick.playerId)
+                : 0;
+          const ownerKey = resolveKeeperOwnerKey(r.teamId, ownerName);
+
+          if (pick) {
+            // Full-board truth: keeper **slot** (keeper or retained) drives two-year rule + cost labeling.
+            const isKeptThisYear = isDraftKeeperSlotPick(pick);
+            if (isKeptThisYear && keptPrev2.has(nkey)) continue;
+            const round = Number(pick.roundId) || 0;
+            if (round <= 0) {
+              const costSource: KeeperPoolEntry["costSource"] = "fa_fixed";
+              const costPart = "Keeper cost · cache (FA default Rd 7)";
+              pool.push({
+                ownerName,
+                ownerKey,
+                playerId: resolvedPlayerId,
+                teamName: r.teamName,
+                playerName,
+                nflTeam: r.nflTeam,
+                position: r.position,
+                slot: r.slot,
+                acquisitionType: r.acquisitionType || "Roster",
+                keepYear: 0,
+                isLastKeeperYear: false,
+                keeperRoundCost: 7,
+                costSource,
+                originalDraftRound: null,
+                originalDraftSeason: null,
+                lastKeptSeason: null,
+                lastKeptRound: null,
+                sourceLabel: `${rosterPartLabel} · ${costPart}`,
+              });
+              continue;
+            }
+            const keepYear: 0 | 1 = isKeptThisYear ? 1 : 0;
+            const isLastKeeperYear = keepYear === 1;
+            // Cost for next draft year = this year's draft round − 1 (capped at round 1).
+            // Applies whether the player was originally drafted or kept this year — the
+            // 2025 draft slot already reflects the current keeper cost; subtract 1 more.
+            const keeperRoundCost = round; // same round as last draft
+            const costSource: KeeperPoolEntry["costSource"] = isKeptThisYear ? "espn_stored" : "draft_history_round";
+            const costPart = isKeptThisYear
+              ? "Keeper · draft (ESPN flag)"
+              : "Draft · prior season draft recap";
+            pool.push({
+              ownerName,
+              ownerKey,
+              playerId: resolvedPlayerId,
+              teamName: r.teamName,
+              playerName,
+              nflTeam: r.nflTeam,
+              position: r.position,
+              slot: r.slot,
+              acquisitionType: isKeptThisYear ? "Keeper" : r.acquisitionType || "Draft",
+              keepYear,
+              isLastKeeperYear,
+              keeperRoundCost,
+              costSource,
+              originalDraftRound: isKeptThisYear ? null : round,
+              originalDraftSeason: isKeptThisYear ? null : prevSeason,
+              lastKeptSeason: isKeptThisYear ? prevSeason : null,
+              lastKeptRound: isKeptThisYear ? round : null,
+              sourceLabel: `${rosterPartLabel} · ${costPart}`,
+            });
+          } else {
+            pool.push({
+              ownerName,
+              ownerKey,
+              playerId: resolvedPlayerId,
+              teamName: r.teamName,
+              playerName,
+              nflTeam: r.nflTeam,
+              position: r.position,
+              slot: r.slot,
+              acquisitionType: r.acquisitionType || "Roster",
+              keepYear: 0,
+              isLastKeeperYear: false,
+              keeperRoundCost: 7,
+              costSource: "fa_fixed",
+              originalDraftRound: null,
+              originalDraftSeason: null,
+              lastKeptSeason: null,
+              lastKeptRound: null,
+              sourceLabel: `${rosterPartLabel} · Keeper cost · cache (not in ${prevSeason} draft recap — FA default Rd 7)`,
+            });
+          }
+        }
+
+        pool.sort((a, b) => {
+          const own = a.ownerName.localeCompare(b.ownerName);
+          if (own !== 0) return own;
+          return a.keeperRoundCost - b.keeperRoundCost;
+        });
+
+        return {
+          pool,
+          draftYear,
+          rosterSeason,
+          leagueId: lid,
+          prevSeason,
+          prev2Season,
+          rosterProvenance,
+        };
+      }),
+    /**
+     * Keeper Advisor's single authoritative recommendation surface. Consumes the
+     * enhanced `keeperPool` output (identity / cost / eligibility) and joins real
+     * ADP + computeMarketValues BY playerId via keeperValuationService. ALL keeper
+     * value/recommendation logic lives in that service — never here, never on the
+     * client. Pass-through of keeperPool's gate/error/provenance fields is preserved.
+     */
+    keeperValuation: publicProcedure
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }): Promise<KeeperValuationResponse> => {
+        const caller = appRouter.createCaller(ctx);
+        const kp = await caller.espn.keeperPool({
+          draftYear: input.draftYear,
+          activeLeagueKey: input.activeLeagueKey,
+        });
+        const base = kp as Record<string, unknown>;
+        const pool = Array.isArray((kp as { pool?: KeeperPoolEntry[] }).pool)
+          ? (kp as { pool: KeeperPoolEntry[] }).pool
+          : [];
+        if (pool.length === 0) {
+          return { ...base, valuations: [] as KeeperValuation[] } as KeeperValuationResponse;
+        }
+        const valuations = await computeKeeperValuations({
+          pool,
+          season: (kp as { rosterSeason: number }).rosterSeason,
+          leagueId: (kp as { leagueId: string }).leagueId,
+          userId: ctx.user?.id ?? undefined,
+        });
+        return { ...base, valuations } as KeeperValuationResponse;
+      }),
+
+    // ── League Keeper Forecast (visibility-only convenience view) ──────────────
+    // One likely keeper per owner: MANUAL → CONFIRMED (ESPN) → highest computeKeeper-
+    // Valuations(). No new model. Resolution lives entirely in keeperForecastService.
+    leagueKeeperForecast: publicProcedure
+      .input(
+        z.object({
+          draftYear: z.number().int().min(2019).max(2030).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        const caller = appRouter.createCaller(ctx);
+        const kp = await caller.espn.keeperPool({
+          draftYear: input.draftYear,
+          activeLeagueKey: input.activeLeagueKey,
+        });
+        const base = kp as Record<string, unknown>;
+        const pool = Array.isArray((kp as { pool?: KeeperPoolEntry[] }).pool)
+          ? (kp as { pool: KeeperPoolEntry[] }).pool
+          : [];
+        if (pool.length === 0) {
+          return { ...base, forecast: [] as KeeperForecastRow[] };
+        }
+        const forecast = await computeLeagueKeeperForecast({
+          pool: pool.map((p) => ({
+            ownerKey: p.ownerKey,
+            ownerName: p.ownerName,
+            playerId: p.playerId,
+            playerName: p.playerName,
+            position: p.position,
+            keeperRoundCost: p.keeperRoundCost,
+            costSource: p.costSource,
+          })),
+          season: (kp as { rosterSeason: number }).rosterSeason,
+          leagueId: (kp as { leagueId: string }).leagueId,
+          userId: ctx.user?.id ?? undefined,
+        });
+        return { ...base, forecast };
+      }),
+
+    // ── Manual keeper selections (user override of predicted keepers) ──────────
+    // Recommendations remain 100% server-generated (keeperValuation above). These
+    // procedures only record/clear a user's manual KEEP overrides. Persisted by
+    // (userId, leagueId, season, ownerKey, playerId). Degrade safely if the table
+    // is not yet provisioned (return empty / soft error).
+    getManualKeeperSelections: protectedProcedure
+      .input(z.object({ season: z.number().int().min(2019).max(2030) }))
+      .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: userId } }, null, input.season);
+        if (!leagueId) {
+          return { leagueId: "", season: input.season, keeperLimit: null as number | null, selections: [] as Awaited<ReturnType<typeof svcGetManualKeepers>> };
+        }
+        let keeperLimit: number | null = null;
+        try {
+          const capSeasonData = await getSeasonData(input.season, undefined, userId);
+          const caps = buildLeagueCapabilities(leagueId, input.season, capSeasonData as Record<string, unknown>);
+          keeperLimit = caps.keeperSlotsPerTeam ?? null;
+        } catch { /* limit unknown — UI falls back to no cap */ }
+        const selections = await svcGetManualKeepers({ userId, leagueId, season: input.season });
+        return { leagueId, season: input.season, keeperLimit, selections };
+      }),
+
+    setManualKeeperSelection: protectedProcedure
+      .input(z.object({
+        season: z.number().int().min(2019).max(2030),
+        ownerKey: z.string().min(1).max(64),
+        playerId: z.number().int(),
+        playerName: z.string().max(128).optional(),
+        position: z.string().max(8).optional(),
+        keep: z.boolean(),
+        keeperRoundPick: z.number().int().min(0).max(20).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const { leagueId } = await resolveActiveLeagueId({ user: { id: userId } }, null, input.season);
+        if (!leagueId) return { ok: false as const, error: "no_league" as const };
+        let keeperLimit: number | null = null;
+        try {
+          const capSeasonData = await getSeasonData(input.season, undefined, userId);
+          const caps = buildLeagueCapabilities(leagueId, input.season, capSeasonData as Record<string, unknown>);
+          keeperLimit = caps.keeperSlotsPerTeam ?? null;
+        } catch { /* limit unknown — do not block selection */ }
+        return svcSetManualKeeper({
+          userId,
+          leagueId,
+          season: input.season,
+          ownerKey: input.ownerKey,
+          playerId: input.playerId,
+          playerName: input.playerName ?? "",
+          position: input.position ?? "",
+          keep: input.keep,
+          keeperLimit,
+          keeperRoundPick: input.keeperRoundPick,
+        });
+      }),
+    keeperPoolByOwner: publicProcedure
+      .input(z.object({
+        draftYear: z.number().int().min(2019).max(2030).optional(),
+        ownerName: z.string().min(1).max(255),
+      }))
+      .query(async ({ ctx, input }) => {
+        const currentYear = new Date().getFullYear();
+        const draftYear  = input.draftYear ?? currentYear;
+        const prevSeason = draftYear - 1;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return { pool: [], draftYear, leagueId: "" };
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, prevSeason,
+        );
+        if (!leagueId) return { pool: [], draftYear, leagueId: "" };
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return { pool: [], draftYear, leagueId: lid };
+
+        // Re-use the main keeperPool query via the router — but for simplicity
+        // we do an owner-filtered pass on the same data.
+        const rosterRows = await db
+          .select()
+          .from(gmSeasonRosters)
+          .where(andDrizzle(
+            eqDrizzle(gmSeasonRosters.leagueId, lid),
+            eqDrizzle(gmSeasonRosters.season, prevSeason),
+            eqDrizzle(gmSeasonRosters.ownerName, input.ownerName),
+          ));
+
+        return { pool: rosterRows, draftYear, leagueId: lid };
+      }),
+
+    /**
+     * Draft History — simple mDraftDetail pipeline.
+     * Reads gmDraftPicks for the season ordered by overallPick.
+     * No source priority, no canonical builder, no scrape rows.
+     */
+    draftHistory: publicProcedure
+      .input(z.object({ season: z.number().int().min(2009).max(2030) }))
+      .query(async ({ ctx, input }) => {
+        const yr = input.season;
+        if (!ctx.user?.id) return { season: yr, leagueId: "", teamCount: 0, picks: [], diagnostics: { sourceUsed: "empty" as string, totalPicks: 0, warnings: [] as string[] } };
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          yr,
+        );
+        const db = await getDb();
+        const empty = {
+          season: yr,
+          leagueId,
+          teamCount: 0,
+          picks: [] as Array<{
+            overallPick: number; roundId: number; roundPick: number;
+            teamId: number; teamName: string; playerName: string;
+            position: string | null; nflTeam: string; isKeeper: boolean; source: string;
+          }>,
+          diagnostics: {
+            sourceUsed: "espn_mDraftDetail" as string,
+            rawRows: 0,
+            storedRows: 0,
+            duplicateOverallPicks: 0,
+            missingRoundPick: 0,
+            missingTeamName: 0,
+            warnings: [] as string[],
+          },
+        };
+        if (!db) {
+          empty.diagnostics.warnings.push("Database unavailable.");
+          return empty;
+        }
+
+        const [settingsRow] = await db
+          .select({ teamCount: gmLeagueSettings.teamCount })
+          .from(gmLeagueSettings)
+          .where(andDrizzle(eqDrizzle(gmLeagueSettings.leagueId, leagueId), eqDrizzle(gmLeagueSettings.season, yr)));
+        const teamCount = Number(settingsRow?.teamCount ?? 0);
+
+        const rows = await db
+          .select({
+            overallPick: gmDraftPicks.overallPick,
+            roundId: gmDraftPicks.roundId,
+            roundPick: gmDraftPicks.roundPick,
+            teamId: gmDraftPicks.teamId,
+            playerName: gmDraftPicks.playerName,
+            position: gmDraftPicks.position,
+            isKeeper: gmDraftPicks.isKeeper,
+            rawPick: gmDraftPicks.rawPick,
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(eqDrizzle(gmDraftPicks.leagueId, leagueId), eqDrizzle(gmDraftPicks.season, yr)))
+          .orderBy(ascDrizzle(gmDraftPicks.overallPick));
+
+        const rawRows = rows.length;
+        if (rawRows === 0) {
+          empty.diagnostics.warnings.push("No draft picks in database. Use Import from ESPN to fetch mDraftDetail data.");
+          return { ...empty, teamCount };
+        }
+
+        // Dedup by overallPick (keep first)
+        const seenOverall = new Set<number>();
+        let duplicateOverallPicks = 0;
+        const deduped = rows.filter((r) => {
+          if (seenOverall.has(r.overallPick)) { duplicateOverallPicks++; return false; }
+          seenOverall.add(r.overallPick);
+          return true;
+        });
+
+        let missingRoundPick = 0;
+        let missingTeamName = 0;
+        const sources = new Set<string>();
+
+        const picks = deduped
+          .filter((r) => r.playerName)
+          .map((r) => {
+            let rawJson: { source?: string; teamName?: string; nflTeam?: string; proTeam?: string } = {};
+            try { rawJson = JSON.parse(r.rawPick ?? "") as typeof rawJson; } catch { /* ignore */ }
+            const src = rawJson.source ?? "unknown";
+            sources.add(src);
+            const teamName = rawJson.teamName?.trim() ?? "";
+            const nflTeam = (rawJson.nflTeam ?? rawJson.proTeam ?? "").trim();
+            if (!r.roundPick) missingRoundPick++;
+            if (!teamName) missingTeamName++;
+            return {
+              overallPick: r.overallPick,
+              roundId: r.roundId,
+              roundPick: r.roundPick,
+              teamId: r.teamId,
+              teamName: teamName || `Team ${r.teamId}`,
+              playerName: r.playerName ?? "",
+              position: r.position ?? null,
+              nflTeam,
+              isKeeper: Boolean(r.isKeeper),
+              source: src,
+            };
+          });
+
+        const warnings: string[] = [];
+        if (duplicateOverallPicks > 0) warnings.push(`${duplicateOverallPicks} duplicate overallPick slots removed.`);
+        if (missingRoundPick > 0) warnings.push(`${missingRoundPick} picks missing roundPick — re-import from ESPN to fix.`);
+        if (missingTeamName > 0) warnings.push(`${missingTeamName} picks missing teamName in rawPick JSON.`);
+
+        const sourceLabel = sources.size === 1 ? [...sources][0]! : [...sources].join(", ");
+        return {
+          season: yr,
+          leagueId,
+          teamCount,
+          picks,
+          diagnostics: {
+            sourceUsed: sourceLabel,
+            rawRows,
+            storedRows: picks.length,
+            duplicateOverallPicks,
+            missingRoundPick,
+            missingTeamName,
+            warnings,
+          },
+        };
+      }),
+
+    /**
+     * FULL IMPORT / repair: mDraftDetail → normalizeDraftPicks → DELETE season → INSERT (no scrape upsert).
+     */
+    importDraftFromEspnApi: protectedProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2009).max(2030),
+          leagueId: z.string().min(1).max(32).optional(),
+          /** Chrome extension: live ESPN session from browser cookies */
+          swid: z.string().min(1).optional(),
+          espnS2: z.string().min(1).optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const yr = input.season;
+        const resolved = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          input.leagueId ?? null,
+          yr,
+        );
+        const hasSwid = Boolean(input.swid?.trim());
+        const hasEspnS2 = Boolean(input.espnS2?.trim());
+        const extensionCreds =
+          hasSwid && hasEspnS2
+            ? {
+                leagueId: resolved.leagueId,
+                swid: input.swid!.trim(),
+                espnS2: input.espnS2!.trim(),
+              }
+            : undefined;
+        console.info("[importDraftFromEspnApi]", {
+          season: yr,
+          leagueId: resolved.leagueId,
+          hasSwid,
+          hasEspnS2,
+          authSource: extensionCreds ? "extension_payload" : "stored_or_env",
+        });
+        const result = await importSeasonDraftFromEspnApi(
+          resolved.leagueId,
+          yr,
+          extensionCreds,
+          ctx.user.id,
+        );
+        return {
+          ...result,
+          success: result.status === "imported",
+        };
+      }),
+
+    /**
+     * Draft History V3 canonical board — ESPN visual recap (`draft_recap_html`) rows only.
+     * Kept for backwards compatibility; DraftHistory UI now uses espn.draftHistory instead.
+     */
+    draftRecapCanonical: publicProcedure
+      .input(z.object({ season: z.number().int().min(2009).max(2030) }))
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return null;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          input.season,
+        );
+        return getDraftRecapCanonicalBoard(leagueId, input.season);
+      }),
+
+    /** Per-season counts + data source (normalized vs cache tiers) for ops / debugging. Cached 5 minutes. */
+    historicalCoverage: protectedProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      return getHistoricalCoverageReport(leagueId, ctx.user.id);
+    }),
+
+    /** Debug: which source backs historical pages (DB vs cache). */
+    historicalReadAudit: protectedProcedure.query(async ({ ctx }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      return buildHistoricalReadAudit(leagueId, ctx.user.id);
+    }),
+
     matchups: publicProcedure
       .input(z.object({ season: z.number(), matchupPeriodId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return [];
+        const data = await getSeasonData(input.season, undefined, ctx.user.id);
         if (!data) return [];
         const matchups = normalizeMatchups(data);
         if (input.matchupPeriodId !== undefined) return matchups.filter((m: unknown) => (m as Record<string, unknown>).matchupPeriodId === input.matchupPeriodId);
         return matchups;
       }),
 
+    /**
+     * Scoreboard: normalized `matchups` + `teams` (DB) for the requested week.
+     */
+    matchupsScoreboard: publicProcedure
+      .input(
+        z.object({
+          season: z.number(),
+          week: z.number().int().min(1),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        if (!ctx.user?.id) return { matchups: [], teams: [], week: input.week, season: input.season };
+        const resolved = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          input.season
+        );
+        const { leagueId, source } = resolved;
+        console.info("[matchupsScoreboard]", {
+          userId: ctx.user?.id ?? null,
+          leagueId,
+          source,
+          season: input.season,
+          week: input.week,
+        });
+
+        type TeamLite = {
+          teamId: number;
+          teamName: string;
+          ownerName: string;
+          wins: number;
+          losses: number;
+          ties: number;
+          logoUrl: string;
+          rank: number | null;
+        };
+
+        function teamMapFromRows(rows: Record<string, unknown>[]): Map<number, TeamLite> {
+          const teamMap = new Map<number, TeamLite>();
+          for (const t of rows) {
+            const tid = Number(t.teamId ?? t.id);
+            if (!Number.isFinite(tid) || tid <= 0) continue;
+            const rank =
+              t.playoffSeed != null && Number.isFinite(Number(t.playoffSeed))
+                ? Number(t.playoffSeed)
+                : t.rankFinal != null && Number.isFinite(Number(t.rankFinal))
+                  ? Number(t.rankFinal)
+                  : t.finalStanding != null && Number.isFinite(Number(t.finalStanding))
+                    ? Number(t.finalStanding)
+                    : null;
+            const ownersStr = String(t.owners ?? "").trim();
+            const ownerDisplay = String(t.ownerDisplay ?? "").trim();
+            const ownerName =
+              ownerDisplay ||
+              ownersStr.split(";").map((s) => s.trim()).filter(Boolean)[0] ||
+              "";
+            teamMap.set(tid, {
+              teamId: tid,
+              teamName: String(t.name ?? t.nickname ?? `Team ${tid}`),
+              ownerName,
+              wins: Number(t.wins ?? 0) || 0,
+              losses: Number(t.losses ?? 0) || 0,
+              ties: Number(t.ties ?? 0) || 0,
+              logoUrl: typeof t.logoUrl === "string" ? t.logoUrl.trim() : "",
+              rank,
+            });
+          }
+          return teamMap;
+        }
+
+        function mapScoreboardRows(
+          mrows: { synthetic?: boolean }[],
+          teamMap: Map<number, TeamLite>,
+        ) {
+          return mrows.map((m) => {
+            const row = m as Record<string, unknown>;
+            const home = teamMap.get(Number(row.homeTeamId));
+            const away = teamMap.get(Number(row.awayTeamId));
+            const hid = Number(row.homeTeamId);
+            const aid = Number(row.awayTeamId);
+            const hs = Number(row.homeScore ?? row.homeTotalPoints ?? 0);
+            const as = Number(row.awayScore ?? row.awayTotalPoints ?? 0);
+            const wid = row.winnerTeamId != null ? Number(row.winnerTeamId) : null;
+            const completed = row.isCompleted !== undefined ? Boolean(row.isCompleted) : hs + as > 0;
+            let winnerSide: "home" | "away" | "tie" | "undecided" = "undecided";
+            if (completed) {
+              if (wid === hid) winnerSide = "home";
+              else if (wid === aid) winnerSide = "away";
+              else if (hs > as) winnerSide = "home";
+              else if (as > hs) winnerSide = "away";
+              else if (hs === as && hs > 0) winnerSide = "tie";
+            } else if (wid === hid) winnerSide = "home";
+            else if (wid === aid) winnerSide = "away";
+
+            return {
+              id: row.id != null ? Number(row.id) : -(Number(row.week ?? 1) * 1000 + Number(row.matchupPeriodId ?? 0)),
+              week: Number(row.week ?? row.scoringPeriodId ?? input.week),
+              matchupPeriodId: Number(row.matchupPeriodId ?? 0),
+              homeTeamId: hid,
+              awayTeamId: aid,
+              homeScore: hs,
+              awayScore: as,
+              homeProjected: row.homeProjected != null ? Number(row.homeProjected) : null,
+              awayProjected: row.awayProjected != null ? Number(row.awayProjected) : null,
+              winnerTeamId: wid,
+              isCompleted: completed,
+              isPlayoff: Boolean(row.isPlayoff),
+              winnerSide,
+              home: home ?? {
+                teamId: hid,
+                teamName: `Team ${hid}`,
+                ownerName: "",
+                wins: 0,
+                losses: 0,
+                ties: 0,
+                logoUrl: "",
+                rank: null,
+              },
+              away: away ?? {
+                teamId: aid,
+                teamName: `Team ${aid}`,
+                ownerName: "",
+                wins: 0,
+                losses: 0,
+                ties: 0,
+                logoUrl: "",
+                rank: null,
+              },
+            };
+          });
+        }
+
+        let dataSource: "verified_manual" | "normalized" | "cache" | "none" = "none";
+        let maxWeek = 0;
+
+        const db = await getDb();
+        if (!db) return { maxWeek, matchups: [] as const, dataSource };
+
+        // ── Load team map from gmTeams (used for both DB and cache paths) ─────
+        const teamRows = await db
+          .select({
+            teamId: gmTeams.teamId,
+            name: gmTeams.name,
+            ownerName: gmTeams.ownerName,
+            wins: gmTeams.wins,
+            losses: gmTeams.losses,
+            ties: gmTeams.ties,
+            logoUrl: gmTeams.logoUrl,
+            playoffSeed: gmTeams.playoffSeed,
+            finalStanding: gmTeams.finalStanding,
+          })
+          .from(gmTeams)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmTeams.leagueId, leagueId),
+              eqDrizzle(gmTeams.season, input.season)
+            )
+          );
+
+        const teamMap = new Map<number, TeamLite>();
+        for (const t of teamRows) {
+          const tid = Number(t.teamId);
+          const rank =
+            t.playoffSeed != null && Number.isFinite(Number(t.playoffSeed))
+              ? Number(t.playoffSeed)
+              : t.finalStanding != null && Number.isFinite(Number(t.finalStanding))
+                ? Number(t.finalStanding)
+                : null;
+          teamMap.set(tid, {
+            teamId: tid,
+            teamName: (t.name && String(t.name).trim()) || `Team ${tid}`,
+            ownerName: (t.ownerName && String(t.ownerName).trim()) || "",
+            wins: Number(t.wins ?? 0) || 0,
+            losses: Number(t.losses ?? 0) || 0,
+            ties: Number(t.ties ?? 0) || 0,
+            logoUrl: typeof t.logoUrl === "string" ? t.logoUrl.trim() : "",
+            rank,
+          });
+        }
+
+        // ── Phase 1: gmMatchups DB ─────────────────────────────────────────────
+        const [agg] = await db
+          .select({
+            maxWeek: sql<number>`COALESCE(MAX(${gmMatchups.week}), 0)`.mapWith(Number),
+          })
+          .from(gmMatchups)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmMatchups.leagueId, leagueId),
+              eqDrizzle(gmMatchups.season, input.season)
+            )
+          );
+
+        maxWeek = Math.max(maxWeek, Number(agg?.maxWeek ?? 0) || 0);
+
+        const mrows = await db
+          .select({
+            id: gmMatchups.id,
+            week: gmMatchups.week,
+            matchupPeriodId: gmMatchups.matchupPeriodId,
+            homeTeamId: gmMatchups.homeTeamId,
+            awayTeamId: gmMatchups.awayTeamId,
+            homeScore: gmMatchups.homeScore,
+            awayScore: gmMatchups.awayScore,
+            homeProjected: gmMatchups.homeProjected,
+            awayProjected: gmMatchups.awayProjected,
+            winnerTeamId: gmMatchups.winnerTeamId,
+            isCompleted: gmMatchups.isCompleted,
+            isPlayoff: gmMatchups.isPlayoff,
+          })
+          .from(gmMatchups)
+          .where(
+            andDrizzle(
+              eqDrizzle(gmMatchups.leagueId, leagueId),
+              eqDrizzle(gmMatchups.season, input.season),
+              eqDrizzle(gmMatchups.week, input.week)
+            )
+          )
+          .orderBy(ascDrizzle(gmMatchups.matchupPeriodId), ascDrizzle(gmMatchups.id));
+
+        if (mrows.length > 0) {
+          const matchups = mapScoreboardRows(mrows as { synthetic?: boolean }[], teamMap);
+          dataSource = "normalized";
+          return { maxWeek, matchups, dataSource };
+        }
+
+        // ── Phase 2: Combined ESPN cache fallback ──────────────────────────────
+        const cacheHit = await getCachedViewWithTier(input.season, "combined", leagueId);
+        if (!cacheHit) return { maxWeek, matchups: [] as const, dataSource };
+
+        const payload = cacheHit.row.payload as Record<string, unknown>;
+        let cacheNorm: ReturnType<typeof normalizeMatchups> = [];
+        try {
+          cacheNorm = normalizeMatchups(payload);
+        } catch {
+          return { maxWeek, matchups: [] as const, dataSource };
+        }
+
+        // Compute maxWeek from full cache schedule so week selector populates
+        const cacheMaxWeek = cacheNorm.reduce((mx, m) => {
+          const w = Number(m.scoringPeriodId ?? m.matchupPeriodId ?? 0);
+          return w > mx ? w : mx;
+        }, 0);
+        maxWeek = Math.max(maxWeek, cacheMaxWeek);
+
+        // Filter to requested week: match scoringPeriodId first, then matchupPeriodId
+        let weekMatchups = cacheNorm.filter((m) => Number(m.scoringPeriodId) === input.week);
+        if (weekMatchups.length === 0) {
+          weekMatchups = cacheNorm.filter((m) => Number(m.matchupPeriodId) === input.week);
+        }
+
+        if (weekMatchups.length === 0) return { maxWeek, matchups: [] as const, dataSource };
+
+        // Dedup by homeTeamId|awayTeamId within the week
+        const seen = new Set<string>();
+        const dedupedWeek: typeof weekMatchups = [];
+        for (const m of weekMatchups) {
+          const key = `${m.homeTeamId}|${m.awayTeamId}`;
+          if (!seen.has(key)) { seen.add(key); dedupedWeek.push(m); }
+        }
+
+        // Convert normalizeMatchups output to the shape mapScoreboardRows expects
+        const cacheRows = dedupedWeek.map((m, idx) => {
+          const hid = Number(m.homeTeamId);
+          const aid = Number(m.awayTeamId);
+          const winnerStr = String(m.winner ?? "UNDECIDED");
+          const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+          return {
+            id: -(idx + 1),
+            week: Number(m.scoringPeriodId ?? m.matchupPeriodId ?? input.week),
+            matchupPeriodId: Number(m.matchupPeriodId ?? 0),
+            homeTeamId: hid,
+            awayTeamId: aid,
+            homeScore: Number(m.homeTotalPoints ?? 0),
+            awayScore: Number(m.awayTotalPoints ?? 0),
+            homeProjected: m.homeProjectedPoints != null ? Number(m.homeProjectedPoints) : null,
+            awayProjected: m.awayProjectedPoints != null ? Number(m.awayProjectedPoints) : null,
+            winnerTeamId,
+            isCompleted: winnerTeamId != null ? 1 : 0,
+            isPlayoff: matchupIsPlayoffFromEspnTier(m.playoffTierType) ? 1 : 0,
+          };
+        });
+
+        const matchups = mapScoreboardRows(cacheRows as { synthetic?: boolean }[], teamMap);
+        dataSource = "cache";
+        return { maxWeek, matchups, dataSource };
+      }),
+
     transactions: publicProcedure
-      .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(
+        z.object({
+          season: z.number(),
+          teamId: z.number().optional(),
+          /** ALL omitted; TRADES = TRADE + TRADE_* ; else exact `type` match */
+          typeFilter: z.string().optional(),
+          activeLeagueKey: z.string().optional(),
+        })
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
-        const txs = normalizeTransactions(data);
-        if (input.teamId !== undefined) return txs.filter((t: unknown) => (t as Record<string, unknown>).teamId === input.teamId);
+        let txs = normalizeTransactions(data) as Record<string, unknown>[];
+        const tf = input.typeFilter?.trim();
+        if (tf && tf !== "ALL") {
+          txs = txs.filter((t) => {
+            const typ = String(t.type ?? "");
+            if (tf === "TRADES") return typ === "TRADE" || typ.startsWith("TRADE_");
+            return typ === tf;
+          });
+        }
+        if (input.teamId !== undefined) {
+          const tid = input.teamId;
+          txs = txs.filter(
+            (t) => t.teamId === tid || t.fromTeamId === tid || t.toTeamId === tid
+          );
+        }
         return txs;
+      }),
+
+    /**
+     * teamId → canonical owner name for a season, resolved across ALL seasons via
+     * the canonical identity engine (ownerProfileService). Lets Transactions show
+     * real owner names instead of "Team {id}" for teamIds missing from the viewed
+     * season's roster. Additive — does not change the `transactions` payload.
+     */
+    transactionTeamNames: publicProcedure
+      .input(z.object({ season: z.number(), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }): Promise<Record<number, string>> => {
+        void input.activeLeagueKey;
+        if (!ctx.user?.id) return {};
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } }, null, undefined,
+        );
+        if (!leagueId) return {};
+        const db = await getDb();
+        const allGmRows = db
+          ? ((await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, leagueId))) as GmTeamRow[])
+          : [];
+        if (allGmRows.length === 0) return {};
+        return buildTeamNameResolver(allGmRows).nameMapForSeason(input.season);
+      }),
+
+    /** Recent completed-style transactions from persisted `gmTransactions` (newest first). */
+    recentLeagueTransactionEvents: publicProcedure
+      .input(
+        z.object({
+          seasons: z.array(z.number().int()).min(1).max(8),
+          limit: z.number().int().min(1).max(40).optional().default(12),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return [];
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, undefined,
+        );
+        if (!leagueId) return [];
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return [];
+        return loadRecentLeagueTransactionEvents({
+          db,
+          leagueId: lid,
+          seasons: input.seasons,
+          limit: input.limit ?? 12,
+        });
       }),
 
     // ── Trade Aging ─────────────────────────────────────────────────────────────
@@ -1289,8 +4310,13 @@ export const appRouter = router({
     // directly; TRADE_UPHOLD/TRADE_ACCEPT header rows are skipped (no items).
     tradeAging: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcVORP, calcROSValue, calcPickValue } = await import("./analytics");
+        const {
+          resolveAndValueTradePick,
+          compareReceivedSideTotals,
+          toTradeAgingVerdict,
+        } = await import("./tradePickValueAuthority");
         // Helper: compute a single player's ROS composite value
         const playerCompositeValue = (avgPoints: number, position: string, vorp: number): number => {
           const fakePlayer = { playerId: 0, playerName: "", position, teamId: 0, ownerName: "", seasonPoints: 0, avgPoints, projectedTotal: null, keeperValue: 0, keeperValueFuture: 0, injuryStatus: "", appliedStats: {} };
@@ -1300,7 +4326,7 @@ export const appRouter = router({
         };
         const seasons = input.season
           ? [input.season]
-          : (await getAllCachedSeasons()).sort((a, b) => a - b);
+          : (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
 
         // ── Types ──────────────────────────────────────────────────────────────
         interface TradeSide {
@@ -1323,7 +4349,7 @@ export const appRouter = router({
         const allTrades: TradeRecord[] = [];
 
         for (const season of seasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, undefined, ctx.user?.id);
           if (!data) continue;
 
           // Build player value map for this season
@@ -1366,6 +4392,13 @@ export const appRouter = router({
           const teams = normalizeTeams(data) as Record<string, unknown>[];
           const ownerMap = new Map<number, string>();
           for (const t of teams) ownerMap.set(t.teamId as number, (t.owners as string) || `Team ${t.teamId}`);
+
+          const { leagueId: agingLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, season);
+          const agingGeo = agingLeagueId
+            ? await resolveKeeperDraftGeometryForSeason(agingLeagueId, season, ctx.user?.id, data as Record<string, unknown>)
+            : null;
+          const pickTeamCountTradeAging =
+            agingGeo && agingGeo.teamCount > 0 ? agingGeo.teamCount : teams.length;
 
           // Collect completed trade item rows.
           // Legacy path: type === "TRADE" && status === "EXECUTED" (or empty)
@@ -1502,18 +4535,18 @@ export const appRouter = router({
 
               for (const r of group.pickRows) {
                 if ((r.toTeamId as number) === receivingTeamId) {
-                  const round = (r.round as number) || 1;
-                  const pickInRound = (r.pickInRound as number) || 7;
-                  const overall = (r.overallPickNumber as number);
-                  // Derive round/pickInRound from overallPickNumber if available
-                  const derivedRound = overall ? Math.ceil(overall / 14) : round;
-                  const derivedPick = overall ? ((overall - 1) % 14) + 1 : pickInRound;
-                  const value = calcPickValue(derivedRound, derivedPick);
+                  const resolved = resolveAndValueTradePick({
+                    round: r.round as number | null,
+                    pickInRound: r.pickInRound as number | null,
+                    overallPickNumber: r.overallPickNumber as number | null,
+                    teamCount: pickTeamCountTradeAging,
+                    roundCount: agingGeo?.roundCount,
+                  });
                   picks.push({
-                    label: `${derivedRound}.${String(derivedPick).padStart(2, "0")}`,
-                    round: derivedRound,
-                    pickInRound: derivedPick,
-                    value,
+                    label: resolved.label,
+                    round: resolved.round,
+                    pickInRound: resolved.pickInRound,
+                    value: resolved.rawValue,
                   });
                 }
               }
@@ -1537,9 +4570,8 @@ export const appRouter = router({
             // Skip trades where both sides are empty (e.g. header-only rows)
             if (sideA.players.length + sideA.picks.length + sideB.players.length + sideB.picks.length === 0) continue;
 
-            const margin = sideA.totalValue - sideB.totalValue;
-            const verdict: TradeRecord["verdict"] =
-              Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+            const cmp = compareReceivedSideTotals(sideA.totalValue, sideB.totalValue);
+            const verdict: TradeRecord["verdict"] = toTradeAgingVerdict(cmp.winner);
 
             // Get proposedDate from first row, or fall back to acceptance-row date (2026 path)
             const firstRow = group.playerRows[0] || group.pickRows[0];
@@ -1552,7 +4584,7 @@ export const appRouter = router({
               sideA,
               sideB,
               verdict,
-              verdictMargin: Math.abs(margin),
+              verdictMargin: cmp.margin,
             });
           }
         }
@@ -1562,12 +4594,26 @@ export const appRouter = router({
         // scraped_trades table (populated by the Chrome extension when the user
         // visits the ESPN transactions page).
         if (allTrades.length === 0) {
+          const pickTeamCountBySeason = new Map<number, number>();
+          const resolvePickTeamCountForSeason = async (seas: number) => {
+            if (pickTeamCountBySeason.has(seas)) return pickTeamCountBySeason.get(seas)!;
+            const { leagueId: scrapLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, seas);
+            const sd = await getSeasonData(seas, undefined, ctx.user?.id);
+            const g =
+              scrapLeagueId && sd
+                ? await resolveKeeperDraftGeometryForSeason(scrapLeagueId, seas, ctx.user?.id, sd as Record<string, unknown>)
+                : null;
+            const n = g && g.teamCount > 0 ? g.teamCount : 0;
+            pickTeamCountBySeason.set(seas, n);
+            return n;
+          };
           const scrapedRows = await getScrapedTrades(input.season);
           for (const row of scrapedRows) {
             try {
+              const tcScraped = await resolvePickTeamCountForSeason(row.season);
               const sideA = JSON.parse(row.sideAJson) as { teamId: number; ownerName: string; players: { playerId: number; playerName: string; position: string; avgPoints?: number }[]; picks: { label: string; round: number; pickInRound: number }[] };
               const sideB = JSON.parse(row.sideBJson) as typeof sideA;
-              const buildScrapedSide = (side: typeof sideA) => {
+              const buildScrapedSide = (side: typeof sideA, tc: number) => {
                 const players = side.players.map(p => {
                   const pInfo = undefined; // no season data available for scraped trades
                   const avgPts = p.avgPoints ?? 0;
@@ -1579,15 +4625,15 @@ export const appRouter = router({
                   label: pk.label,
                   round: pk.round,
                   pickInRound: pk.pickInRound,
-                  value: calcPickValue(pk.round, pk.pickInRound),
+                  value: tc > 0 ? calcPickValue(pk.round, pk.pickInRound, tc) : 0,
                 }));
                 const totalValue = players.reduce((s, p) => s + p.compositeValue, 0) + picks.reduce((s, p) => s + p.value, 0);
                 return { teamId: side.teamId, ownerName: side.ownerName, players, picks, totalValue };
               };
-              const builtA = buildScrapedSide(sideA);
-              const builtB = buildScrapedSide(sideB);
-              const margin = builtA.totalValue - builtB.totalValue;
-              const verdict: "sideA" | "sideB" | "even" = Math.abs(margin) < 50 ? "even" : margin > 0 ? "sideA" : "sideB";
+              const builtA = buildScrapedSide(sideA, tcScraped);
+              const builtB = buildScrapedSide(sideB, tcScraped);
+              const cmpScraped = compareReceivedSideTotals(builtA.totalValue, builtB.totalValue);
+              const verdict: "sideA" | "sideB" | "even" = toTradeAgingVerdict(cmpScraped.winner);
               allTrades.push({
                 season: row.season,
                 tradeId: row.tradeKey,
@@ -1595,7 +4641,7 @@ export const appRouter = router({
                 sideA: builtA,
                 sideB: builtB,
                 verdict,
-                verdictMargin: Math.abs(margin),
+                verdictMargin: cmpScraped.margin,
               });
             } catch {
               // skip malformed rows
@@ -1607,11 +4653,11 @@ export const appRouter = router({
         return allTrades.sort((a, b) => b.proposedDate - a.proposedDate);
       }),
 
-    allStandings: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+    allStandings: publicProcedure.query(async ({ ctx }) => {
+      const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
       const result: Record<number, unknown[]> = {};
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (data) {
           const teams = normalizeTeams(data);
           result[season] = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
@@ -1622,8 +4668,8 @@ export const appRouter = router({
 
     freeAgents: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const players = (data.players as Record<string, unknown>[]) || [];
         const POS_MAP: Record<number, string> = { 1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST" };
@@ -1646,42 +4692,47 @@ export const appRouter = router({
           .slice(0, 100);
       }),
 
-    keeperHistory: publicProcedure.query(async () => {
-      const cachedSeasons = await getAllCachedSeasons();
+    keeperHistory: publicProcedure.query(async ({ ctx }) => {
+      const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
       const keepers: unknown[] = [];
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (p.keeper) keepers.push(p);
+          if (!isDraftKeeperSlotPick(p)) continue;
+          keepers.push(p);
         }
       }
       return keepers;
     }),
 
     draftOrder: publicProcedure
-      .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .input(z.object({
+        season: z.number(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         return normalizeDraftOrder(data);
       }),
 
-    keeperAnalysis: publicProcedure.query(async () => {
+    keeperAnalysis: publicProcedure.query(async ({ ctx }) => {
       // Build keeper eligibility per team with 2-consecutive-year rule
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
       // Map: teamId -> list of { season, playerId, playerName, position, roundId }
       const keepersByTeam: Record<number, Array<{ season: number; playerId: number; playerName: string; position: string; roundId: number; teamName: string }>> = {};
 
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           if (!keepersByTeam[tid]) keepersByTeam[tid] = [];
           keepersByTeam[tid].push({
@@ -1709,7 +4760,7 @@ export const appRouter = router({
       }> = [];
 
       // Get current season rosters for eligible player list
-      const currentData = await getSeasonData(latestSeason);
+      const currentData = await getSeasonData(latestSeason, undefined, ctx.user?.id);
       const currentRosters = currentData ? normalizeRosters(currentData) : [];
       const currentTeams = currentData ? normalizeTeams(currentData) : [];
 
@@ -1768,23 +4819,23 @@ export const appRouter = router({
 
       return { latestSeason, nextSeason, teams: result };
     }),
-    keeperEligibility2026: publicProcedure.query(async () => {
+    keeperEligibility2026: publicProcedure.query(async ({ ctx }) => {
       // Full 2026 keeper eligibility calculator with 2-consecutive-year rule enforcement
       // Rule: a player kept in BOTH 2024 AND 2025 must return to the draft pool in 2026
       // Round cost: if kept in round R in 2025, cost to keep in 2026 = R - 1
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
 
       // Build per-team, per-player keeper history across all seasons
       const keepersByPlayerByTeam: Record<number, Record<number, Array<{ season: number; roundId: number; playerName: string; position: string }>>> = {};
       const teamNames: Record<number, string> = {};
 
       for (const season of cachedSeasons) {
-        const data = await getSeasonData(season);
+        const data = await getSeasonData(season, undefined, ctx.user?.id);
         if (!data) continue;
         const picks = normalizeDraftPicks(data);
         for (const pick of picks) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           const pid = p.playerId as number;
           if (!keepersByPlayerByTeam[tid]) keepersByPlayerByTeam[tid] = {};
@@ -1801,8 +4852,8 @@ export const appRouter = router({
 
       // Get 2025 keepers as the baseline for 2026 eligibility
       const latestSeason = 2025;
-      const data2025 = await getSeasonData(latestSeason);
-      const data2024 = await getSeasonData(2024);
+      const data2025 = await getSeasonData(latestSeason, undefined, ctx.user?.id);
+      const data2024 = await getSeasonData(2024, undefined, ctx.user?.id);
       const teams2025 = data2025 ? normalizeTeams(data2025) : [];
 
       // Build 2024 keeper set: playerId -> roundId (for consecutive check)
@@ -1811,7 +4862,7 @@ export const appRouter = router({
         const picks2024 = normalizeDraftPicks(data2024);
         for (const pick of picks2024) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           const pid = p.playerId as number;
           if (!keepers2024[tid]) keepers2024[tid] = {};
@@ -1825,7 +4876,7 @@ export const appRouter = router({
         const picks2025 = normalizeDraftPicks(data2025);
         for (const pick of picks2025) {
           const p = pick as Record<string, unknown>;
-          if (!p.keeper) continue;
+          if (!isDraftKeeperSlotPick(p)) continue;
           const tid = p.teamId as number;
           if (!keepers2025[tid]) keepers2025[tid] = [];
           keepers2025[tid].push({
@@ -1967,6 +5018,139 @@ export const appRouter = router({
         returningByPosition[pos].push({ playerName: p.playerName, teamName: p.teamName, round2025: p.round2025 });
       }
 
+      // A1: Owner profile computed for the user's selected (focal) owner.
+      // Previously this returned a single hardcoded owner; it now resolves the
+      // focal owner from the signed-in user's active profile and computes career,
+      // keeper, draft, and GM-activity data from cache via the live opponent
+      // builder. No fallback to any specific owner: if no profile is configured
+      // we return a neutral profile-required state.
+      const ownerProfile = await (async () => {
+        const neutral = {
+          profileRequired: true,
+          ownerName: null as string | null,
+          teamName: null as string | null,
+          teamId: null as number | null,
+          careerSeasons: [] as Array<{ season: number; wins: number; losses: number; pf: number; pa: number; seed: number; teamName: string }>,
+          careerStats: null as Record<string, unknown> | null,
+          keeperHistory: [] as Array<{ season: number; playerName: string; position: string; round: number }>,
+          keeper2026: { eligible: [] as unknown[], ineligible: [] as unknown[], recommendation: "Select your owner profile to see your keeper outlook.", status: "profile_required" },
+          draftTendencies: null as Record<string, unknown> | null,
+          gmActivityProfile: null as Record<string, unknown> | null,
+        };
+
+        const co = ctx.user?.id ? await resolveCurrentOwner({ id: ctx.user.id }) : null;
+        const focalMemberId = co?.isSetupComplete ? co.ownerId : null;
+        if (!focalMemberId) return neutral;
+
+        const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
+        const profiles = await buildLiveOpponentProfiles(ctx.user?.id);
+        const live = profiles.get(focalMemberId) ?? null;
+        if (!live) return neutral;
+
+        // Focal team for the latest synced season = intersection of the owner's
+        // team IDs with this season's teams.
+        const focalTeamIds = new Set(live.teamIds);
+        let focalTeamId: number | null = null;
+        for (const t of teams2025) {
+          if (focalTeamIds.has(t.teamId as number)) { focalTeamId = t.teamId as number; break; }
+        }
+        if (focalTeamId == null && live.teamIds.length) focalTeamId = live.teamIds[live.teamIds.length - 1];
+        const focalTeamRow = focalTeamId != null ? teams2025.find(t => (t.teamId as number) === focalTeamId) : undefined;
+        const teamName = (focalTeamRow?.teamName as string) || (focalTeamId != null ? teamNames[focalTeamId] : "") || live.ownerName;
+
+        // A1 fix: compute all career totals defensively from careerSeasons with
+        // numeric guards. Do NOT trust live.career.* (can be NaN when older
+        // seasons have undefined W/L). Missing/undefined values are treated as 0,
+        // and every numeric output is coerced finite so the response has no NaN.
+        const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+        const r1 = (v: number) => Math.round(num(v) * 10) / 10;
+        const careerSeasons = live.seasons.map(s => ({
+          season: num(s.season),
+          wins: num(s.wins),
+          losses: num(s.losses),
+          ties: num((s as { ties?: unknown }).ties),
+          pf: num(s.pf),
+          pa: num(s.pa),
+          seed: num(s.seed),
+          teamName,
+        }));
+        const totalWins = careerSeasons.reduce((a, r) => a + r.wins, 0);
+        const totalLosses = careerSeasons.reduce((a, r) => a + r.losses, 0);
+        const totalTies = careerSeasons.reduce((a, r) => a + r.ties, 0);
+        const totalPF = careerSeasons.reduce((a, r) => a + r.pf, 0);
+        const totalPA = careerSeasons.reduce((a, r) => a + r.pa, 0);
+        const totalGames = totalWins + totalLosses + totalTies;
+        const winPct = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
+        const avgPF = careerSeasons.length ? totalPF / careerSeasons.length : 0;
+        const avgPA = careerSeasons.length ? totalPA / careerSeasons.length : 0;
+        const bestSeason = careerSeasons.length ? careerSeasons.reduce((b, r) => (r.wins > b.wins ? r : b)) : null;
+        const worstSeason = careerSeasons.length ? careerSeasons.reduce((w, r) => (r.wins < w.wins ? r : w)) : null;
+        const recent = careerSeasons.slice(-3);
+        const recentGames = recent.reduce((a, r) => a + r.wins + r.losses + r.ties, 0);
+        const recentWinPct = recentGames > 0 ? (recent.reduce((a, r) => a + r.wins, 0) / recentGames) * 100 : winPct;
+        const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
+        const careerStats = {
+          totalWins, totalLosses, totalTies,
+          winPct: r1(winPct),
+          totalPF: r1(totalPF),
+          totalPA: r1(totalPA),
+          avgPF: r1(avgPF),
+          avgPA: r1(avgPA),
+          playoffSeasons: num(live.career.playoffSeasons),
+          totalSeasons: careerSeasons.length,
+          bestSeason, worstSeason, trend,
+          recentWinPct: r1(recentWinPct),
+        };
+
+        const keeperHistory: Array<{ season: number; playerName: string; position: string; round: number }> = [];
+        for (const tid of live.teamIds) {
+          const byPlayer = keepersByPlayerByTeam[tid];
+          if (!byPlayer) continue;
+          for (const recs of Object.values(byPlayer)) {
+            for (const r of recs) keeperHistory.push({ season: r.season, playerName: r.playerName, position: r.position, round: r.roundId });
+          }
+        }
+        keeperHistory.sort((a, b) => a.season - b.season);
+
+        const focalTeam2026 = focalTeamId != null ? teamResults.find(t => t.teamId === focalTeamId) : undefined;
+        const keeper2026 = {
+          eligible: focalTeam2026?.players.filter(p => !p.isIneligible) ?? [],
+          ineligible: focalTeam2026?.players.filter(p => p.isIneligible) ?? [],
+          recommendation: focalTeam2026 ? "Evaluate your best round-surplus keeper option before the Aug 18 deadline." : "No keeper data found for your team in the latest synced season.",
+          status: focalTeam2026 ? "pending" : "no_data",
+        };
+
+        const draftTendencies = {
+          draftStyleBadge: live.draftStyleBadge,
+          draftStyleDesc: live.draftStyleDesc,
+          earlyQbTendency: live.earlyQbTendency,
+          earlyTeTendency: live.earlyTeTendency,
+          keeperEfficiencyAvg: num(live.keeperEfficiencyAvg),
+        };
+        const gmActivityProfile = {
+          seasonActivity: live.seasons.map(s => ({ season: s.season, acquisitions: s.acquisitions, drops: s.drops, trades: s.trades, rosterMoves: s.acquisitions + s.drops })),
+          averages: { acquisitions: live.avgAcquisitions, trades: live.avgTrades },
+          gmArchetype: live.gmArchetype,
+          gmArchetypeDesc: live.gmArchetypeDesc,
+          strengthsWeaknesses: (await resolvePremiumAccess(ctx.user))
+            ? live.strengthsWeaknesses
+            : [],
+        };
+
+        return {
+          profileRequired: false,
+          ownerName: live.ownerName,
+          teamName,
+          teamId: focalTeamId,
+          careerSeasons,
+          careerStats,
+          keeperHistory,
+          keeper2026,
+          draftTendencies,
+          gmActivityProfile,
+        };
+      })();
+
       return {
         season: 2026,
         deadline: "August 18, 2026",
@@ -1988,162 +5172,7 @@ export const appRouter = router({
             ? `${allIneligible.length} elite player${allIneligible.length > 1 ? "s" : ""} returning to the draft pool — ${competitorConstraints.filter(c => c.overallThreat === "critical").length} team${competitorConstraints.filter(c => c.overallThreat === "critical").length !== 1 ? "s" : ""} must burn early picks on replacements`
             : "No ineligible players this season",
         },
-        ownerProfile: (() => {
-          // Rod Sellers — Str8FrmHell / RodZilla — Team ID 11 across all seasons
-          const ROD_TEAM_ID = 11;
-          const ROD_TEAM_NAME = "Str8FrmHell, RodZilla";
-
-          // Career season records (from ESPN cache, 2018–2025)
-          const careerSeasons = [
-            { season: 2018, wins: 5,  losses: 8,  pf: 1583.1, pa: 1788.9, seed: 13, teamName: "Str8FrmHell, Rod's Minions" },
-            { season: 2019, wins: 8,  losses: 5,  pf: 1843.1, pa: 1821.4, seed: 2,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2020, wins: 6,  losses: 7,  pf: 1781.8, pa: 1706.4, seed: 10, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2021, wins: 7,  losses: 7,  pf: 1699.2, pa: 1782.5, seed: 9,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2022, wins: 3,  losses: 11, pf: 1447.1, pa: 1857.7, seed: 13, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2023, wins: 7,  losses: 7,  pf: 1893.6, pa: 1885.7, seed: 7,  teamName: "Str8FrmHell, RodZilla" },
-            { season: 2024, wins: 5,  losses: 8,  pf: 1652.3, pa: 1680.8, seed: 10, teamName: "Str8FrmHell, RodZilla" },
-            { season: 2025, wins: 9,  losses: 5,  pf: 1921.3, pa: 1693.3, seed: 3,  teamName: "Str8FrmHell, RodZilla" },
-          ];
-
-          const totalWins   = careerSeasons.reduce((s, r) => s + r.wins, 0);
-          const totalLosses = careerSeasons.reduce((s, r) => s + r.losses, 0);
-          const totalGames  = totalWins + totalLosses;
-          const winPct      = totalGames > 0 ? (totalWins / totalGames) * 100 : 0;
-          const totalPF     = careerSeasons.reduce((s, r) => s + r.pf, 0);
-          const totalPA     = careerSeasons.reduce((s, r) => s + r.pa, 0);
-          const avgPF       = totalPF / careerSeasons.length;
-          const bestSeason  = careerSeasons.reduce((best, r) => r.wins > best.wins ? r : best, careerSeasons[0]);
-          const worstSeason = careerSeasons.reduce((worst, r) => r.wins < worst.wins ? r : worst, careerSeasons[0]);
-          const playoffSeasons = careerSeasons.filter(r => r.seed <= 7).length; // top 7 of 14 make playoffs
-
-          // Keeper history (2022–2025, from ESPN data)
-          const keeperHistory = [
-            { season: 2022, playerName: "Derrick Henry",   position: "RB", round: 1, eligible2026: false },
-            { season: 2023, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
-            { season: 2024, playerName: "Saquon Barkley",  position: "RB", round: 2, eligible2026: false },
-            { season: 2025, playerName: "Breece Hall",     position: "RB", round: 5, eligible2026: true  },
-          ];
-
-          // 2026 keeper situation
-          const myTeam2026 = teamResults.find(t => t.teamId === ROD_TEAM_ID);
-          // Known player name map for IDs that ESPN stores without playerInfo
-          const KNOWN_PLAYER_NAMES: Record<number, { name: string; position: string }> = {
-            4427366: { name: "Breece Hall", position: "RB" },
-            3929630: { name: "Saquon Barkley", position: "RB" },
-            3043078: { name: "Derrick Henry", position: "RB" },
-          };
-          const resolvePlayerName = (p: { playerName: string; position: string; playerId?: number }) => {
-            if (p.playerName && !p.playerName.startsWith("Player#")) return p;
-            const pid = p.playerId as number | undefined;
-            if (pid && KNOWN_PLAYER_NAMES[pid]) {
-              return { ...p, playerName: KNOWN_PLAYER_NAMES[pid].name, position: KNOWN_PLAYER_NAMES[pid].position };
-            }
-            return p;
-          };
-          const my2026KeeperRaw = myTeam2026?.players.find(p => !p.isIneligible) ?? null;
-          const my2026Keeper = my2026KeeperRaw ? resolvePlayerName(my2026KeeperRaw as unknown as { playerName: string; position: string; playerId?: number }) as typeof my2026KeeperRaw : null;
-          const my2026Ineligible = myTeam2026?.players.filter(p => p.isIneligible) ?? [];
-
-          // Trend: last 3 seasons
-          const recentSeasons = careerSeasons.slice(-3);
-          const recentWinPct = recentSeasons.reduce((s, r) => s + r.wins, 0) /
-            (recentSeasons.reduce((s, r) => s + r.wins + r.losses, 0)) * 100;
-          const trend = recentWinPct > winPct + 5 ? "improving" : recentWinPct < winPct - 5 ? "declining" : "stable";
-
-          // ── Draft Tendencies (from 8-season analysis) ──────────────────────
-          const draftTendencies = {
-            totalPicks: 107,
-            positionalBreakdown: [
-              { position: "RB",  picks: 38, pct: 36, avgRound: 4.7, earlyPicks: 14 },
-              { position: "WR",  picks: 26, pct: 24, avgRound: 6.2, earlyPicks: 7  },
-              { position: "QB",  picks: 8,  pct: 7,  avgRound: 5.9, earlyPicks: 1  },
-              { position: "TE",  picks: 5,  pct: 5,  avgRound: 6.8, earlyPicks: 2  },
-              { position: "K",   picks: 4,  pct: 4,  avgRound: 11.5, earlyPicks: 0 },
-              { position: "FLEX",picks: 4,  pct: 4,  avgRound: 10.2, earlyPicks: 0 },
-            ],
-            round1Breakdown: [
-              { position: "RB", count: 7 },
-              { position: "WR", count: 1 },
-            ],
-            earlyRoundSplit: [
-              { position: "RB",  count: 14, pct: 52 },
-              { position: "WR",  count: 7,  pct: 27 },
-              { position: "TE",  count: 2,  pct: 8  },
-              { position: "QB",  count: 1,  pct: 4  },
-            ],
-            draftStyleBadge: "RB-First Builder",
-            draftStyleDesc: "7 of 8 round-1 picks have been RBs. You consistently build around elite backfields before addressing WR depth.",
-            keeperPattern: "Consistent RB keeper — Henry (2022), Barkley x2 (2023-24), Hall (2025). 2026 keeper TBD — pending trade decisions.",
-            notablePicks: [
-              { season: 2020, pick: "Lamar Jackson Rd1 Pk13", note: "Bold QB1 in round 1 — paid off with MVP season" },
-              { season: 2023, pick: "CMC Rd1 + Bijan Rd1", note: "Double RB round 1 — high upside, high variance" },
-              { season: 2025, pick: "McCaffrey Rd1 + McBride Rd2", note: "RB/TE stack — injury risk but elite ceiling" },
-            ],
-          };
-
-          // ── GM Activity Profile (from transaction counter data) ────────────
-          const gmActivityProfile = {
-            seasonActivity: [
-              { season: 2018, acquisitions: 36, drops: 33, trades: 12, rosterMoves: 75 },
-              { season: 2019, acquisitions: 38, drops: 34, trades: 12, rosterMoves: 69 },
-              { season: 2020, acquisitions: 23, drops: 17, trades: 6,  rosterMoves: 46 },
-              { season: 2021, acquisitions: 49, drops: 56, trades: 9,  rosterMoves: 71 },
-              { season: 2022, acquisitions: 16, drops: 17, trades: 4,  rosterMoves: 64 },
-              { season: 2023, acquisitions: 27, drops: 43, trades: 10, rosterMoves: 46 },
-              { season: 2024, acquisitions: 13, drops: 26, trades: 1,  rosterMoves: 40 },
-              { season: 2025, acquisitions: 26, drops: 49, trades: 4,  rosterMoves: 80 },
-            ],
-            averages: { acquisitions: 29, drops: 34, trades: 7.3, rosterMoves: 61 },
-            gmArchetype: "Active Trader",
-            gmArchetypeDesc: "7.3 trades/season is above league average. You're willing to make moves but not a waiver grinder (29 adds/season is moderate).",
-            insights: [
-              { label: "Most Active Season", value: "2021 (49 adds, 56 drops, 9 trades) — finished 7–7, missed playoffs" },
-              { label: "Quietest Season", value: "2024 (13 adds, 1 trade) — finished 5–8" },
-              { label: "Best Trade Season", value: "2018 & 2019 (12 trades each) — both playoff years" },
-              { label: "Best Season Activity", value: "2025 (26 adds, 4 trades) — finished 9–5, #3 seed" },
-            ],
-            strengthsWeaknesses: [
-              { type: "strength", text: "Consistent RB keeper identification — 4 straight years of strong RB keeper value" },
-              { type: "strength", text: "Trade willingness — 7.3 trades/season shows you're not afraid to make deals" },
-              { type: "strength", text: "2025 breakout — best season in 8 years shows growth and adaptation" },
-              { type: "weakness", text: "RB dependency — 36% of all picks are RBs; WR depth has been inconsistent" },
-              { type: "weakness", text: "High-activity seasons correlate with poor results (2021: 49 adds, 7–7)" },
-              { type: "weakness", text: "2024 under-activity — 1 trade all season, missed obvious roster improvements" },
-              { type: "blindspot", text: "Late-round QB value — you've drafted multiple QBs in rounds 4–6 but rarely hit" },
-              { type: "blindspot", text: "TE neglect — only 5 TE picks in 8 seasons; relying on mid-tier TEs hurts PPR floors" },
-            ],
-          };
-
-          return {
-            ownerName: "Rod Sellers",
-            teamName: ROD_TEAM_NAME,
-            teamId: ROD_TEAM_ID,
-            careerSeasons,
-            careerStats: {
-              totalWins,
-              totalLosses,
-              winPct: Math.round(winPct * 10) / 10,
-              totalPF: Math.round(totalPF * 10) / 10,
-              totalPA: Math.round(totalPA * 10) / 10,
-              avgPF: Math.round(avgPF * 10) / 10,
-              playoffSeasons,
-              totalSeasons: careerSeasons.length,
-              bestSeason,
-              worstSeason,
-              trend,
-              recentWinPct: Math.round(recentWinPct * 10) / 10,
-            },
-            keeperHistory,
-            keeper2026: {
-              eligible: my2026Keeper ? [my2026Keeper] : [],
-              ineligible: my2026Ineligible,
-              recommendation: "2026 keeper is TBD — pending trade decisions. Evaluate your best round-surplus option before the Aug 18 deadline.",
-              status: "pending",
-            },
-            draftTendencies,
-            gmActivityProfile,
-          };
-        })(),
+        ownerProfile,
       };
     }),
 
@@ -2158,6 +5187,7 @@ export const appRouter = router({
           if (v === undefined || v === null || v === '' || v === 0) return undefined;
           return String(v);
         }),
+        leagueName: z.string().optional(),
         season: z.number().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -2171,10 +5201,16 @@ export const appRouter = router({
           : [currentYear, currentYear - 1, 2026, 2025];
 
         // Always guarantee a non-empty leagueName
-        let leagueName = testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League";
+        const passedName = (input.leagueName ?? "").trim();
+        let leagueName = passedName || (testLeagueId ? `ESPN League ${testLeagueId}` : "ESPN League");
+
+        if (ctx.user && testLeagueId) {
+          const { assertCanConnectLeague } = await import("./connectedLeagueLimits");
+          await assertCanConnectLeague(ctx.user.id, "espn", testLeagueId);
+        }
 
         // Try to fetch league name from ESPN (non-blocking — failure just uses fallback)
-        if (testLeagueId) {
+        if (testLeagueId && !passedName) {
           for (const season of seasonsToTry) {
             try {
               const settingsUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${testLeagueId}?view=mSettings`;
@@ -2210,7 +5246,7 @@ export const appRouter = router({
                 provider: "espn",
                 leagueId: testLeagueId || "default",
                 leagueName,
-                season: 2025,
+                season: new Date().getFullYear(),
                 isActive: true,
                 credentials: encryptedCreds,
                 syncStatus: "pending",
@@ -2245,6 +5281,10 @@ export const appRouter = router({
             }
           }
 
+          // Active-league safety (ARCHITECTURE.md S9): keep a set-up league active rather
+          // than this freshly-connected (owner-not-yet-selected) one.
+          await reconcileActiveLeague(ctx.user.id);
+
           const refreshSeason =
             input.season ?? new Date().getFullYear();
           const creds = {
@@ -2253,15 +5293,18 @@ export const appRouter = router({
             espnS2,
           };
           void (async () => {
-            const { refreshSingleSeason } = await import("./espnSeasonRefresh");
-            await refreshSingleSeason({
-              season: refreshSeason,
+            const { completeEspnConnectOnboarding } = await import("./espnOnboardingService");
+            const result = await completeEspnConnectOnboarding({
+              userId: ctx.user!.id,
               leagueId: testLeagueId || "default",
               creds,
-              userId: ctx.user!.id,
+              season: refreshSeason,
             });
+            if (result.errors.length) {
+              console.warn("[saveCredentials] onboarding completed with warnings:", result);
+            }
           })().catch(err => {
-            console.error("[saveCredentials] Background refresh failed:", err);
+            console.error("[saveCredentials] Background onboarding failed:", err);
           });
         }
 
@@ -2320,10 +5363,1884 @@ export const appRouter = router({
           error,
         };
       }),
+
+    /**
+     * One-click diagnostics: why `espn_raw_cache` `combined` JSON for a season does not produce `draft_picks`.
+     * Loads latest `combined` row, runs extract → normalize → upsertDraftPicks, reports DB counts. Dev console / tRPC only.
+     */
+    debugHistoricalDraftIngest: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return debugHistoricalDraftIngest({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          season: input.season,
+        });
+      }),
+
+    /**
+     * Chrome extension: persist one season from ESPN JSON already fetched with the user's browser session.
+     * Raw rows → `espn_raw_cache`; normalization only via existing `runEspnCombinedPersist` / `normalizeEspnPayload` path.
+     */
+    ingestHistoricalSeasonPayload: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          source: z.literal("chrome_extension_espn_api"),
+          combinedPayload: z.record(z.string(), z.unknown()),
+          matchupPayloads: z
+            .array(
+              z.object({
+                week: z.number().int().min(1).max(30),
+                payload: z.record(z.string(), z.unknown()),
+              }),
+            )
+            .default([]),
+          force: z.boolean().optional(),
+          matchupsExplicitlyUnavailable: z.boolean().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return importEspnBrowserSeasonBundle({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          season: input.season,
+          source: "chrome_extension_espn_api",
+          combinedPayload: input.combinedPayload as Record<string, unknown>,
+          matchupPayloads: input.matchupPayloads,
+          force: input.force,
+          matchupsExplicitlyUnavailable: input.matchupsExplicitlyUnavailable,
+        });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped draft recap picks into `draft_picks` (no combined JSON persist).
+     * Ingest only — does NOT authorize Draft History display (use draftRecapCanonical for UI).
+     * See docs/DRAFT_HISTORY_CANONICAL.md
+     */
+    ingestParsedDraftPicks: publicProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          picks: z.array(
+            z.object({
+              overallPick: z.number(),
+              roundId: z.number(),
+              roundPick: z.number(),
+              teamId: z.number().optional().default(0),
+              teamName: z.string(),
+              playerName: z.string(),
+              position: z.string(),
+              nflTeam: z.string().optional(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        console.log("[AUTH USER]", ctx.auth?.userId, "dbUser:", ctx.user?.id ?? null);
+        const userId = ctx.user?.id ?? 0;
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedDraftPicks: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
+        return ingestParsedDraftPicks({
+          userId,
+          leagueId: input.leagueId,
+          season: input.season,
+          picks: input.picks,
+        });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped standings rows into `teams` + `standings_snapshots`.
+     */
+    ingestParsedStandings: publicProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          rows: z.array(
+            z.object({
+              rank: z.number(),
+              teamName: z.string(),
+              ownerName: z.string(),
+              wins: z.number(),
+              losses: z.number(),
+              ties: z.number(),
+              pointsFor: z.number(),
+              pointsAgainst: z.number(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedStandings: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
+        return ingestParsedStandings({ userId, leagueId: input.leagueId, season: input.season, rows: input.rows });
+      }),
+
+    /**
+     * Chrome extension: upsert HTML-scraped weekly matchup rows into `matchups`.
+     */
+    ingestParsedMatchups: publicProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          rows: z.array(
+            z.object({
+              week: z.number(),
+              awayTeam: z.string(),
+              homeTeam: z.string(),
+              awayScore: z.number(),
+              homeScore: z.number(),
+              winner: z.string().nullable(),
+            }),
+          ),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user?.id ?? 0;
+        // Phase B: all leagues require auth — 457622 bypass removed.
+        if (!userId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: `ingestParsedMatchups: no db user (auth.userId=${ctx.auth?.userId ?? "none"})`,
+          });
+        }
+        return ingestParsedMatchups({ userId, leagueId: input.leagueId, season: input.season, rows: input.rows });
+      }),
+
+    /**
+     * Web app: same persistence as `ingestHistoricalSeasonPayload`, tagged for audit as a logged-in
+     * browser session (no extension).
+     */
+    importFromBrowser: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().min(1).max(32),
+          season: z.number().int().min(1990).max(2100),
+          combinedPayload: z.record(z.string(), z.unknown()),
+          matchupPayloads: z
+            .array(
+              z.object({
+                week: z.number().int().min(1).max(30),
+                payload: z.record(z.string(), z.unknown()),
+              }),
+            )
+            .default([]),
+          force: z.boolean().optional(),
+          matchupsExplicitlyUnavailable: z.boolean().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return importEspnBrowserSeasonBundle({
+          userId: ctx.user.id,
+          leagueId: input.leagueId,
+          season: input.season,
+          source: "browser_session",
+          combinedPayload: input.combinedPayload as Record<string, unknown>,
+          matchupPayloads: input.matchupPayloads,
+          force: input.force,
+          matchupsExplicitlyUnavailable: input.matchupsExplicitlyUnavailable,
+        });
+      }),
+
+    /** Per-season normalized GM counts for browser-session sync UI (fixed season range). */
+    browserSyncStatus: protectedProcedure
+      .input(
+        z
+          .object({
+            leagueId: z.string().min(1).max(32).optional(),
+            startSeason: z.number().int().min(1990).max(2100).optional(),
+            endSeason: z.number().int().min(1990).max(2100).optional(),
+            activeLeagueKey: z.string().optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          input?.leagueId ?? null,
+          undefined,
+        );
+        const start = input?.startSeason ?? 2009;
+        const end = input?.endSeason ?? 2026;
+        const seasons = await getBrowserSyncStatusForLeague(leagueId, start, end);
+        return { leagueId, seasons };
+      }),
+
+    /** Per-season normalized row counts for diagnostics (extension POSTs this like other mutations). */
+    historicalImportStatus: protectedProcedure
+      .input(
+        z.object({
+          leagueId: z.string().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          input.leagueId ?? null,
+          undefined,
+        );
+        const db = await getDb();
+        if (!db) return { leagueId, seasons: [] as Array<Record<string, unknown>> };
+        const seasonsRows = await db
+          .selectDistinct({ season: gmDraftPicks.season })
+          .from(gmDraftPicks)
+          .where(eqDrizzle(gmDraftPicks.leagueId, leagueId))
+          .orderBy(ascDrizzle(gmDraftPicks.season));
+        const seasons = seasonsRows.map((r) => r.season);
+        const out: Array<{
+          season: number;
+          draftPicks: number;
+          teams: number;
+          matchups: number;
+          transactions: number;
+          errors: string[];
+        }> = [];
+        for (const s of seasons) {
+          const c = await countNormalizedGmRowsForSeason(leagueId, s);
+          const errors: string[] = [];
+          if (c.draftPicks === 0) errors.push("no_draft_picks");
+          if (c.teams === 0) errors.push("no_teams");
+          if (c.matchups === 0) errors.push("no_matchups");
+          out.push({
+            season: s,
+            draftPicks: c.draftPicks,
+            teams: c.teams,
+            matchups: c.matchups,
+            transactions: c.transactions,
+            errors,
+          });
+        }
+        return { leagueId, seasons: out };
+      }),
+
+    standingsHistory: publicProcedure.query(async ({ ctx }) => {
+      type SeasonResult = { season: number; finalStanding: number | null; wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number };
+      type AggOwner = { ownerKey: string; displayName: string; seasonResults: SeasonResult[] };
+      type Diagnostic = { ownerKey: string; displayName: string; seasonCount: number };
+      const empty = { seasons: [] as number[], owners: [] as AggOwner[], diagnostics: [] as Diagnostic[] };
+      if (!ctx.user?.id) return empty;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return empty;
+      const rows = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerId: gmTeams.ownerId,
+          ownerName: gmTeams.ownerName,
+          wins: gmTeams.wins,
+          losses: gmTeams.losses,
+          ties: gmTeams.ties,
+          pointsFor: gmTeams.pointsFor,
+          pointsAgainst: gmTeams.pointsAgainst,
+          finalStanding: gmTeams.finalStanding,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
+      const allSeasonSet = new Set<number>();
+
+      // Pass 1: build normalizedName → ownerId cross-reference from rows that have both.
+      // This lets historical rows (ownerId="") be bridged to the same key as their recent counterpart.
+      const nameToOwnerId = new Map<string, string>();
+      for (const row of rows) {
+        const id = (row.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(row.ownerName || row.name || "");
+        if (norm && !nameToOwnerId.has(norm)) nameToOwnerId.set(norm, id);
+      }
+
+      // Pass 2: accumulate by ownerKey
+      const ownerAccumulator = new Map<string, { displayName: string; bySeasonMap: Map<number, SeasonResult> }>();
+
+      for (const row of rows) {
+        allSeasonSet.add(row.season);
+        const rawOwner = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
+        const ownerKey = resolveOwnerKey(row.ownerId, row.ownerName, row.name || `Team ${row.teamId}`, nameToOwnerId);
+        const display = cleanOwnerDisplay(rawOwner) || rawOwner;
+        console.log("[standingsHistory]", { rawOwner, ownerKey, season: row.season });
+
+        let agg = ownerAccumulator.get(ownerKey);
+        if (!agg) {
+          agg = { displayName: display, bySeasonMap: new Map() };
+          ownerAccumulator.set(ownerKey, agg);
+        } else if (display && !display.startsWith("(")) {
+          // Prefer the most recent clean (non-paren) display name
+          agg.displayName = display;
+        }
+
+        // Keep first (best-standing) entry per season per owner
+        if (!agg.bySeasonMap.has(row.season)) {
+          agg.bySeasonMap.set(row.season, {
+            season: row.season,
+            finalStanding: row.finalStanding,
+            wins: row.wins,
+            losses: row.losses,
+            ties: row.ties,
+            pointsFor: Number(row.pointsFor),
+            pointsAgainst: Number(row.pointsAgainst),
+          });
+        }
+      }
+
+      const seasons = [...allSeasonSet].sort((a, b) => a - b);
+      const owners: AggOwner[] = [...ownerAccumulator.entries()]
+        .map(([ownerKey, { displayName, bySeasonMap }]) => ({
+          ownerKey,
+          displayName,
+          seasonResults: [...bySeasonMap.values()].sort((a, b) => a.season - b.season),
+        }))
+        .sort((a, b) => {
+          const tA = a.seasonResults.filter((r) => r.finalStanding === 1).length;
+          const tB = b.seasonResults.filter((r) => r.finalStanding === 1).length;
+          if (tB !== tA) return tB - tA;
+          const wA = a.seasonResults.reduce((s, r) => s + r.wins, 0);
+          const wB = b.seasonResults.reduce((s, r) => s + r.wins, 0);
+          return wB - wA;
+        });
+
+      const diagnostics: Diagnostic[] = [...ownerAccumulator.entries()].map(([ownerKey, { displayName, bySeasonMap }]) => ({
+        ownerKey, displayName, seasonCount: bySeasonMap.size,
+      }));
+      return { seasons, owners, diagnostics };
+    }),
+
+    allTimeH2H: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { owners: [] as string[], matrix: [] as { owner: string; vs: Record<string, { wins: number; losses: number; ties: number }> }[] };
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          ownerId: gmTeams.ownerId,
+          ownerName: gmTeams.ownerName,
+          name: gmTeams.name,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      // Pass 1: build normalizedName → ownerId cross-reference
+      const nameToOwnerId2 = new Map<string, string>();
+      for (const t of allTeams) {
+        const id = (t.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(t.ownerName || t.name || "");
+        if (norm && !nameToOwnerId2.has(norm)) nameToOwnerId2.set(norm, id);
+      }
+
+      // Pass 2: ownerKey → display name (last/most-recent clean name wins)
+      const ownerMap = new Map<string, string>();         // season:teamId → ownerKey
+      const ownerDisplayMap = new Map<string, string>();  // ownerKey → displayName
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = resolveOwnerKey(t.ownerId, t.ownerName, t.name || `Team ${t.teamId}`, nameToOwnerId2);
+        ownerMap.set(`${t.season}:${t.teamId}`, ownerKey);
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplayMap.set(ownerKey, display);
+        else if (!ownerDisplayMap.has(ownerKey)) ownerDisplayMap.set(ownerKey, display || rawName);
+      }
+
+      const matchups = await db
+        .select({
+          season: gmMatchups.season,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+        })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+        ));
+
+      // H2H accumulation keyed by ownerKey (not display name) to handle merged owners correctly
+      const h2h = new Map<string, { wins: number; losses: number; ties: number }>();
+      const getOrCreate = (key: string) => {
+        if (!h2h.has(key)) h2h.set(key, { wins: 0, losses: 0, ties: 0 });
+        return h2h.get(key)!;
+      };
+      for (const m of matchups) {
+        const homeKey = ownerMap.get(`${m.season}:${m.homeTeamId}`);
+        const awayKey = ownerMap.get(`${m.season}:${m.awayTeamId}`);
+        if (!homeKey || !awayKey || homeKey === awayKey) continue;
+        if (m.winnerTeamId === m.homeTeamId) {
+          getOrCreate(`${homeKey}|${awayKey}`).wins++;
+          getOrCreate(`${awayKey}|${homeKey}`).losses++;
+        } else if (m.winnerTeamId === m.awayTeamId) {
+          getOrCreate(`${awayKey}|${homeKey}`).wins++;
+          getOrCreate(`${homeKey}|${awayKey}`).losses++;
+        } else {
+          getOrCreate(`${homeKey}|${awayKey}`).ties++;
+          getOrCreate(`${awayKey}|${homeKey}`).ties++;
+        }
+      }
+
+      // Convert ownerKeys → display names for the response (client uses display strings as identifiers)
+      const ownerKeySet = new Set<string>();
+      for (const v of ownerMap.values()) ownerKeySet.add(v);
+      const ownerKeys = [...ownerKeySet].sort((a, b) => {
+        const da = ownerDisplayMap.get(a) ?? a;
+        const db2 = ownerDisplayMap.get(b) ?? b;
+        return da.localeCompare(db2);
+      });
+      const owners = ownerKeys.map((k) => ownerDisplayMap.get(k) ?? k);
+      const matrix = ownerKeys.map((ownerKey) => {
+        const owner = ownerDisplayMap.get(ownerKey) ?? ownerKey;
+        return {
+          owner,
+          vs: Object.fromEntries(
+            ownerKeys
+              .filter((r) => r !== ownerKey)
+              .map((rivalKey) => {
+                const rivalDisplay = ownerDisplayMap.get(rivalKey) ?? rivalKey;
+                return [rivalDisplay, h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0 }];
+              }),
+          ),
+        };
+      });
+      return { owners, matrix };
+    }),
+
+    // ── Clean League History endpoints ─────────────────────────────────────
+
+    leagueHistoryStandings: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return null;
+      type SeasonEntry = {
+        finalStanding: number | null;
+        wins: number | null;
+        losses: number | null;
+        ties: number | null;
+        pointsFor: number;
+        pointsAgainst: number;
+        /** `rs_matchups` = regular-season completed H2H; otherwise show PF/PA only (never mislabel points as record). */
+        recordBasis: "rs_matchups" | "pf_only";
+      };
+      type OwnerRow = { ownerKey: string; displayName: string; championships: number; seasons: { season: number; entry: SeasonEntry }[] };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { seasons: [] as number[], owners: [] as OwnerRow[] };
+
+      const rows = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          wins: gmTeams.wins,
+          losses: gmTeams.losses,
+          ties: gmTeams.ties,
+          pointsFor: gmTeams.pointsFor,
+          pointsAgainst: gmTeams.pointsAgainst,
+          finalStanding: gmTeams.finalStanding,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
+      // ── Compute wins/losses/ties from deduped regular-season matchups only ─
+      const matchupRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+          eqDrizzle(gmMatchups.isPlayoff, 0),
+        ));
+
+      // Deduplicate matchups then accumulate per (season, teamId)
+      const seenMatchupKeys = new Set<string>();
+      const computedRecord = new Map<string, { wins: number; losses: number; ties: number }>();
+      const ensureRecord = (k: string) => {
+        if (!computedRecord.has(k)) computedRecord.set(k, { wins: 0, losses: 0, ties: 0 });
+        return computedRecord.get(k)!;
+      };
+      for (const m of matchupRows) {
+        const mk = `${m.season}|${m.matchupPeriodId}|${m.homeTeamId}|${m.awayTeamId}`;
+        if (seenMatchupKeys.has(mk)) continue;
+        seenMatchupKeys.add(mk);
+        const hk = `${m.season}:${m.homeTeamId}`;
+        const ak = `${m.season}:${m.awayTeamId}`;
+        if (m.winnerTeamId === m.homeTeamId) {
+          ensureRecord(hk).wins++; ensureRecord(ak).losses++;
+        } else if (m.winnerTeamId === m.awayTeamId) {
+          ensureRecord(ak).wins++; ensureRecord(hk).losses++;
+        } else {
+          ensureRecord(hk).ties++; ensureRecord(ak).ties++;
+        }
+      }
+
+      // ── Build owner map, using matchup records for wins/losses ────────────
+      // championships is always 0 here — title counts come from leagueMedals.
+      const allSeasons = new Set<number>();
+      const acc = new Map<string, { displayName: string; seasonMap: Map<number, SeasonEntry> }>();
+
+      for (const row of rows) {
+        allSeasons.add(row.season);
+        const rawName = (row.ownerName || row.name || `Team ${row.teamId}`).trim();
+        const ownerKey = normalizeOwnerStr(rawName);
+        const display = cleanOwnerDisplay(rawName) || rawName;
+
+        let entry = acc.get(ownerKey);
+        if (!entry) {
+          entry = { displayName: display, seasonMap: new Map() };
+          acc.set(ownerKey, entry);
+        } else {
+          entry.displayName = display;
+        }
+
+        if (!entry.seasonMap.has(row.season)) {
+          const rec = computedRecord.get(`${row.season}:${row.teamId}`);
+          const recordBasis: SeasonEntry["recordBasis"] =
+            rec != null ? "rs_matchups" : "pf_only";
+          const pf = Number(row.pointsFor);
+          const pa = Number(row.pointsAgainst);
+          entry.seasonMap.set(row.season, {
+            finalStanding: row.finalStanding,
+            wins: recordBasis === "rs_matchups" ? rec!.wins : null,
+            losses: recordBasis === "rs_matchups" ? rec!.losses : null,
+            ties: recordBasis === "rs_matchups" ? rec!.ties : null,
+            pointsFor: pf,
+            pointsAgainst: pa,
+            recordBasis,
+          });
+        }
+      }
+
+      const seasons = [...allSeasons].sort((a, b) => a - b);
+      const owners: OwnerRow[] = [...acc.entries()]
+        .map(([ownerKey, { displayName, seasonMap }]) => {
+          const seasons2 = [...seasonMap.entries()]
+            .sort(([a], [b]) => a - b)
+            .map(([season, entry]) => ({ season, entry }));
+          return { ownerKey, displayName, championships: 0, seasons: seasons2 };
+        })
+        .sort((a, b) => {
+          const wA = a.seasons.reduce((s, r) => s + (r.entry.wins ?? 0), 0);
+          const wB = b.seasons.reduce((s, r) => s + (r.entry.wins ?? 0), 0);
+          return wB - wA;
+        });
+
+      return { seasons, owners };
+    }),
+
+    leagueHistoryH2H: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return null;
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      type FlatMatchup = {
+        season: number;
+        matchupPeriodId: number;
+        homeTeamId: number;
+        awayTeamId: number;
+        winnerTeamId: number | null;
+        isCompleted: number;
+      };
+      type H2HDiagnostics = {
+        rawMatchupRows: number;
+        uniqueMatchups: number;
+        duplicateMatchups: number;
+        unresolvedTeamMappings: number;
+        ownerResolutionFailures: number;
+        ownerPairCount: number;
+        missingScores: number;
+        skippedUnresolvedOwners: number;
+        skippedSameOwner: number;
+        totalDedupedMatchups: number;
+        dbSeasons: number[];
+        cacheSeasons: number[];
+        emptySeasons: number[];
+        coverageWarning: boolean;
+        /** Sample team slots that could not be mapped to an owner (max 40). */
+        unresolvedTeamSamples: { season: number; teamId: number }[];
+        /** Owners present on rosters but with zero completed H2H games counted (possible mapping gaps). */
+        ownersWithZeroH2H: string[];
+      };
+      type H2HReturn = {
+        owners: string[];
+        matrix: { owner: string; vs: Record<string, { wins: number; losses: number; ties: number; gamesPlayed?: number }> }[];
+        diagnostics: H2HDiagnostics;
+      };
+      const emptyDiag: H2HDiagnostics = {
+        rawMatchupRows: 0, uniqueMatchups: 0, duplicateMatchups: 0,
+        unresolvedTeamMappings: 0, ownerResolutionFailures: 0, ownerPairCount: 0,
+        missingScores: 0, skippedUnresolvedOwners: 0, skippedSameOwner: 0,
+        totalDedupedMatchups: 0, dbSeasons: [], cacheSeasons: [], emptySeasons: [],
+        coverageWarning: false,
+        unresolvedTeamSamples: [],
+        ownersWithZeroH2H: [],
+      };
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { owners: [] as string[], matrix: [] as H2HReturn["matrix"], diagnostics: emptyDiag };
+
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      // Same owner-key strategy as allTimeH2H: ESPN ownerId when present, else name + cross-ref.
+      const nameToOwnerIdH2h = new Map<string, string>();
+      for (const t of allTeams) {
+        const id = (t.ownerId || "").trim();
+        if (!id) continue;
+        const norm = normalizeOwnerStr(t.ownerName || t.name || "");
+        if (norm && !nameToOwnerIdH2h.has(norm)) nameToOwnerIdH2h.set(norm, id);
+      }
+
+      const teamToOwnerKey = new Map<string, string>();
+      const ownerDisplay = new Map<string, string>();
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const ownerKey = resolveOwnerKey(t.ownerId, t.ownerName, t.name || `Team ${t.teamId}`, nameToOwnerIdH2h);
+        teamToOwnerKey.set(`${t.season}:${t.teamId}`, ownerKey);
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplay.set(ownerKey, display);
+        else if (!ownerDisplay.has(ownerKey)) ownerDisplay.set(ownerKey, display || rawName);
+      }
+
+      // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
+      const dbRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      const coveredByDb = new Set<number>(dbRows.map((r) => r.season));
+      const allMatchups: FlatMatchup[] = dbRows.map((r) => ({
+        season: r.season,
+        matchupPeriodId: r.matchupPeriodId,
+        homeTeamId: r.homeTeamId,
+        awayTeamId: r.awayTeamId,
+        winnerTeamId: r.winnerTeamId,
+        isCompleted: r.isCompleted,
+      }));
+
+      // ── Phase 2: Fallback to combined ESPN cache for uncovered seasons ─────
+      const dbSeasons: number[] = [];
+      const cacheSeasons: number[] = [];
+      const emptySeasons: number[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredByDb.has(s)) {
+          dbSeasons.push(s);
+          continue;
+        }
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+          let added = 0;
+          try {
+            const norm = normalizeMatchups(payload as Record<string, unknown>);
+            for (const m of norm) {
+              const hid = Number(m.homeTeamId);
+              const aid = Number(m.awayTeamId);
+              if (!hid || !aid || !Number.isFinite(hid) || !Number.isFinite(aid)) continue;
+              const winnerStr = String(m.winner ?? "UNDECIDED");
+              const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+              const isCompleted = winnerTeamId != null ? 1 : 0;
+              allMatchups.push({ season: s, matchupPeriodId: Number(m.matchupPeriodId) || 0, homeTeamId: hid, awayTeamId: aid, winnerTeamId, isCompleted });
+              added++;
+            }
+          } catch { /* skip malformed payload */ }
+          if (added > 0) {
+            cacheSeasons.push(s);
+          } else {
+            emptySeasons.push(s);
+          }
+        } else {
+          emptySeasons.push(s);
+        }
+      }
+
+      // ── Phase 3: Build H2H matrix across all sources ──────────────────────
+      const h2h = new Map<string, { wins: number; losses: number; ties: number; gamesPlayed: number }>();
+      const bumpH2H = (k: string, f: "wins" | "losses" | "ties") => {
+        if (!h2h.has(k)) h2h.set(k, { wins: 0, losses: 0, ties: 0, gamesPlayed: 0 });
+        h2h.get(k)![f]++;
+        h2h.get(k)!.gamesPlayed++;
+      };
+
+      const seenH2HKeys = new Set<string>();
+      const unresolvedSampleKeys = new Set<string>();
+      const unresolvedTeamSamples: { season: number; teamId: number }[] = [];
+      const pushUnresolved = (season: number, teamId: number) => {
+        const u = `${season}:${teamId}`;
+        if (unresolvedSampleKeys.has(u) || unresolvedTeamSamples.length >= 40) return;
+        unresolvedSampleKeys.add(u);
+        unresolvedTeamSamples.push({ season, teamId });
+      };
+
+      let uniqueMatchups = 0;
+      let duplicateMatchups = 0;
+      let unresolvedTeamMappings = 0;
+      let ownerResolutionFailures = 0;
+      let missingScores = 0;
+      let skippedUnresolvedOwners = 0;
+      let skippedSameOwner = 0;
+
+      for (const m of allMatchups) {
+        if (m.isCompleted !== 1) continue;
+
+        const homeId = Number(m.homeTeamId);
+        const awayId = Number(m.awayTeamId);
+        if (!homeId || !awayId || homeId <= 0 || awayId <= 0 || homeId === awayId) continue;
+
+        const mk = `${m.season}|${m.matchupPeriodId}|${homeId}|${awayId}`;
+        if (seenH2HKeys.has(mk)) { duplicateMatchups++; continue; }
+        seenH2HKeys.add(mk);
+        uniqueMatchups++;
+
+        const hk = teamToOwnerKey.get(`${m.season}:${homeId}`);
+        const ak = teamToOwnerKey.get(`${m.season}:${awayId}`);
+        if (!hk) { unresolvedTeamMappings++; pushUnresolved(m.season, homeId); }
+        if (!ak) { unresolvedTeamMappings++; pushUnresolved(m.season, awayId); }
+        if (!hk || !ak) { ownerResolutionFailures++; skippedUnresolvedOwners++; continue; }
+        if (hk === ak) { skippedSameOwner++; continue; }
+
+        const winnerId = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+        if (winnerId === homeId) {
+          bumpH2H(`${hk}|${ak}`, "wins"); bumpH2H(`${ak}|${hk}`, "losses");
+        } else if (winnerId === awayId) {
+          bumpH2H(`${ak}|${hk}`, "wins"); bumpH2H(`${hk}|${ak}`, "losses");
+        } else {
+          bumpH2H(`${hk}|${ak}`, "ties"); bumpH2H(`${ak}|${hk}`, "ties");
+          missingScores++;
+        }
+      }
+
+      const ownerPairCount = Math.floor(h2h.size / 2);
+
+      const ownerKeys = [...ownerDisplay.keys()].sort((a, b) =>
+        (ownerDisplay.get(a) ?? a).localeCompare(ownerDisplay.get(b) ?? b),
+      );
+      const ownersWithZeroH2H = ownerKeys
+        .filter((k) => {
+          let gp = 0;
+          for (const other of ownerKeys) {
+            if (other === k) continue;
+            gp += h2h.get(`${k}|${other}`)?.gamesPlayed ?? 0;
+          }
+          return gp === 0;
+        })
+        .map((k) => ownerDisplay.get(k) ?? k);
+
+      const diagnostics: H2HDiagnostics = {
+        rawMatchupRows: allMatchups.length,
+        uniqueMatchups,
+        duplicateMatchups,
+        unresolvedTeamMappings,
+        ownerResolutionFailures,
+        ownerPairCount,
+        missingScores,
+        skippedUnresolvedOwners,
+        skippedSameOwner,
+        totalDedupedMatchups: uniqueMatchups,
+        dbSeasons,
+        cacheSeasons,
+        emptySeasons,
+        coverageWarning: emptySeasons.length > 0,
+        unresolvedTeamSamples,
+        ownersWithZeroH2H,
+      };
+
+      const owners = ownerKeys.map((k) => ownerDisplay.get(k) ?? k);
+      const matrix = ownerKeys.map((ownerKey) => ({
+        owner: ownerDisplay.get(ownerKey) ?? ownerKey,
+        vs: Object.fromEntries(
+          ownerKeys
+            .filter((r) => r !== ownerKey)
+            .map((rivalKey) => [
+              ownerDisplay.get(rivalKey) ?? rivalKey,
+              h2h.get(`${ownerKey}|${rivalKey}`) ?? { wins: 0, losses: 0, ties: 0, gamesPlayed: 0 },
+            ]),
+        ),
+      }));
+      return { owners, matrix, diagnostics };
+    }),
+
+    /** Per-season diagnostic analysis: champions, standings integrity, matchup integrity. */
+    leagueDiagnostics: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return { champion: [], standings: [], matchups: [] };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { champion: [], standings: [], matchups: [] };
+
+      // ── Fetch all team rows ───────────────────────────────────────────────
+      const teamRows = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          wins: gmTeams.wins,
+          losses: gmTeams.losses,
+          ties: gmTeams.ties,
+          pointsFor: gmTeams.pointsFor,
+          finalStanding: gmTeams.finalStanding,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.finalStanding));
+
+      // ── Fetch all matchup rows ────────────────────────────────────────────
+      const matchupRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          homeScore: gmMatchups.homeScore,
+          awayScore: gmMatchups.awayScore,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId))
+        .orderBy(ascDrizzle(gmMatchups.season), ascDrizzle(gmMatchups.matchupPeriodId));
+
+      // ── Group by season ───────────────────────────────────────────────────
+      const bySeasonTeams = new Map<number, typeof teamRows>();
+      for (const r of teamRows) {
+        const arr = bySeasonTeams.get(r.season) ?? [];
+        arr.push(r);
+        bySeasonTeams.set(r.season, arr);
+      }
+      const bySeasonMatchups = new Map<number, typeof matchupRows>();
+      for (const m of matchupRows) {
+        const arr = bySeasonMatchups.get(m.season) ?? [];
+        arr.push(m);
+        bySeasonMatchups.set(m.season, arr);
+      }
+
+      const allSeasonSet = new Set<number>([...bySeasonTeams.keys(), ...bySeasonMatchups.keys()]);
+      const allSeasonsList = [...allSeasonSet].sort((a, b) => a - b);
+
+      // ── Champion diagnostics ──────────────────────────────────────────────
+      const champion = allSeasonsList.map((season) => {
+        const rows = bySeasonTeams.get(season) ?? [];
+        const rank1 = rows.filter((r) => r.finalStanding === 1);
+        const sorted = [...rank1].sort((a, b) => {
+          if (b.wins !== a.wins) return b.wins - a.wins;
+          return Number(b.pointsFor) - Number(a.pointsFor);
+        });
+        const selected = sorted[0] ?? null;
+        const rawName = selected ? (selected.ownerName || selected.name || `Team ${selected.teamId}`).trim() : null;
+        return {
+          season,
+          totalRows: rows.length,
+          rank1Rows: rank1.length,
+          selectedChampion: rawName,
+          duplicateChampionCandidates: rank1.length > 1,
+          missingChampion: rank1.length === 0,
+          titleOwnerKey: rawName ? normalizeOwnerStr(rawName) : null,
+        };
+      });
+
+      // ── Standings diagnostics ─────────────────────────────────────────────
+      const standings = allSeasonsList.map((season) => {
+        const rows = bySeasonTeams.get(season) ?? [];
+        const teamCount = rows.length;
+
+        const ownerKeyCounts = new Map<string, number>();
+        for (const r of rows) {
+          const k = normalizeOwnerStr((r.ownerName || r.name || `Team ${r.teamId}`).trim());
+          ownerKeyCounts.set(k, (ownerKeyCounts.get(k) ?? 0) + 1);
+        }
+        const uniqueOwnerCount = ownerKeyCounts.size;
+        const duplicateOwnerRows = [...ownerKeyCounts.values()].filter((c) => c > 1).reduce((s, c) => s + (c - 1), 0);
+
+        const standingCounts = new Map<number, number>();
+        for (const r of rows) {
+          if (r.finalStanding != null) standingCounts.set(r.finalStanding, (standingCounts.get(r.finalStanding) ?? 0) + 1);
+        }
+        const duplicateFinalStandingRanks = [...standingCounts.entries()].filter(([, c]) => c > 1).map(([rank]) => rank).sort((a, b) => a - b);
+        const expectedRanks = Array.from({ length: teamCount }, (_, i) => i + 1);
+        const missingFinalStandingRanks = expectedRanks.filter((r) => !standingCounts.has(r));
+        const impossibleRecords = rows.filter((r) => r.wins < 0 || r.losses < 0 || r.ties < 0).length;
+
+        return { season, teamCount, uniqueOwnerCount, duplicateOwnerRows, duplicateFinalStandingRanks, missingFinalStandingRanks, impossibleRecords };
+      });
+
+      // ── Matchup diagnostics ───────────────────────────────────────────────
+      const matchups = allSeasonsList.map((season) => {
+        const rows = bySeasonMatchups.get(season) ?? [];
+        const totalMatchupRows = rows.length;
+
+        const seenKeys = new Set<string>();
+        const dupeKeys = new Set<string>();
+        for (const r of rows) {
+          const k = `${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (seenKeys.has(k)) dupeKeys.add(k);
+          else seenKeys.add(k);
+        }
+        const uniqueMatchups = seenKeys.size;
+        const duplicateMatchups = dupeKeys.size;
+
+        const completed = rows.filter((r) => r.isCompleted === 1);
+        const missingScores = completed.filter((r) => Number(r.homeScore) === 0 && Number(r.awayScore) === 0).length;
+        const winnerScoreMismatches = completed.filter((r) => {
+          if (!r.winnerTeamId) return false;
+          const hs = Number(r.homeScore);
+          const as_ = Number(r.awayScore);
+          if (hs === as_) return false;
+          const expected = hs > as_ ? r.homeTeamId : r.awayTeamId;
+          return r.winnerTeamId !== expected;
+        }).length;
+
+        return { season, totalMatchupRows, uniqueMatchups, duplicateMatchups, missingScores, winnerScoreMismatches };
+      });
+
+      // ── Medal diagnostics ─────────────────────────────────────────────────
+      const medalRows = await db
+        .select({
+          season: leagueMedals.season,
+          championOwner: leagueMedals.championOwner,
+          runnerUpOwner: leagueMedals.runnerUpOwner,
+          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          source: leagueMedals.source,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
+        .orderBy(ascDrizzle(leagueMedals.season));
+
+      const medals = medalRows.map((m) => ({
+        season: m.season,
+        championOwner: m.championOwner,
+        runnerUpOwner: m.runnerUpOwner,
+        thirdPlaceOwner: m.thirdPlaceOwner,
+        source: m.source,
+      }));
+
+      return { champion, standings, matchups, medals };
+    }),
+
+    /** All medal records for the active league — source of truth for title counts. */
+    leagueMedals: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return [];
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select({
+          season: leagueMedals.season,
+          championOwner: leagueMedals.championOwner,
+          runnerUpOwner: leagueMedals.runnerUpOwner,
+          thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          source: leagueMedals.source,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, leagueId))
+        .orderBy(ascDrizzle(leagueMedals.season));
+    }),
+
+    /** Approved owner aliases for the active league (legacy team name → owner name). */
+    leagueOwnerAliases: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        if (!ctx.user?.id) return [];
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          undefined,
+        );
+        const db = await getDb();
+        if (!db) return [];
+        const rows = await db
+          .select({
+            legacyTeamName: ownerAliases.legacyTeamName,
+            resolvedOwnerName: ownerAliases.resolvedOwnerName,
+          })
+          .from(ownerAliases)
+          .where(andDrizzle(eqDrizzle(ownerAliases.leagueId, leagueId), eqDrizzle(ownerAliases.status, "approved")));
+        return rows.filter((r) => r.resolvedOwnerName);
+      }),
+
+    /**
+     * Ring of Honor: `league_medals` champion / runner-up / third, resolved with the same
+     * `resolveMedalTeamToOwnerKey` + canonical owner-key pipeline as Hall of Fame.
+     */
+    ringOfHonor: publicProcedure.query(async ({ ctx }) => {
+      type ResolvedMedal = {
+        season: number;
+        championTeam: string | null;
+        runnerUpTeam: string | null;
+        thirdTeam: string | null;
+        resolvedChampionOwner: string | null;
+        resolvedRunnerUpOwner: string | null;
+        resolvedThirdOwner: string | null;
+      };
+      type LeaderboardEntry = {
+        ownerName: string;
+        ownerKey: string;
+        titles: number;
+        seasons: number[];
+      };
+      type Diagnostics = {
+        totalMedals: number;
+        unmatchedChampionTeams: { season: number; teamName: string }[];
+        unmatchedRunnerUpTeams: { season: number; teamName: string }[];
+        unmatchedThirdTeams: { season: number; teamName: string }[];
+      };
+      const empty = {
+        medals: [] as ResolvedMedal[],
+        leaderboard: [] as LeaderboardEntry[],
+        diagnostics: {
+          totalMedals: 0,
+          unmatchedChampionTeams: [] as { season: number; teamName: string }[],
+          unmatchedRunnerUpTeams: [] as { season: number; teamName: string }[],
+          unmatchedThirdTeams: [] as { season: number; teamName: string }[],
+        } as Diagnostics,
+      };
+
+      if (!ctx.user?.id) return empty;
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db || !leagueId) return empty;
+
+      const hof = await buildHallOfFamePayload({ db, leagueId, userId: ctx.user.id });
+      const diag = hof.championships.medalDiagnostics;
+
+      const resolvedMedals: ResolvedMedal[] = hof.championships.history.map((h) => ({
+        season: h.season,
+        championTeam: h.championTeam,
+        runnerUpTeam: h.runnerUpTeam,
+        thirdTeam: h.thirdTeam,
+        resolvedChampionOwner: h.resolvedChampionDisplay,
+        resolvedRunnerUpOwner: h.resolvedRunnerUpDisplay,
+        resolvedThirdOwner: h.resolvedThirdDisplay,
+      }));
+
+      const leaderboard: LeaderboardEntry[] = hof.championships.leaderboard.map((e) => ({
+        ownerName: e.displayName,
+        ownerKey: e.ownerKey,
+        titles: e.titles,
+        seasons: e.titleSeasons,
+      }));
+
+      return {
+        medals: resolvedMedals,
+        leaderboard,
+        diagnostics: {
+          totalMedals: diag.totalMedals,
+          unmatchedChampionTeams: diag.unmatchedChampionTeams,
+          unmatchedRunnerUpTeams: diag.unmatchedRunnerUpTeams,
+          unmatchedThirdTeams: diag.unmatchedThirdTeams,
+        },
+      };
+    }),
+
+    /** Hall of Fame — championships via league_medals; records from completed RS gmMatchups only (no gmTeams W/L). */
+    hallOfFame: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      const userId = ctx.user?.id ?? 0;
+      if (!userId) return null;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: userId } },
+        null,
+        undefined,
+      );
+      if (!leagueId) return null;
+      const db = await getDb();
+      if (!db) return null;
+      const hof = await buildHallOfFamePayload({ db, leagueId, userId });
+      if (!hof) return hof;
+      return gateHallOfFame(hof, await resolvePremiumAccess(ctx.user));
+    }),
+
+    /** All-time owner W-L-T from deduped completed weekly matchups (not standings snapshots). */
+    ownerAllTimeRecords: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return null;
+      // Seasons we expect coverage for. Cache fallback is attempted for any season
+      // not present in the normalized gmMatchups table.
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      type FlatMatchup = {
+        season: number;
+        matchupPeriodId: number;
+        homeTeamId: number;
+        awayTeamId: number;
+        winnerTeamId: number | null;
+        isCompleted: number;
+      };
+      type SeasonCoverageEntry = {
+        season: number;
+        source: "db" | "cache" | "empty";
+        rawRows: number;
+      };
+      type OwnerRecord = {
+        ownerKey: string;
+        displayName: string;
+        wins: number;
+        losses: number;
+        ties: number;
+        gamesPlayed: number;
+        winPct: number;
+      };
+      type Diagnostics = {
+        rawMatchupRows: number;
+        uniqueMatchups: number;
+        duplicateMatchups: number;
+        skippedIncomplete: number;
+        skippedMissingTeams: number;
+        skippedSynthetic: number;
+        skippedUnresolvedOwner: number;
+        skippedSameOwner: number;
+        dbSeasons: number[];
+        cacheSeasons: number[];
+        emptySeasons: number[];
+        coverageWarning: boolean;
+        seasonCoverage: SeasonCoverageEntry[];
+      };
+      const emptyDiag: Diagnostics = {
+        rawMatchupRows: 0, uniqueMatchups: 0, duplicateMatchups: 0,
+        skippedIncomplete: 0, skippedMissingTeams: 0, skippedSynthetic: 0,
+        skippedUnresolvedOwner: 0, skippedSameOwner: 0,
+        dbSeasons: [], cacheSeasons: [], emptySeasons: [],
+        coverageWarning: false, seasonCoverage: [],
+      };
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { owners: [] as OwnerRecord[], diagnostics: emptyDiag };
+
+      const allTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      const allTeamsFull = allTeams as GmTeamRow[];
+      const nameToOwnerIdRec = buildNameToOwnerId(allTeamsFull);
+      const ownerKeyRemapRecords = buildRawKeyToCanonicalProfileKey(allTeamsFull);
+      const teamToOwnerKey = buildTeamToCanonicalProfileKey(allTeamsFull);
+
+      const ownerDisplay = new Map<string, string>();
+      for (const t of allTeams) {
+        const rawName = (t.ownerName || t.name || `Team ${t.teamId}`).trim();
+        const rawKey = resolveOwnerKey(
+          String(t.ownerId || "").trim(),
+          t.ownerName || "",
+          t.name || `Team ${t.teamId}`,
+          nameToOwnerIdRec,
+        );
+        const ownerKey = ownerKeyRemapRecords.get(rawKey) ?? rawKey;
+        const display = cleanOwnerDisplay(rawName);
+        if (display && !display.startsWith("(")) ownerDisplay.set(ownerKey, display);
+        else if (!ownerDisplay.has(ownerKey)) ownerDisplay.set(ownerKey, display || rawName);
+      }
+
+      // ── Phase 1: Load from normalized gmMatchups ──────────────────────────
+      const dbRows = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      const coveredByDb = new Set<number>(dbRows.map((r) => r.season));
+      const allMatchups: FlatMatchup[] = dbRows.map((r) => ({
+        season: r.season,
+        matchupPeriodId: r.matchupPeriodId,
+        homeTeamId: r.homeTeamId,
+        awayTeamId: r.awayTeamId,
+        winnerTeamId: r.winnerTeamId,
+        isCompleted: r.isCompleted,
+      }));
+
+      // ── Phase 2: Fallback to combined ESPN cache for uncovered seasons ─────
+      const seasonCoverage: SeasonCoverageEntry[] = [];
+      const dbSeasons: number[] = [];
+      const cacheSeasons: number[] = [];
+      const emptySeasons: number[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredByDb.has(s)) {
+          const count = dbRows.filter((r) => r.season === s).length;
+          seasonCoverage.push({ season: s, source: "db", rawRows: count });
+          dbSeasons.push(s);
+          continue;
+        }
+        // Season not in gmMatchups — try combined ESPN cache
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+          let added = 0;
+          try {
+            const norm = normalizeMatchups(payload as Record<string, unknown>);
+            for (const m of norm) {
+              const hid = Number(m.homeTeamId);
+              const aid = Number(m.awayTeamId);
+              if (!hid || !aid || !Number.isFinite(hid) || !Number.isFinite(aid)) continue;
+              const winnerStr = String(m.winner ?? "UNDECIDED");
+              const winnerTeamId = winnerStr === "HOME" ? hid : winnerStr === "AWAY" ? aid : null;
+              const isCompleted = winnerTeamId != null ? 1 : 0;
+              allMatchups.push({ season: s, matchupPeriodId: Number(m.matchupPeriodId) || 0, homeTeamId: hid, awayTeamId: aid, winnerTeamId, isCompleted });
+              added++;
+            }
+          } catch { /* skip malformed payload */ }
+          if (added > 0) {
+            seasonCoverage.push({ season: s, source: "cache", rawRows: added });
+            cacheSeasons.push(s);
+          } else {
+            seasonCoverage.push({ season: s, source: "empty", rawRows: 0 });
+            emptySeasons.push(s);
+          }
+        } else {
+          seasonCoverage.push({ season: s, source: "empty", rawRows: 0 });
+          emptySeasons.push(s);
+        }
+      }
+
+      // ── Phase 3: Aggregate owner W-L-T across all sources ─────────────────
+      const records = new Map<string, { wins: number; losses: number; ties: number }>();
+      const bump = (ownerKey: string, field: "wins" | "losses" | "ties") => {
+        if (!records.has(ownerKey)) records.set(ownerKey, { wins: 0, losses: 0, ties: 0 });
+        records.get(ownerKey)![field]++;
+      };
+
+      const seenKeys = new Set<string>();
+      let duplicateMatchups = 0;
+      let skippedIncomplete = 0;
+      let skippedMissingTeams = 0;
+      let skippedSynthetic = 0;
+      let skippedUnresolvedOwner = 0;
+      let skippedSameOwner = 0;
+      let uniqueMatchups = 0;
+
+      for (const m of allMatchups) {
+        if (m.isCompleted !== 1) { skippedIncomplete++; continue; }
+
+        const homeId = Number(m.homeTeamId);
+        const awayId = Number(m.awayTeamId);
+        if (!homeId || !awayId) { skippedMissingTeams++; continue; }
+        if (homeId <= 0 || awayId <= 0 || homeId === awayId) { skippedSynthetic++; continue; }
+
+        const mk = `${m.season}|${m.matchupPeriodId}|${homeId}|${awayId}`;
+        if (seenKeys.has(mk)) { duplicateMatchups++; continue; }
+        seenKeys.add(mk);
+        uniqueMatchups++;
+
+        const homeOwnerKey = teamToOwnerKey.get(`${m.season}:${homeId}`);
+        const awayOwnerKey = teamToOwnerKey.get(`${m.season}:${awayId}`);
+        if (!homeOwnerKey || !awayOwnerKey) { skippedUnresolvedOwner++; continue; }
+        if (homeOwnerKey === awayOwnerKey) { skippedSameOwner++; continue; }
+
+        const winnerId = m.winnerTeamId != null ? Number(m.winnerTeamId) : null;
+        if (winnerId === homeId) {
+          bump(homeOwnerKey, "wins"); bump(awayOwnerKey, "losses");
+        } else if (winnerId === awayId) {
+          bump(awayOwnerKey, "wins"); bump(homeOwnerKey, "losses");
+        } else {
+          bump(homeOwnerKey, "ties"); bump(awayOwnerKey, "ties");
+        }
+      }
+
+      const owners: OwnerRecord[] = [...records.entries()]
+        .map(([ownerKey, { wins, losses, ties }]) => {
+          const gamesPlayed = wins + losses + ties;
+          const winPct = gamesPlayed > 0 ? Math.round(((wins + 0.5 * ties) / gamesPlayed) * 1000) / 10 : 0;
+          return { ownerKey, displayName: ownerDisplay.get(ownerKey) ?? ownerKey, wins, losses, ties, gamesPlayed, winPct };
+        })
+        .sort((a, b) => b.winPct - a.winPct || b.wins - a.wins || a.displayName.localeCompare(b.displayName));
+
+      const payload = {
+        owners,
+        diagnostics: {
+          rawMatchupRows: allMatchups.length,
+          uniqueMatchups,
+          duplicateMatchups,
+          skippedIncomplete,
+          skippedMissingTeams,
+          skippedSynthetic,
+          skippedUnresolvedOwner,
+          skippedSameOwner,
+          dbSeasons,
+          cacheSeasons,
+          emptySeasons,
+          coverageWarning: emptySeasons.length > 0,
+          seasonCoverage,
+        },
+      };
+      return gateOwnerAllTimeRecords(
+        payload.owners,
+        payload.diagnostics,
+        await resolvePremiumAccess(ctx.user),
+      );
+    }),
+
+    /** Per-season matchup coverage diagnostics: how many matchup rows exist per source per season. */
+    ownerMatchupCoverage: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      if (!ctx.user?.id) return null;
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: ctx.user.id } },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) {
+        return {
+          leagueId,
+          seasons: [] as {
+            season: number;
+            gmMatchupsRows: number;
+            completedRows: number;
+            dedupedRows: number;
+            completedPlayoffDedupedRows: number;
+            gmTeamsRows: number;
+            cacheAvailable: boolean;
+            usable: boolean;
+          }[],
+        };
+      }
+
+      // Count gmMatchups rows per season
+      const [dbMatchupRows, dbTeamRows] = await Promise.all([
+        db
+          .select({
+            season: gmMatchups.season,
+            matchupPeriodId: gmMatchups.matchupPeriodId,
+            homeTeamId: gmMatchups.homeTeamId,
+            awayTeamId: gmMatchups.awayTeamId,
+            isCompleted: gmMatchups.isCompleted,
+            isPlayoff: gmMatchups.isPlayoff,
+          })
+          .from(gmMatchups)
+          .where(eqDrizzle(gmMatchups.leagueId, leagueId)),
+        db.select({ season: gmTeams.season }).from(gmTeams).where(eqDrizzle(gmTeams.leagueId, leagueId)),
+      ]);
+
+      const matchupsBySeason = new Map<number, typeof dbMatchupRows>();
+      for (const r of dbMatchupRows) {
+        const arr = matchupsBySeason.get(r.season) ?? [];
+        arr.push(r);
+        matchupsBySeason.set(r.season, arr);
+      }
+      const teamCountBySeason = new Map<number, number>();
+      for (const r of dbTeamRows) teamCountBySeason.set(r.season, (teamCountBySeason.get(r.season) ?? 0) + 1);
+
+      const seasons = await Promise.all(HIST_SEASONS.map(async (s) => {
+        const rows = matchupsBySeason.get(s) ?? [];
+        const completedRows = rows.filter((r) => r.isCompleted === 1).length;
+        const seenKeys = new Set<string>();
+        let dedupedRows = 0;
+        for (const r of rows) {
+          if (r.isCompleted !== 1) continue;
+          const k = `${s}|${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (!seenKeys.has(k)) { seenKeys.add(k); dedupedRows++; }
+        }
+        const seenPlayoff = new Set<string>();
+        let completedPlayoffDedupedRows = 0;
+        for (const r of rows) {
+          if (r.isCompleted !== 1 || r.isPlayoff !== 1) continue;
+          const k = `${s}|${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`;
+          if (seenPlayoff.has(k)) continue;
+          seenPlayoff.add(k);
+          completedPlayoffDedupedRows++;
+        }
+        const gmTeamsRows = teamCountBySeason.get(s) ?? 0;
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const cacheAvailable = Boolean(hit?.row?.payload);
+        const usable = (rows.length > 0 || cacheAvailable) && gmTeamsRows > 0;
+        return {
+          season: s,
+          gmMatchupsRows: rows.length,
+          completedRows,
+          dedupedRows,
+          completedPlayoffDedupedRows,
+          gmTeamsRows,
+          cacheAvailable,
+          usable,
+        };
+      }));
+
+      return { leagueId, seasons };
+    }),
+
+    /** Backfill gmMatchups from ESPN combined cache for seasons with no normalized rows. */
+    backfillMatchupsFromCache: publicProcedure.mutation(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      // Find which seasons already have rows in gmMatchups
+      const existing = await db
+        .selectDistinct({ season: gmMatchups.season })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+      const coveredSeasons = new Set(existing.map((r) => r.season));
+
+      const results: { season: number; status: "skipped" | "backfilled" | "no_cache" | "error"; rowsWritten: number }[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredSeasons.has(s)) {
+          results.push({ season: s, status: "skipped", rowsWritten: 0 });
+          continue;
+        }
+        const hit = await getCachedViewWithTier(s, "combined", leagueId);
+        const payload = hit?.row?.payload;
+        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          results.push({ season: s, status: "no_cache", rowsWritten: 0 });
+          continue;
+        }
+        try {
+          const written = await upsertMatchups(db, leagueId, s, payload as Record<string, unknown>);
+          results.push({ season: s, status: "backfilled", rowsWritten: written });
+        } catch (e) {
+          console.error("[backfillMatchupsFromCache] season", s, e);
+          results.push({ season: s, status: "error", rowsWritten: 0 });
+        }
+      }
+
+      const totalWritten = results.reduce((n, r) => n + r.rowsWritten, 0);
+      return { leagueId, results, totalWritten };
+    }),
+
+    /**
+     * Per-season source audit for H2H data.
+     * Reports for each of 2009–2025: gmMatchups row counts, combined cache schedule counts,
+     * winner field format found in cache, Rod Sellers' team presence, and Rod's per-opponent record.
+     * Use this to prove where 0-0 H2H records come from before fixing anything.
+     */
+    h2hSourceDiagnostics: publicProcedure.query(async ({ ctx }) => {
+      if (!ctx.user?.id) return null;
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+      const ROD_PATTERNS = ["rod sellers", "rod", "sellers"]; // normalized lowercase search
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) return { leagueId, seasons: [] as unknown[] };
+
+      // Load all gmMatchups rows once
+      const allDbMatchups = await db
+        .select({
+          season: gmMatchups.season,
+          matchupPeriodId: gmMatchups.matchupPeriodId,
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          isCompleted: gmMatchups.isCompleted,
+        })
+        .from(gmMatchups)
+        .where(eqDrizzle(gmMatchups.leagueId, leagueId));
+
+      // Load all gmTeams rows once
+      const allDbTeams = await db
+        .select({
+          season: gmTeams.season,
+          teamId: gmTeams.teamId,
+          name: gmTeams.name,
+          ownerName: gmTeams.ownerName,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, leagueId));
+
+      // Index by season
+      const matchupsBySeason = new Map<number, typeof allDbMatchups>();
+      for (const m of allDbMatchups) {
+        if (!matchupsBySeason.has(m.season)) matchupsBySeason.set(m.season, []);
+        matchupsBySeason.get(m.season)!.push(m);
+      }
+      const teamsBySeason = new Map<number, typeof allDbTeams>();
+      for (const t of allDbTeams) {
+        if (!teamsBySeason.has(t.season)) teamsBySeason.set(t.season, []);
+        teamsBySeason.get(t.season)!.push(t);
+      }
+
+      function findRodTeamId(teams: typeof allDbTeams): number | null {
+        for (const t of teams) {
+          const raw = (t.ownerName || t.name || "").toLowerCase();
+          if (ROD_PATTERNS.some((p) => raw.includes(p))) return t.teamId;
+        }
+        return null;
+      }
+
+      const seasons = await Promise.all(HIST_SEASONS.map(async (season) => {
+        // ── gmMatchups stats ──────────────────────────────────────────────────
+        const dbRows = matchupsBySeason.get(season) ?? [];
+        const dbCompleted = dbRows.filter((r) => r.isCompleted === 1);
+        const dbDeduped = new Set<string>();
+        for (const r of dbCompleted) dbDeduped.add(`${r.matchupPeriodId}|${r.homeTeamId}|${r.awayTeamId}`);
+        const dbNullWinner = dbRows.filter((r) => r.winnerTeamId == null).length;
+
+        // ── gmTeams stats ─────────────────────────────────────────────────────
+        const seasonTeams = teamsBySeason.get(season) ?? [];
+        const rodTeamId = findRodTeamId(seasonTeams);
+        const rodDbMatchups = rodTeamId != null
+          ? dbRows.filter((r) => r.homeTeamId === rodTeamId || r.awayTeamId === rodTeamId)
+          : [];
+        const rodDbCompleted = rodDbMatchups.filter((r) => r.isCompleted === 1).length;
+
+        // ── Combined cache stats ──────────────────────────────────────────────
+        const hit = await getCachedViewWithTier(season, "combined", leagueId);
+        let cacheExists = false;
+        let cacheScheduleItems = 0;
+        let cacheCompletedItems = 0;
+        let cacheWinnerValues: Record<string, number> = {};
+        let cacheRodMatchups = 0;
+        let cacheTier = "";
+
+        if (hit) {
+          cacheExists = true;
+          cacheTier = hit.tier;
+          const payload = hit.row.payload as Record<string, unknown>;
+          const schedule = (payload?.schedule as Record<string, unknown>[]) ?? [];
+          cacheScheduleItems = schedule.length;
+          for (const item of schedule) {
+            const w = String(item.winner ?? "UNDECIDED");
+            cacheWinnerValues[w] = (cacheWinnerValues[w] ?? 0) + 1;
+            if (w !== "UNDECIDED") cacheCompletedItems++;
+            if (rodTeamId != null) {
+              const hid = Number((item.home as Record<string, unknown>)?.teamId);
+              const aid = Number((item.away as Record<string, unknown>)?.teamId);
+              if (hid === rodTeamId || aid === rodTeamId) cacheRodMatchups++;
+            }
+          }
+        }
+
+        // ── Rod opponent record from DB completed matchups ───────────────────
+        const rodOpponents: Record<string, { wins: number; losses: number; ties: number }> = {};
+        if (rodTeamId != null) {
+          for (const r of dbCompleted) {
+            const rIsHome: boolean = r.homeTeamId === rodTeamId;
+            const rIsAway: boolean = r.awayTeamId === rodTeamId;
+            if (!rIsHome && !rIsAway) continue;
+            const oppId: number = rIsHome ? r.awayTeamId : r.homeTeamId;
+            const oppEntry = seasonTeams.find((t) => t.teamId === oppId);
+            const oppName: string = oppEntry ? (oppEntry.ownerName || oppEntry.name || String(oppId)) : String(oppId);
+            if (!rodOpponents[oppName]) rodOpponents[oppName] = { wins: 0, losses: 0, ties: 0 };
+            const rodWon: boolean = r.winnerTeamId === rodTeamId;
+            const oppWon: boolean = r.winnerTeamId === oppId;
+            if (rodWon) rodOpponents[oppName].wins++;
+            else if (oppWon) rodOpponents[oppName].losses++;
+            else rodOpponents[oppName].ties++;
+          }
+        }
+
+        // Source determination
+        const source = dbRows.length > 0 ? "gmMatchups" : cacheExists ? "cache_only" : "none";
+
+        return {
+          season,
+          source,
+          // gmMatchups
+          dbTotalRows: dbRows.length,
+          dbCompletedRows: dbCompleted.length,
+          dbDedupedCompleted: dbDeduped.size,
+          dbNullWinnerRows: dbNullWinner,
+          // gmTeams
+          gmTeamsRows: seasonTeams.length,
+          rodTeamId,
+          rodDbMatchups: rodDbMatchups.length,
+          rodDbCompleted,
+          // cache
+          cacheExists,
+          cacheTier,
+          cacheScheduleItems,
+          cacheCompletedItems,
+          cacheWinnerValues,
+          cacheRodMatchups,
+          // Rod opponents (from DB completed)
+          rodOpponentRecord: rodOpponents,
+        };
+      }));
+
+      // Summary
+      const noData = seasons.filter((s) => s.source === "none");
+      const cacheOnly = seasons.filter((s) => s.source === "cache_only");
+      const dbCovered = seasons.filter((s) => s.source === "gmMatchups");
+      const nullWinnerSeasons = seasons.filter((s) => s.dbNullWinnerRows > 0);
+
+      return {
+        leagueId,
+        summary: {
+          totalSeasons: seasons.length,
+          dbCoveredCount: dbCovered.length,
+          cacheOnlyCount: cacheOnly.length,
+          noDataCount: noData.length,
+          nullWinnerSeasonsCount: nullWinnerSeasons.length,
+          noDataSeasons: noData.map((s) => s.season),
+          cacheOnlySeasons: cacheOnly.map((s) => s.season),
+          dbCoveredSeasons: dbCovered.map((s) => s.season),
+          nullWinnerSeasons: nullWinnerSeasons.map((s) => ({ season: s.season, nullCount: s.dbNullWinnerRows })),
+        },
+        seasons,
+      };
+    }),
+
+    /**
+     * Fetch historical matchup scoreboard from ESPN API for seasons not covered by gmMatchups,
+     * then persist via upsertMatchups. Requires valid ESPN credentials (SWID + espn_s2).
+     * Does NOT touch championships, Ring of Honor, or draft data.
+     */
+    fetchAndPersistHistoricalMatchups: publicProcedure.mutation(async ({ ctx }) => {
+      const HIST_SEASONS = [2009,2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: ctx.user ? { id: ctx.user.id } : undefined },
+        null,
+        undefined,
+      );
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+
+      const { resolveEspnCreds, fetchEspnViewsHardened } = await import("./espnService");
+      const creds = await resolveEspnCreds(undefined, ctx.user?.id);
+
+      // Find which seasons already have completed matchup rows
+      const existing = await db
+        .selectDistinct({ season: gmMatchups.season })
+        .from(gmMatchups)
+        .where(andDrizzle(
+          eqDrizzle(gmMatchups.leagueId, leagueId),
+          eqDrizzle(gmMatchups.isCompleted, 1),
+        ));
+      const coveredSeasons = new Set(existing.map((r) => r.season));
+
+      const results: {
+        season: number;
+        status: "skipped" | "fetched" | "no_auth" | "fetch_error" | "empty_schedule";
+        scheduleItems: number;
+        completedItems: number;
+        rowsWritten: number;
+        error?: string;
+      }[] = [];
+
+      for (const s of HIST_SEASONS) {
+        if (coveredSeasons.has(s)) {
+          results.push({ season: s, status: "skipped", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+          continue;
+        }
+
+        if (!creds.swid || !creds.espnS2) {
+          results.push({ season: s, status: "no_auth", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+          continue;
+        }
+
+        try {
+          const fetchResult = await fetchEspnViewsHardened(s, ["mMatchupScore"], {
+            ...creds,
+            leagueId,
+          });
+          const schedule = (fetchResult.merged?.schedule as Record<string, unknown>[]) ?? [];
+
+          if (schedule.length === 0) {
+            results.push({ season: s, status: "empty_schedule", scheduleItems: 0, completedItems: 0, rowsWritten: 0 });
+            continue;
+          }
+
+          const completedCount = schedule.filter((item) => {
+            const w = String(item.winner ?? "UNDECIDED");
+            return w !== "UNDECIDED" && w !== "";
+          }).length;
+
+          // Inject seasonId into payload so normalizeMatchups can read it
+          const payload: Record<string, unknown> = { ...fetchResult.merged, seasonId: s, schedule };
+          const written = await upsertMatchups(db, leagueId, s, payload);
+          results.push({ season: s, status: "fetched", scheduleItems: schedule.length, completedItems: completedCount, rowsWritten: written });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          results.push({ season: s, status: "fetch_error", scheduleItems: 0, completedItems: 0, rowsWritten: 0, error: msg });
+        }
+      }
+
+      const totalFetched = results.filter((r) => r.status === "fetched").length;
+      const totalWritten = results.reduce((n, r) => n + r.rowsWritten, 0);
+      return { leagueId, results, totalFetched, totalWritten };
+    }),
+
+    /** Upsert gold/silver/bronze medal data for one season from the ESPN League History page. */
+    upsertSeasonMedals: protectedProcedure
+      .input(z.object({
+        // leagueId is REQUIRED and explicit. Medal writes must never infer the league
+        // from ambient active-league state: doing so previously wrote one league's
+        // championship history under another league's id (cross-league contamination).
+        // The caller must pass the league the medal actually belongs to.
+        leagueId:        z.string().min(1).max(32),
+        season:          z.number().int().min(2009).max(2030),
+        championOwner:   z.string().max(255),
+        runnerUpOwner:   z.string().max(255).default(""),
+        thirdPlaceOwner: z.string().max(255).default(""),
+        source:          z.string().max(64).default("espn_history_medal"),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        // Explicit league only — never the active league. Validate that the signed-in
+        // user is actually connected to this league before writing any medal row.
+        const leagueId = input.leagueId.trim().slice(0, 32);
+        await assertUserLeagueAccess(ctx.user.id, leagueId);
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
+        await db
+          .insert(leagueMedals)
+          .values({
+            leagueId,
+            season: input.season,
+            championOwner: input.championOwner.trim(),
+            runnerUpOwner: input.runnerUpOwner.trim(),
+            thirdPlaceOwner: input.thirdPlaceOwner.trim(),
+            source: input.source,
+          })
+          .onDuplicateKeyUpdate({
+            set: {
+              championOwner: input.championOwner.trim(),
+              runnerUpOwner: input.runnerUpOwner.trim(),
+              thirdPlaceOwner: input.thirdPlaceOwner.trim(),
+              source: input.source,
+            },
+          });
+        return { leagueId, season: input.season, ok: true };
+      }),
+
+    /** Owner draft profiles disabled until V3. Canonical draft data: `draftRecapCanonical` only. */
+    ownerDraftProfiles: publicProcedure.query(async () => ({
+      disabled: true as const,
+      reason:
+        "Owner draft profiles paused. Draft History V3 will use espn.draftRecapCanonical (draft_recap_html only). Legacy getSeasonDraftPicks must not drive profiles.",
+      profiles: [] as const,
+      diagnostics: {
+        seasonsAnalyzed: [] as number[],
+        seasonsMissingPicks: [] as number[],
+        perSeason: [] as const,
+        totalDraftHistoryPicks: 0,
+        totalProfilePicks: 0,
+        totalUnresolved: 0,
+        coverageWarning: false,
+      },
+    })),
   }),
 
-  playerProfiles: publicProcedure.query(async () => {
-    const leagueId = await resolveActiveLeagueId();
+  /**
+   * Player-centric draft timeline on profiles — NOT Draft History V3 board.
+   * Uses live combined cache per season; quarantined from draftRecapCanonical.
+   * See docs/DRAFT_HISTORY_CANONICAL.md
+   */
+  playerProfiles: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return [];
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: { id: ctx.user.id } },
+      null,
+      undefined
+    );
     const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
     const POS_MAP: Record<number, string> = {
@@ -2339,7 +7256,10 @@ export const appRouter = router({
     const seenPickKeys = new Set<string>();
     const allUniquePicks: Array<{
       season: number; round: number; pick: number; overallPick: number;
-      playerId: number; teamId: number; isKeeper: boolean;
+      playerId: number; teamId: number;
+      draftedForAnalytics: boolean;
+      slotClass: (typeof SlotClass)[keyof typeof SlotClass];
+      keeperSlot: boolean;
     }> = [];
 
     // Collect all transactions
@@ -2349,7 +7269,7 @@ export const appRouter = router({
     }> = [];
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season, leagueId);
+      const data = await getSeasonData(season, leagueId, ctx.user?.id);
       if (!data) continue;
 
       teamNamesBySeason[season] = {};
@@ -2393,6 +7313,7 @@ export const appRouter = router({
         const key = `${season}:${pick.overallPickNumber}`;
         if (seenPickKeys.has(key)) continue;
         seenPickKeys.add(key);
+        const truth = classifyDraftPickRawPick(pick);
         allUniquePicks.push({
           season,
           round: pick.roundId as number,
@@ -2400,7 +7321,9 @@ export const appRouter = router({
           overallPick: pick.overallPickNumber as number,
           playerId: pick.playerId as number,
           teamId: pick.teamId as number,
-          isKeeper: pick.keeper === true || pick.reservedForKeeper === true,
+          draftedForAnalytics: truth.draftedForAnalytics,
+          slotClass: truth.slotClass,
+          keeperSlot: truth.keeperSlot,
         });
       }
 
@@ -2427,11 +7350,25 @@ export const appRouter = router({
       playerId: number;
       playerName: string;
       position: string;
-      draftHistory: Array<{ season: number; round: number; pick: number; overallPick: number; teamId: number; teamName: string; ownerName: string; isKeeper: boolean }>;
+      draftHistory: Array<{
+        season: number; round: number; pick: number; overallPick: number; teamId: number; teamName: string; ownerName: string;
+        draftedForAnalytics: boolean;
+        slotClass: string;
+        keeperSlot: boolean;
+        /** @deprecated use keeperSlot / slotClass */
+        isKeeper: boolean;
+      }>;
       keeperSeasons: number[];
       teamsBySeason: Record<number, { teamId: number; teamName: string; ownerName: string }>;
       firstSeen: number;
       lastSeen: number;
+      /** Open-draft selections only (actual draft decisions). */
+      openDraftSelections: number;
+      /** All board appearances including keeper/retained/unknown rows. */
+      draftBoardSlots: number;
+      keeperSlots: number;
+      retainedSlots: number;
+      /** @deprecated use openDraftSelections — kept for older clients (same value). */
       totalDrafts: number;
       totalKeeperYears: number;
     }>();
@@ -2451,6 +7388,10 @@ export const appRouter = router({
           teamsBySeason: {},
           firstSeen: pick.season,
           lastSeen: pick.season,
+          openDraftSelections: 0,
+          draftBoardSlots: 0,
+          keeperSlots: 0,
+          retainedSlots: 0,
           totalDrafts: 0,
           totalKeeperYears: 0,
         });
@@ -2458,6 +7399,11 @@ export const appRouter = router({
 
       const p = playerMap.get(pid)!;
       if (info?.name) { p.playerName = info.name; p.position = info.position; }
+
+      p.draftBoardSlots++;
+      if (pick.draftedForAnalytics) p.openDraftSelections++;
+      if (pick.slotClass === SlotClass.KEEPER) p.keeperSlots++;
+      if (pick.slotClass === SlotClass.RETAINED) p.retainedSlots++;
 
       p.draftHistory.push({
         season: pick.season,
@@ -2467,24 +7413,31 @@ export const appRouter = router({
         teamId: pick.teamId,
         teamName: teamInfo.name,
         ownerName: teamInfo.ownerName,
-        isKeeper: pick.isKeeper,
+        draftedForAnalytics: pick.draftedForAnalytics,
+        slotClass: pick.slotClass,
+        keeperSlot: pick.keeperSlot,
+        isKeeper: pick.keeperSlot,
       });
 
-      if (pick.isKeeper) p.keeperSeasons.push(pick.season);
+      if (pick.keeperSlot) p.keeperSeasons.push(pick.season);
       p.teamsBySeason[pick.season] = { teamId: pick.teamId, teamName: teamInfo.name, ownerName: teamInfo.ownerName };
       p.firstSeen = Math.min(p.firstSeen, pick.season);
       p.lastSeen = Math.max(p.lastSeen, pick.season);
-      p.totalDrafts++;
-      if (pick.isKeeper) p.totalKeeperYears++;
+      if (pick.draftedForAnalytics) p.totalDrafts++;
+      if (pick.keeperSlot) p.totalKeeperYears++;
     }
 
     // Build final profiles array with computed fields
     const profiles = Array.from(playerMap.values()).map((p) => {
-      const rounds = p.draftHistory.map((d) => d.round);
+      const openRounds = p.draftHistory.filter((d) => d.draftedForAnalytics).map((d) => d.round);
+      const rounds = openRounds.length > 0 ? openRounds : p.draftHistory.map((d) => d.round);
       const avgRound = rounds.length > 0 ? Math.round((rounds.reduce((s, r) => s + r, 0) / rounds.length) * 10) / 10 : null;
-      const roundTrend = p.draftHistory.length >= 2
-        ? p.draftHistory[p.draftHistory.length - 1].round - p.draftHistory[0].round
-        : 0;
+      const openHistory = p.draftHistory.filter((d) => d.draftedForAnalytics);
+      const roundTrend = openHistory.length >= 2
+        ? openHistory[openHistory.length - 1].round - openHistory[0].round
+        : p.draftHistory.length >= 2
+          ? p.draftHistory[p.draftHistory.length - 1].round - p.draftHistory[0].round
+          : 0;
       const uniqueTeams = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.teamName)));
       const uniqueOwners = Array.from(new Set(Object.values(p.teamsBySeason).map((t) => t.ownerName).filter(Boolean)));
       const transactionCount = allTxns.filter((tx) => tx.playerId === p.playerId).length;
@@ -2500,8 +7453,8 @@ export const appRouter = router({
         uniqueOwners,
         seasonsActive: p.lastSeen - p.firstSeen + 1,
         transactionCount,
-        // League-wide prominence score: keeper years * 3 + total drafts + seasons active
-        prominenceScore: p.totalKeeperYears * 3 + p.totalDrafts + (p.lastSeen - p.firstSeen),
+        // League-wide prominence: open-draft seasons + keeper-slot seasons weighted
+        prominenceScore: p.totalKeeperYears * 3 + p.openDraftSelections + (p.lastSeen - p.firstSeen),
       };
     });
 
@@ -2512,14 +7465,12 @@ export const appRouter = router({
       profiles,
       totalPlayers: profiles.length,
       totalKeptPlayers: profiles.filter((p) => p.totalKeeperYears > 0).length,
-      leagueStaples: profiles.filter((p) => p.totalDrafts >= 3).length,
+      leagueStaples: profiles.filter((p) => p.openDraftSelections >= 3).length,
       seasons: cachedSeasons,
     };
   }),
 
-  ownerCareerStats: publicProcedure.query(() => {
-    return memCache("ownerCareerStats", 10 * 60_000, async () => {
-    // Resolve active league credentials for multi-league isolation
+  ownerCareerStats: publicProcedure.query(async () => {
     let ownerStatsCreds: import('./espnService').EspnCreds | undefined;
     try {
       const db = await getDb();
@@ -2545,7 +7496,14 @@ export const appRouter = router({
     } catch (_e) { /* non-fatal — fall back to env-var league */ }
     const ownerStatsLeagueId = ownerStatsCreds?.leagueId ?? LEAGUE_ID;
 
-    const cachedSeasons = await getAllCachedSeasons(ownerStatsLeagueId);
+    return memCache(`ownerCareerStats:vNorm:${ownerStatsLeagueId}`, 10 * 60_000, async () => {
+    const cachedSeasonsList = await getAllCachedSeasons(ownerStatsLeagueId);
+    const normSeasons = await distinctNormalizedSeasons(ownerStatsLeagueId);
+    const cachedSeasons = Array.from(
+      new Set([...cachedSeasonsList, ...normSeasons].map((s) => Number(s))),
+    )
+      .filter((s) => s !== 2009)
+      .sort((a, b) => a - b);
 
     // ── Per-owner aggregated stats ──────────────────────────────────────────
     // memberId → owner profile
@@ -2613,48 +7571,27 @@ export const appRouter = router({
       return ownerMap.get(memberId)!;
     }
 
-    // Fetch championship data from ESPN leagueHistory API — the ONLY reliable source
-    // for pre-2018 seasons where the combined cache has empty teams arrays.
-    let leagueHistoryChampMap = new Map<number, { season: number; championMemberId: string; runnerUpMemberId: string | null; championTeamName: string }>();
-    try {
-      const { fetchLeagueHistoryChampions } = await import('./espnService');
-      leagueHistoryChampMap = await fetchLeagueHistoryChampions(cachedSeasons, ownerStatsCreds);
-    } catch {
-      // If the API call fails (e.g. no credentials), fall back to cache-based detection
-    }
-
     for (const season of cachedSeasons) {
-      const row = await getCachedView(season, 'combined', ownerStatsLeagueId);
-      if (!row) continue;
-      const data = row.payload as any;
+      let data: any = null;
+      const row = await getCachedView(season, "combined", ownerStatsLeagueId);
+      data = row?.payload as any;
+      const teamsLenEarly = Array.isArray(data?.teams) ? data.teams.length : 0;
+      if (!data || teamsLenEarly === 0) {
+        try {
+          const synth = await buildCombinedPayloadFromNormalized(season, ownerStatsLeagueId, undefined);
+          if (synth && Array.isArray(synth.teams) && synth.teams.length > 0) {
+            data = synth;
+          }
+        } catch (e) {
+          console.warn("[ownerCareerStats] normalized fallback skipped:", season, e);
+        }
+      }
+      if (!data) continue;
       const members: any[] = data.members || [];
       const teams: any[] = data.teams || [];
       const hasTeamData = teams.length > 0;
 
-      // For seasons with no team data (pre-2018 cache gap), still credit championships
-      // using the leagueHistory API data, but skip W/L/record processing.
       if (!hasTeamData) {
-        const histEntry = leagueHistoryChampMap.get(season);
-        if (histEntry) {
-          const champOwner = getOrCreateOwner(histEntry.championMemberId, []);
-          champOwner.championships++;
-          champOwner.seasonRecords.push({
-            season, teamName: histEntry.championTeamName,
-            wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
-            rank: 1, playoffSeed: 0, madePlayoffs: true,
-            isChampion: true, isRunnerUp: false,
-          });
-          if (histEntry.runnerUpMemberId) {
-            const ruOwner = getOrCreateOwner(histEntry.runnerUpMemberId, []);
-            ruOwner.runnerUps++;
-            ruOwner.seasonRecords.push({
-              season, teamName: '',
-              wins: 0, losses: 0, ties: 0, pf: 0, pa: 0,
-              rank: 2, playoffSeed: 0, madePlayoffs: true,
-              isChampion: false, isRunnerUp: true,
-            });
-          }
-        }
         continue;
       }
 
@@ -2932,10 +7869,11 @@ export const appRouter = router({
     }); // end memCache
   }),
 
+
   ownerPredictions: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .query(async ({ input }) => {
-      const leagueId = await resolveActiveLeagueId();
+    .query(async ({ ctx, input }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
       const cachedSeasons = await getAllCachedSeasons(leagueId);
 
       // Collect all owner data for this member across seasons
@@ -3083,7 +8021,11 @@ export const appRouter = router({
       else if (rosterStability >= 70) gmArchetype = 'Patient Builder';
       else if (waiverAggression < 30 && tradeFrequency < 30) gmArchetype = 'Set & Forget';
 
-      const prompt = `You are an expert Fantasy Football analyst for the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const promptCtx = await resolveLeaguePromptContext(ctx.user.id);
+      const { leagueDescriptor, historyClause } = buildLeaguePromptContext(promptCtx);
+
+      const prompt = `You are an expert Fantasy Football analyst for ${leagueDescriptor}, ${historyClause}.
 
 Analyze the following owner's career history and generate a detailed 2026 behavioral prediction report.
 
@@ -3188,46 +8130,42 @@ Generate a JSON prediction report with these exact fields:
       };
     }),
 
-  // ── Owner Self-Review (AI-generated scouting report for Rod) ────────────────
-  ownerSelfReview: protectedProcedure.query(async () => {
-    const prompt = `You are an expert fantasy football analyst reviewing the career of Rod Sellers, manager of "Str8FrmHell / RodZilla" in the 18-season keeper league "ATLANTAS FINEST FF" (14 teams, PPR, 1 keeper, 7-team playoffs, snake draft).
+  // ── Owner Self-Review (AI scouting report from synced career data) ─────────
+  ownerSelfReview: protectedProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) {
+      throw new TRPCError({ code: "UNAUTHORIZED", message: "Not signed in" });
+    }
+    const { buildOwnerCareerProfileForFocalUser, formatOwnerCareerProfileFactsBlock } =
+      await import("./ownerCareerProfileService");
+    const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
 
-Here is Rod's complete career data:
+    const career = await buildOwnerCareerProfileForFocalUser(ctx.user.id);
+    if (!career) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Select your franchise in profile and sync league history to generate a self-review.",
+      });
+    }
 
-CAREER RECORD: 50W–56L (47.2% win rate) across 8 seasons (2018–2025)
-PLAYOFF APPEARANCES: 4 of 8 seasons (2019 #2 seed, 2021 #9, 2023 #7, 2025 #3)
-BEST SEASON: 2025 — 9–5, #3 seed, 1921 PF (career high)
-WORST SEASON: 2022 — 3–11, #13 seed, 1447 PF
+    const promptCtx = await resolveLeaguePromptContext(ctx.user.id, career.yearMax);
+    const { leagueDescriptor, historyClause } = buildLeaguePromptContext(promptCtx);
+    const franchiseLine = career.teamNames.length ? ` (${career.teamNames.join(" / ")})` : "";
+    const facts = formatOwnerCareerProfileFactsBlock(career);
 
-DRAFT TENDENCIES (107 picks, 2018–2025):
-- RB: 38 picks (36%), avg round 4.7 — 7 of 8 round-1 picks were RBs
-- WR: 26 picks (24%), avg round 6.2
-- QB: 8 picks (7%), avg round 5.9
-- TE: 5 picks (5%), avg round 6.8
-- Early rounds (1–3): 52% RB, 27% WR, 8% TE, 4% QB
-- Draft style: RB-First Builder
+    const prompt = `You are an expert fantasy football analyst reviewing the career of ${career.ownerName}${franchiseLine} in ${leagueDescriptor}, ${historyClause}.
 
-KEEPER HISTORY: Derrick Henry 2022 (Rd1), Saquon Barkley 2023 (Rd2), Saquon Barkley 2024 (Rd2), Breece Hall 2025 (Rd5)
-2026 KEEPER: TBD -- pending trade decisions before Aug 18 deadline
+Here is the compiled career data for this manager (from synced ESPN cache only — treat as ground truth; do not invent seasons or stats not listed):
 
-GM ACTIVITY (8-season averages): 29 adds/season, 34 drops/season, 7.3 trades/season
-- Most active: 2021 (49 adds, 9 trades) — 7–7, missed playoffs
-- Quietest: 2024 (13 adds, 1 trade) — 5–8
-- Best seasons (2019, 2025) had moderate activity (26–38 adds, 4–12 trades)
+${facts}
 
-NOTABLE MOMENTS:
-- 2020: Drafted Lamar Jackson in Round 1 (bold QB1 call)
-- 2023: Double RB round 1 (CMC + Bijan Robinson)
-- 2025: Career-best season with McCaffrey Rd1 + McBride Rd2
-
-Generate an honest, detailed self-scouting report as if you are Rod's personal analytics coach. Be direct and specific — don't be generic.
+Generate an honest, detailed self-scouting report as if you are this manager's personal analytics coach. Be direct and specific — don't be generic.
 
 Respond with JSON in this exact format:
 {
-  "narrative": "3-4 sentence career narrative describing Rod's arc, style, and trajectory",
+  "narrative": "3-4 sentence career narrative describing this manager's arc, style, and trajectory",
   "focusAreas2026": ["specific focus area 1", "specific focus area 2", "specific focus area 3", "specific focus area 4"],
-  "draftRecommendations": "2-3 sentences of specific 2026 draft advice based on his tendencies and blind spots",
-  "honestVerdict": "1-2 sentences of honest, direct assessment of where Rod stands in the league and what separates him from the top managers"
+  "draftRecommendations": "2-3 sentences of specific upcoming-draft advice based on tendencies and blind spots shown in the data",
+  "honestVerdict": "1-2 sentences of honest, direct assessment of where this manager stands relative to the league data and what separates them from sustained title contention"
 }`;
 
     const response = await invokeLLM({
@@ -3267,29 +8205,55 @@ Respond with JSON in this exact format:
 
   // ── League Draft Tendencies ──────────────────────────────────────────────
   // Aggregates all 14 managers' draft picks by round and position from 2018-2025
-  leagueDraftTendencies: publicProcedure.query(async () => {
-    const leagueId = await resolveActiveLeagueId();
+  leagueDraftTendencies: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.user?.id) return null;
+    const { leagueId } = await resolveActiveLeagueId(
+      { user: { id: ctx.user.id } },
+      null,
+      undefined
+    );
     return memCache(`leagueDraftTendencies:${leagueId}`, 10 * 60_000, async () => {
     const POS_MAP: Record<number, string> = {
       1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "D/ST", 17: "D/ST",
     };
     const cachedSeasons = (await getAllCachedSeasons(leagueId)).sort((a, b) => a - b);
 
+    // Canonical position source: draft_picks carries the resolved position string for every pick,
+    // including individual defenders. Build (season:overallPick) → normalized position so IDPs
+    // collapse into "DP" instead of falling through to "UNK" in the tendency tallies below.
+    const tendencyDb = await getDb();
+    const dpPosByPick = new Map<string, string>();
+    try {
+      if (tendencyDb) {
+        const [dpRows] = (await tendencyDb.execute(sql`
+          SELECT season, overallPick, position FROM draft_picks WHERE leagueId = ${leagueId}
+        `)) as unknown as [Array<{ season: number; overallPick: number; position: string | null }>];
+        for (const r of dpRows) {
+          const p = String(r.position ?? "").trim();
+          if (!p || p === "?") continue;
+          dpPosByPick.set(`${Number(r.season)}:${Number(r.overallPick)}`, normalizeDefensivePosition(p));
+        }
+      }
+    } catch { /* draft_picks unavailable → fall back to ESPN position ids below */ }
+
     // owner key -> stats
     const ownerMap = new Map<string, {
       memberId: string; name: string; seasons: Set<number>;
       byRound: Record<number, Record<string, number>>;
       byPosition: Record<string, number>;
-      round1Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      round2Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      round3Picks: Array<{ season: number; playerName: string; position: string; isKeeper: boolean }>;
-      totalPicks: number;
+      round1Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      round2Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      round3Picks: Array<{ season: number; playerName: string; position: string; keeperSlot: boolean; draftedForAnalytics: boolean; isKeeper: boolean }>;
+      boardSlotCount: number;
+      openDraftPickCount: number;
+      keeperSlotCount: number;
+      retainedSlotCount: number;
     }>();
 
     const seenPickKeys = new Set<string>();
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season, leagueId);
+      const data = await getSeasonData(season, leagueId, ctx.user?.id);
       if (!data) continue;
 
       const memberNameMap: Record<string, string> = {};
@@ -3336,7 +8300,7 @@ Respond with JSON in this exact format:
         const ownerId = teamOwnerMap[teamId] || `team_${teamId}`;
         const ownerName = memberNameMap[ownerId] || `Team${teamId}`;
         const round = (pick.roundId as number) || Math.ceil(overall / 14) || 1;
-        const isKeeper = pick.keeper === true || pick.reservedForKeeper === true;
+        const truth = classifyDraftPickRawPick(pick);
 
         // Get player name and position
         const pEntry = (pick.playerPoolEntry as Record<string, unknown>) || {};
@@ -3345,21 +8309,38 @@ Respond with JSON in this exact format:
         const playerInfo = playerInfoMap.get(playerId);
         const playerName = (pPlayer.fullName as string) || playerInfo?.name || `Player#${playerId}`;
         const posId = pPlayer.defaultPositionId as number || 0;
-        const position = POS_MAP[posId] || playerInfo?.position || "UNK";
+        // Prefer the canonical draft_picks position (recognizes defenders), then ESPN ids; fold IDP → DP.
+        const canonicalPos = dpPosByPick.get(`${season}:${overall}`);
+        const position = normalizeDefensivePosition(canonicalPos || POS_MAP[posId] || playerInfo?.position || "UNK");
 
         if (!ownerMap.has(ownerId)) {
           ownerMap.set(ownerId, {
             memberId: ownerId, name: ownerName, seasons: new Set(),
-            byRound: {}, byPosition: {}, round1Picks: [], round2Picks: [], round3Picks: [], totalPicks: 0,
+            byRound: {}, byPosition: {}, round1Picks: [], round2Picks: [], round3Picks: [],
+            boardSlotCount: 0, openDraftPickCount: 0, keeperSlotCount: 0, retainedSlotCount: 0,
           });
         }
         const o = ownerMap.get(ownerId)!;
         o.seasons.add(season);
-        o.totalPicks++;
-        if (!o.byRound[round]) o.byRound[round] = {};
-        o.byRound[round][position] = (o.byRound[round][position] || 0) + 1;
-        o.byPosition[position] = (o.byPosition[position] || 0) + 1;
-        const pickDetail = { season, playerName, position, isKeeper };
+        o.boardSlotCount++;
+        if (truth.draftedForAnalytics) o.openDraftPickCount++;
+        if (truth.keeperSlot) o.keeperSlotCount++;
+        if (truth.retained) o.retainedSlotCount++;
+
+        if (truth.draftedForAnalytics) {
+          if (!o.byRound[round]) o.byRound[round] = {};
+          o.byRound[round][position] = (o.byRound[round][position] || 0) + 1;
+          o.byPosition[position] = (o.byPosition[position] || 0) + 1;
+        }
+        const pickDetail = {
+          season,
+          playerName,
+          position,
+          keeperSlot: truth.keeperSlot,
+          draftedForAnalytics: truth.draftedForAnalytics,
+          /** @deprecated use keeperSlot — kept for older clients */
+          isKeeper: truth.keeperSlot,
+        };
         if (round === 1) o.round1Picks.push(pickDetail);
         if (round === 2) o.round2Picks.push(pickDetail);
         if (round === 3) o.round3Picks.push(pickDetail);
@@ -3368,8 +8349,8 @@ Respond with JSON in this exact format:
 
     // Serialize and compute derived fields
     const owners = Array.from(ownerMap.values())
-      .filter(o => o.totalPicks > 0)
-      .sort((a, b) => b.seasons.size - a.seasons.size || b.totalPicks - a.totalPicks)
+      .filter(o => o.boardSlotCount > 0)
+      .sort((a, b) => b.seasons.size - a.seasons.size || b.openDraftPickCount - a.openDraftPickCount)
       .map(o => {
         const posTotal = Object.values(o.byPosition).reduce((s, v) => s + v, 0);
         const topPositions = Object.entries(o.byPosition)
@@ -3468,7 +8449,11 @@ Respond with JSON in this exact format:
           memberId: o.memberId,
           name: o.name,
           seasons: o.seasons.size,
-          totalPicks: o.totalPicks,
+          totalPicks: o.openDraftPickCount,
+          boardSlotCount: o.boardSlotCount,
+          openDraftPickCount: o.openDraftPickCount,
+          keeperSlotCount: o.keeperSlotCount,
+          retainedSlotCount: o.retainedSlotCount,
           topPositions,
           byRound: o.byRound,
           round1Picks: [...o.round1Picks].sort((a, b) => b.season - a.season),
@@ -3499,27 +8484,37 @@ Respond with JSON in this exact format:
       }
     }
 
-     return { owners, leagueByRound, seasons: cachedSeasons };
+     // Read-only IDP/DP draft-tendency summary (history + confidence + coverage).
+     const idpDraftProfile = tendencyDb
+       ? await computeLeagueIdpDraftProfile({ db: tendencyDb, sql, leagueId })
+       : null;
+     return { owners, leagueByRound, seasons: cachedSeasons, idpDraftProfile };
     }); // end memCache
   }),
   // ── Pick Value Calculator ─────────────────────────────────────────────────
-  // 14-team PPR calibrated pick value chart (210 picks, 15 rounds × 14 teams)
-  // Formula: value(overall) = 3000 * e^(-0.028 * (overall - 1))
-  // Calibrated so: 1.01=3000, 1.14≈2085, 2.01≈1409, 3.14≈952, 5.14≈435
-  pickValueChart: publicProcedure.query(() => {
-    const TEAMS = 14;
-    const ROUNDS = 15;
+  // Snake pick value chart from active league team/round count (same exp decay as pickTradeEval).
+  pickValueChart: publicProcedure.query(async ({ ctx }) => {
+    const g = await resolvePickValueGeometryForUser(ctx);
+    const TEAMS = g.teamCount;
+    const ROUNDS = g.roundCount;
     const BASE = 3000;
     const K = 0.028;
     const picks: Array<{ overall: number; round: number; pickInRound: number; label: string; value: number }> = [];
-    for (let overall = 1; overall <= TEAMS * ROUNDS; overall++) {
-      const round = Math.ceil(overall / TEAMS);
-      const positionInRound = overall - (round - 1) * TEAMS;
-      const pickInRound = round % 2 === 1 ? positionInRound : TEAMS + 1 - positionInRound;
-      const value = Math.round(BASE * Math.exp(-K * (overall - 1)));
-      picks.push({ overall, round, pickInRound, label: `${round}.${String(pickInRound).padStart(2, '0')}`, value });
+    if (TEAMS > 0 && ROUNDS > 0) {
+      for (let overall = 1; overall <= TEAMS * ROUNDS; overall++) {
+        const round = Math.ceil(overall / TEAMS);
+        const positionInRound = overall - (round - 1) * TEAMS;
+        const pickInRound = round % 2 === 1 ? positionInRound : TEAMS + 1 - positionInRound;
+        const value = Math.round(BASE * Math.exp(-K * (overall - 1)));
+        picks.push({ overall, round, pickInRound, label: `${round}.${String(pickInRound).padStart(2, "0")}`, value });
+      }
     }
-    return picks;
+    return {
+      picks,
+      teamCount: g.teamCount,
+      roundCount: g.roundCount,
+      draftSlotCount: g.draftSlotCount,
+    };
   }),
 
   pickTradeEval: publicProcedure
@@ -3528,22 +8523,20 @@ Respond with JSON in this exact format:
       sideB: z.array(z.object({ round: z.number(), pickInRound: z.number() })),
       counterpartyMemberId: z.string().optional(),
     }))
-    .query(async ({ input }) => {
-      const TEAMS = 14;
-      const BASE = 3000;
-      const K = 0.028;
-      function pickValue(round: number, pickInRound: number): number {
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
-      }
-      const valueA = input.sideA.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
-      const valueB = input.sideB.reduce((s, p) => s + pickValue(p.round, p.pickInRound), 0);
+    .query(async ({ ctx, input }) => {
+      const g = await resolvePickValueGeometryForUser(ctx);
+      const TEAMS = g.teamCount;
+      const {
+        sumTradePickValues,
+        pickPackageVerdictForSideA,
+        compareGivenSideTotals,
+      } = await import("./tradePickValueAuthority");
+      const valueA = sumTradePickValues(input.sideA, TEAMS, "raw");
+      const valueB = sumTradePickValues(input.sideB, TEAMS, "raw");
       const diff = valueA - valueB;
-      const pct = valueB > 0 ? Math.round((valueA / valueB) * 100) : 0;
-      let verdict: 'WIN' | 'FAIR' | 'LOSS';
-      if (pct >= 110) verdict = 'WIN';
-      else if (pct >= 90) verdict = 'FAIR';
-      else verdict = 'LOSS';
+      const cmp = compareGivenSideTotals(valueA, valueB);
+      const pct = valueB > 0 ? Math.round(cmp.gainRatioA * 100) : 0;
+      const verdict = pickPackageVerdictForSideA(valueA, valueB);
 
       // ── DNA-based acceptance probability ──────────────────────────────────
       let dnaAnalysis: {
@@ -3565,12 +8558,12 @@ Respond with JSON in this exact format:
           };
           // Re-use the leagueDraftTendencies cached result by calling getSeasonData
           // Build a minimal owner profile from the most recent 3 seasons
-          const recentSeasons = (await getAllCachedSeasons()).sort((a, b) => b - a).slice(0, 3);
+          const recentSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => b - a).slice(0, 3);
           const ownerStats = { rb1Pct: 0, wr1Pct: 0, earlyRbPct: 0, diversityScore: 50, keeperRate: 0, qbAvgRound: 8, teAvgRound: 8, draftStyle: 'BPA', name: input.counterpartyMemberId };
           let r1Total = 0; let rb1 = 0; let wr1 = 0; let earlyRb = 0; let earlyTotal = 0; let keeperPicks = 0; let totalPicks = 0; let qbRounds: number[] = []; let teRounds: number[] = [];
           const POS_MAP2: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'D/ST', 17: 'D/ST' };
           for (const season of recentSeasons) {
-            const sd = await getSeasonData(season);
+            const sd = await getSeasonData(season, undefined, ctx.user?.id);
             if (!sd) continue;
             const memberNameMap: Record<string, string> = {};
             for (const m of (sd.members as Record<string, unknown>[]) || []) {
@@ -3591,11 +8584,12 @@ Respond with JSON in this exact format:
             for (const pick of draftPicks) {
               const memberId = pick.memberId as string;
               if (memberId !== input.counterpartyMemberId) continue;
+              const truth = classifyDraftPickRawPick(pick);
               const round = pick.roundId as number;
               const pos = playerInfoMap.get(pick.playerId as number)?.position || 'UNK';
-              const isKeeper = !!(pick.keeper as boolean);
               totalPicks++;
-              if (isKeeper) keeperPicks++;
+              if (truth.keeperSlot) keeperPicks++;
+              if (!truth.draftedForAnalytics) continue;
               if (round === 1) { r1Total++; if (pos === 'RB') rb1++; if (pos === 'WR') wr1++; }
               if (round <= 4) { earlyTotal++; if (pos === 'RB') earlyRb++; }
               if (pos === 'QB') qbRounds.push(round);
@@ -3649,7 +8643,19 @@ Respond with JSON in this exact format:
         : champEquityDelta < 0 ? `${champEquityDelta}% title odds reduction`
         : 'Neutral championship equity impact';
 
-      return { valueA, valueB, diff, pct, verdict, dnaAnalysis, champEquityDelta, champEquityLabel };
+      return {
+        valueA,
+        valueB,
+        diff,
+        pct,
+        verdict,
+        dnaAnalysis,
+        champEquityDelta,
+        champEquityLabel,
+        teamCount: g.teamCount,
+        roundCount: g.roundCount,
+        draftSlotCount: g.draftSlotCount,
+      };
     }),
 
   // ── Draft Pick Trade Tracker ──────────────────────────────────────────────
@@ -3658,13 +8664,8 @@ Respond with JSON in this exact format:
     .input(z.object({ draftYear: z.number().default(2026) }))
     .query(async ({ input }) => {
       const trades = await getPickTrades(input.draftYear);
-      const BASE = 3000; const K = 0.028; const TEAMS = 14;
-      function pv(round: number, pir: number) {
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pir : TEAMS + 1 - pir);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
-      }
-      const acquired = trades.filter((t) => t.type === 'acquired');
-      const tradedAway = trades.filter((t) => t.type === 'traded_away');
+      const acquired = trades.filter((t) => t.type === "acquired");
+      const tradedAway = trades.filter((t) => t.type === "traded_away");
       const acquiredValue = acquired.reduce((s, t) => s + t.pickValue, 0);
       const tradedValue = tradedAway.reduce((s, t) => s + t.pickValue, 0);
       return { trades, acquiredValue, tradedValue, netValue: acquiredValue - tradedValue };
@@ -3673,17 +8674,34 @@ Respond with JSON in this exact format:
   addPickTrade: protectedProcedure
     .input(z.object({
       draftYear: z.number().default(2026),
-      type: z.enum(['acquired', 'traded_away']),
-      round: z.number().min(1).max(15),
-      pickInRound: z.number().min(1).max(14),
+      type: z.enum(["acquired", "traded_away"]),
+      round: z.number().min(1).max(32),
+      pickInRound: z.number().min(1).max(32),
       counterparty: z.string().min(1).max(128),
       notes: z.string().max(500).optional(),
     }))
-    .mutation(async ({ input }) => {
-      const TEAMS = 14; const BASE = 3000; const K = 0.028;
+    .mutation(async ({ ctx, input }) => {
+      const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.draftYear);
+      if (!leagueId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Active league not configured" });
+      }
+      const seasonPayload = await getSeasonData(input.draftYear, undefined, ctx.user.id);
+      const geo = await resolveKeeperDraftGeometryForSeason(leagueId, input.draftYear, ctx.user.id, seasonPayload);
+      if (geo.teamCount <= 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "League team count unavailable — sync league data first" });
+      }
+      if (input.pickInRound > geo.teamCount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `pickInRound must be 1..${geo.teamCount} for this league`,
+        });
+      }
+      const TEAMS = geo.teamCount;
+      const BASE = 3000;
+      const K = 0.028;
       const overall = (input.round - 1) * TEAMS + (input.round % 2 === 1 ? input.pickInRound : TEAMS + 1 - input.pickInRound);
       const pickValue = Math.round(BASE * Math.exp(-K * (overall - 1)));
-      const label = `${input.round}.${String(input.pickInRound).padStart(2, '0')}`;
+      const label = `${input.round}.${String(input.pickInRound).padStart(2, "0")}`;
       await addPickTrade({ ...input, label, pickValue, notes: input.notes ?? null });
       return { success: true };
     }),
@@ -3695,27 +8713,59 @@ Respond with JSON in this exact format:
       return { success: true };
     }),
 
-  // Returns the 2026 draft order from ESPN
-  draftPickPortfolio: publicProcedure.query(async () => {
-    const TEAMS = 14;
-    const BASE = 3000;
-    const K = 0.028;
-    function pickValue(round: number, pickInRound: number): number {
-      const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-      return Math.round(BASE * Math.exp(-K * (overall - 1)));
+  // Returns the draft-year draft order from ESPN cache (snake geometry from league settings + payload).
+  draftPickPortfolio: publicProcedure.query(async ({ ctx }) => {
+    const DRAFT_YEAR = 2026;
+    const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, DRAFT_YEAR);
+    let TEAMS = 0;
+    let ROUNDS = 0;
+    if (leagueId) {
+      const cached = await getCachedView(DRAFT_YEAR, "combined", undefined, { userId: ctx.user?.id });
+      const raw = cached?.payload ? (cached.payload as Record<string, unknown>) : null;
+      const geo = await resolveKeeperDraftGeometryForSeason(leagueId, DRAFT_YEAR, ctx.user?.id, raw);
+      TEAMS = geo.teamCount;
+      ROUNDS = geo.roundCount;
+    }
+    let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
+
+    // PRIMARY SOURCE — the draft_picks table, where each pick's teamId is its CURRENT
+    // owner (post-trade). This is the same trade-aware data the Draft War Room mock
+    // board reads: a pick a team traded away is already recorded under the team that
+    // acquired it, so no trade reconstruction is needed here.
+    if (leagueId) {
+      try {
+        const { getDb } = await import("./db");
+        const dbPicks = await getDb();
+        if (dbPicks) {
+          const [rows] = (await dbPicks.execute(sql`
+            SELECT dp.teamId, dp.roundId, dp.roundPick, dp.overallPick, t.name AS teamName
+            FROM draft_picks dp
+            LEFT JOIN teams t ON t.leagueId = dp.leagueId AND t.season = dp.season AND t.teamId = dp.teamId
+            WHERE dp.leagueId = ${leagueId} AND dp.season = ${DRAFT_YEAR}
+            ORDER BY dp.overallPick
+          `)) as unknown as [Array<Record<string, unknown>>];
+          for (const r of rows) {
+            const tid = Number(r.teamId);
+            if (!Number.isFinite(tid) || tid <= 0) continue;
+            draftOrder.push({
+              teamId: tid,
+              teamName: (r.teamName as string) || `Team ${tid}`,
+              round: Number(r.roundId),
+              pickInRound: Number(r.roundPick),
+              overall: Number(r.overallPick),
+            });
+          }
+        }
+      } catch { /* fall through to the draft-order snake below */ }
     }
 
-    // Load 2026 draft order from ESPN cache
-    let draftOrder: Array<{ teamId: number; teamName: string; round: number; pickInRound: number; overall: number }> = [];
     try {
-      const cached = await getCachedView(2026, 'combined');
-      if (cached?.payload) {
+      const cached = await getCachedView(DRAFT_YEAR, "combined", undefined, { userId: ctx.user?.id });
+      if (draftOrder.length === 0 && cached?.payload && TEAMS > 0 && ROUNDS > 0) {
         const raw = cached.payload as Record<string, unknown>;
         const normalized = normalizeDraftOrder(raw);
-        // normalizeDraftOrder returns { pickOrder: [{position, teamId, name, abbrev, owners}], draftDate, ... }
-        // pickOrder is the snake order for round 1 only; we expand to all 15 rounds
         const pickOrder = normalized.pickOrder as Array<{ position: number; teamId: number; name?: string; abbrev?: string; owners?: string }>;
-        for (let round = 1; round <= 15; round++) {
+        for (let round = 1; round <= ROUNDS; round++) {
           const roundOrder = round % 2 === 1 ? pickOrder : [...pickOrder].reverse();
           roundOrder.forEach((slot, idx) => {
             const pickInRound = idx + 1;
@@ -3730,11 +8780,11 @@ Respond with JSON in this exact format:
           });
         }
       }
-    } catch { /* no 2026 cache yet */ }
+    } catch { /* no draft-year cache yet */ }
 
-    // If no 2026 data, generate a placeholder 14-team snake order
-    if (draftOrder.length === 0) {
-      for (let round = 1; round <= 15; round++) {
+    // If no cache data, generate a placeholder snake using resolved geometry (still no fixed 14).
+    if (draftOrder.length === 0 && TEAMS > 0 && ROUNDS > 0) {
+      for (let round = 1; round <= ROUNDS; round++) {
         for (let pos = 1; pos <= TEAMS; pos++) {
           const pickInRound = round % 2 === 1 ? pos : TEAMS + 1 - pos;
           const overall = (round - 1) * TEAMS + pos;
@@ -3749,14 +8799,38 @@ Respond with JSON in this exact format:
       }
     }
 
-    return { draftOrder, totalPicks: draftOrder.length };
+    return {
+      draftOrder,
+      totalPicks: draftOrder.length,
+      teamCount: TEAMS,
+      roundCount: ROUNDS,
+      draftSlotCount: TEAMS > 0 && ROUNDS > 0 ? TEAMS * ROUNDS : 0,
+    };
   }),
+
+    soulsDraftBoard: protectedProcedure
+    .input(z.object({
+      season: z.number().optional(),
+      keepers: z.array(z.object({ teamId: z.number(), keeperRound: z.number(), player: z.string(), position: z.string() })).optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const { resolveActiveLeagueId, getDb } = await import("./db");
+      const { runSoulsDraftBoard, soulsEngineSupportsLeague } = await import("./draftEngine/runSoulsDraftBoard");
+      const { leagueId } = await resolveActiveLeagueId({ user: ctx.user });
+      if (!leagueId || !soulsEngineSupportsLeague(String(leagueId))) {
+        return { supported: false as const, board: null };
+      }
+      const db = await getDb();
+      if (!db) return { supported: false as const, board: null };
+      const board = await runSoulsDraftBoard({ db, leagueId: String(leagueId), season: input?.season, keepers: input?.keepers });
+      return { supported: !!board, board };
+    }),
 
     opponentProfile: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
-      const data = await findLiveOpponentProfile(input.memberId);
+      const data = await findLiveOpponentProfile(input.memberId, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
       return data;
     }),
@@ -3768,10 +8842,16 @@ Respond with JSON in this exact format:
     }),
   opponentScoutingReport: protectedProcedure
     .input(z.object({ memberId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const { findLiveOpponentProfile } = await import("./liveOpponentProfile");
-      const data = await findLiveOpponentProfile(input.memberId);
+      const data = await findLiveOpponentProfile(input.memberId, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "Opponent not found — sync ESPN data first" });
+
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const scoutSeason = new Date().getFullYear();
+      const promptCtx = await resolveLeaguePromptContext(ctx.user?.id, scoutSeason);
+      const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
+      const focalDisplayName = promptCtx.focalOwnerName?.trim() || focalClause;
 
       const totalW = data.career.wins;
       const totalL = data.career.losses;
@@ -3789,19 +8869,19 @@ Respond with JSON in this exact format:
         : 'Playoff Record: No completed playoff matchup data available';
 
       // Build enriched H2H block
-      let enrichedH2HBlock = `H2H vs Rod Sellers: ${h2hW}W-${h2hL}L (career)`;
+      let enrichedH2HBlock = `H2H vs ${focalDisplayName}: ${h2hW}W-${h2hL}L (career)`;
       try {
         const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import('./h2hContextBuilder');
-        const rodId = await resolveRodMemberId();
-        if (rodId && input.memberId && rodId !== input.memberId) {
-          const h2h = await computeRichH2H(rodId, input.memberId, 'Rod Sellers', data.ownerName);
+        const focalMemberId = await resolveRodMemberId(ctx.user?.id);
+        if (focalMemberId && input.memberId && focalMemberId !== input.memberId) {
+          const h2h = await computeRichH2H(focalMemberId, input.memberId, focalDisplayName, data.ownerName, ctx.user?.id);
           if (h2h.rsTotalGames > 0) {
-            enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs Rod Sellers`);
+            enrichedH2HBlock = buildH2HPromptBlock(h2h, `H2H vs ${focalDisplayName}`);
           }
         }
       } catch { /* non-fatal */ }
 
-      const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for the ATLANTAS FINEST FF league (14-team PPR keeper league, 2026 season).
+      const prompt = `You are an expert fantasy football analyst scouting ${data.ownerName} for ${leagueDescriptor}, ${historyClause} (scouting season context: ${scoutSeason}).
 
 Career Record: ${totalW}W-${totalL}L (${winPct}% win rate) over ${data.seasons.length} seasons
 ${poStr}
@@ -3815,13 +8895,13 @@ Strengths: ${data.strengthsWeaknesses.filter(s => s.type === "strength").map(s =
 Weaknesses: ${data.strengthsWeaknesses.filter(s => s.type === "weakness").map(s => s.text).join("; ")}
 Blind Spots: ${data.strengthsWeaknesses.filter(s => s.type === "blindspot").map(s => s.text).join("; ")}
 
-Write a detailed scouting report for Rod Sellers to use against this opponent in 2026. Include:
+Write a detailed scouting report for ${focalDisplayName} to use against this opponent in ${scoutSeason}. Include:
 1. THREAT LEVEL (Elite/High/Medium/Low) with one-sentence justification
 2. CAREER NARRATIVE (2-3 sentences on their arc and what defines them)
-3. HOW TO BEAT THEM (3 specific tactical recommendations for Rod)
-4. TRADE STRATEGY (should Rod trade with them? What to offer? What to demand?)
+3. HOW TO BEAT THEM (3 specific tactical recommendations for ${focalDisplayName})
+4. TRADE STRATEGY (should ${focalDisplayName} trade with them? What to offer? What to demand?)
 5. DRAFT DAY INTEL (what positions do they prioritize? How does that affect the draft board?)
-6. 2026 PREDICTION (one bold prediction about their season)
+6. ${scoutSeason} PREDICTION (one bold prediction about their season)
 
 Be specific, honest, and tactical. This is a competitive scouting report, not a puff piece.`;
 
@@ -3836,8 +8916,8 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       return { report, ownerName: data.ownerName };
     }),
 
-  keeperROI: publicProcedure.query(async () => {
-    // Aggregate all keeper picks across 2022-2025 with ROI analysis
+  keeperROI: publicProcedure.query(async ({ ctx }) => {
+    // Aggregate all keeper picks across cached seasons with ROI analysis
     // ROI = round saved vs. what you'd have to spend in a normal draft
     // A keeper kept in round N costs round N-1 in the next draft
     // "Round surplus" = (market round - keeper cost round)
@@ -3845,27 +8925,16 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     // We approximate market round using: if kept in Rd X, they were worth at least Rd X-1 (the cost)
     // Better approximation: use pick value chart to compute value ratio
 
-    const cachedSeasons = (await getAllCachedSeasons()).sort((a, b) => a - b);
+    const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a, b) => a - b);
+    const anchorSeason = cachedSeasons.length ? cachedSeasons[cachedSeasons.length - 1]! : new Date().getFullYear();
+    const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, anchorSeason);
+    const anchorPayload = leagueId ? await getSeasonData(anchorSeason, undefined, ctx.user?.id) : null;
+    const anchorGeo = leagueId
+      ? await resolveKeeperDraftGeometryForSeason(leagueId, anchorSeason, ctx.user?.id, anchorPayload)
+      : { teamCount: 0, roundCount: 0, draftSlotCount: 0 };
 
-    // Pick value chart (14-team PPR, same as pickValueChart endpoint)
-    const TOTAL_TEAMS = 14;
-    const TOTAL_ROUNDS = 15;
     const BASE_VALUE = 3000;
     const DECAY = 0.93;
-    const pickValues: Record<string, number> = {};
-    for (let round = 1; round <= TOTAL_ROUNDS; round++) {
-      for (let pick = 1; pick <= TOTAL_TEAMS; pick++) {
-        const overall = (round - 1) * TOTAL_TEAMS + pick;
-        const value = Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
-        pickValues[`${round}.${pick}`] = value;
-        pickValues[`${round}`] = pickValues[`${round}`] ?? value; // first pick of round as round value
-      }
-    }
-    // Round-level values (use mid-round pick, pick 7 of 14)
-    const roundValue = (round: number) => {
-      const overall = (round - 1) * TOTAL_TEAMS + 7;
-      return Math.round(BASE_VALUE * Math.pow(DECAY, overall - 1));
-    };
 
     // Collect all keeper picks
     type KeeperROIEntry = {
@@ -3890,13 +8959,19 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
     const playerConsecutiveTracker: Record<string, number> = {}; // `${teamId}-${playerId}` -> years kept
 
     for (const season of cachedSeasons) {
-      const data = await getSeasonData(season);
+      const data = await getSeasonData(season, undefined, ctx.user?.id);
       if (!data) continue;
+      const { leagueId: seasonLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, season);
+      if (!seasonLeagueId) continue;
+      const geo = await resolveKeeperDraftGeometryForSeason(seasonLeagueId, season, ctx.user?.id, data);
+      const midPick = defaultMidPickInRound(geo.teamCount);
+      const roundValue = (r: number) => keeperDecayRoundValue(r, geo.teamCount, midPick, BASE_VALUE, DECAY);
+
       const picks = normalizeDraftPicks(data);
 
       for (const pick of picks) {
         const p = pick as Record<string, unknown>;
-        if (!p.keeper) continue;
+        if (!isDraftKeeperSlotPick(p)) continue;
 
         const teamId = p.teamId as number;
         const playerId = p.playerId as number;
@@ -4007,6 +9082,9 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       bestValueKeepers,
       worstValueKeepers,
       seasons: cachedSeasons,
+      teamCount: anchorGeo.teamCount,
+      roundCount: anchorGeo.roundCount,
+      draftSlotCount: anchorGeo.draftSlotCount,
     };
   }),
 
@@ -4016,10 +9094,17 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       targetType: z.enum(["player", "pick"]),
       targetOwnerId: z.string().optional(), // memberId of owner if known
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       // ── 1. Load latest season data (2025) ──────────────────────────────────
-      const seasonData = await getSeasonData(2025) as any;
+      const seasonData = await getSeasonData(2025, undefined, ctx.user.id) as any;
       if (!seasonData) throw new TRPCError({ code: "NOT_FOUND", message: "Season data not available" });
+
+      const { leagueId: tradeGenLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, 2025);
+      const pickGeo =
+        tradeGenLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(tradeGenLeagueId, 2025, ctx.user.id, seasonData as Record<string, unknown>)
+          : { teamCount: 0, roundCount: 0, draftSlotCount: 0 };
+      const pickValTeams = pickGeo.teamCount;
 
       const teams: any[] = seasonData.teams || [];
       const members: any[] = seasonData.members || [];
@@ -4055,9 +9140,9 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       }
 
       // ── 2. League scoring settings (from leagueScoringService) ──────────────
-      const leagueScoringSettings = await getLeagueScoringSettings().catch(() => null);
+      const leagueScoringSettings = await getLeagueScoringSettings(undefined, ctx.user?.id).catch(() => null);
       const scoringMap: Record<number, number> = leagueScoringSettings?.scoringMap ?? {};
-      const scoringDesc = leagueScoringSettings?.scoringDescription ?? `Half PPR (0.5/rec), 6pts/TD, 4pts/pass TD, 1pt/25 pass yds, 1pt/10 rush yds, 1pt/10 rec yds`;
+      const scoringDesc = leagueScoringSettings?.scoringDescription ?? "Full PPR (1 pt/rec) · 6 pts/pass TD · 6 pts/rush TD · 6 pts/rec TD · 1 pt/25 pass yds · 1 pt/10 rush yds · 1 pt/10 rec yds · 3 pts/INT";
 
       // ── 3. Build player roster index ──────────────────────────────────────
       interface PlayerInfo {
@@ -4111,14 +9196,10 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       let targetPickValue = 0;
       let targetPickOwnerName = "Unknown";
 
-      // Canonical pick value formula: 14-team PPR snake draft, exponential decay
-      // Matches the pickValueChart / pickTradeEval endpoints exactly
+      // Canonical pick value: same exp decay as pickValueChart, league-sized snake.
       function pickValueCanonical(round: number, pickInRound: number): number {
-        const TEAMS = 14;
-        const BASE = 3000;
-        const K = 0.028;
-        const overall = (round - 1) * TEAMS + (round % 2 === 1 ? pickInRound : TEAMS + 1 - pickInRound);
-        return Math.round(BASE * Math.exp(-K * (overall - 1)));
+        if (pickValTeams <= 0) return 0;
+        return expPickValueFromSnakeRound(round, pickInRound, pickValTeams);
       }
 
       if (input.targetType === "pick") {
@@ -4134,7 +9215,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           // Step 1: Get the 2026 draft order from ESPN (uses 2025 season data which has 2026 draft settings)
           const draftOrderData = normalizeDraftOrder(seasonData as Record<string, unknown>);
           const pickOrder = draftOrderData.pickOrder || [];
-          // Snake draft: odd rounds go 1→14, even rounds go 14→1
+          // Snake draft: odd rounds ascend by slot, even rounds reverse (league-sized).
           // The team at position `pick` in round `round` is the original owner
           let originalOwnerTeamId: number | null = null;
           let originalOwnerName = "Unknown";
@@ -4206,7 +9287,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
       if (!targetMemberId && targetOwnerName && targetOwnerName !== "Unknown") {
         try {
           const { buildLiveOpponentProfiles } = await import("./liveOpponentProfile");
-          const profiles = await buildLiveOpponentProfiles();
+          const profiles = await buildLiveOpponentProfiles(ctx.user?.id);
           const cleanTarget = targetOwnerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
           for (const [mid, prof] of Array.from(profiles.entries())) {
             const cleanProf = prof.ownerName.toLowerCase().replace(/[^a-z0-9 ]/g, "");
@@ -4663,17 +9744,32 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         valueRatioPct: bo.valueRatioPct,
       }));
 
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const { resolveRodMemberId } = await import("./h2hContextBuilder");
+      const tradePromptCtx = await resolveLeaguePromptContext(ctx.user.id, 2025);
+      const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(tradePromptCtx);
+      const focalH2hShort = tradePromptCtx.focalOwnerName?.trim() || "the focal manager";
+      const focalMemberIdTrade = await resolveRodMemberId(ctx.user.id);
+      let focalLeagueLine = "";
+      if (focalMemberIdTrade) {
+        const focalTeamInfo = Object.values(teamMap).find(ti => ti.memberId === focalMemberIdTrade);
+        if (focalTeamInfo) {
+          focalLeagueLine = `${focalClause} (${focalTeamInfo.teamName}): ${focalTeamInfo.record.wins}-${focalTeamInfo.record.losses} in 2025 regular season.`;
+        }
+      }
+      if (!focalLeagueLine) focalLeagueLine = `${focalClause}.`;
+
       // ── 8. Pull GM style context for target owner ─────────────────────────
       const { getGmStyleForTradeGenerator } = await import("./liveOpponentProfile");
-      const gmStyle = await getGmStyleForTradeGenerator(targetMemberId);
+      const gmStyle = await getGmStyleForTradeGenerator(targetMemberId, ctx.user?.id);
       // ── 8b. Pull Phase 3 DNA profile for target owner ────────────────────
       let dnaProfile: import("./leagueDNA").ManagerDNA | null = null;
       let dnaPromptBlock = "";
       try {
         const { calcLeagueDNA } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const allManagers = await buildManagerRawData();
-        const dnaProfiles = calcLeagueDNA(allManagers);
+        const allManagers = await buildManagerRawData(ctx.user?.id);
+        const dnaProfiles = calcLeagueDNA(allManagers, focalH2hShort);
         const found = dnaProfiles.find(p => p.memberId === targetMemberId);
         if (found) {
           dnaProfile = found;
@@ -4689,7 +9785,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
   Trade Frequency: ${found.trade.avgTradesPerSeason.toFixed(1)}/season | Loss-trade ratio: ${found.trade.lossTradeRatio.toFixed(2)}x
   Draft Biases (overvalues/undervalues vs league avg): ${bias}
   Top Exploit: ${found.exploitWindows[0] ?? "No specific exploit identified"}
-  H2H vs Rod: ${found.trade.h2hVsRod.wins}W-${found.trade.h2hVsRod.losses}L (Rod wins ${found.trade.h2hVsRod.winPct.toFixed(0)}% of matchups)
+  H2H vs ${focalH2hShort}: ${found.trade.h2hVsRod.wins}W-${found.trade.h2hVsRod.losses}L (${focalH2hShort} wins ${found.trade.h2hVsRod.winPct.toFixed(0)}% of matchups)
   INSTRUCTION: Use these behavioral facts to customize the negotiation strategy, offer framing, and closing message. If they overvalue a position, offer that. If they are tilting, apply urgency. If they are highly exploitable, be aggressive.`;
         }
       } catch {
@@ -4704,17 +9800,17 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
         const gives = o.rodGives.picks.join(" + ");
         const receives = o.rodReceives.picks.join(" + ");
         const ratio = o.valueRatioPct ?? (targetValue > 0 ? Math.round((o.totalValue / targetValue) * 100) : 0);
-        return `Option ${i + 1}: Rod gives [${gives}] (value: ${o.rodGives.totalValue}) in exchange for [${receives}] (value: ${o.rodReceives.totalValue}) — ${ratio}% value match`;
+        return `Option ${i + 1}: You give [${gives}] (value: ${o.rodGives.totalValue}) in exchange for [${receives}] (value: ${o.rodReceives.totalValue}) — ${ratio}% value match`;
       }).join("\n");
 
       const gmContext = gmStyle
-        ? `Target owner GM profile: ${gmStyle.archetype}, averages ${gmStyle.avgTrades} trades/season, H2H vs Rod: ${gmStyle.h2hVsRod.wins}W-${gmStyle.h2hVsRod.losses}L. Draft style: ${gmStyle.draftStyleBadge}.`
+        ? `Target owner GM profile: ${gmStyle.archetype}, averages ${gmStyle.avgTrades} trades/season, H2H vs ${focalH2hShort}: ${gmStyle.h2hVsRod.wins}W-${gmStyle.h2hVsRod.losses}L. Draft style: ${gmStyle.draftStyleBadge}.`
         : "GM profile not available for this owner.";
 
       const llmMessages: Message[] = [
         {
           role: "system",
-          content: `You are an expert fantasy football trade negotiator for a 14-team PPR league (ATLANTAS FINEST FF). 
+          content: `You are an expert fantasy football trade negotiator for ${leagueDescriptor}, ${historyClause}.
 League scoring: ${scoringDesc}.
 You analyze player stats, positional value, and GM behavioral profiles to craft winning trade strategies.
 Always be specific, reference actual stats and values, and give actionable negotiation advice.
@@ -4739,7 +9835,7 @@ ${gmContext}
 My offer options:
 ${offerDesc}
 
-LLeague context: 14-team PPR, keeper league, 2026 season. Rod Sellers (Str8FrmHell/RodZilla) went 9-5 in 2025, finished 3rd seed.${dnaPromptBlock ? "\n" + dnaPromptBlock : ""}
+League context: ${leagueDescriptor}, ${historyClause}. ${focalLeagueLine}${dnaPromptBlock ? "\n" + dnaPromptBlock : ""}
 Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTANT: The DNA intelligence above contains behavioral facts — use them to make the negotiation strategy, timing, and closing message highly specific to this opponent." : ""}`,
         },
       ];
@@ -4912,10 +10008,26 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       picksA: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
       picksB: z.array(z.object({ round: z.number(), pick: z.number().default(7) })).optional(),
     }))
-    .mutation(async ({ input }) => {
-      const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue, calcPickValue } = await import("./analytics");
-      const data = await getSeasonData(input.season);
+    .mutation(async ({ ctx, input }) => {
+      const entitled = await resolvePremiumAccess(ctx.user);
+      const { calcVORP, calcPositionalScarcity, calcKeeperEfficiency, calcROSValue, calcTradeValue } = await import("./analytics");
+      const { computeMarketValues } = await import("./marketValue");
+      const {
+        sumTradePickValues,
+        compareGivenSideTotals,
+        PICK_TO_MARKET_SCALE,
+      } = await import("./tradePickValueAuthority");
+      const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
+
+      const { leagueId: taLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+      const taGeo =
+        taLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(taLeagueId, input.season, ctx.user?.id, data as Record<string, unknown>)
+          : null;
+      const teamsNormTa = normalizeTeams(data) as Record<string, unknown>[];
+      const pickTeamCountAnalyze =
+        taGeo && taGeo.teamCount > 0 ? taGeo.teamCount : teamsNormTa.length;
 
       // Build full roster player list for context
       const rosters = normalizeRosters(data) as Record<string, unknown>[];
@@ -4939,17 +10051,136 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       const scarcityResults = calcPositionalScarcity(allPlayers, []); // no free agents in cache
       const keeperResults = calcKeeperEfficiency(allPlayers, vorpResults);
 
+      // ── Market Value Engine V2 ────────────────────────────────────────────
+      // Resolve reliable inputs (ADP, ESPN projection, percent-started, keeper
+      // savings, weekly points history via the gm_player_registry crosswalk) and
+      // compute a phase-aware market value for every rostered player. This is
+      // what makes preseason values non-zero (the old engine used avgPoints,
+      // which is 0 before any games are played). Failure here degrades to no
+      // market value (legacy composite), never breaks trade analysis.
+      const marketValues = await (async () => {
+        try {
+          // 1) Enrich from the combined ESPN payload: id -> ADP / projection / %started
+          type Enrich = { adp: number | null; projection: number | null; pctStarted: number | null };
+          const enrichById = new Map<number, Enrich>();
+          const teamsRaw = (data as { teams?: unknown[] }).teams ?? [];
+          for (const t of teamsRaw as Array<{ roster?: { entries?: unknown[] } }>) {
+            for (const e of (t.roster?.entries ?? []) as Array<{ playerPoolEntry?: { player?: Record<string, unknown> } }>) {
+              const p = e.playerPoolEntry?.player as Record<string, unknown> | undefined;
+              const id = p?.id as number | undefined;
+              if (id == null) continue;
+              const ranks = p?.draftRanksByRankType as Record<string, { rank?: number }> | undefined;
+              const adp = ranks?.PPR?.rank ?? ranks?.STANDARD?.rank ?? null;
+              const stats = (p?.stats as Array<Record<string, unknown>> | undefined) ?? [];
+              const projBlock =
+                stats.find((s) => s.statSourceId === 1 && s.seasonId === input.season && s.statSplitTypeId === 0) ??
+                stats.find((s) => s.statSourceId === 1 && s.seasonId === input.season) ??
+                stats.find((s) => s.statSourceId === 1);
+              const projection = typeof projBlock?.appliedTotal === "number" ? (projBlock.appliedTotal as number) : null;
+              const ownership = p?.ownership as { percentStarted?: number; percentOwned?: number } | undefined;
+              const pctStarted = ownership?.percentStarted ?? ownership?.percentOwned ?? null;
+              enrichById.set(id, { adp, projection, pctStarted });
+            }
+          }
+
+          // 2) Weekly points history via crosswalk (current + 3 prior seasons),
+          //    deduped to one value per (player, season, week).
+          const ids = allPlayers.map((p) => p.playerId).filter((n) => Number.isFinite(n));
+          const weeklyById = new Map<number, Map<number, Map<number, number>>>(); // id -> season -> week -> pts
+          if (ids.length > 0) {
+            const mvDb = await getDb();
+            const inList = ids.join(",");
+            const minSeason = input.season - 3;
+            const execRes = mvDb
+              ? await mvDb.execute(sql`
+                  SELECT r.espnPlayerId AS espnId, w.season AS season, w.week AS week, MAX(w.pointsScored) AS pts
+                  FROM gm_weekly_player_stats w
+                  JOIN gm_player_registry r ON r.id = w.playerId
+                  WHERE r.espnPlayerId IN (${sql.raw(inList)})
+                    AND w.season <= ${input.season} AND w.season >= ${minSeason}
+                  GROUP BY r.espnPlayerId, w.season, w.week
+                `)
+              : null;
+            // drizzle's db.execute return shape varies ([rows,fields] | rows | {rows});
+            // normalize exactly like the rest of the codebase's rowsOf() helper so a
+            // shape mismatch can't make the loop throw and silently empty the value map.
+            const rows = (Array.isArray(execRes)
+              ? (Array.isArray(execRes[0]) ? execRes[0] : execRes)
+              : (execRes && Array.isArray((execRes as { rows?: unknown[] }).rows)
+                  ? (execRes as { rows: unknown[] }).rows
+                  : [])) as Array<{ espnId: string | number; season: number; week: number; pts: number }>;
+            for (const row of rows ?? []) {
+              const id = Number(row.espnId);
+              const season = Number(row.season);
+              const week = Number(row.week);
+              const pts = Number(row.pts);
+              if (!Number.isFinite(id) || !Number.isFinite(season) || !Number.isFinite(week)) continue;
+              if (!weeklyById.has(id)) weeklyById.set(id, new Map());
+              const bySeason = weeklyById.get(id)!;
+              if (!bySeason.has(season)) bySeason.set(season, new Map());
+              bySeason.get(season)!.set(week, pts);
+            }
+          }
+
+          // 3) Build engine inputs for the full cohort
+          const keeperSavingsById = new Map<number, number>();
+          for (const k of keeperResults) keeperSavingsById.set(k.playerId, k.roundSavings);
+
+          const inputs = allPlayers.map((p) => {
+            const en = enrichById.get(p.playerId);
+            const bySeason = weeklyById.get(p.playerId);
+            const currentWeekMap = bySeason?.get(input.season);
+            const currentSeasonWeekly = currentWeekMap
+              ? [...currentWeekMap.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v)
+              : [];
+            const history = bySeason
+              ? [...bySeason.entries()]
+                  .filter(([s]) => s < input.season)
+                  .map(([season, weeks]) => {
+                    const vals = [...weeks.values()];
+                    const avg = vals.length ? vals.reduce((s2, v) => s2 + v, 0) / vals.length : 0;
+                    const m = avg;
+                    const variance = vals.length > 1 ? vals.reduce((s2, v) => s2 + (v - m) * (v - m), 0) / (vals.length - 1) : 0;
+                    return { season, avg, stdev: vals.length > 1 ? Math.sqrt(variance) : null, weeks: vals.length };
+                  })
+              : [];
+            return {
+              playerId: p.playerId,
+              position: p.position,
+              adpRank: en?.adp ?? null,
+              projection: en?.projection ?? null,
+              keeperRoundSavings: keeperSavingsById.get(p.playerId) ?? null,
+              percentStarted: en?.pctStarted ?? null,
+              currentSeasonWeekly,
+              history,
+              currentSeason: input.season,
+            };
+          });
+
+          return computeMarketValues(inputs);
+        } catch (err) {
+          console.warn("[tradeAnalyze] market value engine degraded:", (err as Error).message);
+          return new Map<number, import("./marketValue").MarketValueResult>();
+        }
+      })();
+
       // Weeks remaining (approximate — 14 regular season weeks, playoffs weeks 15-17)
       const weeksRemaining = 10;
 
       // Score each player in the trade
       const scorePlayer = (p: { playerId: number; playerName: string; position: string; avgPoints: number; teamId: number }) => {
+        // Source of truth for player value is the server's cached roster (the same data the
+        // picker shows), not the client payload — payload avgPoints can arrive as NaN and
+        // poison the composite. Fall back to a sanitized client value only if uncached.
+        const cachedAvg = allPlayers.find(ap => ap.playerId === p.playerId)?.avgPoints;
+        const clientAvg = Number.isFinite(p.avgPoints) ? p.avgPoints : 0;
+        const avgPoints = Number.isFinite(cachedAvg) ? (cachedAvg as number) : clientAvg;
         const playerRow: import("./analytics").PlayerRow = {
           playerId: p.playerId,
           playerName: p.playerName,
           position: p.position,
-          avgPoints: p.avgPoints,
-          seasonPoints: p.avgPoints * 14,
+          avgPoints,
+          seasonPoints: avgPoints * 14,
           teamId: p.teamId,
           ownerName: "",
           projectedTotal: null,
@@ -4962,39 +10193,88 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         const ros = calcROSValue([playerRow], weeksRemaining)[0];
         const scarcity = scarcityResults.find(s => s.position === p.position);
         const keeper = keeperResults.find(k => k.playerId === p.playerId);
-        return calcTradeValue(playerRow, vorp, ros, scarcity, keeper);
+        return calcTradeValue(playerRow, vorp, ros, scarcity, keeper, marketValues.get(p.playerId));
       };
 
       const sideAValues = input.sideA.map(scorePlayer);
       const sideBValues = input.sideB.map(scorePlayer);
 
-      // Score picks
-      const pickValueA = (input.picksA || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
-      const pickValueB = (input.picksB || []).reduce((sum, p) => sum + calcPickValue(p.round, p.pick), 0);
+      const pickValueA = sumTradePickValues(
+        (input.picksA || []).map((p) => ({ round: p.round, pick: p.pick })),
+        pickTeamCountAnalyze,
+        "market",
+      );
+      const pickValueB = sumTradePickValues(
+        (input.picksB || []).map((p) => ({ round: p.round, pick: p.pick })),
+        pickTeamCountAnalyze,
+        "market",
+      );
 
       const totalA = sideAValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueA;
       const totalB = sideBValues.reduce((s, v) => s + v.compositeValue, 0) + pickValueB;
 
-      const ratio = totalB > 0 ? totalA / totalB : 1;
-      const fairnessGrade =
-        ratio >= 0.95 && ratio <= 1.05 ? "FAIR"
-        : ratio >= 0.85 ? "SLIGHT EDGE B"
-        : ratio >= 0.75 ? "B WINS"
-        : ratio <= 1.05 && ratio >= 1.0 ? "FAIR"
-        : ratio > 1.05 && ratio <= 1.15 ? "SLIGHT EDGE A"
-        : ratio > 1.15 ? "A WINS"
-        : "LOPSIDED";
+      const tradeCmp = compareGivenSideTotals(
+        totalA,
+        totalB,
+        Math.round(50 * PICK_TO_MARKET_SCALE),
+      );
+      const ratio = tradeCmp.ratio;
+      const gainRatioA = tradeCmp.gainRatioA;
+      const fairnessGrade = tradeCmp.fairnessGrade;
 
       // Positional needs analysis
       const teamARoster = allPlayers.filter(p => p.teamId === input.teamAId);
       const teamBRoster = allPlayers.filter(p => p.teamId === input.teamBId);
       const posCount = (roster: typeof allPlayers) => {
-        const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0 };
-        for (const p of roster) if (p.position in counts) counts[p.position]++;
+        // Count DP (individual defenders) and K too — this is an IDP league, so a defender-heavy
+        // roster must be visible to the fit rating. Raw IDP positions collapse to "DP".
+        const IDP = new Set(["DP", "DL", "LB", "DB", "S", "CB", "DE", "DT", "EDGE"]);
+        const counts: Record<string, number> = { QB: 0, RB: 0, WR: 0, TE: 0, DP: 0, K: 0 };
+        for (const p of roster) {
+          const pos = IDP.has(String(p.position)) ? "DP" : String(p.position);
+          if (pos in counts) counts[pos]++;
+        }
         return counts;
       };
       const needsA = posCount(teamARoster);
       const needsB = posCount(teamBRoster);
+
+      // Slice 2: League-format awareness (TRUST/TRANSPARENCY ONLY — does not affect valuation).
+      const { resolveLeagueContext } = await import("./leagueContext");
+      const leagueCtx = await resolveLeagueContext(ctx.user?.id, input.season);
+      const disclaimers: string[] = [];
+      if (leagueCtx.format === "dynasty") {
+        disclaimers.push(
+          "⚠ Dynasty League Detected. Current valuations are redraft-oriented and may undervalue youth, rookie picks, and long-term assets.",
+        );
+      }
+      if (leagueCtx.format === "keeper") {
+        disclaimers.push(
+          "⚠ Keeper League Detected. Current valuations do not yet fully account for keeper economics.",
+        );
+      }
+      if (leagueCtx.format === "unknown") {
+        disclaimers.push(
+          "⚠ League format confidence is limited. Trade valuations may be less accurate until format is confirmed.",
+        );
+      }
+
+      const tradeCore = {
+        totalA,
+        totalB,
+        pickValueA,
+        pickValueB,
+        ratio: Math.round(ratio * 100) / 100,
+        fairnessGrade,
+        leagueFormat: leagueCtx.format,
+        formatSource: leagueCtx.formatSource,
+        requiresFormatDisclaimer: leagueCtx.requiresFormatDisclaimer,
+        disclaimers,
+      };
+
+      if (!entitled) {
+        return gateTradeAnalyzeResult(tradeCore, false);
+      }
 
       // Build math summary for AI context
       const mathSummary = [
@@ -5007,14 +10287,25 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
         `Positions changing hands: A gives ${Array.from(new Set(input.sideA.map(p => p.position))).join("+")}, B gives ${Array.from(new Set(input.sideB.map(p => p.position))).join("+")}`,
       ].join("\n");
 
+      const { resolveLeaguePromptContext, buildLeaguePromptContext } = await import("./leaguePromptContext");
+      const tradeCtx = await resolveLeaguePromptContext(ctx.user?.id, input.season);
+      const { leagueDescriptor, historyClause } = buildLeaguePromptContext(tradeCtx);
+      const focalH2hLabelTrade = tradeCtx.focalOwnerName?.trim() || "the focal manager";
+
       // Phase 3: Inject DNA profiles for both trade partners
       let dnaContext = "";
+      let dnaLiteA: {
+        avgTradesPerSeason?: number; tradeFrequency?: number; gmArchetype?: string; tiltLabel?: string;
+        waiverAggression?: number; draftStyleBadge?: string; round1Distribution?: Record<string, number>; championships?: number;
+        activityPrimary?: string; activitySecondary?: string;
+      } | undefined;
+      let dnaLiteB: typeof dnaLiteA;
       try {
         const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
         const { buildManagerRawData } = await import("./dnaRouter");
-        const managerRawData = await buildManagerRawData();
+        const managerRawData = await buildManagerRawData(ctx.user?.id);
         if (managerRawData.length > 0) {
-          const dnaProfiles = calcLeagueDNA(managerRawData);
+          const dnaProfiles = calcLeagueDNA(managerRawData, focalH2hLabelTrade);
           const teamsData = normalizeTeams(data);
           const teamAData = teamsData.find(t => (t.teamId as number) === input.teamAId);
           const teamBData = teamsData.find(t => (t.teamId as number) === input.teamBId);
@@ -5023,6 +10314,107 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
           const focusedProfiles = dnaProfiles.filter(p =>
             teamAMemberIds.includes(p.memberId) || teamBMemberIds.includes(p.memberId)
           );
+          // Pedigree from the TRUSTED championship source (computeAllTrophyHistory) — the same
+          // source Owner Profiles / Cast / Dashboard use. NOT seasonRecords.isChampion, which
+          // buildManagerRawData hardcodes to false (that rendered a false "No titles yet" for
+          // known champions). Keyed by memberId, matching the DNA profile's memberId.
+          const champByMember = new Map<string, number>();
+          let trophyOk = false;
+          try {
+            const { computeAllTrophyHistory } = await import("./championshipHistoryBuilder");
+            const trophyMap = await computeAllTrophyHistory(undefined, ctx.user?.id);
+            if (trophyMap.size > 0) {
+              trophyOk = true;
+              for (const [mid, rec] of trophyMap) champByMember.set(mid, rec.championships ?? 0);
+            }
+          } catch {
+            // trophy history unavailable — pedigree stays hidden (championships left undefined)
+          }
+          // Behavioral DNA from the TRUSTED Activity DNA service (computeActivityDna) — the same
+          // primary/secondary archetypes the Owner Profiles page shows (Roster Builder, Waiver
+          // Aggressive, Trade Opportunist). Replaces calcLeagueDNA's weaker gmArchetype label.
+          const normGuid = (g: unknown) =>
+            String(g ?? "").replace(/^id:/i, "").toUpperCase().replace(/[^0-9A-F]/g, "");
+          const activityByGuid = new Map<string, { primaryDNA: string; secondaryDNA: string }>();
+          try {
+            const { resolveActiveLeagueId } = await import("./db");
+            const { computeActivityDna } = await import("./activityDnaService");
+            const { leagueId } = await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined }, null, undefined,
+            );
+            if (leagueId) {
+              const activity = await computeActivityDna(leagueId);
+              for (const a of activity) {
+                activityByGuid.set(normGuid(a.ownerId), { primaryDNA: a.primaryDNA, secondaryDNA: a.secondaryDNA });
+              }
+            }
+          } catch {
+            // Activity DNA unavailable — behavioral line falls back to the calcLeagueDNA archetype.
+          }
+          // Draft tendency from the TRUSTED shared draft-DNA helper (attributeOwnedPicks +
+          // computeDraftDnaFromOwnedPicks) — the same computation behind the Owner Profiles page.
+          // Overrides calcLeagueDNA's generic draft badge when the trusted data resolves.
+          const draftDnaByGuid = new Map<string, { draftStyleBadge: string; round1: Record<string, number> }>();
+          try {
+            const { resolveActiveLeagueId, getDb } = await import("./db");
+            const { leagueId: ddLeague } = await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined }, null, undefined,
+            );
+            const db = await getDb();
+            if (db && ddLeague) {
+              const lid = String(ddLeague).trim().slice(0, 32);
+              const allGmRows = await db
+                .select().from(gmTeams)
+                .where(eqDrizzle(gmTeams.leagueId, lid))
+                .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.teamId));
+              const { teamsBySeason: ddTeamsBySeason, draftRows: ddDraftRows } = await loadOwnerProfileSharedData({ db, leagueId: lid });
+              const tradeMemberIds = [...new Set([...teamAMemberIds, ...teamBMemberIds])];
+              for (const memberId of tradeMemberIds) {
+                const resolved =
+                  resolveOwnerTeamsForProfile(allGmRows, `id:${memberId}`) ??
+                  resolveOwnerTeamsForProfile(allGmRows, memberId);
+                if (!resolved) continue;
+                const { ownedPicks } = attributeOwnedPicks({
+                  draftRows: ddDraftRows,
+                  teamsBySeason: ddTeamsBySeason,
+                  profileOwnerKey: resolved.profileOwnerKey,
+                  allLeagueGmRows: allGmRows,
+                });
+                const ddna = computeDraftDnaFromOwnedPicks(ownedPicks);
+                const r1 = ddna.byRound.find((r) => r.round === 1);
+                const entry = { draftStyleBadge: ddna.draftStyleBadge, round1: r1 ? r1.posCounts : {} };
+                draftDnaByGuid.set(normGuid(memberId), entry);
+                for (const tr of resolved.ownerTeamRows) {
+                  const g = normGuid(tr.ownerId);
+                  if (g) draftDnaByGuid.set(g, entry);
+                }
+              }
+            }
+          } catch {
+            // Trusted draft DNA unavailable — draft tendency falls back to the calcLeagueDNA badge.
+          }
+          const toProfile = (p: (typeof dnaProfiles)[number]) => {
+            const act = activityByGuid.get(normGuid(p.memberId));
+            const dd = draftDnaByGuid.get(normGuid(p.memberId));
+            return {
+              avgTradesPerSeason: p.trade?.avgTradesPerSeason,
+              tradeFrequency: p.trade?.tradeFrequency,
+              gmArchetype: p.gmArchetype,
+              tiltLabel: p.tilt?.tiltLabel,
+              waiverAggression: p.waiver?.waiverAggression,
+              draftStyleBadge: dd?.draftStyleBadge ?? p.draft?.draftStyleBadge,
+              round1Distribution: dd?.round1 ?? p.draft?.round1Distribution,
+              // Trusted source only: present champions get their count, others "No titles yet";
+              // if trophy history failed to load, undefined → client hides the line.
+              championships: trophyOk ? (champByMember.get(p.memberId) ?? 0) : undefined,
+              activityPrimary: act?.primaryDNA,
+              activitySecondary: act?.secondaryDNA,
+            };
+          };
+          for (const p of focusedProfiles) {
+            if (teamAMemberIds.includes(p.memberId)) dnaLiteA = toProfile(p);
+            if (teamBMemberIds.includes(p.memberId)) dnaLiteB = toProfile(p);
+          }
           if (focusedProfiles.length > 0) {
             dnaContext = "\n\n" + buildDNAPromptBlock(focusedProfiles);
           }
@@ -5035,7 +10427,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
 
 ${mathSummary}${dnaContext}
 
-League context: 14-team PPR keeper league (ATLANTAS FINEST FF). Keepers cost 1 round more than previous year's draft round.${dnaContext ? "\nIMPORTANT: The DNA intelligence above contains behavioral facts about both owners — use them to make the negotiation strategy and recommendations highly specific to each owner's tendencies." : ""}
+League context: ${leagueDescriptor}, ${historyClause}. Keeper cost rules follow your league's ESPN settings when known from synced data.${dnaContext ? "\nIMPORTANT: The DNA intelligence above contains behavioral facts about both owners — use them to make the negotiation strategy and recommendations highly specific to each owner's tendencies." : ""}
 
 Provide:
 1. VERDICT: One sentence — who wins this trade (or FAIR if balanced).
@@ -5052,171 +10444,107 @@ Provide:
       });
       const aiVerdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
 
-      return {
+      // ── Phase 1: Trade Intelligence Report (deterministic, completed-trade data only) ──
+      const tradeIntelligence = await (async () => {
+        try {
+          const { buildTradeIntelligence } = await import("./tradeIntelligence");
+          const { listSeasonsForLeagueHistorical } = await import("./historicalDataService");
+          const tiSeasons = await listSeasonsForLeagueHistorical(undefined, ctx.user?.id);
+          const teamValueMap = new Map<number, number>();
+          for (const v of vorpResults) {
+            const pr = allPlayers.find((pp) => pp.playerId === v.playerId);
+            if (pr) teamValueMap.set(pr.teamId, (teamValueMap.get(pr.teamId) ?? 0) + Math.max(0, v.vorp));
+          }
+          const sortedTeamVals = [...teamValueMap.values()].sort((a, b) => a - b);
+          const rankPct = (teamId: number) => {
+            const val = teamValueMap.get(teamId) ?? 0;
+            if (sortedTeamVals.length <= 1) return 0.5;
+            return sortedTeamVals.filter((x) => x < val).length / (sortedTeamVals.length - 1);
+          };
+          const teamMeta = (teamId: number) => {
+            const t = teamsNormTa.find((tt) => (tt.teamId as number) === teamId) as Record<string, unknown> | undefined;
+            const wins = Number(t?.wins ?? 0), losses = Number(t?.losses ?? 0), ties = Number(t?.ties ?? 0);
+            return {
+              ownerName: (t?.owners as string) || `Team ${teamId}`,
+              record: { wins, losses, ties, hasRecord: wins + losses + ties > 0, rosterValueRankPct: rankPct(teamId), pointsForGap: null as number | null },
+            };
+          };
+          const metaA = teamMeta(input.teamAId);
+          const metaB = teamMeta(input.teamBId);
+          // True when ANY team in the analyzed season has a record, so a team whose own
+          // record didn't resolve is labeled "record unavailable" rather than "preseason".
+          const seasonHasGames = teamsNormTa.some((tt) => {
+            const r = tt as Record<string, unknown>;
+            return Number(r.wins ?? 0) + Number(r.losses ?? 0) + Number(r.ties ?? 0) > 0;
+          });
+          return await buildTradeIntelligence({
+            seasons: tiSeasons,
+            loadSeasonData: (s) => getSeasonData(s, undefined, ctx.user?.id),
+            teamAId: input.teamAId,
+            teamBId: input.teamBId,
+            ownerNameA: metaA.ownerName,
+            ownerNameB: metaB.ownerName,
+            dnaA: dnaLiteA,
+            dnaB: dnaLiteB,
+            needsA,
+            needsB,
+            receivedByA: [
+              ...input.sideB.map((p) => p.position),
+              ...((input.picksB?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            gaveByA: [
+              ...input.sideA.map((p) => p.position),
+              ...((input.picksA?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            receivedByB: [
+              ...input.sideA.map((p) => p.position),
+              ...((input.picksA?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            gaveByB: [
+              ...input.sideB.map((p) => p.position),
+              ...((input.picksB?.length ?? 0) > 0 ? ["PICK"] : []),
+            ],
+            ratio,
+            recordA: metaA.record,
+            recordB: metaB.record,
+            seasonHasGames,
+          });
+        } catch {
+          return null; // intelligence is additive — never breaks the value engine
+        }
+      })();
+
+      return gateTradeAnalyzeResult({
+        ...tradeCore,
         sideAValues,
         sideBValues,
-        totalA,
-        totalB,
-        pickValueA,
-        pickValueB,
-        ratio: Math.round(ratio * 100) / 100,
-        fairnessGrade,
         aiVerdict,
         mathSummary,
         teamANeeds: needsA,
         teamBNeeds: needsB,
-      };
+        tradeIntelligence,
+      }, true);
     }),
 
   advisor: router({
     chat: subscribedProcedure
-      .input(z.object({ message: z.string().min(1).max(2000), season: z.number().optional() }))
+      .input(z.object({
+        message: z.string().min(1).max(2000),
+        season: z.number().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .mutation(async ({ input, ctx }) => {
+        void input.activeLeagueKey;
         const userId = ctx.user.id;
         const season = input.season ?? 2025;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         // Rate limit check
         const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
-        let leagueContext = `You are an expert Fantasy Football GM advisor for the league "ATLANTAS FINEST FF" (League ID: ${LEAGUE_ID}).
-This is an 18-season keeper league running from 2009 to 2026 with 14 teams.
-Format: Head-to-Head Points, PPR (Point Per Reception), Snake Draft, 1 keeper per team.
-Scoring positions: QB, RB, WR, TE, K, D/ST. Playoffs: 7 teams.
-Be concise, data-driven, and specific. Reference actual team names and player names when possible.`;
-
-        const data = await getSeasonData(season);
-        if (data) {
-          const teams = normalizeTeams(data);
-          const settings = normalizeSettings(data);
-          const teamOwnerMapAdvisor: Record<number, string> = {};
-          for (const t of teams) teamOwnerMapAdvisor[t.teamId as number] = t.owners as string;
-          const allPlayers: PlayerRow[] = (normalizeRosters(data) as unknown[]).map((r: unknown) => {
-            const p = r as Record<string, unknown>;
-            return {
-              playerId: p.playerId as number,
-              playerName: (p.playerName as string) || "Unknown",
-              position: (p.position as string) || "?",
-              teamId: p.teamId as number,
-              ownerName: teamOwnerMapAdvisor[p.teamId as number] || "Unknown",
-              seasonPoints: (p.appliedTotal as number) || 0,
-              avgPoints: (p.appliedAverage as number) || 0,
-              projectedTotal: (p.projectedTotal as number) || null,
-              keeperValue: (p.keeperValue as number) || 0,
-              keeperValueFuture: (p.keeperValueFuture as number) || 0,
-              injuryStatus: (p.injuryStatus as string) || "",
-              appliedStats: (p.appliedStats as Record<string, number>) || {},
-            };
-          });
-          const calYear = new Date().getFullYear();
-          const isSeasonComplete = (settings.currentMatchupPeriod as number || 0) >= 14 || season < calYear;
-          const upcomingSeason = season + 1;
-          if (isSeasonComplete) {
-            leagueContext += `\n\nDATA CONTEXT: The ${season} season is COMPLETE (final standings below). The upcoming season is ${upcomingSeason}. When answering questions about "next season", "heading into ${upcomingSeason}", or future planning, base your analysis on these FINAL ${season} standings and rosters. Do NOT say the season is ongoing.`;
-          } else {
-            leagueContext += `\n\nCurrent Season: ${season} (ACTIVE), Week ${settings.currentMatchupPeriod || "N/A"}`;
-          }
-          leagueContext += `\n\n${isSeasonComplete ? `${season} FINAL Standings` : "Current Standings"}:\n`;
-          const sorted = teams.sort((a, b) => ((a.rankFinal as number) || 99) - ((b.rankFinal as number) || 99));
-          for (const t of sorted) {
-            leagueContext += `  ${t.rankFinal}. ${t.teamName} (${t.owners}) W:${t.wins} L:${t.losses} PF:${Number(t.pointsFor || 0).toFixed(1)}\n`;
-          }
-          // Inject analytics snapshot so AI reasons from calculated facts
-          if (allPlayers.length > 0) {
-            const vorpResults = calcVORP(allPlayers);
-            const scarcityResults = calcPositionalScarcity(allPlayers, []);
-            const rosterGaps = calcRosterGaps(allPlayers);
-            leagueContext += `\n\nCALCULATED ANALYTICS (treat these as ground truth — do not contradict):`;
-            // VORP leaders by position
-            const positions = ["QB", "RB", "WR", "TE"];
-            leagueContext += `\n\nVORP Leaders (Value Over Replacement by position):`;
-            for (const pos of positions) {
-              const top = vorpResults.filter(v => v.position === pos).sort((a, b) => b.vorp - a.vorp).slice(0, 3);
-              if (top.length > 0) {
-                leagueContext += `\n  ${pos}: ${top.map(v => `${v.playerName} (${v.ownerName}, VORP +${v.vorp.toFixed(1)}, ${v.vorpTier}, avg ${v.avgPoints.toFixed(1)} PPG)`).join(" | ")}`;
-              }
-            }
-            // Positional scarcity
-            const scarce = scarcityResults.filter(s => s.scarcityScore >= 50).sort((a, b) => b.scarcityScore - a.scarcityScore);
-            if (scarce.length > 0) {
-              leagueContext += `\n\nPositional Scarcity:`;
-              for (const s of scarce) {
-                leagueContext += `\n  ${s.position}: ${s.scarcityLabel} (score ${s.scarcityScore}/100, ${s.availableStarters} quality starters available, top FA avg ${s.topFreeAgentAvg.toFixed(1)} PPG)`;
-              }
-            }
-            // Roster gaps
-            const topGaps = rosterGaps
-              .filter(g => g.overallGrade === "D" || g.overallGrade === "F" || g.overallGrade === "C")
-              .sort((a, b) => (a.overallGrade > b.overallGrade ? 1 : -1))
-              .slice(0, 4);
-            if (topGaps.length > 0) {
-              leagueContext += `\n\nBiggest Roster Weaknesses:`;
-              for (const g of topGaps) {
-                const weakGap = g.gaps.find(gap => gap.position === g.weakestPosition);
-                const avgStr = weakGap ? ` (avg ${weakGap.topPlayerAvg.toFixed(1)} PPG, ${weakGap.gapSeverity})` : "";
-                leagueContext += `\n  ${g.ownerName}: weakest at ${g.weakestPosition}${avgStr}, overall grade ${g.overallGrade}`;
-              }
-            }
-          }
-        // Phase 1: inject live injury intelligence into advisor context
-          if (allPlayers.length > 0) {
-            try {
-              const injuryContext = await buildAdvisorInjuryContext(
-                allPlayers.map((p: PlayerRow) => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, teamId: p.teamId })),
-                0  // 0 = Rod's teamId placeholder
-              );
-              leagueContext += "\n\n" + injuryContext;
-            } catch {
-              // Injury fetch failed — continue without it
-            }
-          }
-
-          // Phase 3: inject League DNA behavioral intelligence
-          try {
-            const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
-            const { buildManagerRawData } = await import("./dnaRouter");
-            const managerRawData = await buildManagerRawData();
-            if (managerRawData.length > 0) {
-              const dnaProfiles = calcLeagueDNA(managerRawData);
-              const dnaBlock = buildDNAPromptBlock(dnaProfiles);
-              leagueContext += "\n\n" + dnaBlock;
-            }
-          } catch {
-            // DNA unavailable — continue without it
-          }
-          // Phase 4: inject upcoming draft order and keeper data
-          try {
-            // Always fetch the 2026 draft order explicitly — this is the upcoming draft
-            const UPCOMING_DRAFT_YEAR = 2026;
-            const upcomingDraftData = await getSeasonData(UPCOMING_DRAFT_YEAR);
-            const draftData = upcomingDraftData ?? await getSeasonData(season);
-            const draftLabelYear = upcomingDraftData ? UPCOMING_DRAFT_YEAR : season;
-            if (draftData) {
-              const draftOrderData = normalizeDraftOrder(draftData as Record<string, unknown>);
-              const pickOrder = draftOrderData.pickOrder || [];
-if (pickOrder.length > 0) {
-                const draftDateMs = draftOrderData.draftDate as number;
-                const draftDateStr = draftDateMs ? new Date(draftDateMs).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "TBD";
-                leagueContext += `\n\n## GROUND TRUTH — ${draftLabelYear} DRAFT ORDER (this overrides any prior conversation)`;
-                leagueContext += `\nSnake Draft, ${draftOrderData.keeperCount || 1} keeper per team. Use this EXACT order — do NOT contradict it regardless of what was said earlier.`;
-                leagueContext += `\nDraft Date: ${draftDateStr}`;
-                leagueContext += `\nRound 1 Pick Order: ${pickOrder.map(p => `#${p.position} ${p.owners}`).join(", ")}`;
-                leagueContext += `\n(Round 2 reverses: last pick goes first, etc.)`;
-              }
-              // Inject current keeper picks from current season draft
-              const picks2025 = normalizeDraftPicks(draftData as Record<string, unknown>);
-              const keepers = (picks2025 as Array<Record<string, unknown>>).filter(p => p.keeper === true || p.keeper === 1);
-              if (keepers.length > 0) {
-                leagueContext += `\n\n2025 KEEPER PICKS (players kept from prior season):`;
-                for (const k of keepers) {
-                  leagueContext += `\n  Round ${k.roundId}: ${k.playerName} (${k.position}) → kept by ${k.ownerName || k.teamName}`;
-                }
-              }
-            }
-          } catch {
-            // Draft order unavailable — continue without it
-          }
-        }
-        // Inject GM memory into system prompt
+        const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
         const gmMemory = await getUserMemory(userId);
+        let gmMemoryBlock: string | undefined;
         if (gmMemory) {
           const memParts: string[] = [];
           if (gmMemory.riskTolerance) memParts.push(`Risk Tolerance: ${gmMemory.riskTolerance}`);
@@ -5226,18 +10554,17 @@ if (pickOrder.length > 0) {
           if (gmMemory.favoritePlayerTypes) memParts.push(`Favorite Player Types: ${gmMemory.favoritePlayerTypes}`);
           if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
           if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
-          if (memParts.length > 0) {
-            leagueContext += `\n\n## GM PROFILE (Rod Sellers)\n${memParts.join("\n")}`;
-          }
+          if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
         }
-        const history = await getChatHistory(userId, season);
+        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+        const history = await getChatHistory(userId, season, chatLeagueId);
         const messages: Message[] = [
           { role: "system", content: leagueContext },
           ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
           { role: "user", content: input.message },
         ];
 
-        await addChatMessage(userId, "user", input.message, season);
+        await addChatMessage(userId, "user", input.message, season, chatLeagueId);
         const response = await invokeLLM({
           messages,
           callType: "advisor",
@@ -5245,20 +10572,30 @@ if (pickOrder.length > 0) {
         });
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
-        await addChatMessage(userId, "assistant", assistantMessage, season);
+        await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
         // Record usage for rate limiter
         recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
         return { message: assistantMessage };
       }),
 
     history: protectedProcedure
-      .input(z.object({ season: z.number().optional() }))
-      .query(async ({ ctx, input }) => getChatHistory(ctx.user.id, input.season)),
+      .input(z.object({ season: z.number().optional(), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+        return getChatHistory(ctx.user.id, input.season, chatLeagueId);
+      }),
 
-    clearHistory: protectedProcedure.mutation(async ({ ctx }) => {
-      await clearChatHistory(ctx.user.id);
-      return { success: true };
-    }),
+    clearHistory: protectedProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .mutation(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+        await clearChatHistory(ctx.user.id, chatLeagueId);
+        return { success: true };
+      }),
     getMemory: protectedProcedure.query(async ({ ctx }) => {
       return getUserMemory(ctx.user.id);
     }),
@@ -5292,9 +10629,9 @@ if (pickOrder.length > 0) {
   pipeline: router({
     health: publicProcedure
       .input(z.object({ season: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const manifests = await getRefreshManifests();
-        const cachedSeasons = await getAllCachedSeasons();
+        const cachedSeasons = await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined);
         const cookiesPresent = hasCookies();
 
         // Build per-season health summary
@@ -5362,8 +10699,8 @@ if (pickOrder.length > 0) {
 
     validate: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
-        const data = await getCachedView(input.season, "combined");
+      .query(async ({ ctx, input }) => {
+        const data = await getCachedView(input.season, "combined", undefined, { userId: ctx.user?.id });
         if (!data) return { isUsable: false, issues: ["No cached data for this season"], warnings: [], season: input.season };
         return validateDataQuality(input.season, data.payload as Record<string, unknown>);
       }),
@@ -5373,9 +10710,9 @@ if (pickOrder.length > 0) {
   analytics: router({
     vorp: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`vorp:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5406,9 +10743,9 @@ if (pickOrder.length > 0) {
 
     scarcity: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`scarcity:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5467,9 +10804,9 @@ if (pickOrder.length > 0) {
 
     rosterGaps: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`rosterGaps:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5500,9 +10837,9 @@ if (pickOrder.length > 0) {
 
     keeperEfficiency: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         return memCache(`keeperEfficiency:${input.season}`, 10 * 60_000, async () => {
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5534,8 +10871,13 @@ if (pickOrder.length > 0) {
 
     managerBehavior: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
-      .query(async ({ input }) => {
-        const leagueId = await resolveActiveLeagueId();
+      .query(async ({ ctx, input }) => {
+        if (!ctx.user?.id) return null;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          undefined
+        );
         const seasonKey = `${leagueId}:${(input.seasons ?? []).join("-") || "all"}`;
         return memCache(`managerBehavior:${seasonKey}`, 10 * 60_000, async () => {
         const cachedSeasons = input.seasons ?? await getAllCachedSeasons(leagueId);
@@ -5547,7 +10889,7 @@ if (pickOrder.length > 0) {
         const seasonTeamOwnerMap: Record<string, string> = {};
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season, leagueId);
+          const data = await getSeasonData(season, leagueId, ctx.user?.id);
           if (!data) continue;
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
@@ -5581,7 +10923,7 @@ if (pickOrder.length > 0) {
         const allDraftPicks: DraftPickRow[] = [];
 
         for (const season of cachedSeasons) {
-          const data = await getSeasonData(season, leagueId);
+          const data = await getSeasonData(season, leagueId, ctx.user?.id);
           if (!data) continue;
           const teams = normalizeTeams(data);
           if (!teams || teams.length === 0) continue;
@@ -5632,7 +10974,7 @@ if (pickOrder.length > 0) {
         const playerScoreMap = new Map<number, { avgPoints: number; position: string }>();
         const latestCachedSeason = [...cachedSeasons].sort((a, b) => b - a)[0];
         if (latestCachedSeason) {
-          const latestData = await getSeasonData(latestCachedSeason, leagueId);
+          const latestData = await getSeasonData(latestCachedSeason, leagueId, ctx.user?.id);
           if (latestData) {
             const latestRosters = normalizeRosters(latestData) as Record<string, unknown>[];
             for (const r of latestRosters) {
@@ -5662,8 +11004,8 @@ if (pickOrder.length > 0) {
 
     rosValues: publicProcedure
       .input(z.object({ season: z.number(), weeksRemaining: z.number().optional() }))
-      .query(async ({ input }) => {
-        const data = await getSeasonData(input.season);
+      .query(async ({ ctx, input }) => {
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as unknown[];
         const teams = normalizeTeams(data);
@@ -5698,9 +11040,9 @@ if (pickOrder.length > 0) {
         weeksRemaining: z.number().optional().default(10),
         teamId: z.number().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calc3DProjections } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const teams = normalizeTeams(data);
@@ -5740,10 +11082,14 @@ if (pickOrder.length > 0) {
     // ── KEEPER FUTURE VALUE ─────────────────────────────────────────────────────
     keeperFutureValue: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number().optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcKeeperFutureValue } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const { leagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+        if (!leagueId) return [];
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
+        const geo = await resolveKeeperDraftGeometryForSeason(leagueId, input.season, ctx.user?.id, data);
+        if (geo.teamCount <= 0 || geo.roundCount <= 0) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const teams = normalizeTeams(data);
         const teamOwnerMap: Record<number, string> = {};
@@ -5751,7 +11097,8 @@ if (pickOrder.length > 0) {
         const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
         const keeperRoundMap: Record<number, number> = {};
         for (const p of draftPicks) {
-          if (p.keeper === true) keeperRoundMap[p.playerId as number] = p.roundId as number;
+          if (!isDraftKeeperSlotPick(p)) continue;
+          keeperRoundMap[p.playerId as number] = p.roundId as number;
         }
         const players: PlayerRow[] = rosters
           .filter(r => !input.teamId || r.teamId === input.teamId)
@@ -5770,7 +11117,7 @@ if (pickOrder.length > 0) {
             appliedStats: {},
           }))
           .filter(p => p.keeperValue > 0);
-        return calcKeeperFutureValue(players);
+        return calcKeeperFutureValue(players, undefined, geo);
       }),
 
     // ── STRENGTH OF SCHEDULE ────────────────────────────────────────────────────
@@ -5780,9 +11127,9 @@ if (pickOrder.length > 0) {
         currentWeek: z.number().optional().default(1),
         playoffStartWeek: z.number().optional().default(15),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcStrengthOfSchedule } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rawTeams = normalizeTeams(data);
         const ownerNameMap: Record<number, string> = {};
@@ -5819,7 +11166,7 @@ if (pickOrder.length > 0) {
     // ── OPPONENT OVERVALUATION ──────────────────────────────────────────────────
     opponentOvervaluation: publicProcedure
       .input(z.object({ seasons: z.array(z.number()).optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcOpponentOvervaluation } = await import("./analytics_additions");
         const seasons = input.seasons || [2023, 2024, 2025];
         const allDraftPicks: DraftPickRow[] = [];
@@ -5828,12 +11175,25 @@ if (pickOrder.length > 0) {
         const allTransactions: TransactionRow[] = [];
         const allDraftPickRows: DraftPickRow[] = [];
         for (const season of seasons) {
-          const data = await getSeasonData(season);
+          const data = await getSeasonData(season, undefined, ctx.user?.id);
           if (!data) continue;
           const picks = normalizeDraftPicks(data) as Record<string, unknown>[];
           for (const p of picks) {
-            allDraftPicks.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
-            allDraftPickRows.push({ season, teamId: p.teamId as number, roundId: p.roundId as number, roundPickNumber: p.roundPickNumber as number, overallPickNumber: p.overallPickNumber as number, position: (p.position as string) || "?", keeper: (p.keeper as boolean) || false });
+            const row: DraftPickRow = {
+              season,
+              teamId: p.teamId as number,
+              roundId: p.roundId as number,
+              roundPickNumber: p.roundPickNumber as number,
+              overallPickNumber: p.overallPickNumber as number,
+              position: (p.position as string) || "?",
+              keeper: !!(p.keeper as boolean),
+              reservedForKeeper: p.reservedForKeeper === true,
+              draftedForAnalytics: p.draftedForAnalytics as boolean | undefined,
+              keeperSlot: p.keeperSlot as boolean | undefined,
+              retained: p.retained as boolean | undefined,
+            };
+            allDraftPicks.push(row);
+            allDraftPickRows.push(row);
           }
           const teams = normalizeTeams(data);
           for (const t of teams) {
@@ -5855,9 +11215,9 @@ if (pickOrder.length > 0) {
     // ── WAIVER REPLACEMENT COST ─────────────────────────────────────────────────
     waiverReplacementCost: publicProcedure
       .input(z.object({ season: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { calcWaiverReplacementCost } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         const rosters = normalizeRosters(data) as Record<string, unknown>[];
         const rosteredIds = new Set(rosters.map(r => r.playerId as number));
@@ -5872,9 +11232,9 @@ if (pickOrder.length > 0) {
     // ── STRATEGY MODE CONTEXT ───────────────────────────────────────────────────
     strategyMode: publicProcedure
       .input(z.object({ season: z.number(), teamId: z.number(), currentWeek: z.number().optional().default(1), manualOverride: z.enum(["win_now", "long_term", "balanced"]).optional() }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const { buildStrategyModeContext } = await import("./analytics_additions");
-        const data = await getSeasonData(input.season);
+        const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return null;
         const teams = normalizeTeams(data);
         const team = teams.find(t => t.teamId === input.teamId);
@@ -5883,6 +11243,1590 @@ if (pickOrder.length > 0) {
       }),
   }),
 
+  // Owner Profiles — separate sub-router to avoid espn router TypeScript depth limit
+
+  // ─── Data Health + Owner Identity ─────────────────────────────────────────
+  // Separate sub-router (avoids espn depth limit).
+  // leagueOverview: season/draft/matchup/medal coverage + readiness score.
+  // identityScan: legacy team-name resolution scan + fuzzy confidence.
+  // saveAlias: commissioner-approved mapping saved to owner_aliases table.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ─── Player Intelligence ─────────────────────────────────────────────────
+  // keeper records, championship impact, owner relationships, league story.
+  // Sources: gmDraftPicks, gmTransactions (TRADE), gmSeasonRosters, gmTeams,
+  //          leagueMedals. No new schema, no new imports.
+  // ─────────────────────────────────────────────────────────────────────────
+  playerIntelligence: router({
+    // Search: fuzzy player name lookup across gmDraftPicks
+    search: publicProcedure
+      .input(z.object({ query: z.string().min(1).max(120), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return [];
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, undefined,
+        );
+        if (!leagueId) return [];
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return [];
+        const q = input.query.trim();
+        const rows = await db
+          .select({
+            playerName: gmDraftPicks.playerName,
+            position:   gmDraftPicks.position,
+            cnt:        sql<number>`COUNT(DISTINCT ${gmDraftPicks.season})`.mapWith(Number),
+            keeperCnt:  sql<number>`SUM(CASE WHEN ${gmDraftPicks.isKeeper}=1 THEN 1 ELSE 0 END)`.mapWith(Number),
+            maxSeason:  sql<number>`MAX(${gmDraftPicks.season})`.mapWith(Number),
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, lid),
+            likeDrizzle(gmDraftPicks.playerName, `%${q}%`),
+          ))
+          .groupBy(gmDraftPicks.playerName, gmDraftPicks.position)
+          .orderBy(descDrizzle(sql`MAX(${gmDraftPicks.season})`), ascDrizzle(gmDraftPicks.playerName))
+          .limit(20);
+        return rows.filter(r => r.playerName).map(r => ({
+          playerName: r.playerName!,
+          position:   r.position ?? "",
+          seasons:    r.cnt ?? 0,
+          keeperCount: r.keeperCnt ?? 0,
+          lastSeason: r.maxSeason ?? 0,
+        }));
+      }),
+
+    // Full player profile — all league history for one player by name
+    profile: publicProcedure
+      .input(z.object({ playerName: z.string().min(1).max(255), activeLeagueKey: z.string().optional() }))
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, undefined,
+        );
+        if (!leagueId) return null;
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return null;
+
+        const pName = input.playerName.trim();
+
+        // ── 1. Draft history (gmDraftPicks) ───────────────────────────────
+        const draftRows = await db
+          .select({
+            season:       gmDraftPicks.season,
+            roundId:      gmDraftPicks.roundId,
+            roundPick:    gmDraftPicks.roundPick,
+            overallPick:  gmDraftPicks.overallPick,
+            teamId:       gmDraftPicks.teamId,
+            isKeeper:     gmDraftPicks.isKeeper,
+            position:     gmDraftPicks.position,
+          })
+          .from(gmDraftPicks)
+          .where(andDrizzle(
+            eqDrizzle(gmDraftPicks.leagueId, lid),
+            likeDrizzle(gmDraftPicks.playerName, pName),
+          ))
+          .orderBy(descDrizzle(gmDraftPicks.season));
+
+        // ── 2. Trade history (gmTransactions, type TRADE) ─────────────────
+        const tradeRows = await db
+          .select({
+            season:       gmTransactions.season,
+            fromTeamId:   gmTransactions.fromTeamId,
+            toTeamId:     gmTransactions.toTeamId,
+            processedDate: gmTransactions.processedDate,
+            type:         gmTransactions.type,
+            status:       gmTransactions.status,
+          })
+          .from(gmTransactions)
+          .where(andDrizzle(
+            eqDrizzle(gmTransactions.leagueId, lid),
+            likeDrizzle(gmTransactions.playerName, pName),
+            sql`LOWER(${gmTransactions.type}) LIKE "%trade%"`,
+          ))
+          .orderBy(descDrizzle(gmTransactions.season), descDrizzle(gmTransactions.processedDate));
+
+        // ── 3. Roster/ownership (gmSeasonRosters) ─────────────────────────
+        const rosterRows = await db
+          .select({
+            season:          gmSeasonRosters.season,
+            ownerName:       gmSeasonRosters.ownerName,
+            teamName:        gmSeasonRosters.teamName,
+            position:        gmSeasonRosters.position,
+            nflTeam:         gmSeasonRosters.nflTeam,
+            acquisitionType: gmSeasonRosters.acquisitionType,
+          })
+          .from(gmSeasonRosters)
+          .where(andDrizzle(
+            eqDrizzle(gmSeasonRosters.leagueId, lid),
+            likeDrizzle(gmSeasonRosters.playerName, pName),
+          ))
+          .orderBy(descDrizzle(gmSeasonRosters.season));
+
+        // ── 4. gmTeams lookup (teamId → ownerName) per season ─────────────
+        const allSeasons = [...new Set([
+          ...draftRows.map(r => r.season),
+          ...tradeRows.map(r => r.season),
+        ])];
+        let teamRows: { season: number; teamId: number; ownerName: string | null; name: string | null }[] = [];
+        if (allSeasons.length > 0) {
+          teamRows = await db
+            .select({
+              season:    gmTeams.season,
+              teamId:    gmTeams.teamId,
+              ownerName: gmTeams.ownerName,
+              name:      gmTeams.name,
+            })
+            .from(gmTeams)
+            .where(andDrizzle(
+              eqDrizzle(gmTeams.leagueId, lid),
+              inArrayDrizzle(gmTeams.season, allSeasons),
+            ));
+        }
+        const teamMap = new Map<string, { ownerName: string; teamName: string }>();
+        for (const t of teamRows) {
+          if (t.teamId && t.season)
+            teamMap.set(`${t.season}:${t.teamId}`, {
+              ownerName: t.ownerName?.trim() || `Team ${t.teamId}`,
+              teamName:  t.name?.trim()      || `Team ${t.teamId}`,
+            });
+        }
+        const resolveOwner = (season: number, teamId: number | null) =>
+          teamId ? (teamMap.get(`${season}:${teamId}`) ?? { ownerName: `Team ${teamId}`, teamName: `Team ${teamId}` }) : null;
+
+        // ── 5. Championships (leagueMedals) ───────────────────────────────
+        const medals = await db
+          .select({
+            season:          leagueMedals.season,
+            championOwner:   leagueMedals.championOwner,
+            runnerUpOwner:   leagueMedals.runnerUpOwner,
+            thirdPlaceOwner: leagueMedals.thirdPlaceOwner,
+          })
+          .from(leagueMedals)
+          .where(eqDrizzle(leagueMedals.leagueId, lid));
+        const champMap = new Map<number, { champion: string; runnerUp: string; third: string }>();
+        for (const m of medals) {
+          champMap.set(m.season, {
+            champion:  m.championOwner  ?? "",
+            runnerUp:  m.runnerUpOwner  ?? "",
+            third:     m.thirdPlaceOwner ?? "",
+          });
+        }
+
+        // ── 6. Enrich draft rows ──────────────────────────────────────────
+        const enrichedDraft = draftRows.map(r => {
+          const owner = resolveOwner(r.season, r.teamId);
+          const champ  = champMap.get(r.season);
+          const isChampion = champ && owner ? (
+            champ.champion.toLowerCase().includes(owner.ownerName.toLowerCase().slice(0,5)) ||
+            owner.ownerName.toLowerCase().includes(champ.champion.toLowerCase().slice(0,5))
+          ) : false;
+          return {
+            season:      r.season,
+            round:       r.roundId,
+            pick:        r.roundPick,
+            overallPick: r.overallPick,
+            isKeeper:    (r.isKeeper ?? 0) === 1,
+            position:    r.position ?? "",
+            ownerName:   owner?.ownerName ?? "",
+            teamName:    owner?.teamName  ?? "",
+            isChampionSeason: !!isChampion,
+          };
+        });
+
+        // ── 7. Enrich trade rows ──────────────────────────────────────────
+        const enrichedTrades = tradeRows.map(r => {
+          const from = resolveOwner(r.season, r.fromTeamId ?? null);
+          const to   = resolveOwner(r.season, r.toTeamId   ?? null);
+          return {
+            season:       r.season,
+            fromOwner:    from?.ownerName ?? "Unknown",
+            fromTeam:     from?.teamName  ?? "",
+            toOwner:      to?.ownerName   ?? "Unknown",
+            toTeam:       to?.teamName    ?? "",
+            processedDate: r.processedDate ?? null,
+          };
+        }).filter(r => r.fromOwner !== r.toOwner);
+
+        // ── 8. Keeper history ─────────────────────────────────────────────
+        const keeperHistory = enrichedDraft.filter(d => d.isKeeper);
+
+        // ── 9. Ownership timeline ─────────────────────────────────────────
+        // Merge rosterRows + draftRows into one ownership map keyed by season
+        const ownershipMap = new Map<number, {
+          ownerName: string; teamName: string; season: number;
+          acquisitionType: string; position: string; nflTeam: string;
+          isKeeper: boolean; isChampionSeason: boolean;
+        }>();
+        for (const r of rosterRows) {
+          const champ = champMap.get(r.season);
+          const n = r.ownerName?.trim() || "";
+          const isChamp = champ ? (
+            champ.champion.toLowerCase().includes(n.toLowerCase().slice(0,5)) ||
+            n.toLowerCase().includes(champ.champion.toLowerCase().slice(0,5))
+          ) : false;
+          ownershipMap.set(r.season, {
+            ownerName:       n || r.teamName || "",
+            teamName:        r.teamName || "",
+            season:          r.season,
+            acquisitionType: r.acquisitionType || "",
+            position:        r.position || "",
+            nflTeam:         r.nflTeam || "",
+            isKeeper:        r.acquisitionType?.toLowerCase().includes("keep") ?? false,
+            isChampionSeason: !!isChamp,
+          });
+        }
+        // Fill any draft-season gaps not in rosterRows
+        for (const d of enrichedDraft) {
+          if (!ownershipMap.has(d.season)) {
+            ownershipMap.set(d.season, {
+              ownerName: d.ownerName, teamName: d.teamName, season: d.season,
+              acquisitionType: d.isKeeper ? "Keeper" : "Draft",
+              position: d.position, nflTeam: "",
+              isKeeper: d.isKeeper,
+              isChampionSeason: d.isChampionSeason,
+            });
+          }
+        }
+        const ownershipTimeline = [...ownershipMap.values()]
+          .sort((a, b) => a.season - b.season);
+
+        // ── 10. Stats summary ─────────────────────────────────────────────
+        const uniqueOwners = [...new Set(ownershipTimeline.map(t => t.ownerName).filter(Boolean))];
+        const champSeasons = ownershipTimeline.filter(t => t.isChampionSeason).map(t => t.season);
+        const firstSeason = ownershipTimeline[0]?.season ?? null;
+        const lastSeason  = ownershipTimeline[ownershipTimeline.length - 1]?.season ?? null;
+        const position    = enrichedDraft[0]?.position || rosterRows[0]?.position || "";
+        const nflTeam     = rosterRows.find(r => r.nflTeam)?.nflTeam || "";
+
+        // ── 11. Auto-generated league story (deterministic) ───────────────
+        const story = buildPlayerStory({
+          playerName: pName, position, nflTeam,
+          ownershipTimeline, enrichedDraft, enrichedTrades,
+          keeperHistory, champSeasons, uniqueOwners, firstSeason, lastSeason,
+        });
+
+        // ── 12. Owner relationship cards ──────────────────────────────────
+        const ownerRelations = uniqueOwners.map(ownerName => {
+          const seasons = ownershipTimeline.filter(t => t.ownerName === ownerName).map(t => t.season);
+          const drafts  = enrichedDraft.filter(d => d.ownerName === ownerName);
+          const kepts   = keeperHistory.filter(k => k.ownerName === ownerName);
+          const trades  = enrichedTrades.filter(t => t.toOwner === ownerName || t.fromOwner === ownerName);
+          const champs  = seasons.filter(s => champSeasons.includes(s));
+          return { ownerName, seasons, draftCount: drafts.length, keeperCount: kepts.length, tradeCount: trades.length, champSeasons: champs };
+        }).sort((a, b) => b.seasons.length - a.seasons.length);
+
+        return {
+          playerName:      pName,
+          position,
+          nflTeam,
+          firstSeason,
+          lastSeason,
+          totalSeasons:    ownershipTimeline.length,
+          uniqueOwnerCount: uniqueOwners.length,
+          keeperCount:     keeperHistory.length,
+          champSeasons,
+          story,
+          ownershipTimeline,
+          draftHistory:    enrichedDraft,
+          tradeHistory:    enrichedTrades,
+          keeperHistory,
+          ownerRelations,
+        };
+      }),
+
+  }),
+
+  dataHealth: router({
+
+    leagueOverview: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      const userId = ctx.user?.id ?? 0;
+      if (!userId) return null;
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: userId } }, null, undefined,
+      );
+      if (!leagueId) return null;
+      const lid = leagueId;
+      const db = await getDb();
+      if (!db) return null;
+
+      const SEASONS = [2010,2011,2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024,2025];
+
+      // Aggregate each table per season in bulk
+      const teamCounts = await db
+        .select({ season: gmTeams.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))
+        .groupBy(gmTeams.season);
+      const draftCounts = await db
+        .select({ season: gmDraftPicks.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmDraftPicks).where(eqDrizzle(gmDraftPicks.leagueId, lid))
+        .groupBy(gmDraftPicks.season);
+      const matchupCounts = await db
+        .select({ season: gmMatchups.season, cnt: sql<number>`COUNT(*)`.mapWith(Number) })
+        .from(gmMatchups).where(andDrizzle(eqDrizzle(gmMatchups.leagueId, lid), eqDrizzle(gmMatchups.isCompleted, 1), eqDrizzle(gmMatchups.isPlayoff, 0)))
+        .groupBy(gmMatchups.season);
+      const medalSeasons = (await db.select({ season: leagueMedals.season }).from(leagueMedals).where(eqDrizzle(leagueMedals.leagueId, lid))).map(r => r.season);
+
+      const tcMap  = new Map(teamCounts.map(r => [r.season, r.cnt]));
+      const dcMap  = new Map(draftCounts.map(r => [r.season, r.cnt]));
+      const mcMap  = new Map(matchupCounts.map(r => [r.season, r.cnt]));
+      const medSet = new Set(medalSeasons);
+
+      // Owner resolution quality: % of gmTeams rows with non-empty ownerName (2018+)
+      const teamRows2018 = await db
+        .select({ ownerName: gmTeams.ownerName })
+        .from(gmTeams).where(andDrizzle(eqDrizzle(gmTeams.leagueId, lid), sql`${gmTeams.season} >= 2018`));
+      const resolvedCount  = teamRows2018.filter(r => r.ownerName && r.ownerName.trim() !== "").length;
+      const ownerResolution = teamRows2018.length > 0 ? Math.round((resolvedCount / teamRows2018.length) * 100) : 0;
+
+      // Check for weekly player stats table existence
+      let weeklyStatsExist = false;
+      try {
+        const result = await db.execute(sql`SELECT COUNT(*) as cnt FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = "gm_weekly_player_stats"`) as unknown as Array<{cnt: number}>;
+        weeklyStatsExist = Number(result[0]?.cnt ?? 0) > 0;
+      } catch { weeklyStatsExist = false; }
+
+      const seasonRows = SEASONS.map(s => ({
+        season:     s,
+        teams:      tcMap.get(s) ?? 0,
+        draftPicks: dcMap.get(s) ?? 0,
+        matchups:   mcMap.get(s) ?? 0,
+        medals:     medSet.has(s),
+        weeklyStats: weeklyStatsExist,
+        apiSeason:  s >= 2018,
+      }));
+
+      // Readiness score — weighted across separate dimensions so partial data
+      // gets appropriate credit rather than being zeroed by missing matchup data.
+      //   40 pts: API seasons with teams + draft picks (core import coverage)
+      //   30 pts: API seasons with matchup data (rivalry/H2H features)
+      //   15 pts: owner resolution quality (2018+)
+      //    5 pts: medals imported
+      //   10 pts: any legacy data (2010–2017)
+      const apiSeasons     = seasonRows.filter(s => s.apiSeason);
+      const coreSeasons    = apiSeasons.filter(s => s.teams > 0 && s.draftPicks > 0).length;
+      const matchupSeasons = apiSeasons.filter(s => s.matchups > 0).length;
+      const legacySeasons  = seasonRows.filter(s => !s.apiSeason && s.draftPicks > 0).length;
+
+      const corePct    = apiSeasons.length > 0 ? coreSeasons    / apiSeasons.length : 0;
+      const matchupPct = apiSeasons.length > 0 ? matchupSeasons / apiSeasons.length : 0;
+      const legacyPct  = legacySeasons > 0 ? 1 : 0;
+
+      const medalScore  = medSet.size > 0 ? 5 : 0;
+      const ownerScore  = Math.round(Number.isFinite(ownerResolution) ? ownerResolution * 0.15 : 0);
+
+      const readinessScore = Math.min(100, Math.round(
+        corePct    * 40 +
+        matchupPct * 30 +
+        ownerScore      +
+        medalScore      +
+        legacyPct  * 10,
+      ));
+
+      const featureGates = [
+        { name: "Rivalry Dossier",        status: mcMap.size > 0 ? "unlocked" : "blocked",   reason: mcMap.size > 0 ? "gmMatchups populated" : "Sync to populate matchup data" },
+        { name: "Heartbreak Index",        status: mcMap.size > 0 ? "unlocked" : "blocked",   reason: mcMap.size > 0 ? "gmMatchups scores available" : "Requires matchup scores" },
+        { name: "Owner Profiles",          status: tcMap.size > 0 ? "unlocked" : "blocked",   reason: tcMap.size > 0 ? "gmTeams populated" : "Sync to populate team data" },
+        { name: "Draft DNA",               status: dcMap.size > 0 ? "unlocked" : "blocked",   reason: dcMap.size > 0 ? "gmDraftPicks populated" : "Run Full Import" },
+        { name: "Keeper Advisor",          status: dcMap.size > 0 ? "unlocked" : "blocked",   reason: dcMap.size > 0 ? "gmDraftPicks with isKeeper flag" : "Run Full Import" },
+        { name: "Hall of Fame",            status: medSet.size > 0 && ownerResolution >= 80 ? "unlocked" : "warning", reason: medSet.size === 0 ? "Import league history medals" : ownerResolution < 80 ? "Resolve owner aliases first" : "All data present" },
+        { name: "No-Moves Simulator",      status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+        { name: "GM Score (full)",         status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+        { name: "KVS / Draft RODC",        status: "blocked",  reason: "Requires gmWeeklyPlayerStats (P2 pipeline)" },
+      ];
+
+      return {
+        leagueId: lid,
+        seasonRows,
+        readinessScore,
+        ownerResolution,
+        featureGates,
+        weeklyStatsExist,
+        // Breakdown values for health card bar rows
+        dataCompleteness: apiSeasons.length > 0 ? Math.round(corePct * 100) : null,
+        matchupCoverage:  apiSeasons.length > 0 ? Math.round(matchupPct * 100) : null,
+      };
+    }),
+
+    identityScan: publicProcedure
+      .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      const userId = ctx.user?.id ?? 0;
+      if (!userId) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: userId } }, null, undefined,
+      );
+      if (!leagueId) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
+      const lid = leagueId;
+      const db = await getDb();
+      if (!db) return { autoMatchedOwners: [], ambiguousOwners: [], unresolvedTeams: [], identityStats: { autoMatched: 0, autoMatchedWithLegacyBridge: 0, ambiguous: 0, unresolved: 0 } };
+
+      // Inline Levenshtein for server-side fuzzy match
+      function lev(a: string, b: string): number {
+        const m = a.length, n = b.length;
+        const dp: number[][] = Array.from({ length: m + 1 }, (_, i) => Array.from({ length: n + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+        for (let i = 1; i <= m; i++) {
+          for (let j = 1; j <= n; j++) {
+            dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+          }
+        }
+        return dp[m][n];
+      }
+      const normStr = (s: string) => String(s ?? "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+      function fuzzyScore(a: string, b: string): number {
+        const na = normStr(a), nb = normStr(b);
+        const maxLen = Math.max(na.length, nb.length);
+        return maxLen === 0 ? 100 : Math.round((1 - lev(na, nb) / maxLen) * 100);
+      }
+
+      // Saved aliases (manual confirms/rejections from prior review) — consumed by the canonical layer below
+      const savedRows = await db.select().from(ownerAliases).where(eqDrizzle(ownerAliases.leagueId, lid));
+
+      // ── Canonical identity layer — GUID-first, name-bridge fallback ──
+      // Authoritative identity per ARCHITECTURE.md §9.1: teams.ownerId GUID is primary;
+      // the canonical union-find engine merges legacy (GUID-less, name-only) team-seasons
+      // into their modern GUID identity by EXACT owner-name bridge. A canonical key of
+      // "id:<GUID>" => resolved to a GUID person (auto-matched, read-only); "name:<pk>" =>
+      // never had/bridged to a GUID => genuinely GUID-less legacy owner (manual review).
+      const allOwnerRows = (await db.select().from(gmTeams).where(eqDrizzle(gmTeams.leagueId, lid))) as any[];
+      const nameToOwnerId = buildNameToOwnerId(allOwnerRows);
+      const teamToCanon   = buildTeamToCanonicalProfileKey(allOwnerRows);
+
+      type IdCluster = {
+        canonicalKey: string; isGuid: boolean; memberId: string | null;
+        display: string; displaySeason: number;
+        seasons: Set<number>; guidSeasons: Set<number>; legacySeasons: Set<number>;
+        teamNames: Set<string>;
+      };
+      const clusters = new Map<string, IdCluster>();
+      for (const t of allOwnerRows) {
+        if (!t || t.teamId <= 0) continue;
+        const key = teamToCanon.get(`${t.season}:${t.teamId}`)
+          ?? resolveOwnerKey(String(t.ownerId || "").trim(), t.ownerName || "", t.name || "", nameToOwnerId);
+        let c = clusters.get(key);
+        if (!c) {
+          c = { canonicalKey: key, isGuid: key.startsWith("id:"),
+                memberId: key.startsWith("id:") ? key.slice(3) : null,
+                display: "", displaySeason: -1,
+                seasons: new Set(), guidSeasons: new Set(), legacySeasons: new Set(), teamNames: new Set() };
+          clusters.set(key, c);
+        }
+        c.seasons.add(t.season);
+        if (String(t.ownerId || "").trim()) c.guidSeasons.add(t.season); else c.legacySeasons.add(t.season);
+        const disp = cleanOwnerDisplay((t.ownerName || "").trim());
+        if (disp && t.season > c.displaySeason) { c.display = disp; c.displaySeason = t.season; }
+        if (t.name) c.teamNames.add(String(t.name));
+      }
+
+      // best-effort saved-alias lookup: by any of the cluster's team names, else owner name
+      const aliasByName = new Map<string, any>();
+      for (const a of savedRows) aliasByName.set(normStr(a.legacyTeamName), a);
+      const lookupAlias = (c: IdCluster) => {
+        for (const tn of c.teamNames) { const a = aliasByName.get(normStr(tn)); if (a) return a; }
+        return aliasByName.get(normStr(c.display)) ?? null;
+      };
+
+      const autoMatchedOwners: any[] = [];
+      const ambiguousOwners:   any[] = [];
+      const unresolvedTeams:   any[] = [];
+      const guidNames: { key: string; name: string }[] = [];
+      const nameClusters: IdCluster[] = [];
+      for (const c of clusters.values()) {
+        if (c.isGuid) {
+          guidNames.push({ key: c.canonicalKey, name: c.display });
+          autoMatchedOwners.push({
+            canonicalKey:    c.canonicalKey,
+            memberId:        c.memberId,
+            ownerName:       c.display || "(unknown)",
+            seasons:         [...c.seasons].sort((a,b)=>a-b),
+            guidSeasons:     [...c.guidSeasons].sort((a,b)=>a-b),
+            legacySeasons:   [...c.legacySeasons].sort((a,b)=>a-b),
+            teamNames:       [...c.teamNames],
+            hasLegacyBridge: c.legacySeasons.size > 0,
+            confidence:      100,
+            reason:          c.legacySeasons.size > 0 ? "guid+exact-name-bridge" : "guid",
+          });
+        } else {
+          nameClusters.push(c);
+        }
+      }
+
+      // name: clusters never bridged to a GUID — fuzzy-suggest a modern owner, else unresolved
+      for (const c of nameClusters) {
+        const saved = lookupAlias(c);
+        let best: { key: string; name: string; score: number } | null = null;
+        for (const g of guidNames) {
+          const sc = fuzzyScore(c.display, g.name);
+          if (!best || sc > best.score) best = { key: g.key, name: g.name, score: sc };
+        }
+        const base = {
+          canonicalKey:    c.canonicalKey,
+          legacyOwnerName: c.display || "(unknown)",
+          seasons:         [...c.seasons].sort((a,b)=>a-b),
+          teamNames:       [...c.teamNames],
+          savedStatus:     saved?.status ?? null,
+          savedOwner:      saved?.resolvedOwnerName ?? null,
+        };
+        if (best && best.score >= 70) {
+          ambiguousOwners.push({ ...base, suggestedOwner: best.name, suggestedCanonicalKey: best.key, confidence: best.score, reason: "fuzzy-name" });
+        } else {
+          unresolvedTeams.push({ ...base, suggestedOwner: null, suggestedCanonicalKey: null, confidence: 0, reason: "no-guid-match" });
+        }
+      }
+
+      autoMatchedOwners.sort((a,b)=> String(a.ownerName).localeCompare(String(b.ownerName)));
+      ambiguousOwners.sort((a,b)=> b.confidence - a.confidence);
+      unresolvedTeams.sort((a,b)=> String(a.legacyOwnerName).localeCompare(String(b.legacyOwnerName)));
+
+      const identityStats = {
+        autoMatched:                 autoMatchedOwners.length,
+        autoMatchedWithLegacyBridge: autoMatchedOwners.filter(o => o.hasLegacyBridge).length,
+        ambiguous:                   ambiguousOwners.length,
+        unresolved:                  unresolvedTeams.length,
+      };
+
+      return {
+        autoMatchedOwners,
+        ambiguousOwners,
+        unresolvedTeams,
+        identityStats,
+      };
+    }),
+
+    saveAlias: publicProcedure
+      .input(z.object({
+        legacyTeamName:    z.string().min(1).max(255),
+        legacySeason:      z.number().int().nullable().optional(),
+        resolvedOwnerName: z.string().max(255).nullable(),
+        status:            z.enum(["approved", "rejected", "skipped"]),
+        confidence:        z.number().int().min(0).max(100).optional(),
+        resolutionMethod:  z.string().max(64).optional(),
+        activeLeagueKey:     z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: userId ? { id: userId } : undefined }, null, undefined,
+        );
+        if (!leagueId) return { ok: false };
+        const lid = leagueId;
+        const db  = await getDb();
+        if (!db) return { ok: false };
+        try {
+          await db.insert(ownerAliases).values({
+            leagueId:          lid,
+            legacyTeamName:    input.legacyTeamName,
+            legacySeason:      input.legacySeason ?? null,
+            resolvedOwnerName: input.resolvedOwnerName ?? null,
+            confidence:        input.confidence ?? 0,
+            resolutionMethod:  input.resolutionMethod ?? "manual",
+            status:            input.status,
+          }).onDuplicateKeyUpdate({
+            set: {
+              resolvedOwnerName: input.resolvedOwnerName ?? null,
+              confidence:        input.confidence ?? 0,
+              resolutionMethod:  input.resolutionMethod ?? "manual",
+              status:            input.status,
+            }
+          });
+          return { ok: true };
+        } catch (err) {
+          console.error("[dataHealth.saveAlias]", err);
+          return { ok: false };
+        }
+      }),
+
+  }),
+
+  owners: router({
+
+    ownerList: publicProcedure
+      .input(
+        z
+          .object({
+            activeLeagueKey: z.string().optional(),
+            /** Client `getActive` ESPN league id — if set and ≠ server-resolved active league, return empty rows (no cross-league data). */
+            expectedLeagueId: z.string().min(1).max(64).optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        void input?.activeLeagueKey;
+      const emptyOwnerList = (leagueId: string | null) => ({
+        leagueId,
+        active: [] as OwnerSummaryRow[],
+        graveyard: [] as OwnerSummaryRow[],
+        powerRankings: [] as OwnerPowerRankingRow[],
+        ownerAwards: [] as OwnerAwardRow[],
+        canonicalLeagueDebug: {} as Record<string, never>,
+        allOwners: [] as { ownerKey: string; ownerName: string; seasons: number[]; championships: number }[],
+      });
+      const userId = ctx.user?.id ?? 0;
+      if (!userId) {
+        return emptyOwnerList(null);
+      }
+      const { leagueId } = await resolveActiveLeagueId(
+        { user: { id: userId } }, null, undefined,
+      );
+      if (!leagueId) {
+        return emptyOwnerList("");
+      }
+      const lid = String(leagueId).trim().slice(0, 32);
+      const expected = input?.expectedLeagueId?.trim().slice(0, 32) ?? "";
+      if (expected && expected !== lid) {
+        return emptyOwnerList(lid);
+      }
+      const db = await getDb();
+      if (!db) {
+        return emptyOwnerList(lid);
+      }
+
+      const teamRows = await db
+        .select({
+          ownerName: gmTeams.ownerName,
+          ownerId: gmTeams.ownerId,
+          season: gmTeams.season,
+          name: gmTeams.name,
+          teamId: gmTeams.teamId,
+          rawTeam: gmTeams.rawTeam,
+          pointsFor: gmTeams.pointsFor,
+        })
+        .from(gmTeams)
+        .where(eqDrizzle(gmTeams.leagueId, lid))
+        .orderBy(ascDrizzle(gmTeams.season));
+
+      const fullRows = teamRows as GmTeamRow[];
+      const nameToOwnerId = buildNameToOwnerId(fullRows);
+      const ownerKeyRemap = buildRawKeyToCanonicalProfileKey(fullRows);
+      const rowOwnerKey = (row: (typeof teamRows)[number]) => {
+        const raw = resolveOwnerKey(
+          String(row.ownerId || "").trim(),
+          row.ownerName || "",
+          row.name || "",
+          nameToOwnerId,
+        );
+        return ownerKeyRemap.get(raw) ?? raw;
+      };
+      const teamToOwnerKey = buildTeamToCanonicalProfileKey(fullRows);
+      const flatRS = await loadFlatRegularSeasonMatchups({ db, leagueId: lid, userId });
+      const wlByOwnerSeason = aggregateMatchupWLByOwnerSeason(flatRS, teamToOwnerKey);
+
+      const careerWL = new Map<string, { wins: number; losses: number; ties: number }>();
+      for (const [k, rec] of wlByOwnerSeason) {
+        const ix = k.indexOf("##");
+        if (ix < 0) continue;
+        const ownerKey = k.slice(ix + 2);
+        if (!careerWL.has(ownerKey)) careerWL.set(ownerKey, { wins: 0, losses: 0, ties: 0 });
+        const c = careerWL.get(ownerKey)!;
+        c.wins += rec.wins;
+        c.losses += rec.losses;
+        c.ties += rec.ties;
+      }
+
+      type RowMeta = {
+        seasons: Set<number>;
+        teamNames: Set<string>;
+        maxSeason: number;
+        displayName: string;
+        currentTeam: string;
+      };
+      const metaByKey = new Map<string, RowMeta>();
+      const activityByOwner = new Map<
+        string,
+        { totalMoves: number; seasonsWithMoves: number; acquisitions: number; trades: number }
+      >();
+      const h2hByOwner = new Map<string, { w: number; l: number; t: number }>();
+
+      for (const row of teamRows) {
+        const on = (row.ownerName || "").trim();
+        if (!on) continue;
+        const ownerKey = rowOwnerKey(row);
+        if (!metaByKey.has(ownerKey)) {
+          metaByKey.set(ownerKey, {
+            seasons: new Set<number>(),
+            teamNames: new Set<string>(),
+            maxSeason: row.season,
+            displayName: cleanOwnerDisplay(on) || on,
+            currentTeam: row.name || "",
+          });
+        }
+        const meta = metaByKey.get(ownerKey)!;
+        meta.seasons.add(row.season);
+        if (row.name?.trim()) meta.teamNames.add(row.name.trim());
+        if (row.season >= meta.maxSeason) {
+          meta.maxSeason = row.season;
+          meta.currentTeam = row.name || meta.currentTeam;
+          meta.displayName = cleanOwnerDisplay((row.ownerName || "").trim()) || meta.displayName;
+        }
+
+        if (!activityByOwner.has(ownerKey)) {
+          activityByOwner.set(ownerKey, { totalMoves: 0, seasonsWithMoves: 0, acquisitions: 0, trades: 0 });
+        }
+        let seasonMoves = 0;
+        try {
+          const raw = JSON.parse(row.rawTeam || "{}") as Record<string, unknown>;
+          const tc = (raw.transactionCounter ?? {}) as Record<string, number>;
+          const acq = Number(tc.acquisitions ?? 0);
+          const trd = Number(tc.trades ?? 0);
+          seasonMoves =
+            acq +
+            Number(tc.drops ?? 0) +
+            trd +
+            Number(tc.moveToActive ?? 0) +
+            Number(tc.moveToIR ?? 0);
+          const act = activityByOwner.get(ownerKey)!;
+          act.acquisitions += acq;
+          act.trades += trd;
+        } catch {
+          seasonMoves = 0;
+        }
+        const act = activityByOwner.get(ownerKey)!;
+        act.totalMoves += seasonMoves;
+        if (seasonMoves > 0) act.seasonsWithMoves++;
+      }
+
+      for (const k of metaByKey.keys()) {
+        h2hByOwner.set(k, { w: 0, l: 0, t: 0 });
+      }
+      for (const k of careerWL.keys()) {
+        if (!h2hByOwner.has(k)) h2hByOwner.set(k, { w: 0, l: 0, t: 0 });
+        if (!activityByOwner.has(k)) {
+          activityByOwner.set(k, { totalMoves: 0, seasonsWithMoves: 0, acquisitions: 0, trades: 0 });
+        }
+      }
+
+      const medalRows = await db
+        .select({
+          season: leagueMedals.season,
+          c: leagueMedals.championOwner,
+          r: leagueMedals.runnerUpOwner,
+          t: leagueMedals.thirdPlaceOwner,
+        })
+        .from(leagueMedals)
+        .where(eqDrizzle(leagueMedals.leagueId, lid));
+
+      const approvedAliasRows = await db
+        .select({
+          legacyTeamName: ownerAliases.legacyTeamName,
+          resolvedOwnerName: ownerAliases.resolvedOwnerName,
+          status: ownerAliases.status,
+        })
+        .from(ownerAliases)
+        .where(eqDrizzle(ownerAliases.leagueId, lid));
+      const aliasLabelToKey = buildApprovedAliasLabelToOwnerKey(fullRows, approvedAliasRows);
+      /** gm_teams resolution first; approved-alias fallback for podium-only seasons
+       *  lacking gm_teams rows (same authority as Hall of Fame / League History / Owner Profiles). */
+      const resolveMedalOwnerKey = (season: number, label: string | null): string | null => {
+        const raw = resolveMedalTeamToOwnerKey(season, label, fullRows, nameToOwnerId);
+        if (raw) return ownerKeyRemap.get(raw) ?? raw;
+        if (!label?.trim()) return null;
+        const viaAlias = aliasLabelToKey.get(normalizeOwnerStr(label));
+        return viaAlias ? (ownerKeyRemap.get(viaAlias) ?? viaAlias) : null;
+      };
+
+      const medalsByKey = new Map<string, { championships: number; runnerUps: number; thirdPlace: number }>();
+      const ensureMed = (key: string | null) => {
+        if (!key) return;
+        if (!medalsByKey.has(key)) {
+          medalsByKey.set(key, { championships: 0, runnerUps: 0, thirdPlace: 0 });
+        }
+      };
+      for (const m of medalRows) {
+        const ck = resolveMedalOwnerKey(m.season, m.c);
+        if (ck) {
+          ensureMed(ck);
+          medalsByKey.get(ck)!.championships++;
+        }
+        const rk = resolveMedalOwnerKey(m.season, m.r);
+        if (rk) {
+          ensureMed(rk);
+          medalsByKey.get(rk)!.runnerUps++;
+        }
+        const tk = resolveMedalOwnerKey(m.season, m.t);
+        if (tk) {
+          ensureMed(tk);
+          medalsByKey.get(tk)!.thirdPlace++;
+        }
+      }
+
+      const matchupRows = await db
+        .select({
+          homeTeamId: gmMatchups.homeTeamId,
+          awayTeamId: gmMatchups.awayTeamId,
+          winnerTeamId: gmMatchups.winnerTeamId,
+          season: gmMatchups.season,
+        })
+        .from(gmMatchups)
+        .where(
+          andDrizzle(
+            eqDrizzle(gmMatchups.leagueId, lid),
+            eqDrizzle(gmMatchups.isPlayoff, 0),
+            eqDrizzle(gmMatchups.isCompleted, 1),
+          ),
+        );
+
+      for (const m of matchupRows) {
+        const homeKey = teamToOwnerKey.get(`${m.season}:${m.homeTeamId}`);
+        const awayKey = teamToOwnerKey.get(`${m.season}:${m.awayTeamId}`);
+        if (!homeKey || !awayKey || homeKey === awayKey) continue;
+        const hRec = h2hByOwner.get(homeKey);
+        const aRec = h2hByOwner.get(awayKey);
+        if (!hRec || !aRec) continue;
+        if (!m.winnerTeamId) {
+          hRec.t++;
+          aRec.t++;
+        } else if (m.winnerTeamId === m.homeTeamId) {
+          hRec.w++;
+          aRec.l++;
+        } else {
+          hRec.l++;
+          aRec.w++;
+        }
+      }
+
+      const om = new Map<string, OwnerSummaryRow>();
+      const ownerKeys = new Set([...metaByKey.keys(), ...careerWL.keys(), ...medalsByKey.keys()]);
+      for (const ownerKey of ownerKeys) {
+        const meta = metaByKey.get(ownerKey);
+        const wl = careerWL.get(ownerKey) ?? { wins: 0, losses: 0, ties: 0 };
+        const md = medalsByKey.get(ownerKey) ?? { championships: 0, runnerUps: 0, thirdPlace: 0 };
+        const displayName =
+          meta?.displayName ||
+          (ownerKey.startsWith("name:")
+            ? cleanOwnerDisplay(ownerKey.slice(5).replace(/-/g, " ")) || ownerKey
+            : ownerKey);
+        om.set(ownerKey, {
+          ownerKey,
+          ownerName: displayName,
+          seasons: meta ? [...meta.seasons].sort((a, b) => a - b) : [],
+          currentTeam: meta?.currentTeam ?? "",
+          totalWins: wl.wins,
+          totalLosses: wl.losses,
+          totalTies: wl.ties,
+          winPct: 0,
+          championships: md.championships,
+          runnerUps: md.runnerUps,
+          thirdPlace: md.thirdPlace,
+        });
+      }
+
+      const all = Array.from(om.values()).map((o) => {
+        const seasons = [...new Set(o.seasons)].sort((a, b) => a - b);
+        const g = o.totalWins + o.totalLosses + o.totalTies;
+        return {
+          ...o,
+          seasons,
+          winPct: g > 0 ? Number((((o.totalWins + 0.5 * o.totalTies) / g) * 100).toFixed(1)) : 0,
+        };
+      });
+
+      const powerRankings: OwnerPowerRankingRow[] = [...all]
+        .map((o) => {
+          const h2h = h2hByOwner.get(o.ownerKey) ?? { w: 0, l: 0, t: 0 };
+          const act = activityByOwner.get(o.ownerKey) ?? {
+            totalMoves: 0,
+            seasonsWithMoves: 0,
+            acquisitions: 0,
+            trades: 0,
+          };
+          const seasonCount = o.seasons.length || 1;
+          const activityAvgPerSeason =
+            seasonCount > 0 ? Number((act.totalMoves / seasonCount).toFixed(1)) : 0;
+          const h2hPct = h2hWinPctForPower(h2h.w, h2h.l, h2h.t);
+          const h2hGames = h2h.w + h2h.l + h2h.t;
+          const wpPart = Math.round(o.winPct * 100);
+          const medalPart =
+            o.championships * 8000 + o.runnerUps * 2500 + o.thirdPlace * 900;
+          const h2hPart = Math.min(
+            5200,
+            Math.round(h2hPct * 45) + (h2h.w - h2h.l) * 18 + Math.min(h2hGames, 40) * 6,
+          );
+          const actPart = Math.min(
+            2800,
+            Math.floor(Math.min(act.totalMoves, 800) * 2.2) + act.seasonsWithMoves * 35,
+          );
+          const score = wpPart + medalPart + h2hPart + actPart;
+          const rec =
+            o.totalTies > 0
+              ? `${o.totalWins}-${o.totalLosses}-${o.totalTies}`
+              : `${o.totalWins}-${o.totalLosses}`;
+          const reason = buildOwnerPowerReason({
+            winPct: o.winPct,
+            championships: o.championships,
+            runnerUps: o.runnerUps,
+            thirdPlace: o.thirdPlace,
+            h2hWins: h2h.w,
+            h2hLosses: h2h.l,
+            h2hTies: h2h.t,
+            activityAvgPerSeason,
+          });
+          return {
+            rank: 0,
+            ownerKey: o.ownerKey,
+            ownerName: o.ownerName,
+            currentTeam: o.currentTeam,
+            score,
+            record: rec,
+            winPct: o.winPct,
+            championships: o.championships,
+            medals: { runnerUps: o.runnerUps, thirdPlace: o.thirdPlace },
+            reason,
+          };
+        })
+        .sort((a, b) => {
+          if (b.score !== a.score) return b.score - a.score;
+          if (b.championships !== a.championships) return b.championships - a.championships;
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        })
+        .map((row, i) => ({ ...row, rank: i + 1 }));
+
+      const allLeagueTeamsForDraft = teamRows
+        .filter((r) => r.ownerName)
+        .map((r) => ({
+          season: r.season,
+          teamId: r.teamId,
+          name: r.name,
+          ownerName: r.ownerName as string,
+          ownerId: String(r.ownerId || "").trim() || undefined,
+        }));
+      const teamsBySeasonAwards = buildTeamsBySeason(allLeagueTeamsForDraft);
+
+      const draftRowsForAwards = await db
+        .select({
+          position: gmDraftPicks.position,
+          roundId: gmDraftPicks.roundId,
+          isKeeper: gmDraftPicks.isKeeper,
+          season: gmDraftPicks.season,
+          teamId: gmDraftPicks.teamId,
+          rawPick: gmDraftPicks.rawPick,
+        })
+        .from(gmDraftPicks)
+        .where(eqDrizzle(gmDraftPicks.leagueId, lid));
+
+      type DraftAgg = { totalPicks: number; earlyPremium: number; keeperPicks: number; sumRound: number };
+      const draftAgg = new Map<string, DraftAgg>();
+      for (const on of om.keys()) {
+        draftAgg.set(on, { totalPicks: 0, earlyPremium: 0, keeperPicks: 0, sumRound: 0 });
+      }
+      for (const row of draftRowsForAwards) {
+        const teamNameFromPick = parseDraftPickTeamNameFromRawPick(row.rawPick);
+        const res = resolveDraftPickOwner(
+          { season: row.season, teamId: row.teamId, teamName: teamNameFromPick },
+          teamsBySeasonAwards,
+        );
+        const seasonList = teamsBySeasonAwards.get(row.season) ?? [];
+        const rowById = seasonList.find((t) => t.teamId === row.teamId);
+        const pickKeyRaw = rowById
+          ? resolveOwnerKey(
+              String(rowById.ownerId ?? "").trim(),
+              rowById.ownerName,
+              rowById.name,
+              nameToOwnerId,
+            )
+          : resolveOwnerKey("", res.ownerName, teamNameFromPick ?? "", nameToOwnerId);
+        const pickKey = ownerKeyRemap.get(pickKeyRaw) ?? pickKeyRaw;
+        const d = draftAgg.get(pickKey);
+        if (!d) continue;
+        d.totalPicks++;
+        d.sumRound += row.roundId;
+        if (row.isKeeper === 1) d.keeperPicks++;
+        const pos = String(row.position ?? "").toUpperCase();
+        if (row.roundId <= 3 && (pos === "RB" || pos === "WR")) d.earlyPremium++;
+      }
+
+      const MIN_DRAFT = 12;
+      const ownerAwards: OwnerAwardRow[] = [];
+      const pushAward = (a: OwnerAwardRow | null) => {
+        if (a && a.ownerName && a.ownerKey) ownerAwards.push(a);
+      };
+
+      const activeMulti = all.filter((o) => o.seasons.length >= 2);
+      const draftEligible = activeMulti.filter(
+        (o) => (draftAgg.get(o.ownerKey)?.totalPicks ?? 0) >= MIN_DRAFT,
+      );
+
+      if (draftEligible.length > 0) {
+        const bestSorted = [...draftEligible].sort((a, b) => {
+          const da = draftAgg.get(a.ownerKey)!;
+          const db = draftAgg.get(b.ownerKey)!;
+          if (db.earlyPremium !== da.earlyPremium) return db.earlyPremium - da.earlyPremium;
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        });
+        const best = bestSorted[0]!;
+        const bd = draftAgg.get(best.ownerKey)!;
+        pushAward({
+          awardName: "Best Drafter",
+          ownerKey: best.ownerKey,
+          ownerName: best.ownerName,
+          value: bd.earlyPremium,
+          reason: `Most RB/WR heat in rounds 1–3 (${bd.earlyPremium} hits on ${bd.totalPicks} resolved picks).`,
+        });
+        if (draftEligible.length >= 2) {
+          const worstSorted = [...draftEligible].sort((a, b) => {
+            const da = draftAgg.get(a.ownerKey)!;
+            const db = draftAgg.get(b.ownerKey)!;
+            if (da.earlyPremium !== db.earlyPremium) return da.earlyPremium - db.earlyPremium;
+            const avgA = da.sumRound / da.totalPicks;
+            const avgB = db.sumRound / db.totalPicks;
+            if (avgB !== avgA) return avgB - avgA;
+            return a.ownerName.localeCompare(b.ownerName);
+          });
+          const worst = worstSorted[0]!;
+          if (worst.ownerName !== best.ownerName) {
+            const wd = draftAgg.get(worst.ownerKey)!;
+            pushAward({
+              awardName: "Worst Drafter",
+              ownerKey: worst.ownerKey,
+              ownerName: worst.ownerName,
+              value: wd.earlyPremium,
+              reason: `Fewest early RB/WR strikes (${wd.earlyPremium}) on ${wd.totalPicks} picks — premium window closed early.`,
+            });
+          }
+        }
+      }
+
+      const keeperCandidates = activeMulti.filter((o) => {
+        const d = draftAgg.get(o.ownerKey);
+        return d && d.totalPicks >= 10 && d.keeperPicks >= 2;
+      });
+      if (keeperCandidates.length > 0) {
+        const sortedK = [...keeperCandidates].sort((a, b) => {
+          const da = draftAgg.get(a.ownerKey)!;
+          const db = draftAgg.get(b.ownerKey)!;
+          const ra = (da.keeperPicks / da.totalPicks) * 100;
+          const rb = (db.keeperPicks / db.totalPicks) * 100;
+          if (Math.abs(rb - ra) > 0.001) return rb - ra;
+          if (db.keeperPicks !== da.keeperPicks) return db.keeperPicks - da.keeperPicks;
+          return a.ownerName.localeCompare(b.ownerName);
+        });
+        const wk = sortedK[0]!;
+        const kd = draftAgg.get(wk.ownerKey)!;
+        const rate = Number(((kd.keeperPicks / kd.totalPicks) * 100).toFixed(1));
+        pushAward({
+          awardName: "Keeper King",
+          ownerKey: wk.ownerKey,
+          ownerName: wk.ownerName,
+          value: `${rate}%`,
+          reason: `${kd.keeperPicks} keepers / ${kd.totalPicks} picks (${rate}%) — rent-controlled roster spots.`,
+        });
+      }
+
+      const acqCand = activeMulti.filter((o) => (activityByOwner.get(o.ownerKey)?.acquisitions ?? 0) > 0);
+      if (acqCand.length > 0) {
+        const wa = [...acqCand].sort((a, b) => {
+          const ca = activityByOwner.get(a.ownerKey)?.acquisitions ?? 0;
+          const cb = activityByOwner.get(b.ownerKey)?.acquisitions ?? 0;
+          if (cb !== ca) return cb - ca;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const ac = activityByOwner.get(wa.ownerKey)?.acquisitions ?? 0;
+        pushAward({
+          awardName: "Transaction Addict",
+          ownerKey: wa.ownerKey,
+          ownerName: wa.ownerName,
+          value: ac,
+          reason: `${ac} lifetime acquisitions — waiver wire is cardio.`,
+        });
+      }
+
+      const tradeCand = activeMulti.filter((o) => (activityByOwner.get(o.ownerKey)?.trades ?? 0) > 0);
+      if (tradeCand.length > 0) {
+        const wt = [...tradeCand].sort((a, b) => {
+          const ca = activityByOwner.get(a.ownerKey)?.trades ?? 0;
+          const cb = activityByOwner.get(b.ownerKey)?.trades ?? 0;
+          if (cb !== ca) return cb - ca;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const tc = activityByOwner.get(wt.ownerKey)?.trades ?? 0;
+        pushAward({
+          awardName: "Trade Shark",
+          ownerKey: wt.ownerKey,
+          ownerName: wt.ownerName,
+          value: tc,
+          reason: `${tc} completed trades — roster diplomacy with teeth.`,
+        });
+      }
+
+      const bullyCand = activeMulti.filter((o) => o.totalWins + o.totalLosses + o.totalTies >= 14);
+      if (bullyCand.length > 0) {
+        const wb = [...bullyCand].sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        pushAward({
+          awardName: "Regular Season Bully",
+          ownerKey: wb.ownerKey,
+          ownerName: wb.ownerName,
+          value: `${wb.winPct}%`,
+          reason: `${wb.totalWins}-${wb.totalLosses}-${wb.totalTies} ledger at ${wb.winPct}% — spreadsheet villain arc.`,
+        });
+      }
+
+      const hasMedalPodium = all.some((o) => o.runnerUps + o.thirdPlace > 0);
+      if (hasMedalPodium) {
+        const wp = [...all]
+          .sort((a, b) => {
+            const pa = a.runnerUps + a.thirdPlace;
+            const pb = b.runnerUps + b.thirdPlace;
+            if (pb !== pa) return pb - pa;
+            if (a.championships !== b.championships) return a.championships - b.championships;
+            return a.ownerName.localeCompare(b.ownerName);
+          })[0]!;
+        if (wp.runnerUps + wp.thirdPlace > 0) {
+          pushAward({
+            awardName: "Playoff Merchant",
+            ownerKey: wp.ownerKey,
+            ownerName: wp.ownerName,
+            value: `${wp.runnerUps} RU · ${wp.thirdPlace} 3rd`,
+            reason: `${wp.runnerUps + wp.thirdPlace} podium trips vs ${wp.championships} titles — always open for January business.`,
+          });
+        }
+      }
+
+      const rkCand = activeMulti.filter((o) => {
+        const h = h2hByOwner.get(o.ownerKey);
+        return h && h.w + h.l + h.t >= 10;
+      });
+      if (rkCand.length > 0) {
+        const wr = [...rkCand].sort((a, b) => {
+          const ha = h2hByOwner.get(a.ownerKey)!;
+          const hb = h2hByOwner.get(b.ownerKey)!;
+          const da = ha.w - ha.l;
+          const db = hb.w - hb.l;
+          if (db !== da) return db - da;
+          const pa = h2hWinPctForPower(ha.w, ha.l, ha.t);
+          const pb = h2hWinPctForPower(hb.w, hb.l, hb.t);
+          if (pb !== pa) return pb - pa;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const h = h2hByOwner.get(wr.ownerKey)!;
+        const net = h.w - h.l;
+        pushAward({
+          awardName: "Rivalry Killer",
+          ownerKey: wr.ownerKey,
+          ownerName: wr.ownerName,
+          value: `${h.w}-${h.l}-${h.t}`,
+          reason: `${net >= 0 ? "+" : ""}${net} net H2H (${h2hWinPctForPower(h.w, h.l, h.t)}% in ${h.w + h.l + h.t} games) — receipts filed.`,
+        });
+      }
+
+      const grave = all.filter((o) => o.seasons.length === 1);
+      if (grave.length > 0) {
+        const ow = [...grave].sort((a, b) => {
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        pushAward({
+          awardName: "One-Year Wonder",
+          ownerKey: ow.ownerKey,
+          ownerName: ow.ownerName,
+          value: `${ow.winPct}%`,
+          reason: `Single-season ${ow.totalWins}-${ow.totalLosses}-${ow.totalTies} at ${ow.winPct}% — comet, not constellation.`,
+        });
+        const legend = [...grave].sort((a, b) => {
+          const rowA = teamRows.find((r) => {
+            const k = rowOwnerKey(r as GmTeamRow);
+            return k === a.ownerKey && a.seasons.includes(r.season);
+          });
+          const rowB = teamRows.find((r) => {
+            const k = rowOwnerKey(r as GmTeamRow);
+            return k === b.ownerKey && b.seasons.includes(r.season);
+          });
+          const pfa = Number(rowA?.pointsFor ?? 0);
+          const pfb = Number(rowB?.pointsFor ?? 0);
+          if (pfb !== pfa) return pfb - pfa;
+          return a.ownerName.localeCompare(b.ownerName);
+        })[0]!;
+        const prow = teamRows.find((r) => {
+          const k = rowOwnerKey(r as GmTeamRow);
+          return k === legend.ownerKey && legend.seasons.includes(r.season);
+        });
+        const pf = Number(prow?.pointsFor ?? 0);
+        pushAward({
+          awardName: "Graveyard Legend",
+          ownerKey: legend.ownerKey,
+          ownerName: legend.ownerName,
+          value: Number(pf.toFixed(1)),
+          reason: `One-season ${pf.toFixed(1)} PF before exit — ghosted the league like a legend should.`,
+        });
+      }
+
+      const CANON_DEBUG = new Set(["christian edmondson", "rod sellers"]);
+      const canonicalLeagueDebug: Record<
+        string,
+        {
+          ownerKey: string;
+          displayName: string;
+          mergedOwnerAliases: string[];
+          mergedTeamNames: string[];
+          recordSource: string;
+          totalResolvedMatchups: number;
+          missingSeasons: number[];
+          wins: number;
+          losses: number;
+          ties: number;
+          serviceVersion: string;
+        }
+      > = {};
+      for (const o of all) {
+        const n = normalizeOwnerStr(o.ownerName);
+        const pk = personMergeKey(o.ownerName);
+        if (!CANON_DEBUG.has(n) && !CANON_DEBUG.has(pk)) continue;
+        const meta = metaByKey.get(o.ownerKey);
+        canonicalLeagueDebug[o.ownerName] = {
+          ownerKey: o.ownerKey,
+          displayName: o.ownerName,
+          mergedOwnerAliases: meta ? [...new Set(teamRows.filter((r) => {
+            const k = rowOwnerKey(r as GmTeamRow);
+            return k === o.ownerKey;
+          }).map((r) => (r.ownerName || "").trim()))].filter(Boolean).sort() : [],
+          mergedTeamNames: meta ? [...meta.teamNames].sort() : [],
+          recordSource: "gmMatchupsCompletedRegularSeason",
+          totalResolvedMatchups: o.totalWins + o.totalLosses + o.totalTies,
+          missingSeasons: [],
+          wins: o.totalWins,
+          losses: o.totalLosses,
+          ties: o.totalTies,
+          serviceVersion: "owner-canon-v4",
+        };
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        const rawKeySet = new Set(
+          teamRows.map((r) =>
+            resolveOwnerKey(String(r.ownerId || "").trim(), r.ownerName || "", r.name || "", nameToOwnerId),
+          ),
+        );
+        const canonKeySet = new Set(
+          teamRows.map((r) => rowOwnerKey(r as GmTeamRow)),
+        );
+        const duplicateCandidatesMerged = Math.max(0, rawKeySet.size - canonKeySet.size);
+        const unresolvedRecords = teamRows.filter((r) => !((r.ownerName || "").trim())).length;
+        console.log("[owners.ownerList] identity merge", {
+          totalRawOwnerRows: teamRows.length,
+          totalCanonicalOwners: all.length,
+          distinctRawOwnerKeys: rawKeySet.size,
+          distinctCanonicalKeys: canonKeySet.size,
+          duplicateCandidatesMerged,
+          unresolvedRecords,
+        });
+      }
+
+      return gateOwnerList(
+        {
+          leagueId: lid,
+          active: all.filter((o) => o.seasons.length >= 2).sort((a, b) => b.totalWins - a.totalWins),
+          graveyard: all.filter((o) => o.seasons.length === 1).sort((a, b) => b.seasons[0] - a.seasons[0]),
+          powerRankings,
+          ownerAwards,
+          canonicalLeagueDebug,
+          allOwners: all.map((o) => ({
+            ownerKey: o.ownerKey,
+            ownerName: o.ownerName,
+            seasons: o.seasons,
+            championships: o.championships,
+          })),
+        },
+        await resolvePremiumAccess(ctx.user),
+        await (async () => {
+          const focal = await resolveCurrentOwner({ id: userId });
+          const seed = (focal.ownerKey || focal.displayName || "").trim();
+          if (!seed) return null;
+          const resolved = resolveOwnerTeamsForProfile(fullRows, seed);
+          return resolved?.profileOwnerKey ?? focal.ownerKey;
+        })(),
+        await (async () => {
+          // Biggest rival — single source of truth (same as the Dashboard / me.ownerHome).
+          // We only resolve the rival's canonical ownerKey here; the gating layer redacts.
+          try {
+            const threat = await computeBiggestThreat(userId);
+            const pair = threat.topRivalryPair;
+            if (!pair) return null;
+            const resolved =
+              (pair.rivalId ? resolveOwnerTeamsForProfile(fullRows, `id:${String(pair.rivalId).trim()}`) : null) ??
+              (pair.rivalName ? resolveOwnerTeamsForProfile(fullRows, String(pair.rivalName).trim()) : null);
+            return resolved?.profileOwnerKey ?? null;
+          } catch {
+            return null;
+          }
+        })(),
+      );
+    }),
+
+    /** Full profile panel: `buildOwnerProfilePayload` in `server/ownerProfileService.ts` (matchup-based RS records). */
+    ownerProfile: publicProcedure
+      .input(
+        z
+          .object({
+            /** Canonical key from `owners.ownerList` (preferred). */
+            ownerKey: z.string().min(1).max(255).optional(),
+            /** Legacy / display fallback — same resolver as `ownerKey` when set. */
+            ownerName: z.string().min(1).max(255).optional(),
+            compareWith: z.string().min(1).max(255).optional(),
+            activeLeagueKey: z.string().optional(),
+            /** Client `getActive` ESPN league id — if set and ≠ server-resolved active league, return a mismatch stub (no profile body). */
+            expectedLeagueId: z.string().min(1).max(64).optional(),
+          })
+          .refine((v) => Boolean((v.ownerKey ?? v.ownerName ?? "").trim()), {
+            message: "ownerKey or ownerName is required",
+            path: ["ownerKey"],
+          }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, undefined,
+        );
+        if (!leagueId) return null;
+        const lid = String(leagueId).trim().slice(0, 32);
+        const expected = input.expectedLeagueId?.trim().slice(0, 32) ?? "";
+        if (expected && expected !== lid) {
+          return { leagueId: lid, ownerProfileLeagueMismatch: true as const };
+        }
+        const db = await getDb();
+        if (!db) return null;
+        const ownerName = (input.ownerKey ?? input.ownerName ?? "").trim();
+        const compareRaw = input.compareWith?.trim() ?? "";
+
+        const allGmRows = await db
+          .select()
+          .from(gmTeams)
+          .where(eqDrizzle(gmTeams.leagueId, lid))
+          .orderBy(ascDrizzle(gmTeams.season), ascDrizzle(gmTeams.teamId));
+
+        const resolvedPrimary = resolveOwnerTeamsForProfile(allGmRows, ownerName);
+        if (!resolvedPrimary) return null;
+        const { profileOwnerKey, ownerTeamRows, identityMerge } = resolvedPrimary;
+
+        // Resolve a human display name for the PRIMARY owner from their most-recent
+        // team-season (teams.ownerName = source of truth, ARCHITECTURE §9.1). The client
+        // sends the canonical ownerKey (`id:{GUID}`) as `ownerName`, so passing it through
+        // unresolved leaks a raw `id:{...}` into the profile summary / displayName. Mirror the
+        // comparison-owner path below, which already resolves a real name before building.
+        const looksLikeOwnerKey = (s: string): boolean =>
+          /^id:/.test(s) ||
+          /^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i.test(s);
+        const primaryDisplayName =
+          ownerTeamRows[ownerTeamRows.length - 1]?.ownerName?.trim() ||
+          (looksLikeOwnerKey(ownerName) ? "Unknown Owner" : ownerName);
+
+        const { allLeagueTeams, teamsBySeason, draftRows, medalRows } = await loadOwnerProfileSharedData({
+          db,
+          leagueId: lid,
+        });
+
+        const approvedAliasRowsForProfile = await db
+          .select({
+            legacyTeamName: ownerAliases.legacyTeamName,
+            resolvedOwnerName: ownerAliases.resolvedOwnerName,
+            status: ownerAliases.status,
+          })
+          .from(ownerAliases)
+          .where(eqDrizzle(ownerAliases.leagueId, lid));
+        const profileAliasLabelToKey = buildApprovedAliasLabelToOwnerKey(allGmRows, approvedAliasRowsForProfile);
+
+        const comparisonOwnerKeys = new Set<string>();
+        const comparisonCandidates: string[] = [];
+        for (const t of allGmRows) {
+          const on = (t.ownerName || "").trim();
+          if (!on) continue;
+          const r = resolveOwnerTeamsForProfile(allGmRows, on);
+          if (!r || r.profileOwnerKey === profileOwnerKey) continue;
+          if (comparisonOwnerKeys.has(r.profileOwnerKey)) continue;
+          comparisonOwnerKeys.add(r.profileOwnerKey);
+          const rep = r.ownerTeamRows[r.ownerTeamRows.length - 1]?.ownerName?.trim() || on;
+          comparisonCandidates.push(rep);
+        }
+        comparisonCandidates.sort((a, b) => a.localeCompare(b));
+
+        const flatRS = await loadFlatRegularSeasonMatchups({ db, leagueId: lid, userId });
+        const intelRows = flatMatchupsToIntelRows(flatRS);
+        const allMatchupRows = intelRows.length > 0 ? intelRows : null;
+
+        const recordPrimary = computeOwnerProfileRecordBundle({
+          profileOwnerKey,
+          ownerTeamRows,
+          allLeagueGmRows: allGmRows,
+          medalRows,
+          flatRegularSeason: flatRS,
+          aliasLabelToKey: profileAliasLabelToKey,
+        });
+
+        const compareResolved = compareRaw ? resolveOwnerTeamsForProfile(allGmRows, compareRaw) : null;
+        const compareOk =
+          compareRaw &&
+          compareResolved &&
+          compareResolved.profileOwnerKey !== profileOwnerKey;
+        const compareName = compareOk
+          ? compareResolved.ownerTeamRows[compareResolved.ownerTeamRows.length - 1]?.ownerName?.trim() ||
+            compareRaw
+          : "";
+
+        let compareTeamRows: typeof ownerTeamRows | null = null;
+        let recordCompare: Awaited<ReturnType<typeof computeOwnerProfileRecordBundle>> | null = null;
+        if (compareName && compareResolved) {
+          compareTeamRows = compareResolved.ownerTeamRows;
+          recordCompare = computeOwnerProfileRecordBundle({
+            profileOwnerKey: compareResolved.profileOwnerKey,
+            ownerTeamRows: compareTeamRows,
+            allLeagueGmRows: allGmRows,
+            medalRows,
+            flatRegularSeason: flatRS,
+            aliasLabelToKey: profileAliasLabelToKey,
+          });
+        }
+
+        const primaryActivityDna = await getActivityDnaForOwner(lid, profileOwnerKey).catch(() => null);
+        const primary = await buildOwnerProfilePayload({
+          db,
+          ownerName: primaryDisplayName,
+          profileOwnerKey,
+          allLeagueGmRows: allGmRows,
+          teamRows: ownerTeamRows,
+          teamsBySeason,
+          draftRows,
+          medalRows,
+          allMatchupRows,
+          recordBundle: recordPrimary,
+          activityDna: primaryActivityDna,
+          identityMerge,
+        });
+
+        let comparison: Awaited<ReturnType<typeof buildOwnerProfilePayload>> | null = null;
+        if (compareName && compareResolved && compareTeamRows?.length && recordCompare) {
+          const compareActivityDna = await getActivityDnaForOwner(lid, compareResolved.profileOwnerKey).catch(() => null);
+          comparison = await buildOwnerProfilePayload({
+            db,
+            ownerName: compareName,
+            profileOwnerKey: compareResolved.profileOwnerKey,
+            allLeagueGmRows: allGmRows,
+            teamRows: compareTeamRows,
+            teamsBySeason,
+            draftRows,
+            medalRows,
+            allMatchupRows,
+            recordBundle: recordCompare,
+          activityDna: compareActivityDna,
+            identityMerge: compareResolved.identityMerge,
+          });
+        }
+
+        const h2hRow = comparison
+          ? primary.matchupIntel.find((m) => m.opponentOwner === compareName)
+          : undefined;
+        const headToHead =
+          comparison && h2hRow
+            ? {
+                games: h2hRow.games,
+                winsForOwner: h2hRow.wins,
+                lossesForOwner: h2hRow.losses,
+                ties: h2hRow.ties,
+                recordVs: `${h2hRow.wins}-${h2hRow.losses}${h2hRow.ties ? `-${h2hRow.ties}` : ""}`,
+              }
+            : comparison
+              ? {
+                  games: 0,
+                  winsForOwner: 0,
+                  lossesForOwner: 0,
+                  ties: 0,
+                  recordVs: "0-0",
+                }
+              : null;
+
+        // Free tier shows two profiles in full — the viewer and their biggest
+        // rival (same rival source as the Dashboard). Everyone else stays locked.
+        const focalOwner = await resolveCurrentOwner(ctx.user);
+        const viewerSeed = (focalOwner.ownerKey || focalOwner.displayName || "").trim();
+        const viewerResolved = viewerSeed ? resolveOwnerTeamsForProfile(allGmRows, viewerSeed) : null;
+        const viewerOwnerKey = viewerResolved?.profileOwnerKey ?? null;
+        const rivalOwnerKey = await (async () => {
+          try {
+            const threat = await computeBiggestThreat(userId);
+            const pair = threat.topRivalryPair;
+            if (!pair) return null;
+            const resolved =
+              (pair.rivalId ? resolveOwnerTeamsForProfile(allGmRows, `id:${String(pair.rivalId).trim()}`) : null) ??
+              (pair.rivalName ? resolveOwnerTeamsForProfile(allGmRows, String(pair.rivalName).trim()) : null);
+            return resolved?.profileOwnerKey ?? null;
+          } catch {
+            return null;
+          }
+        })();
+
+        return gateOwnerProfile(
+          {
+            leagueId: lid,
+            ...primary,
+            comparisonCandidates,
+            comparison,
+            headToHead,
+          },
+          await resolvePremiumAccess(ctx.user),
+          profileOwnerKey,
+          viewerOwnerKey,
+          rivalOwnerKey,
+        );
+      }),
+
+    /** Rivalry Dossier: focal owner vs opponents from completed `gmMatchups` (RS + playoffs), canonical ownerKey. */
+    rivalryDossier: publicProcedure
+      .input(
+        z.object({
+          ownerKey: z.string().min(1).max(255),
+          includeHistoricalOwners: z.boolean().optional().default(false),
+          /** When `includeHistoricalOwners` is false, opponents are limited to this set (default rivalry eligibility). */
+          rivalryEligibleOwnerKeys: z.array(z.string().min(1).max(255)).optional(),
+          /** When set, `pairDetail` is populated for this opponent only. */
+          opponentOwnerKeyForPair: z.string().min(1).max(255).optional(),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const userId = ctx.user?.id ?? 0;
+        if (!userId) return null;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: userId } }, null, undefined,
+        );
+        if (!leagueId) return null;
+        const lid = leagueId;
+        const db = await getDb();
+        if (!db) return null;
+        const includeHistoricalOwners = input.includeHistoricalOwners === true;
+        const activeFilter =
+          includeHistoricalOwners || !input.rivalryEligibleOwnerKeys?.length
+            ? null
+            : new Set(input.rivalryEligibleOwnerKeys.map((k) => k.trim()).filter(Boolean));
+        const dossier = await loadRivalryDossier({
+          db,
+          leagueId: lid,
+          ownerKey: input.ownerKey.trim(),
+          includeHistoricalOwners,
+          activeOwnerKeysInSeason: activeFilter,
+          opponentOwnerKeyForPair: input.opponentOwnerKeyForPair?.trim() || null,
+        });
+        if (!dossier) return dossier;
+        return gateRivalryDossier(dossier, await resolvePremiumAccess(ctx.user));
+      }),
+
+  }),
+
+
   // ── DRAFT OPTIMIZER ──────────────────────────────────────────────────────────
   draftOptimizer: protectedProcedure
     .input(z.object({
@@ -5890,8 +12834,8 @@ if (pickOrder.length > 0) {
       draftSlot: z.number().optional().default(11),
       weeksRemaining: z.number().optional().default(10),
     }))
-    .query(async ({ input }) => {
-      const data = await getSeasonData(input.season);
+    .query(async ({ ctx, input }) => {
+      const data = await getSeasonData(input.season, undefined, ctx.user?.id);
       if (!data) throw new TRPCError({ code: "NOT_FOUND", message: "No data for season. Sync ESPN first." });
       const rosters = normalizeRosters(data) as Record<string, unknown>[];
       const teams = normalizeTeams(data);
@@ -5912,7 +12856,13 @@ if (pickOrder.length > 0) {
         appliedStats: {},
       }));
       const draftPicks = normalizeDraftPicks(data) as Record<string, unknown>[];
-      const keeperPlayerIds = new Set(draftPicks.filter(p => p.keeper === true).map(p => p.playerId as number));
+      // Open draft pool: exclude anyone occupying a **keeperSlot** (ESPN keeper or retained), not `keeper` alone.
+      const keeperPlayerIds = new Set(
+        draftPicks
+          .filter((p) => isDraftKeeperSlotPick(p))
+          .map((p) => p.playerId as number)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
       const availablePlayers = allPlayers.filter(p => !keeperPlayerIds.has(p.playerId));
       const removedKeepers = allPlayers.filter(p => keeperPlayerIds.has(p.playerId)).map(p => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, ownerName: p.ownerName, avgPoints: p.avgPoints }));
       const vorpResults = calcVORP(availablePlayers);
@@ -5946,12 +12896,23 @@ if (pickOrder.length > 0) {
         tieredBoard[pos] = tiers;
       }
       const scarcePositions = scarcityResults.filter(s => s.scarcityScore >= 60).map(s => ({ position: s.position, scarcityScore: s.scarcityScore, scarcityLabel: s.scarcityLabel, topFreeAgentAvg: s.topFreeAgentAvg, alert: s.scarcityScore >= 80 ? `Only ${s.availableStarters} ${s.position} starter slots remain unclaimed` : `${s.position} depth is thinning — ${s.availableStarters} quality starters available` }));
-      const TEAMS = 14;
+      const { calcPickValue } = await import("./analytics");
+      const { leagueId: optLeagueId } = await resolveActiveLeagueId({ user: ctx.user }, undefined, input.season);
+      const optGeo =
+        optLeagueId != null
+          ? await resolveKeeperDraftGeometryForSeason(optLeagueId, input.season, ctx.user?.id, data as Record<string, unknown>)
+          : null;
+      const TEAMS = optGeo && optGeo.teamCount > 0 ? optGeo.teamCount : teams.length;
+      if (TEAMS > 0 && input.draftSlot > TEAMS) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `draftSlot must be 1..${TEAMS} for this league` });
+      }
+      const totalRounds =
+        optGeo && optGeo.roundCount > 0 ? optGeo.roundCount : TEAMS > 0 ? Math.max(1, Math.ceil(draftPicks.length / TEAMS)) : 1;
       const rodRecommendations: { round: number; pickInRound: number; overallPick: number; pickValue: number; recommendation: string; topAvailable: { playerName: string; position: string; compositeScore: number; }[]; }[] = [];
-      for (let round = 1; round <= 14; round++) {
+      for (let round = 1; round <= totalRounds; round++) {
         const pickInRound = round % 2 === 1 ? input.draftSlot : (TEAMS + 1 - input.draftSlot);
-        const overallPick = (round - 1) * TEAMS + pickInRound;
-        const pickValue = calcPickValue(round, pickInRound);
+        const overallPick = snakeOverallPick(TEAMS, round, pickInRound);
+        const pickValue = TEAMS > 0 ? calcPickValue(round, pickInRound, TEAMS) : 0;
         const targetPos = round <= 3 ? ["RB", "WR"] : round <= 5 ? ["WR", "RB", "TE"] : round <= 8 ? ["QB", "WR", "RB"] : ["RB", "WR", "TE", "QB"];
         const stillAvailable = enriched.filter(p => targetPos.includes(p.position)).slice(overallPick - 1, overallPick + 4);
         const rec = round === 1 ? "Priority: elite RB or WR — do not reach for QB or TE" : round === 2 ? "Fill the opposite of Round 1 — RB/WR balance is critical" : round <= 4 ? "Target TE if elite option fell, otherwise best RB/WR on board" : round <= 7 ? "QB window opens here — mid-tier QBs score similarly in PPR" : round <= 10 ? "Handcuffs, upside sleepers, depth RBs" : "K and DEF in rounds 13-14 only — never earlier";
@@ -5959,7 +12920,13 @@ if (pickOrder.length > 0) {
       }
       const positionCounts: Record<string, number> = {};
       for (const p of availablePlayers) positionCounts[p.position] = (positionCounts[p.position] || 0) + 1;
-      return { season: input.season, draftSlot: input.draftSlot, computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
+      return {
+        season: input.season,
+        draftSlot: input.draftSlot,
+        teamCount: TEAMS,
+        roundCount: totalRounds,
+        draftSlotCount: TEAMS > 0 ? TEAMS * totalRounds : 0,
+        computedAt: new Date().toISOString(), totalAvailable: availablePlayers.length, removedKeepers, keeperCount: removedKeepers.length, tieredBoard, scarcePositions, rodRecommendations, scarcityResults, positionCounts };
     }),
   // ── WEEKLY STATS ─────────────────────────────────────────────────────────────
   weeklyStats: router({
@@ -6187,27 +13154,34 @@ if (pickOrder.length > 0) {
      * Mock draft setup — returns all league owners with DNA, keeper recs, and draft order.
      * Used by MockDraftSimulator to pre-populate the setup screen.
      */
-    mockSetup: publicProcedure.query(async () => {
+    mockSetup: publicProcedure.query(async ({ ctx }) => {
       const { calcLeagueDNA } = await import("./leagueDNA");
       const { buildManagerRawData } = await import("./dnaRouter");
       const { buildKeeperRecommendations } = await import("./keeperRecommendationEngine");
-      const cachedSeasons = (await getAllCachedSeasons()).sort((a: number, b: number) => a - b);
+      const cachedSeasons = (await getAllCachedSeasons(undefined, ctx.user?.id ?? undefined)).sort((a: number, b: number) => a - b);
       if (cachedSeasons.length === 0) return { owners: [], totalTeams: 0 };
       const latestSeason = cachedSeasons[cachedSeasons.length - 1];
-      const data2025 = await getSeasonData(latestSeason);
+      const data2025 = await getSeasonData(latestSeason, undefined, ctx.user?.id);
       if (!data2025) return { owners: [], totalTeams: 0 };
       // 1. Draft order
       const draftOrderRaw = normalizeDraftOrder(data2025);
       const pickOrder = draftOrderRaw?.pickOrder ?? [];
       const totalTeams = pickOrder.length || 14;
       // 2. DNA profiles
-      const managers = await buildManagerRawData();
-      const dnaProfiles = calcLeagueDNA(managers);
+      const managers = await buildManagerRawData(ctx.user?.id);
+      const { resolveLeaguePromptContext } = await import("./leaguePromptContext");
+      const mockPromptCtx = await resolveLeaguePromptContext(ctx.user?.id, latestSeason);
+      const focalH2hLabelMock = mockPromptCtx.focalOwnerName?.trim() || "the focal manager";
+      const dnaProfiles = calcLeagueDNA(managers, focalH2hLabelMock);
+      // Resolve focal owner for isFocalOwner flag
+      const coDraft = ctx.user?.id ? await resolveCurrentOwner({ id: ctx.user.id }) : null;
+      const focalMemberId = coDraft?.isSetupComplete ? coDraft.ownerId : null;
       // 3. Keeper eligibility
       const keepers2025: Record<number, Array<{ playerId: number; playerName: string; position: string; roundId: number }>> = {};
       const data2025picks = normalizeDraftPicks(data2025);
-      for (const p of data2025picks) {
-        if (!p.keeper) continue;
+      for (const pick of data2025picks) {
+        const p = pick as Record<string, unknown>;
+        if (!isDraftKeeperSlotPick(p)) continue;
         const tid = p.teamId as number;
         const pid = p.playerId as number;
         if (!keepers2025[tid]) keepers2025[tid] = [];
@@ -6221,11 +13195,12 @@ if (pickOrder.length > 0) {
       const prevSeason = latestSeason - 1;
       const keepers2024: Record<number, Record<number, number>> = {};
       if (cachedSeasons.includes(prevSeason)) {
-        const data2024 = await getSeasonData(prevSeason);
+        const data2024 = await getSeasonData(prevSeason, undefined, ctx.user?.id);
         if (data2024) {
           const picks2024 = normalizeDraftPicks(data2024);
-          for (const p of picks2024) {
-            if (!p.keeper) continue;
+          for (const pick of picks2024) {
+            const p = pick as Record<string, unknown>;
+            if (!isDraftKeeperSlotPick(p)) continue;
             const tid = p.teamId as number;
             const pid = p.playerId as number;
             if (!keepers2024[tid]) keepers2024[tid] = {};
@@ -6272,15 +13247,19 @@ if (pickOrder.length > 0) {
           d.ownerName && ownerName.toLowerCase().includes(d.ownerName.toLowerCase().split(" ")[0].toLowerCase())
         ) ?? null;
         const rec = keeperRecs.find(r => r.teamId === tid) ?? null;
-        const isRod = teamName.toLowerCase().includes("str8") ||
-          teamName.toLowerCase().includes("rodzilla") ||
-          ownerName.toLowerCase().includes("rod");
+        // Determine if this slot belongs to the authenticated user's team via profile.
+        // Fall back to false if no profile is configured.
+        const teamMembers = (normalizeDraftOrder(data2025)?.pickOrder ?? []).find(s => s.teamId === tid);
+        const isFocalOwner = focalMemberId != null && (
+          (teamMembers as Record<string,unknown>)?.primaryOwner === focalMemberId ||
+          ownerName.toLowerCase().includes((focalMemberId ?? "").toLowerCase().slice(0, 4))
+        );
         return {
           teamId: tid,
           teamName,
           ownerName,
           draftSlot: slot.position,
-          isRod,
+          isFocalOwner,
           gmArchetype: dna?.gmArchetype ?? "Balanced Manager",
           draftStyleBadge: dna?.draft.draftStyleBadge ?? "Balanced",
           reachPositions: dna?.draft.reachPositions ?? [] as string[],
@@ -6529,7 +13508,7 @@ if (pickOrder.length > 0) {
     /** Get draft history for a player across all seasons — which owners drafted them, what round/year */
     getPlayerDraftHistory: publicProcedure
       .input(z.object({ playerName: z.string().min(2) }))
-      .query(async ({ input }) => {
+      .query(async ({ ctx, input }) => {
         const seasons = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
         const normInput = input.playerName.toLowerCase().replace(/[*+'.,]/g, "").trim();
         const nameParts = normInput.split(" ").filter(Boolean);
@@ -6544,9 +13523,9 @@ if (pickOrder.length > 0) {
         for (const season of seasons) {
           try {
             const [draftRow, teamsRow, membersRow] = await Promise.all([
-              getCachedView(season, "draftDetail"),
-              getCachedView(season, "teams"),
-              getCachedView(season, "members"),
+              getCachedView(season, "draftDetail", undefined, { userId: ctx.user?.id }),
+              getCachedView(season, "teams", undefined, { userId: ctx.user?.id }),
+              getCachedView(season, "members", undefined, { userId: ctx.user?.id }),
             ]);
             if (!draftRow || !teamsRow || !membersRow) continue;
             const draftPayload = draftRow.payload as Record<string, unknown>;

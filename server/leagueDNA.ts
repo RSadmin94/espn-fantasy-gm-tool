@@ -6,6 +6,10 @@
  * No public tool can replicate this — it's built entirely from your private
  * league's actual history.
  *
+ * Draft tendency math (Phase 3C): uses `draftedForAnalytics === true` only
+ * (open-draft picks). Keeper / retained / full board slots are tracked separately
+ * for dynasty-style metrics (`keeperRate` = keeper slots / board slots).
+ *
  * Exports:
  *   calcManagerDNA()          — full behavioral profile per manager
  *   calcExploitabilityScores()— quantified exploit windows per opponent
@@ -19,10 +23,13 @@
  *   and into the GM Advisor system prompt via buildDNAPromptBlock().
  */
 
+import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
+
 // ─── Input types (from ESPN cache / ownerCareerStats) ────────────────────────
 
 export interface SeasonRecord {
   season: number;
+  teamName?: string;
   wins: number;
   losses: number;
   ties: number;
@@ -44,7 +51,28 @@ export interface DraftPickRecord {
   season: number;
   roundId: number;
   position: string;
+  /** ESPN keeper flag on the slot (strict keeper designation when true). */
   keeper: boolean;
+  /** When set, `draftedForAnalytics` / `keeperSlot` / `retained` from DraftTruth (preferred). */
+  draftedForAnalytics?: boolean;
+  keeperSlot?: boolean;
+  retained?: boolean;
+  reservedForKeeper?: boolean;
+}
+
+function openAnalyticsPick(p: DraftPickRecord): boolean {
+  if (typeof p.draftedForAnalytics === "boolean") return p.draftedForAnalytics;
+  return classifyEspnDraftSlot(p.keeper, p.reservedForKeeper).draftedForAnalytics;
+}
+
+function keeperSlotPick(p: DraftPickRecord): boolean {
+  if (typeof p.keeperSlot === "boolean") return p.keeperSlot;
+  return classifyEspnDraftSlot(p.keeper, p.reservedForKeeper).keeperSlot;
+}
+
+function retainedSlotPick(p: DraftPickRecord): boolean {
+  if (typeof p.retained === "boolean") return p.retained;
+  return classifyEspnDraftSlot(p.keeper, p.reservedForKeeper).retained;
 }
 
 export interface ManagerRawData {
@@ -84,6 +112,14 @@ export interface DraftDNA {
   reachPositions: string[];
   /** Positions they historically find value at (drafts 1.5+ rounds late) */
   valuePositions: string[];
+  /** All draft-board slots in sample (open + keeper + retained). */
+  boardSlotCount: number;
+  /** Open-draft selections only (same basis as avg rounds / bias). */
+  draftedPickCount: number;
+  /** Keeper + retained slots (board minus open-draft). */
+  keeperSlotCount: number;
+  /** Retained-only slots (`reservedForKeeper` without strict keeper). */
+  retainedSlotCount: number;
 }
 
 export interface TradeDNA {
@@ -143,12 +179,12 @@ export interface ManagerDNA {
 // ─── League-wide position average helper ─────────────────────────────────────
 
 function calcLeagueAvgRoundByPosition(
-  allPicks: Array<{ position: string; roundId: number; keeper: boolean }>
+  allPicks: Array<DraftPickRecord>
 ): Record<string, number> {
   const positions = ["QB", "RB", "WR", "TE"];
   const result: Record<string, number> = {};
   for (const pos of positions) {
-    const picks = allPicks.filter(p => p.position === pos && !p.keeper);
+    const picks = allPicks.filter(p => p.position === pos && openAnalyticsPick(p));
     result[pos] = picks.length > 0
       ? Math.round((picks.reduce((s, p) => s + p.roundId, 0) / picks.length) * 10) / 10
       : 7.0;
@@ -169,15 +205,16 @@ function calcDraftDNA(
   const reachPositions: string[] = [];
   const valuePositions: string[] = [];
 
-  const nonKeeperPicks = picks.filter(p => !p.keeper);
-  const totalPicks = nonKeeperPicks.length;
-  const keeperPicks = picks.filter(p => p.keeper).length;
-  const keeperRate = totalPicks + keeperPicks > 0
-    ? Math.round((keeperPicks / (totalPicks + keeperPicks)) * 100)
-    : 0;
+  const boardSlotCount = picks.length;
+  const openPicks = picks.filter(openAnalyticsPick);
+  const draftedPickCount = openPicks.length;
+  const keeperSlotCount = picks.filter(keeperSlotPick).length;
+  const retainedSlotCount = picks.filter(retainedSlotPick).length;
+  const keeperRate =
+    boardSlotCount > 0 ? Math.round((keeperSlotCount / boardSlotCount) * 100) : 0;
 
   for (const pos of positions) {
-    const posPicks = nonKeeperPicks.filter(p => p.position === pos);
+    const posPicks = openPicks.filter(p => p.position === pos);
     if (posPicks.length === 0) continue;
     const avg = Math.round((posPicks.reduce((s, p) => s + p.roundId, 0) / posPicks.length) * 10) / 10;
     avgRoundByPosition[pos] = avg;
@@ -214,6 +251,10 @@ function calcDraftDNA(
     draftStyleBadge,
     reachPositions,
     valuePositions,
+    boardSlotCount,
+    draftedPickCount,
+    keeperSlotCount,
+    retainedSlotCount,
   };
 }
 
@@ -347,7 +388,9 @@ function buildExploitWindows(
   draft: DraftDNA,
   trade: TradeDNA,
   waiver: WaiverDNA,
-  tilt: TiltProfile
+  tilt: TiltProfile,
+  /** Display name for the profiled user's focal manager (H2H counterparty in raw data). */
+  focalH2hLabel: string,
 ): string[] {
   const windows: string[] = [];
 
@@ -376,7 +419,7 @@ function buildExploitWindows(
 
   // H2H advantage
   if (trade.h2hVsRod.losses > trade.h2hVsRod.wins && trade.h2hVsRod.losses >= 2) {
-    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs Rod head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
+    windows.push(`${ownerName} is ${trade.h2hVsRod.losses}-${trade.h2hVsRod.wins} vs ${focalH2hLabel} head-to-head — psychological edge. They may concede value in trades to avoid conflict.`);
   }
 
   // Keeper rate exploit
@@ -397,7 +440,8 @@ function buildExploitWindows(
  */
 export function calcManagerDNA(
   manager: ManagerRawData,
-  allLeaguePicks: DraftPickRecord[]
+  allLeaguePicks: DraftPickRecord[],
+  focalH2hLabel = "the focal manager",
 ): ManagerDNA {
   const leagueAvgByPos = calcLeagueAvgRoundByPosition(allLeaguePicks);
 
@@ -431,7 +475,7 @@ export function calcManagerDNA(
     "Shark";
 
   const exploitWindows = buildExploitWindows(
-    manager.ownerName, draft, trade, waiver, tilt
+    manager.ownerName, draft, trade, waiver, tilt, focalH2hLabel
   );
 
   // Plain-English DNA summary for AI prompt injection
@@ -447,7 +491,7 @@ export function calcManagerDNA(
     `Draft: ${draft.draftStyleBadge}${biasLines.length > 0 ? ` (${biasLines.join(", ")})` : ""}`,
     `Trades: ${trade.avgTradesPerSeason}/season | Loss-trade ratio: ${trade.lossTradeRatio.toFixed(2)}x${tilt.tiltLabel !== "Ice Cold" ? ` | Tilt: ${tilt.tiltLabel}` : ""}`,
     `Waiver: ${waiver.avgAcquisitionsPerSeason}/season | Aggression: ${waiver.waiverAggression}/100`,
-    `H2H vs Rod: ${trade.h2hVsRod.wins}W-${trade.h2hVsRod.losses}L`,
+    `H2H vs ${focalH2hLabel}: ${trade.h2hVsRod.wins}W-${trade.h2hVsRod.losses}L`,
     `Exploitability: ${exploitabilityScore}/100 (${exploitabilityLabel})`,
     exploitWindows.length > 0 ? `Top exploit: ${exploitWindows[0]}` : "",
   ].filter(Boolean).join("\n  ");
@@ -577,11 +621,12 @@ export function calcTradeDesperationScore(
 // ─── Batch calculation ────────────────────────────────────────────────────────
 
 export function calcLeagueDNA(
-  managers: ManagerRawData[]
+  managers: ManagerRawData[],
+  focalH2hLabel = "the focal manager",
 ): ManagerDNA[] {
   // Collect all draft picks for league-wide average calculation
   const allLeaguePicks: DraftPickRecord[] = managers.flatMap(m => m.draftPicks);
-  return managers.map(m => calcManagerDNA(m, allLeaguePicks))
+  return managers.map(m => calcManagerDNA(m, allLeaguePicks, focalH2hLabel))
     .sort((a, b) => b.exploitabilityScore - a.exploitabilityScore);
 }
 
