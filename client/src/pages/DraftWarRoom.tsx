@@ -20,6 +20,12 @@ import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
 import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
 import {
+  buildFormatProfile,
+  computeLeagueGrades,
+  toLegacyDraftGrades,
+  type LeagueGradeState,
+} from "@/lib/liveDraftGrade";
+import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
   ShieldCheck, TrendingUp, Activity, ArrowUpRight, ArrowDownRight,
@@ -532,12 +538,25 @@ interface KeeperOverride {
   keeperRound: number;
 }
 
+type LiveGradeFormatPayload = {
+  softCap?: Record<string, number>;
+  hardCap?: Record<string, number>;
+  starters?: Record<string, number>;
+  benchSlots?: number;
+  irSlots?: number;
+  superflexSlots?: number;
+  source?: string;
+};
+
 // ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
 function LiveDraftEngine({
   picks, teams, availablePool, positionCaps,
+  lineupReqs, gradeFormat,
   leagueId, draftId,
 }: {
   picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null;
+  lineupReqs?: Record<string, number> | null;
+  gradeFormat?: LiveGradeFormatPayload | null;
   leagueId?: string | null;
   draftId: string;
 }) {
@@ -669,34 +688,65 @@ function LiveDraftEngine({
     return m;
   }, [schedule, results]);
 
-  // Draft grades (A–F) per team: value captured (players landed later than their ADP = steals,
-  // vs reaches) blended with roster strength (avg market value of who they drafted). Scored 0–1
-  // then graded on a curve relative to the rest of the league. Drafted players only (not keepers).
-  const draftGrades = useMemo(() => {
-    const raw = new Map<number, { score: number; avgDelta: number; strength: number; n: number }>();
-    for (const [tid, roster] of rostersByTeam) {
-      const drafted = roster.filter((r: any) => !r.isKeeper && r.marketValue != null);
-      const withAdp = drafted.filter((r: any) => r.adp != null);
-      const avgDelta = withAdp.length
-        ? withAdp.reduce((s: number, r: any) => s + (Number(r.pickNumber) - Number(r.adp)), 0) / withAdp.length
-        : 0;
-      const strength = drafted.length
-        ? drafted.reduce((s: number, r: any) => s + Number(r.marketValue || 0), 0) / drafted.length
-        : 0;
-      const valueScore = Math.max(0, Math.min(1, 0.5 + avgDelta / 50));
-      const strengthScore = Math.max(0, Math.min(1, strength / 100));
-      raw.set(tid, { score: 0.5 * valueScore + 0.5 * strengthScore, avgDelta, strength, n: drafted.length });
-    }
-    const ranked = [...raw.entries()].sort((a, b) => b[1].score - a[1].score);
-    const total = ranked.length || 1;
-    const out = new Map<number, { letter: string; avgDelta: number; strength: number }>();
-    ranked.forEach(([tid, v], i) => {
-      const p = i / total;
-      const letter = v.n < 3 ? "—" : p < 0.14 ? "A" : p < 0.36 ? "B" : p < 0.68 ? "C" : p < 0.90 ? "D" : "F";
-      out.set(tid, { letter, avgDelta: v.avgDelta, strength: v.strength });
+  // Progressive draft-management grades (configurable pillars + OC + floors + EMA).
+  const formatProfile = useMemo(() => {
+    const startersIn = gradeFormat?.starters ?? {};
+    const mappedReqs = lineupReqs ?? {
+      QB: Number(startersIn.QB ?? 1),
+      RB: Number(startersIn.RB ?? 2),
+      WR: Number(startersIn.WR ?? 2),
+      TE: Number(startersIn.TE ?? 1),
+      FLEX: Number(startersIn.FLEX ?? 1),
+      K: Number(startersIn.K ?? 0),
+      DEF: Number(startersIn.DEF ?? startersIn.DST ?? 0),
+      DP: Number(startersIn.DP ?? 0),
+    };
+    return buildFormatProfile({
+      leagueId,
+      lineupReqs: mappedReqs,
+      softCap: gradeFormat?.softCap ?? null,
+      hardCap: gradeFormat?.hardCap ?? positionCaps,
+      positionCaps,
+      benchSlots: gradeFormat?.benchSlots ?? null,
+      irSlots: gradeFormat?.irSlots ?? null,
+      superflexSlots: gradeFormat?.superflexSlots ?? null,
     });
-    return out;
-  }, [rostersByTeam]);
+  }, [leagueId, lineupReqs, gradeFormat, positionCaps]);
+
+  const gradePrevRef = useRef<LeagueGradeState | null>(null);
+  useEffect(() => {
+    gradePrevRef.current = null;
+  }, [scheduleSig]);
+
+  const totalNonKeeperPicks = useMemo(
+    () => schedule.filter((s: any) => !s.isKeeperSlot).length || schedule.length || 1,
+    [schedule],
+  );
+  const lastLockedOverallPick = useMemo(() => {
+    let max = 0;
+    for (const [n, r] of Object.entries(results)) {
+      if (!r || (r as any).isKeeper) continue;
+      const pn = Number(n);
+      if (pn > max) max = pn;
+    }
+    return max;
+  }, [results]);
+
+  const gradeState = useMemo(() => {
+    return computeLeagueGrades({
+      rostersByTeam,
+      profile: formatProfile,
+      lastLockedOverallPick,
+      totalNonKeeperPicks,
+      previous: gradePrevRef.current,
+    });
+  }, [rostersByTeam, formatProfile, lastLockedOverallPick, totalNonKeeperPicks]);
+
+  useEffect(() => {
+    gradePrevRef.current = gradeState;
+  }, [gradeState]);
+
+  const draftGrades = useMemo(() => toLegacyDraftGrades(gradeState), [gradeState]);
 
   const slot = schedule[idx];
   const done = idx >= schedule.length;
@@ -1019,9 +1069,23 @@ function LiveDraftEngine({
                       title="Manually control this team"
                     />
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
-                    {grade && grade.letter !== "—" && (
+                    {grade && grade.letter !== "—" && (() => {
+                      const snap = gradeState.byTeam.get(tid);
+                      const reason = snap?.lastChange?.reasons?.[0];
+                      const title = snap
+                        ? [
+                            `Draft management ${snap.letter} (${snap.smoothedScore.toFixed(0)})`,
+                            `Pick Value ${snap.pickValue.toFixed(0)}`,
+                            `Talent ${snap.talent.toFixed(0)}`,
+                            `Construction ${snap.construction.toFixed(0)}`,
+                            `Lineup & Depth ${snap.lineupDepth.toFixed(0)}`,
+                            `Opportunity Cost −${snap.opportunityCost.toFixed(0)}`,
+                            reason ? `Reason: ${reason}` : null,
+                          ].filter(Boolean).join(" — ")
+                        : `Draft grade ${grade.letter}`;
+                      return (
                       <span
-                        title={`Draft grade ${grade.letter} — ${grade.avgDelta >= 0 ? "+" : ""}${grade.avgDelta.toFixed(0)} avg value vs ADP, ${grade.strength.toFixed(0)}/100 avg talent`}
+                        title={title}
                         className={cn("text-[10px] font-black px-1.5 rounded border shrink-0",
                           grade.letter === "A" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" :
                           grade.letter === "B" ? "text-lime-300 bg-lime-500/15 border-lime-500/30" :
@@ -1030,7 +1094,8 @@ function LiveDraftEngine({
                           "text-red-300 bg-red-500/15 border-red-500/30")}>
                         {grade.letter}
                       </span>
-                    )}
+                      );
+                    })()}
                     {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
                     <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
                   </div>
@@ -1119,13 +1184,16 @@ function SoulsBoardView({ board }: {
 }
 
 function MockDraftBoard({
-  picks, teams, availablePool, positionCaps, keeperPredictions, rosterNeeds,
+  picks, teams, availablePool, positionCaps, lineupReqs, gradeFormat,
+  keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
   leagueId, draftId,
 }: {
   picks: any[]; teams: any[];
   availablePool: any[];
   positionCaps: Record<string, number> | null;
+  lineupReqs?: Record<string, number> | null;
+  gradeFormat?: LiveGradeFormatPayload | null;
   keeperPredictions: any[];
   rosterNeeds: any[];
   onKeeperOverride: (overrides: KeeperOverride[]) => void;
@@ -1398,6 +1466,8 @@ function MockDraftBoard({
           teams={teams}
           availablePool={availablePool}
           positionCaps={positionCaps}
+          lineupReqs={lineupReqs}
+          gradeFormat={gradeFormat}
           leagueId={leagueId}
           draftId={draftId}
         />
@@ -2111,6 +2181,8 @@ export function DraftWarRoom() {
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName, ownerName: n.ownerName }))}
             availablePool={data?.availablePool ?? []}
             positionCaps={data?.positionCaps ?? null}
+            lineupReqs={(data as any)?.lineupReqs ?? null}
+            gradeFormat={(data as any)?.gradeFormat ?? null}
             keeperPredictions={keeperPredictions ?? []}
             rosterNeeds={rosterNeeds ?? []}
             keeperOverrides={keeperOverrides}

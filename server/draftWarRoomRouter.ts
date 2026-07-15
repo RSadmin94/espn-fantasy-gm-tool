@@ -1620,10 +1620,12 @@ export const draftWarRoomRouter = router({
       // League-driven position caps for the interactive Live Draft — derived from THIS league's real
       // lineup settings (superflex-aware via ESPN slot 7 → QB depth), so Superflex/2-QB and unusual
       // rosters fit. Positions the league doesn't roster are capped at 0.
-      const _hardCap = rosterRulesFromLineupSlotCounts({
+      const lineupSlotCounts = (payload as any)?.settings?.rosterSettings?.lineupSlotCounts;
+      const rosterRules = rosterRulesFromLineupSlotCounts({
         leagueId: String(leagueId),
-        lineupSlotCounts: (payload as any)?.settings?.rosterSettings?.lineupSlotCounts,
-      }).hardCap;
+        lineupSlotCounts,
+      });
+      const _hardCap = rosterRules.hardCap;
       const positionCaps: Record<string, number> = {
         QB: _hardCap.QB ?? 2,
         RB: _hardCap.RB ?? 6,
@@ -1633,11 +1635,23 @@ export const draftWarRoomRouter = router({
         DEF: (leagueReqs.DEF ?? 0) > 0 ? Math.max(1, leagueReqs.DEF ?? 0) : 0,
         DP: (leagueReqs.DP ?? 0) > 0 ? (_hardCap.DP ?? 2) : 0,
       };
+      const superflexSlots = Number((lineupSlotCounts as Record<string, unknown> | null)?.["7"] ?? 0) || 0;
 
       return {
         ok: true, season,
         leagueCapabilities,
         positionCaps,
+        /** Starter requirements + caps for progressive live draft grades */
+        lineupReqs: leagueReqs,
+        gradeFormat: {
+          softCap: rosterRules.softCap,
+          hardCap: rosterRules.hardCap,
+          starters: rosterRules.starters,
+          benchSlots: rosterRules.benchSlots,
+          irSlots: rosterRules.irSlots,
+          superflexSlots,
+          source: rosterRules.source,
+        },
         teamCount: teams.length,
         draftBoardSummary,
         keeperPredictions,
