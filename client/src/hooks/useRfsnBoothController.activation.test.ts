@@ -295,6 +295,41 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.activeCard?.text).toBe("Corrected line.");
   });
 
+  it("[11b] a new pick while audio is playing waits for speech before switching frames", () => {
+    let playing = false;
+    const audio = mockAudio({ isPlaying: () => playing });
+    const first: RfsnCommentaryCard = {
+      id: "c-9",
+      commentator: "coach",
+      label: "ROLE",
+      text: "First pick line that is still being spoken.",
+    };
+    const second: RfsnCommentaryCard = {
+      id: "s-10",
+      commentator: "sofia",
+      label: "ROLE",
+      text: "Next pick commentary.",
+    };
+    const { result, rerender } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: first }) },
+    );
+    settle();
+    expect(result.current.activeCard?.text).toBe(first.text);
+    playing = true;
+    (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
+    rerender(snap({ pick: "10.01", primary: second }));
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(audio.onSnapshotChange).not.toHaveBeenCalled();
+    expect(audio.stopCurrent).not.toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe(first.text);
+    playing = false;
+    act(() => vi.advanceTimersByTime(600));
+    settle();
+    expect(audio.onSnapshotChange).toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe(second.text);
+  });
+
   it("[12] ticker growth on poll does NOT reset the active speaker", () => {
     const audio = mockAudio();
     const primary = mkCard("coach", "c-9");

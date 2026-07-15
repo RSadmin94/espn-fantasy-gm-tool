@@ -27,7 +27,6 @@ export const BOOTH_EXIT_MS = 450;
 export const BOOTH_BETWEEN_SPEAKERS_MS = 400;
 export const BOOTH_DISMISS_MS = 400;
 export const BOOTH_MIN_DISPLAY_MS = 3000;
-export const BOOTH_MAX_DISPLAY_MS = 12000;
 export const BOOTH_MS_PER_CHAR = 50;
 
 export const BOOTH_INACTIVE_OPACITY = 0.72;
@@ -69,8 +68,10 @@ export function boothPortraitMinHeight(
 
 export function commentaryDisplayMs(text: string, reducedMotion = false): number {
   if (reducedMotion) return BOOTH_MIN_DISPLAY_MS;
+  // No max clamp — long spoken lines stay on screen for their natural length.
+  // Booth advance still waits on audio.isPlaying before leaving a card.
   const byLength = text.length * BOOTH_MS_PER_CHAR;
-  return Math.min(BOOTH_MAX_DISPLAY_MS, Math.max(BOOTH_MIN_DISPLAY_MS, byLength));
+  return Math.max(BOOTH_MIN_DISPLAY_MS, byLength);
 }
 
 function commentaryKey(card: Pick<RfsnCommentaryCard, "commentator" | "text" | "id">): string {

@@ -3,7 +3,6 @@
  */
 import type { RfsnCommentatorId } from "../../../client/src/lib/rfsnPresentation";
 
-export const RFSN_TTS_MAX_TEXT_LENGTH = 500;
 export const RFSN_TTS_SUPPORTED_VOICES: readonly RfsnCommentatorId[] = ["sofia", "coach", "roxanne"];
 
 /** Default disabled — must be explicitly set to "true". */
@@ -21,9 +20,10 @@ export function getRfsnTtsServiceToken(): string | null {
   return raw || null;
 }
 
+/** Longer default so full (untruncated) commentary can synthesize before timeout. */
 export function getRfsnTtsTimeoutMs(): number {
-  const raw = Number(process.env.RFSN_TTS_TIMEOUT_MS ?? "5000");
-  return Number.isFinite(raw) && raw > 0 ? raw : 5000;
+  const raw = Number(process.env.RFSN_TTS_TIMEOUT_MS ?? "30000");
+  return Number.isFinite(raw) && raw > 0 ? raw : 30000;
 }
 
 /** Enabled with URL + token configured — fail closed for audio when missing. */

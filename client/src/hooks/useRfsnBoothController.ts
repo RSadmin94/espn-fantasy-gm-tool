@@ -17,6 +17,8 @@ import { usePrefersReducedMotion } from "./usePrefersReducedMotion";
 
 /** Safety cap only — normal advance is audio `ended` or text dwell after onFallback. */
 const AUDIO_SAFETY_FALLBACK_MS = 120_000;
+/** While audio is still playing after min dwell, re-check ownership briefly. */
+const AUDIO_OWNED_POLL_MS = 500;
 
 export type RfsnBoothController = {
   cardStates: Record<RfsnCommentatorId, BoothCardState>;
@@ -81,9 +83,15 @@ export function useRfsnBoothController(
 
   const scheduleTextExit = useCallback((commentator: RfsnCommentatorId, index: number, text: string) => {
     const displayMs = commentaryDisplayMs(text, reducedMotion);
-    timerRef.current = setTimeout(() => {
+    const tryExit = () => {
+      // Prefer complete analyst speech over cutting mid-clip when dwell elapses.
+      if (audioRef.current?.isPlaying?.()) {
+        timerRef.current = setTimeout(tryExit, AUDIO_OWNED_POLL_MS);
+        return;
+      }
       exitSpeakerRef.current(commentator, index, false);
-    }, displayMs);
+    };
+    timerRef.current = setTimeout(tryExit, displayMs);
   }, [reducedMotion]);
 
   const audioAttemptedKeyRef = useRef<string | null>(null);
@@ -167,8 +175,24 @@ export function useRfsnBoothController(
   const beginSpeakerRef = useRef(beginSpeaker);
   beginSpeakerRef.current = beginSpeaker;
 
+  const snapshotGenerationRef = useRef(0);
+  const pendingSnapshotApplyRef = useRef(false);
+
   exitSpeakerRef.current = (commentator, index, manual) => {
     clearTimer();
+    // Mid-speech frame handoff: let the clip finish, then the pending snapshot
+    // effect applies the new sequence — do not stop audio or chain the old order.
+    if (!manual && pendingSnapshotApplyRef.current) {
+      setCardStates((prev) => ({
+        ...prev,
+        [commentator]: "standby",
+      }));
+      setActiveCommentator(null);
+      setActiveCard(null);
+      sequenceIndexRef.current = -1;
+      setSequenceIndex(-1);
+      return;
+    }
     audioRef.current?.stopCurrent();
     const card = sequenceRef.current[index];
     if (!card) {
@@ -208,6 +232,7 @@ export function useRfsnBoothController(
     if (activeCommentator !== commentator || sequenceIndexRef.current < 0) return;
     const state = cardStates[commentator];
     if (state !== "active" && state !== "entering") return;
+    pendingSnapshotApplyRef.current = false;
     audioRef.current?.stopCurrent();
     exitSpeakerRef.current(commentator, sequenceIndexRef.current, true);
   }, [activeCommentator, cardStates]);
@@ -224,24 +249,52 @@ export function useRfsnBoothController(
   }, [snapshot]);
 
   useEffect(() => {
+    const generation = ++snapshotGenerationRef.current;
     clearTimer();
-    audioRef.current?.onSnapshotChange();
-    audioAttemptedKeyRef.current = null;
-    setConsumedTickerIds(new Set());
-    setCardStates(initialCardStates());
-    setActiveCommentator(null);
-    setActiveCard(null);
-    sequenceIndexRef.current = -1;
-    setSequenceIndex(-1);
 
-    const seq = sequenceRef.current;
-    if (seq.length === 0) return;
+    const applyFrame = () => {
+      if (generation !== snapshotGenerationRef.current) return;
+      pendingSnapshotApplyRef.current = false;
+      audioRef.current?.onSnapshotChange();
+      audioAttemptedKeyRef.current = null;
+      setConsumedTickerIds(new Set());
+      setCardStates(initialCardStates());
+      setActiveCommentator(null);
+      setActiveCard(null);
+      sequenceIndexRef.current = -1;
+      setSequenceIndex(-1);
 
-    const startMs = reducedMotion ? 0 : 200;
-    timerRef.current = setTimeout(() => {
-      beginSpeakerRef.current(0, seq[0]!);
-    }, startMs);
+      const seq = sequenceRef.current;
+      if (seq.length === 0) return;
 
+      const startMs = reducedMotion ? 0 : 200;
+      timerRef.current = setTimeout(() => {
+        if (generation !== snapshotGenerationRef.current) return;
+        beginSpeakerRef.current(0, seq[0]!);
+      }, startMs);
+    };
+
+    // Faster mock picks must not truncate speech — finish the clip, then hand off.
+    // Only defer when a booth sequence is already on-air (not on cold start / idle).
+    // Prefer complete analyst commentary over keeping pace with Turbo simulation.
+    const boothOnAir = sequenceIndexRef.current >= 0;
+    if (boothOnAir && audioRef.current?.isPlaying?.()) {
+      pendingSnapshotApplyRef.current = true;
+      const waitForSpeech = () => {
+        if (generation !== snapshotGenerationRef.current) return;
+        if (audioRef.current?.isPlaying?.()) {
+          timerRef.current = setTimeout(waitForSpeech, AUDIO_OWNED_POLL_MS);
+          return;
+        }
+        applyFrame();
+      };
+      waitForSpeech();
+      return () => {
+        clearTimer();
+      };
+    }
+
+    applyFrame();
     return () => {
       clearTimer();
     };

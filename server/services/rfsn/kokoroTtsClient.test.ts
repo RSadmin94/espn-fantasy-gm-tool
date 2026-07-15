@@ -59,7 +59,7 @@ describe("kokoroTtsClient", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("enforces input length cap", async () => {
+  it("sends the full commentary text without truncating", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(wavBytes(), { status: 200, headers: { "content-type": "audio/wav" } }),
     );
@@ -67,7 +67,17 @@ describe("kokoroTtsClient", () => {
     await synthesizeAnalystSpeech({ voice: "coach", text: long });
     const [, init] = fetchSpy.mock.calls[0]!;
     const payload = JSON.parse(String((init as RequestInit).body));
-    expect(payload.text.length).toBeLessThanOrEqual(500);
+    expect(payload.text.length).toBe(600);
+  });
+
+  it("normalizes football abbreviations for speech only", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(wavBytes(), { status: 200, headers: { "content-type": "audio/wav" } }),
+    );
+    await synthesizeAnalystSpeech({ voice: "sofia", text: "A late WR and TE pair." });
+    const [, init] = fetchSpy.mock.calls[0]!;
+    const payload = JSON.parse(String((init as RequestInit).body));
+    expect(payload.text).toBe("A late wide receiver and tight end pair.");
   });
 
   it("rejects non-wav responses", async () => {

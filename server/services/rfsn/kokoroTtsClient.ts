@@ -8,8 +8,8 @@ import {
   getRfsnTtsServiceUrl,
   getRfsnTtsTimeoutMs,
   isRfsnTtsOperational,
-  RFSN_TTS_MAX_TEXT_LENGTH,
 } from "./rfsnTtsConfig";
+import { normalizeSpeechForTts } from "./rfsnSpeechNormalize";
 
 export type SynthesizeAnalystSpeechInput = {
   voice: RfsnCommentatorId | string;
@@ -45,7 +45,9 @@ export async function synthesizeAnalystSpeech(
   }
 
   const voice = assertRfsnTtsVoice(String(input.voice));
-  const text = input.text.trim().slice(0, RFSN_TTS_MAX_TEXT_LENGTH);
+  // Full commentary to Kokoro — no character truncation. Speech normalization
+  // expands abbreviations for TTS only; displayed text is unchanged upstream.
+  const text = normalizeSpeechForTts(input.text.trim());
   if (!text) {
     throw new Error("empty text");
   }

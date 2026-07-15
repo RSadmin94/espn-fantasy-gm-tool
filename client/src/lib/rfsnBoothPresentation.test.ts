@@ -72,9 +72,9 @@ describe("commentary visibility", () => {
 });
 
 describe("commentaryDisplayMs", () => {
-  it("respects minimum and maximum bounds", () => {
+  it("respects minimum and scales with length (no hard max cut-off)", () => {
     expect(commentaryDisplayMs("")).toBe(3000);
-    expect(commentaryDisplayMs("x".repeat(500))).toBe(12000);
+    expect(commentaryDisplayMs("x".repeat(500))).toBe(500 * 50);
   });
 
   it("uses reduced motion minimum", () => {

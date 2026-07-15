@@ -411,9 +411,16 @@ export function useRfsnAudioPlayback(
     if (liveStatus && lastCardRef.current) {
       const pickKey = `${liveStatus.draftId}:${liveStatus.pickId}:${liveStatus.pickNumber}`;
       if (activePickRef.current && activePickRef.current !== pickKey) {
-        cleanupAudio();
-        resetPlaybackAttemptState();
-        activePickRef.current = "";
+        // Do not truncate active speech when a faster draft advances audioStatus.
+        // Booth deferral + gate keep the new frame waiting; stop only via ended /
+        // stopCurrent / onSnapshotChange / intentional new playForCard.
+        const el = audioRef.current;
+        const stillPlaying = Boolean(el && !el.paused && el.currentTime > 0 && !el.ended);
+        if (!stillPlaying && !playInFlightRef.current) {
+          cleanupAudio();
+          resetPlaybackAttemptState();
+          activePickRef.current = "";
+        }
       }
     }
     tryActivatePlaybackRef.current("effect_unlock_or_status");
