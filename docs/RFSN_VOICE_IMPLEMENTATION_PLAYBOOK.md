@@ -260,15 +260,23 @@ Only one hook-owned element plays. Starting a new clip cleans up the previous. B
 
 ## 7. Speech normalization
 
-> **Deploy status:** Live on preview via `6cbb610` (`rfsnSpeechNormalize.ts` → `kokoroTtsClient.ts`). Written booth text stays abbreviated; only the Kokoro request body is expanded. Unit tests cover mapping + false-positive protection; post-deploy browser verify confirmed written abbreviations still appear on-card.
+> **Deploy status:** Football abbreviations shipped with voice polish (`6cbb610`). Possessive / apostrophe normalization is a TTS-only follow-up on the same `normalizeSpeechForTts` path. Written booth text stays abbreviated and keeps its original apostrophes.
 
 ### Why written stays compact
 
-Booth cards remain scannable with standard fantasy shorthand (`WR`, `QB`, …).
+Booth cards remain scannable with standard fantasy shorthand (`WR`, `QB`, …) and natural written possessives (`Rod's roster`).
 
 ### Why TTS needs a separate string
 
-Kokoro would otherwise speak letter names (“double-you-are”). Normalization expands positions **only** on the TTS path.
+Kokoro would otherwise speak letter names (“double-you-are”) and often mangles `'s` / curly `’s` possessives (tokenization / G2P). Normalization expands positions and rewrites possessives **only** on the TTS path.
+
+### Possessives / apostrophes (TTS only)
+
+1. Fold curly apostrophes (`’` / related) → ASCII `'`.
+2. Normalize bare plurals (`James'` → `James's`).
+3. Rewrite non-contraction possessives to natural of-forms (`Rod's roster` → `the roster of Rod`).
+4. Preserve contractions (`don't`, `can't`, `it's`, `they're`, …).
+5. Protect `\bS\b` → `safety` from matching the `s` inside `it's` / `he's`.
 
 ### Mapping (`normalizeSpeechForTts`)
 
@@ -316,6 +324,20 @@ Append to `SPEECH_EXPANSIONS` in `rfsnSpeechNormalize.ts` (longer patterns first
 - Logical ids live in presentation (`RfsnCommentatorId`) and travel through clip metadata / query identity.
 - App sends logical `voice` to Kokoro (`synthesizeAnalystSpeech`); provider resolves to concrete Kokoro voices.
 - To replace the provider: keep persona ids stable; swap only the HTTP client / provider map. Booth UI and commentary assignment stay provider-neutral.
+
+### Roxanne presence (selective)
+
+Roxanne is rivalry / entertainment — **not** the default value analyst.
+
+| Gate | Behavior |
+|------|----------|
+| Live rivalry overlay | `loadLiveRivalryOverlay(userId, leagueId)` maps real rivalryService pairs onto draft `PID_*` owner keys; never fabricates rivals |
+| `roxanneEligible` | Rivalry receipt / drama evidence, or major/historic REACH/STEAL |
+| Ordinary notable steal / slight reach | Sofia/Coach only |
+| `major_reach` | Lead Sofia; optional Coach + Roxanne (`sofia`, `coach`, `roxanne`) |
+| `rivalry_receipt` | Lead Roxanne when rivalry receipt is available |
+
+Without grounded rivalry data, shadow Alice rivals remain for offline fixtures only; production notify passes `userId` so real rivals replace the fixture set when available.
 
 ---
 

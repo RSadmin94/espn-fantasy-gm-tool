@@ -67,7 +67,7 @@ async function main() {
   }
   // Two quick consecutive picks
   resetLiveDraftMomentSession(LEAGUE, DRAFT);
-  const quickA = buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
+  const quickA = await buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
     overallPick: 1,
     round: 1,
     roundPick: 1,
@@ -77,7 +77,7 @@ async function main() {
     playerName: "Routine WR 1",
     position: "WR",
   }, { reset: true });
-  const quickB = buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
+  const quickB = await buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
     overallPick: 2,
     round: 1,
     roundPick: 2,

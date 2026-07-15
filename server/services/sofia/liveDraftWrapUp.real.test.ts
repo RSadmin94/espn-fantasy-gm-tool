@@ -27,11 +27,11 @@ const DRAFT = "draft-wrap-real";
 loadShadowCertEnvFromDotenv();
 const HAS_DEEPSEEK = Boolean(process.env.DEEPSEEK_API_KEY?.trim());
 
-function seedAllPicks(): DraftMoment {
+async function seedAllPicks(): Promise<DraftMoment> {
   const moments = buildBroadcastPaceDraftMoments("wrap-up-real");
   let last = moments[0]!;
   for (const m of moments) {
-    last = buildDraftMomentForLockedPick(
+    last = await buildDraftMomentForLockedPick(
       LEAGUE,
       DRAFT,
       {
@@ -75,7 +75,7 @@ describe.skipIf(!HAS_DEEPSEEK)("live draft wrap-up — real DeepSeek provider", 
   it(
     "generates Sofia, Coach, and Roxanne with grounded separation and booth order",
     async () => {
-      const finalPick = seedAllPicks();
+      const finalPick = await seedAllPicks();
       const picks = getLockedPicksForSession(LEAGUE, DRAFT);
       const summary = summarizeDraftWrapUp(picks, 14);
       const wrapMoment = buildDraftWrapUpBroadcastMoment(LEAGUE, DRAFT, summary);

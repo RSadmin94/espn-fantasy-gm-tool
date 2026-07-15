@@ -313,7 +313,7 @@ async function runMomentScenario(id: string): Promise<CertScenarioResult> {
 
 async function runTwoQuickPicks(): Promise<CertScenarioResult[]> {
   resetLiveDraftMomentSession(LEAGUE, DRAFT);
-  const a = buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
+  const a = await buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
     overallPick: 201,
     round: 15,
     roundPick: 1,
@@ -323,7 +323,7 @@ async function runTwoQuickPicks(): Promise<CertScenarioResult[]> {
     playerName: "Routine WR 201",
     position: "WR",
   }, { reset: true });
-  const b = buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
+  const b = await buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
     overallPick: 202,
     round: 15,
     roundPick: 2,

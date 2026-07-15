@@ -5,8 +5,13 @@ import { buildDraftMomentsFromContext } from "../draftMoments/draftMomentBuilder
 import { buildIdentityResolver } from "../draftMoments/draftMomentIdentityService";
 import type { DraftMoment } from "../draftMoments/draftMomentTypes";
 import { momentConfigForDraftPace, type DraftPace } from "../draftMoments/draftMomentTypes";
-import type { MockPickLike, ReceiptContext } from "../draftMoments/draftMomentReceiptService";
+import type { MockPickLike } from "../draftMoments/draftMomentReceiptService";
 import { makeShadowReceiptContext } from "./shadowDraftSources";
+import {
+  applyLiveRivalryOverlay,
+  loadLiveRivalryOverlay,
+  type LiveRivalryOverlay,
+} from "./liveDraftRivalryOverlay";
 
 export type LockedPickInput = {
   overallPick: number;
@@ -25,6 +30,8 @@ type DraftAccumulator = {
   draftId: string;
   season: number;
   picks: MockPickLike[];
+  rivalry: LiveRivalryOverlay | null;
+  rivalryLoaded: boolean;
 };
 
 const accumulators = new Map<string, DraftAccumulator>();
@@ -46,10 +53,6 @@ export function getLockedPicksForSession(leagueId: string, draftId: string): Moc
   return acc ? [...acc.picks] : [];
 }
 
-function receiptContextFor(leagueId: string): ReceiptContext {
-  return makeShadowReceiptContext({ leagueId, teamCount: 14 });
-}
-
 function resolverForPicks(picks: MockPickLike[]) {
   const rows = new Map<string, { season: number; teamId: number; name: string; ownerName: string; ownerId: string }>();
   for (const p of picks) {
@@ -68,18 +71,33 @@ function resolverForPicks(picks: MockPickLike[]) {
   return buildIdentityResolver([...rows.values()]);
 }
 
-export function buildDraftMomentForLockedPick(
+export async function buildDraftMomentForLockedPick(
   leagueId: string,
   draftId: string,
   pick: LockedPickInput,
-  opts: { season?: number; reset?: boolean; draftPace?: DraftPace } = {},
-): DraftMoment {
+  opts: {
+    season?: number;
+    reset?: boolean;
+    draftPace?: DraftPace;
+    /** Signed-in user — loads grounded rivalry (never fabricated). */
+    userId?: number | null;
+    /** Test-only rivalry injection. */
+    rivalryOverlay?: LiveRivalryOverlay | null;
+  } = {},
+): Promise<DraftMoment> {
   const key = accKey(leagueId, draftId);
   if (opts.reset) accumulators.delete(key);
 
   let acc = accumulators.get(key);
   if (!acc) {
-    acc = { leagueId, draftId, season: opts.season ?? 2026, picks: [] };
+    acc = {
+      leagueId,
+      draftId,
+      season: opts.season ?? 2026,
+      picks: [],
+      rivalry: null,
+      rivalryLoaded: false,
+    };
     accumulators.set(key, acc);
   }
 
@@ -100,12 +118,47 @@ export function buildDraftMomentForLockedPick(
     acc.picks.sort((a, b) => a.overall - b.overall);
   }
 
+  if (opts.rivalryOverlay !== undefined) {
+    acc.rivalry = opts.rivalryOverlay;
+    acc.rivalryLoaded = true;
+  } else if (!acc.rivalryLoaded) {
+    acc.rivalry = await loadLiveRivalryOverlay({
+      userId: opts.userId,
+      leagueId,
+      ownerNames: acc.picks.map((p) => p.ownerName),
+    });
+    acc.rivalryLoaded = true;
+  } else if (acc.rivalry) {
+    const draftNames = acc.picks.map((p) => p.ownerName);
+    acc.rivalry = {
+      ...acc.rivalry,
+      rivals: acc.rivalry.rivals.map((r) => {
+        const matched =
+          draftNames.find((n) => n.trim().toLowerCase() === r.ownerName.trim().toLowerCase()) ??
+          r.ownerName;
+        return { ...r, ownerName: matched };
+      }),
+    };
+  }
+
+  // When a real rivalry overlay is present, replace shadow Alice faux rivals.
+  // When unavailable, keep the shadow context so offline/dev drafts still exercise the lane.
+  let ctx = makeShadowReceiptContext({ leagueId, teamCount: 14 });
+  if (acc.rivalry) {
+    ctx = {
+      ...ctx,
+      rivalById: new Map(),
+      focalMemberId: "",
+    };
+    ctx = applyLiveRivalryOverlay(ctx, acc.rivalry);
+  }
+
   const moments = buildDraftMomentsFromContext({
     leagueId,
     draftId,
     season: acc.season,
     mockPicks: acc.picks,
-    ctx: receiptContextFor(leagueId),
+    ctx,
     resolver: resolverForPicks(acc.picks),
     config: momentConfigForDraftPace(opts.draftPace),
   });

@@ -87,7 +87,7 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     callbackEligible: true,
   }),
 
-  major_reach: plan("major_reach", "sofia", ["coach"], ["roxanne"], 2, {
+  major_reach: plan("major_reach", "sofia", ["coach", "roxanne"], [], 3, {
     energyLevel: "high",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 1,

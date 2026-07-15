@@ -99,7 +99,7 @@ export const rfsnBroadcastRouter = router({
         useDeterministicProvider: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       assertLiveAccess(ctx.user);
       if (!isRfsnLiveBroadcastEnabled()) {
         return { accepted: false, reason: "disabled" as const };
@@ -109,9 +109,15 @@ export const rfsnBroadcastRouter = router({
 
       let draftMoment;
       try {
-        draftMoment = buildDraftMomentForLockedPick(input.leagueId, input.draftId, input.pick as LockedPickInput, {
-          draftPace: input.draftPace,
-        });
+        draftMoment = await buildDraftMomentForLockedPick(
+          input.leagueId,
+          input.draftId,
+          input.pick as LockedPickInput,
+          {
+            draftPace: input.draftPace,
+            userId: ctx.user?.id ?? null,
+          },
+        );
       } catch {
         return { accepted: false, reason: "moment_build_failed" as const };
       }

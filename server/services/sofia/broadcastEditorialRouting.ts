@@ -45,6 +45,33 @@ function hasStrongSignal(moment: BroadcastMoment, prefix: string): boolean {
   return moment.signals.some((s) => s === `${prefix}:strong`);
 }
 
+const ROXANNE_DRAMA_RE =
+  /\b(rival|rivalry|drama|revenge|feud|receipt|temperature|consequence|upset|championship|dynasty|trade war)\b/i;
+
+/**
+ * Roxanne stays selective: rivalry/drama evidence, or clear major/historic reach/steal.
+ * Ordinary notable value picks remain Sofia/Coach.
+ */
+export function roxanneEligible(moment: BroadcastMoment): boolean {
+  if (hasReceipt(moment, "rivalry", "rivalry")) return true;
+  if (moment.primaryStoryline && ROXANNE_DRAMA_RE.test(moment.primaryStoryline)) return true;
+  if (moment.storylines.some((s) => ROXANNE_DRAMA_RE.test(s))) return true;
+  if (moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) return true;
+  if (
+    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) &&
+    (moment.significance === "historic" || moment.significance === "major")
+  ) {
+    return true;
+  }
+  if (
+    (hasSignal(moment, "STEAL") || hasStrongSignal(moment, "STEAL")) &&
+    (moment.significance === "historic" || moment.significance === "major")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Classify moment into an editorial plan — explicit rules, not significance passthrough. */
 export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId {
   if (moment.editorialPlanId) return moment.editorialPlanId;
@@ -121,7 +148,37 @@ export function buildEditorialAssignment(
   ledger: EditorialLedger,
 ): EditorialAssignment {
   const planId = resolveEditorialPlanId(moment);
-  const basePlan = getEditorialPlan(planId);
+  let basePlan = getEditorialPlan(planId);
+
+  // Major/historic steals otherwise prohibit Roxanne on value_pick — allow optional slot when eligible.
+  if (planId === "value_pick" && roxanneEligible(moment)) {
+    basePlan = {
+      ...basePlan,
+      optionalVoices: [...new Set<VoiceId>([...basePlan.optionalVoices, "roxanne"])],
+      prohibitedVoices: basePlan.prohibitedVoices.filter((v) => v !== "roxanne"),
+      maxVoices: Math.max(basePlan.maxVoices, 2),
+    };
+  }
+
+  // Strip optional Roxanne unless grounded eligibility exists.
+  if (basePlan.optionalVoices.includes("roxanne") && !roxanneEligible(moment)) {
+    basePlan = {
+      ...basePlan,
+      optionalVoices: basePlan.optionalVoices.filter((v) => v !== "roxanne"),
+      prohibitedVoices: basePlan.prohibitedVoices.includes("roxanne")
+        ? basePlan.prohibitedVoices
+        : [...basePlan.prohibitedVoices, "roxanne"],
+    };
+  }
+  if (basePlan.leadVoice === "roxanne" && !roxanneEligible(moment)) {
+    basePlan = {
+      ...basePlan,
+      leadVoice: "sofia",
+      optionalVoices: basePlan.optionalVoices.filter((v) => v !== "sofia"),
+      prohibitedVoices: [...new Set<VoiceId>([...basePlan.prohibitedVoices, "roxanne"])],
+    };
+  }
+
   const resolution = ledger.resolveForMoment(basePlan, moment);
   const plan = resolution.plan;
 

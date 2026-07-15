@@ -24,11 +24,11 @@ const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
 const LEAGUE = "WRAP";
 const DRAFT = "draft-wrap-test";
 
-function seedAllPicks(): DraftMoment {
+async function seedAllPicks(): Promise<DraftMoment> {
   const moments = buildBroadcastPaceDraftMoments("wrap-up-seed");
   let last = moments[0]!;
   for (const m of moments) {
-    last = buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
+    last = await buildDraftMomentForLockedPick(LEAGUE, DRAFT, {
       overallPick: m.overallPick,
       round: m.round,
       roundPick: m.roundPick,
@@ -82,7 +82,7 @@ describe("live draft wrap-up", () => {
   });
 
   it("runs exactly once per draft and permits a new wrap-up after session reset", async () => {
-    const finalPick = seedAllPicks();
+    const finalPick = await seedAllPicks();
     const first = await processDraftWrapUp({
       leagueId: LEAGUE,
       draftId: DRAFT,
@@ -114,7 +114,7 @@ describe("live draft wrap-up", () => {
   });
 
   it("marks draft complete with on-air commentary after the final pick", async () => {
-    const finalPick = seedAllPicks();
+    const finalPick = await seedAllPicks();
     const payload = await processDraftWrapUp({
       leagueId: LEAGUE,
       draftId: DRAFT,
@@ -132,7 +132,7 @@ describe("live draft wrap-up", () => {
   });
 
   it("deterministic partial output survives a rejected middle voice", async () => {
-    const finalPick = seedAllPicks();
+    const finalPick = await seedAllPicks();
     const { createDeterministicLiveOrchestrator } = await import("./liveBroadcastOrchestratorFactory");
     const spy = vi.spyOn(
       await import("./liveBroadcastOrchestratorFactory"),
@@ -163,7 +163,7 @@ describe("live draft wrap-up", () => {
   });
 
   it("schedules wrap-up once after the final pick via the live pick hook", async () => {
-    const finalPick = seedAllPicks();
+    const finalPick = await seedAllPicks();
     scheduleLiveBroadcastForDraftMoment(finalPick, {
       draftComplete: true,
       useDeterministicProvider: true,

@@ -4,6 +4,7 @@ import {
   buildEditorialAssignment,
   resolveEditorialPlanId,
   listEditorialPlanIds,
+  roxanneEligible,
 } from "./broadcastEditorialRouting";
 import { SessionEditorialLedger } from "./editorialLedger";
 import { getEditorialPlan, voicesForPlan } from "./editorialPlans";
@@ -145,6 +146,29 @@ describe("buildEditorialAssignment", () => {
     const a = buildEditorialAssignment(bm({ signals: ["REACH:strong"], significance: "major" }), ledger);
     expect(a.leadVoice).toBe("sofia");
     expect(a.request).toContain("sofia");
+  });
+
+  it("requests Sofia + Coach + Roxanne for major_reach", () => {
+    const a = buildEditorialAssignment(
+      bm({ signals: ["REACH:strong"], significance: "major" }),
+      new SessionEditorialLedger(),
+    );
+    expect(roxanneEligible(bm({ signals: ["REACH:strong"], significance: "major" }))).toBe(true);
+    expect(a.request).toEqual(["sofia", "coach", "roxanne"]);
+  });
+
+  it("keeps Roxanne off ordinary notable steals", () => {
+    const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), new SessionEditorialLedger());
+    expect(a.request).not.toContain("roxanne");
+  });
+
+  it("allows Roxanne on major steals as optional", () => {
+    const a = buildEditorialAssignment(
+      bm({ signals: ["STEAL:strong"], significance: "major" }),
+      new SessionEditorialLedger(),
+    );
+    expect(a.leadVoice).not.toBe("roxanne");
+    expect(a.request).toContain("roxanne");
   });
 
   it("requests roxanne lead for rivalry_receipt", () => {
