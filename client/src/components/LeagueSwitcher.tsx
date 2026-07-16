@@ -142,10 +142,10 @@ export default function LeagueSwitcher() {
 
   return (
     <>
-      <div className="px-4 py-3 border-t border-border space-y-2">
+      <div className="px-4 py-3 border-t border-border/60 space-y-2" style={{ background: "linear-gradient(135deg, oklch(0.13 0.020 250 / 0.90) 0%, oklch(0.11 0.018 252 / 0.90) 100%)" }}>
         {/* User row */}
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, oklch(0.88 0.22 130 / 0.20) 0%, oklch(0.62 0.20 295 / 0.15) 100%)", border: "1px solid oklch(0.88 0.22 130 / 0.30)" }}>
             <span className="text-[10px] font-bold text-primary">{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
@@ -175,7 +175,7 @@ export default function LeagueSwitcher() {
         {/* League switcher */}
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-accent/40 hover:bg-accent/70 transition-colors text-left group">
+            <button className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-all duration-200 text-left group" style={{ background: "oklch(0.17 0.022 250)", border: "1px solid oklch(0.24 0.022 250)" }}>
               <span className="text-sm flex-shrink-0">
                 {PROVIDER_EMOJI[activeLeague?.provider ?? ""] ?? "🏆"}
               </span>

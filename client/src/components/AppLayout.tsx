@@ -196,9 +196,9 @@ function ActiveLeagueFooter() {
   });
   const league = activeLeague.data;
   return (
-    <div className="px-5 py-3 border-t border-border">
+    <div className="px-5 py-3 border-t border-border/60" style={{ background: "linear-gradient(135deg, oklch(0.13 0.020 250 / 0.80) 0%, oklch(0.11 0.018 252 / 0.80) 100%)" }}>
       <div className="flex items-center gap-2">
-        <Brain className="w-3 h-3 text-primary/60" />
+        <Brain className="w-3 h-3" style={{ color: "oklch(0.62 0.20 295 / 0.70)" }} />
         {league ? (
           <p className="text-[10px] text-muted-foreground truncate">
             {league.leagueName || `League ${league.leagueId}`}
@@ -240,18 +240,19 @@ function SidebarNav({
           const items = navItems.filter((n) => n.group === group);
           return (
             <div key={group} className="mb-5">
-              <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-widest px-2 mb-1.5">{group}</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest px-2 mb-1.5" style={{ color: "oklch(0.62 0.20 295 / 0.70)" }}>{group}</p>
               {items.map((item) => {
                 const active = location === item.href || (item.href !== "/" && location.startsWith(item.href));
                 const cls = cn(
-                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-150 mb-0.5 group w-full text-left",
-                  active ? "bg-primary/15 text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
+                  "flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-200 mb-0.5 group w-full text-left",
+                  active ? "nav-active-bar text-primary shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/60"
                 );
+                const activeStyle = active ? { background: "linear-gradient(135deg, oklch(0.88 0.22 130 / 0.12) 0%, oklch(0.62 0.20 295 / 0.06) 100%)", borderLeft: "3px solid oklch(0.88 0.22 130)", boxShadow: "0 0 12px oklch(0.88 0.22 130 / 0.08)" } : {};
                 return (
-                  <Link key={item.href} href={item.href} className={cls} onClick={onNavClick}>
+                  <Link key={item.href} href={item.href} className={cls} style={activeStyle} onClick={onNavClick}>
                     <item.icon className={cn("w-4 h-4 flex-shrink-0 transition-colors", active ? "text-primary" : "group-hover:text-foreground")} />
                     <span className="flex-1 truncate">{item.label}</span>
-                    {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">{item.badge}</Badge>}
+                    {item.badge && <Badge className="text-[8px] px-1 py-0 h-3.5 border-0 font-bold" style={{ background: "linear-gradient(135deg, oklch(0.88 0.22 130) 0%, oklch(0.78 0.22 145) 100%)", color: "oklch(0.10 0.015 130)" }}>{item.badge}</Badge>}
                     {active && <ChevronRight className="w-3 h-3 text-primary flex-shrink-0" />}
                   </Link>
                 );
@@ -265,15 +266,19 @@ function SidebarNav({
           <button
             onClick={() => { onAdvisorOpen(); onNavClick?.(); }}
             className={cn(
-              "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold transition-all duration-150",
+              "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-semibold transition-all duration-200",
               advisorOpen
-                ? "bg-primary text-primary-foreground shadow-md"
-                : "bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
+                ? "shadow-md"
+                : "border hover:border-primary/40"
             )}
+            style={advisorOpen
+              ? { background: "linear-gradient(135deg, oklch(0.88 0.22 130) 0%, oklch(0.78 0.22 145) 100%)", color: "oklch(0.10 0.015 130)", boxShadow: "0 0 20px oklch(0.88 0.22 130 / 0.30), 0 4px 12px oklch(0.04 0.010 250 / 0.50)" }
+              : { background: "linear-gradient(135deg, oklch(0.88 0.22 130 / 0.10) 0%, oklch(0.62 0.20 295 / 0.08) 100%)", borderColor: "oklch(0.88 0.22 130 / 0.25)", color: "oklch(0.88 0.22 130)" }
+            }
           >
             <Bot className="w-4 h-4 flex-shrink-0" />
             <span className="flex-1 truncate">AI GM Advisor</span>
-            <Badge className="text-[8px] px-1 py-0 h-3.5 espn-gradient text-white border-0 font-bold">AI</Badge>
+            <Badge className="text-[8px] px-1 py-0 h-3.5 border-0 font-bold" style={{ background: "linear-gradient(135deg, oklch(0.62 0.20 295) 0%, oklch(0.50 0.18 285) 100%)", color: "white" }}>AI</Badge>
           </button>
         </div>
 
@@ -351,21 +356,21 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
       <div className="flex h-screen bg-background overflow-hidden">
 
         {/* ── Desktop sidebar (hidden on mobile) ── */}
-        <aside className="hidden lg:flex flex-shrink-0 flex-col border-r border-border bg-card" style={{ width: "15.5rem" }}>
-          <div className="px-5 py-4 border-b border-border">
+        <aside className="hidden lg:flex flex-shrink-0 flex-col border-r border-border bg-card" style={{ width: "15.5rem", background: "linear-gradient(180deg, oklch(0.13 0.020 250) 0%, oklch(0.11 0.018 252) 100%)" }}>
+          <div className="px-5 py-4 border-b border-border/60" style={{ background: "linear-gradient(135deg, oklch(0.15 0.022 250) 0%, oklch(0.12 0.018 255) 100%)" }}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
-                <Activity className="w-5 h-5 text-white" />
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, oklch(0.88 0.22 130) 0%, oklch(0.78 0.22 145) 100%)", boxShadow: "0 0 16px oklch(0.88 0.22 130 / 0.35), 0 2px 8px oklch(0.04 0.010 250 / 0.60)" }}>
+                <Activity className="w-5 h-5" style={{ color: "oklch(0.10 0.015 130)" }} />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
-                <p className="text-[11px] text-muted-foreground leading-tight">GM Command Center</p>
+                <p className="text-sm font-bold leading-tight tracking-tight" style={{ background: "linear-gradient(135deg, oklch(0.96 0.008 240), oklch(0.85 0.010 240))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
+                <p className="text-[11px] leading-tight" style={{ color: "oklch(0.62 0.20 295)" }}>Fantasy Football Rivals</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <div className="flex-1 h-px bg-border" />
-              <Badge variant="outline" className="text-[9px] px-2 border-primary/30 text-primary font-mono">2009 – 2026</Badge>
-              <div className="flex-1 h-px bg-border" />
+              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, transparent, oklch(0.28 0.024 250))" }} />
+              <Badge variant="outline" className="text-[9px] px-2 font-mono" style={{ borderColor: "oklch(0.88 0.22 130 / 0.35)", color: "oklch(0.88 0.22 130)" }}>2009 – 2026</Badge>
+              <div className="flex-1 h-px" style={{ background: "linear-gradient(90deg, oklch(0.28 0.024 250), transparent)" }} />
             </div>
           </div>
           <SidebarNav
@@ -393,14 +398,14 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
           style={{ width: "16rem" }}
         >
           {/* Drawer header */}
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+          <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between" style={{ background: "linear-gradient(135deg, oklch(0.15 0.022 250) 0%, oklch(0.12 0.018 255) 100%)" }}>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-xl espn-gradient flex items-center justify-center flex-shrink-0 shadow-lg">
-                <Activity className="w-4 h-4 text-white" />
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: "linear-gradient(135deg, oklch(0.88 0.22 130) 0%, oklch(0.78 0.22 145) 100%)", boxShadow: "0 0 14px oklch(0.88 0.22 130 / 0.35)" }}>
+                <Activity className="w-4 h-4" style={{ color: "oklch(0.10 0.015 130)" }} />
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-bold text-foreground leading-tight tracking-tight">{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
-                <p className="text-[10px] text-muted-foreground leading-tight">GM Command Center</p>
+                <p className="text-sm font-bold leading-tight tracking-tight" style={{ background: "linear-gradient(135deg, oklch(0.96 0.008 240), oklch(0.85 0.010 240))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{import.meta.env.VITE_APP_TITLE || "GM WAR ROOM"}</p>
+                <p className="text-[10px] leading-tight" style={{ color: "oklch(0.62 0.20 295)" }}>Fantasy Football Rivals</p>
               </div>
             </div>
             <button
@@ -422,7 +427,7 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
         {/* ── Main content ── */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Mobile top bar (always visible on mobile) */}
-          <div className="lg:hidden flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-sm">
+          <div className="lg:hidden flex-shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border/60" style={{ background: "oklch(0.10 0.018 252 / 0.90)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
             <button
               onClick={() => setMobileNavOpen(true)}
               className="w-10 h-10 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
@@ -438,10 +443,12 @@ export default function AppLayout({ children, title, subtitle, headerRight }: Ap
           </div>
 
           {/* Desktop page header — always visible so CompactLeagueSwitcher is accessible on every page */}
-          <header className="hidden lg:flex flex-shrink-0 px-8 py-3 border-b border-border bg-card/50 backdrop-blur-sm items-center justify-between min-h-[56px]">
+          <header className="hidden lg:flex flex-shrink-0 px-8 py-3 border-b border-border/60 items-center justify-between min-h-[56px]" style={{ background: "oklch(0.10 0.018 252 / 0.85)", backdropFilter: "blur(12px) saturate(1.4)", WebkitBackdropFilter: "blur(12px) saturate(1.4)" }}>
             <div className="flex-1 min-w-0">
-              {title && <h1 className="text-lg font-bold text-foreground tracking-tight">{title}</h1>}
-              {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+              {title && (
+                <h1 className="text-lg font-bold tracking-tight" style={{ background: "linear-gradient(135deg, oklch(0.96 0.008 240) 0%, oklch(0.80 0.010 240) 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>{title}</h1>
+              )}
+              {subtitle && <p className="text-[11px] mt-0.5" style={{ color: "oklch(0.52 0.018 240)" }}>{subtitle}</p>}
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <CompactLeagueSwitcher />

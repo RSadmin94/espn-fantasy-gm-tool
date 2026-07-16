@@ -82,12 +82,12 @@ function KeeperCountdownCard({ keeperDeadlineMs }: { keeperDeadlineMs?: number }
     : daysRemaining < 60 ? "approaching"
     : "upcoming";
 
-  const cardClass = {
-    critical: "border-red-500/50 bg-red-950/20",
-    urgent: "border-amber-500/50 bg-amber-950/20",
-    approaching: "border-yellow-500/30 bg-card",
-    upcoming: "border-border bg-card",
-    locked: "border-border bg-card opacity-60",
+  const cardStyle: React.CSSProperties = {
+    critical: { borderColor: "oklch(0.58 0.22 25 / 0.50)", background: "linear-gradient(145deg, oklch(0.14 0.04 25 / 0.40) 0%, oklch(0.12 0.02 25 / 0.20) 100%)", boxShadow: "0 0 20px oklch(0.58 0.22 25 / 0.12), 0 4px 16px oklch(0.04 0.010 250 / 0.40)" },
+    urgent: { borderColor: "oklch(0.68 0.18 50 / 0.50)", background: "linear-gradient(145deg, oklch(0.14 0.04 50 / 0.40) 0%, oklch(0.12 0.02 50 / 0.20) 100%)", boxShadow: "0 0 20px oklch(0.68 0.18 50 / 0.10), 0 4px 16px oklch(0.04 0.010 250 / 0.40)" },
+    approaching: { borderColor: "oklch(0.72 0.18 60 / 0.30)", background: "linear-gradient(145deg, oklch(0.135 0.020 250) 0%, oklch(0.115 0.018 252) 100%)" },
+    upcoming: { borderColor: "oklch(0.88 0.22 130 / 0.20)", background: "linear-gradient(145deg, oklch(0.135 0.020 250) 0%, oklch(0.115 0.018 252) 100%)" },
+    locked: { opacity: 0.6, background: "linear-gradient(145deg, oklch(0.135 0.020 250) 0%, oklch(0.115 0.018 252) 100%)" },
   }[urgency];
 
   const numClass = {
@@ -115,7 +115,7 @@ function KeeperCountdownCard({ keeperDeadlineMs }: { keeperDeadlineMs?: number }
   }[urgency];
 
   return (
-    <Card className={`card-glow ${cardClass}`}>
+    <Card className="card-glow" style={cardStyle}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="p-1.5 rounded-md bg-accent">
@@ -156,7 +156,7 @@ function AIUsageCard() {
     .slice(0, 3);
 
   return (
-    <Card className="card-glow bg-card border-border">
+    <Card className="card-glow">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold flex items-center gap-2">
           <Zap className="w-4 h-4 text-primary" />
@@ -186,8 +186,19 @@ function AIUsageCard() {
                 {pct}% of daily budget
               </Badge>
             </div>
-            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-              <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.020 250)" }}>
+              <div
+                className="h-full rounded-full transition-all duration-700"
+                style={{
+                  width: `${pct}%`,
+                  background: pct >= 90
+                    ? "linear-gradient(90deg, oklch(0.58 0.22 25), oklch(0.65 0.22 25))"
+                    : pct >= 70
+                    ? "linear-gradient(90deg, oklch(0.68 0.18 50), oklch(0.72 0.18 60))"
+                    : "linear-gradient(90deg, oklch(0.88 0.22 130), oklch(0.78 0.22 145))",
+                  boxShadow: pct >= 90 ? "0 0 8px oklch(0.58 0.22 25 / 0.50)" : "0 0 8px oklch(0.88 0.22 130 / 0.40)"
+                }}
+              />
             </div>
             {topTypes.length > 0 && (
               <div className="space-y-1">
@@ -228,7 +239,7 @@ function LeaguePulseStrip() {
 
   if (isLoading) {
     return (
-      <Card className="card-glow bg-card border-border">
+      <Card className="card-glow">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
             <Activity className="w-4 h-4 text-orange-400" />
@@ -253,7 +264,7 @@ function LeaguePulseStrip() {
   const totalTx = data.teams.reduce((s: number, t: { lastWeekTransactionCount: number }) => s + t.lastWeekTransactionCount, 0);
 
   return (
-    <Card className={`card-glow bg-card ${isComplete ? "border-yellow-500/20" : "border-orange-500/20"}`}>
+    <Card className="card-glow" style={{ borderColor: isComplete ? "oklch(0.72 0.18 60 / 0.25)" : "oklch(0.68 0.18 50 / 0.25)", boxShadow: isComplete ? "0 0 20px oklch(0.72 0.18 60 / 0.06), 0 4px 16px oklch(0.04 0.010 250 / 0.40)" : "0 0 20px oklch(0.68 0.18 50 / 0.06), 0 4px 16px oklch(0.04 0.010 250 / 0.40)" }}>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -691,10 +702,10 @@ export default function Dashboard() {
 
   return (
     <AppLayout title="GM War Room" subtitle="ATLANTAS FINEST FF · Str8FrmHell, RodZilla · Rod Sellers · 2026 Season">
-      <div className="p-6">
+      <div className="p-6 fade-in">
         {/* Keeper Deadline Countdown Banner */}
         {showKeeperBanner && (
-          <div className="mb-4 flex items-center justify-between bg-amber-900/20 border border-amber-600/40 rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center justify-between rounded-xl px-4 py-3" style={{ background: "linear-gradient(135deg, oklch(0.18 0.08 60 / 0.25) 0%, oklch(0.14 0.04 60 / 0.15) 100%)", border: "1px solid oklch(0.55 0.15 60 / 0.40)", boxShadow: "0 0 20px oklch(0.72 0.18 60 / 0.08)" }}>
             <div className="flex items-center gap-3">
               <span className="text-2xl">🔒</span>
               <div>
@@ -717,7 +728,7 @@ export default function Dashboard() {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6 bg-card border border-border h-10 p-1 gap-0.5">
+          <TabsList className="mb-6 h-10 p-1 gap-0.5 flex-wrap">
             {[
               { value: "executive", label: "Executive Summary" },
               { value: "standings", label: "League Standings" },
@@ -730,11 +741,11 @@ export default function Dashboard() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="text-xs font-medium px-3 data-[state=active]:bg-primary/15 data-[state=active]:text-primary"
+                className="text-xs font-medium px-3"
               >
                 {tab.label}
                 {tab.badge && (
-                  <Badge className="ml-1.5 text-[9px] px-1 py-0 h-3.5 espn-gradient text-white border-0">
+                  <Badge className="ml-1.5 text-[9px] px-1 py-0 h-3.5 border-0" style={{ background: "linear-gradient(135deg, oklch(0.62 0.20 295) 0%, oklch(0.50 0.18 285) 100%)", color: "white" }}>
                     {tab.badge}
                   </Badge>
                 )}
@@ -747,19 +758,20 @@ export default function Dashboard() {
             {/* 6 Metric Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               {[
-                { label: "2025 Rank", value: myTeam ? `#${myTeam.rankFinal || 1}` : "—", sub: "Final Standings", icon: <Trophy className="w-4 h-4 text-yellow-400" />, color: myTeam ? "text-yellow-400" : "text-muted-foreground" },
-                { label: "Points Scored", value: myTeam ? `${Math.round(Number(myTeam.pointsFor || 0)).toLocaleString()}` : "—", sub: "Total PF 2025", icon: <TrendingUp className="w-4 h-4 text-emerald-400" />, color: myTeam ? "text-emerald-400" : "text-muted-foreground" },
-                { label: "Points Allowed", value: myTeam ? `${Math.round(Number(myTeam.pointsAgainst || 0)).toLocaleString()}` : "—", sub: "Total PA 2025", icon: <Shield className="w-4 h-4 text-blue-400" />, color: myTeam ? "text-blue-400" : "text-muted-foreground" },
-                { label: "Point Differential", value: myTeam ? `+${Math.round(Number(myTeam.pointsFor || 0) - Number(myTeam.pointsAgainst || 0))}` : "—", sub: myTeam ? "+16.3 per game" : "Sync data to view", icon: <Activity className="w-4 h-4 text-primary" />, color: myTeam ? "text-primary" : "text-muted-foreground" },
-                { label: "vs League Avg PF", value: myTeam && leagueAvgPF > 0 ? `+${Math.round(Number(myTeam.pointsFor || 0) - leagueAvgPF)}` : "—", sub: leagueAvgPF > 0 ? `Avg: ${leagueAvgPF} pts` : "Sync data to view", icon: <BarChart3 className="w-4 h-4 text-purple-400" />, color: myTeam ? "text-purple-400" : "text-muted-foreground" },
-                { label: "Playoff Spots", value: standings && standings.length > 0 ? "7 / 14" : "—", sub: standings && standings.length > 0 ? "50% entry rate" : "Sync data to view", icon: <Star className="w-4 h-4 text-orange-400" />, color: standings && standings.length > 0 ? "text-orange-400" : "text-muted-foreground" },
+                { label: "2025 Rank", value: myTeam ? `#${myTeam.rankFinal || 1}` : "—", sub: "Final Standings", icon: <Trophy className="w-4 h-4 text-yellow-400" />, color: "text-yellow-400", accent: "oklch(0.72 0.18 60)" },
+                { label: "Points Scored", value: myTeam ? `${Math.round(Number(myTeam.pointsFor || 0)).toLocaleString()}` : "—", sub: "Total PF 2025", icon: <TrendingUp className="w-4 h-4 text-emerald-400" />, color: "text-emerald-400", accent: "oklch(0.72 0.20 155)" },
+                { label: "Points Allowed", value: myTeam ? `${Math.round(Number(myTeam.pointsAgainst || 0)).toLocaleString()}` : "—", sub: "Total PA 2025", icon: <Shield className="w-4 h-4 text-blue-400" />, color: "text-blue-400", accent: "oklch(0.65 0.18 240)" },
+                { label: "Point Differential", value: myTeam ? `+${Math.round(Number(myTeam.pointsFor || 0) - Number(myTeam.pointsAgainst || 0))}` : "—", sub: myTeam ? "+16.3 per game" : "Sync data to view", icon: <Activity className="w-4 h-4 text-primary" />, color: "text-primary", accent: "oklch(0.88 0.22 130)" },
+                { label: "vs League Avg PF", value: myTeam && leagueAvgPF > 0 ? `+${Math.round(Number(myTeam.pointsFor || 0) - leagueAvgPF)}` : "—", sub: leagueAvgPF > 0 ? `Avg: ${leagueAvgPF} pts` : "Sync data to view", icon: <BarChart3 className="w-4 h-4 text-purple-400" />, color: "text-purple-400", accent: "oklch(0.62 0.20 295)" },
+                { label: "Playoff Spots", value: standings && standings.length > 0 ? "7 / 14" : "—", sub: standings && standings.length > 0 ? "50% entry rate" : "Sync data to view", icon: <Star className="w-4 h-4 text-orange-400" />, color: "text-orange-400", accent: "oklch(0.68 0.18 50)" },
               ].map((card) => (
-                <Card key={card.label} className="card-glow bg-card border-border">
+                <Card key={card.label} className="card-glow" style={{ position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, right: 0, width: "60px", height: "60px", borderRadius: "0 0 0 60px", background: `${card.accent}14`, pointerEvents: "none" }} />
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="p-1.5 rounded-md bg-accent">{card.icon}</div>
+                      <div className="p-1.5 rounded-md" style={{ background: `${card.accent}18` }}>{card.icon}</div>
                     </div>
-                    <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
+                    <p className={`text-xl font-bold num-display ${card.color}`}>{card.value}</p>
                     <p className="text-xs font-medium text-foreground mt-0.5">{card.label}</p>
                     <p className="text-[10px] text-muted-foreground">{card.sub}</p>
                   </CardContent>
@@ -770,7 +782,7 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Threat Assessment */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-red-400" />
@@ -797,10 +809,18 @@ export default function Dashboard() {
                           <p className="text-[10px] text-muted-foreground">{opp.wins25}-{opp.losses25} record</p>
                         </div>
                         <div className="w-16 flex-shrink-0">
-                          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.020 250)" }}>
                             <div
-                              className={`h-full rounded-full ${opp.threat >= 85 ? "bg-red-500" : opp.threat >= 60 ? "bg-yellow-500" : "bg-emerald-500"}`}
-                              style={{ width: `${opp.threat}%` }}
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{
+                                width: `${opp.threat}%`,
+                                background: opp.threat >= 85
+                                  ? "linear-gradient(90deg, oklch(0.58 0.22 25), oklch(0.65 0.22 25))"
+                                  : opp.threat >= 60
+                                  ? "linear-gradient(90deg, oklch(0.72 0.18 60), oklch(0.78 0.18 70))"
+                                  : "linear-gradient(90deg, oklch(0.72 0.20 155), oklch(0.78 0.20 160))",
+                                boxShadow: opp.threat >= 85 ? "0 0 6px oklch(0.58 0.22 25 / 0.50)" : opp.threat >= 60 ? "0 0 6px oklch(0.72 0.18 60 / 0.40)" : "0 0 6px oklch(0.72 0.20 155 / 0.40)"
+                              }}
                             />
                           </div>
                           <p className="text-[10px] text-muted-foreground text-right mt-0.5">{opp.threat}%</p>
@@ -813,7 +833,7 @@ export default function Dashboard() {
               </Card>
 
               {/* Immediate Action Items */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Zap className="w-4 h-4 text-yellow-400" />
@@ -874,7 +894,7 @@ export default function Dashboard() {
             <AIUsageCard />
             {/* Countdowns + Quick Launch */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Clock className="w-4 h-4 text-primary" />
@@ -920,7 +940,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Bot className="w-4 h-4 text-primary" />
@@ -932,7 +952,10 @@ export default function Dashboard() {
                     <Button
                       key={p.label}
                       variant="outline"
-                      className="w-full justify-start gap-3 text-sm h-auto py-3 border-border hover:border-primary/40 hover:bg-primary/5"
+                      className="w-full justify-start gap-3 text-sm h-auto py-3 hover:bg-primary/5 transition-all duration-200"
+                      style={{ borderColor: "oklch(0.26 0.024 250)", transition: "all 0.2s ease" }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "oklch(0.88 0.22 130 / 0.40)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 12px oklch(0.88 0.22 130 / 0.08)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = "oklch(0.26 0.024 250)"; (e.currentTarget as HTMLButtonElement).style.boxShadow = ""; }}
                       onClick={() => launchPrompt(p.prompt)}
                     >
                       <p.icon className="w-4 h-4 text-primary flex-shrink-0" />
@@ -951,7 +974,7 @@ export default function Dashboard() {
           <TabsContent value="standings" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* Full standings table */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-yellow-400" />
@@ -968,12 +991,12 @@ export default function Dashboard() {
                         const tier = i < 3 ? "Elite" : i < 6 ? "Strong" : i < 9 ? "Rising" : "Trade Target";
                         const tierColor = i < 3 ? "border-yellow-500/30 text-yellow-400" : i < 6 ? "border-emerald-500/30 text-emerald-400" : i < 9 ? "border-blue-500/30 text-blue-400" : "border-slate-500/30 text-slate-400";
                         return (
-                          <div key={i} className={`flex items-center gap-3 px-5 py-2.5 hover:bg-accent/30 transition-colors ${isYou ? "bg-blue-500/8 border-l-2 border-l-blue-500" : ""}`}>
+                          <div key={i} className="flex items-center gap-3 px-5 py-2.5 transition-colors" style={isYou ? { background: "linear-gradient(90deg, oklch(0.88 0.22 130 / 0.08) 0%, transparent 100%)", borderLeft: "2px solid oklch(0.88 0.22 130 / 0.60)" } : { borderLeft: "2px solid transparent" }}>
                             <span className={`text-sm font-bold w-5 text-center flex-shrink-0 ${i === 0 ? "text-yellow-400" : i === 1 ? "text-slate-300" : i === 2 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5">
-                                <p className={`text-sm font-medium truncate ${isYou ? "text-blue-400" : "text-foreground"}`}>{String(team.teamName || "")}</p>
-                                {isYou && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-blue-500/20 text-blue-400 border-blue-500/30 border">YOU</Badge>}
+                                <p className={`text-sm font-medium truncate ${isYou ? "text-primary" : "text-foreground"}`}>{String(team.teamName || "")}</p>
+                                {isYou && <Badge className="text-[9px] px-1 py-0 h-3.5 border" style={{ background: "oklch(0.88 0.22 130 / 0.15)", color: "oklch(0.88 0.22 130)", borderColor: "oklch(0.88 0.22 130 / 0.35)" }}>YOU</Badge>}
                               </div>
                               <p className="text-xs text-muted-foreground truncate">{String(team.owners || "")}</p>
                             </div>
@@ -1003,7 +1026,7 @@ export default function Dashboard() {
 
               {/* Bar chart */}
               <div className="space-y-6">
-                <Card className="card-glow bg-card border-border">
+                <Card className="card-glow">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <BarChart3 className="w-4 h-4 text-primary" />
@@ -1035,7 +1058,7 @@ export default function Dashboard() {
                 </Card>
 
                 {/* Multi-year power rankings */}
-                <Card className="card-glow bg-card border-border">
+                <Card className="card-glow">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <TrendingUp className="w-4 h-4 text-primary" />
@@ -1183,7 +1206,7 @@ export default function Dashboard() {
           <TabsContent value="draft" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Round-by-round priority */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-primary" />
@@ -1205,7 +1228,7 @@ export default function Dashboard() {
               </Card>
 
               {/* Roster Blueprint */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />
@@ -1236,7 +1259,7 @@ export default function Dashboard() {
             </div>
 
             {/* ── COMPETITOR DRAFT INTELLIGENCE (full-width deep section) ── */}
-            <Card className="card-glow bg-card border-border">
+            <Card className="card-glow">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Brain className="w-4 h-4 text-primary" />
@@ -1604,7 +1627,7 @@ export default function Dashboard() {
 
             {/* Live 2026 Draft Order */}
             {draftOrder2026?.pickOrder && draftOrder2026.pickOrder.length > 0 && (
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Trophy className="w-4 h-4 text-yellow-400" />
@@ -1639,7 +1662,7 @@ export default function Dashboard() {
           <TabsContent value="keepers" className="space-y-6 mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 4-step framework */}
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Star className="w-4 h-4 text-yellow-400" />
@@ -1664,7 +1687,7 @@ export default function Dashboard() {
 
               <div className="space-y-4">
                 {/* Key principles */}
-                <Card className="card-glow bg-card border-border">
+                <Card className="card-glow">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-emerald-400" />
@@ -1687,7 +1710,7 @@ export default function Dashboard() {
                 </Card>
 
                 {/* League keeper dynamics */}
-                <Card className="card-glow bg-card border-border">
+                <Card className="card-glow">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <Brain className="w-4 h-4 text-primary" />
@@ -1742,7 +1765,7 @@ export default function Dashboard() {
 
             {/* Live Keeper History Timeline */}
             {keeperHistory.length > 0 && (
-              <Card className="card-glow bg-card border-border">
+              <Card className="card-glow">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Activity className="w-4 h-4 text-primary" />
@@ -1795,7 +1818,7 @@ export default function Dashboard() {
           <TabsContent value="chat" className="mt-0">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-280px)] min-h-[500px]">
               {/* Quick prompts sidebar */}
-              <Card className="card-glow bg-card border-border lg:col-span-1 flex flex-col">
+              <Card className="card-glow lg:col-span-1 flex flex-col">
                 <CardHeader className="pb-3 flex-shrink-0">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Zap className="w-4 h-4 text-yellow-400" />
@@ -1823,7 +1846,7 @@ export default function Dashboard() {
               </Card>
 
               {/* Chat area */}
-              <Card className="card-glow bg-card border-border lg:col-span-3 flex flex-col">
+              <Card className="card-glow lg:col-span-3 flex flex-col">
                 <CardHeader className="pb-3 flex-shrink-0 border-b border-border">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Bot className="w-4 h-4 text-primary" />
