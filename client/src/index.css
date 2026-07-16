@@ -73,12 +73,35 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* Ambient brand glow — one subtle purple wash at top, fixed to viewport */
+    background-image:
+      radial-gradient(
+        ellipse 90% 45% at 50% -15%,
+        color-mix(in oklch, var(--color-brand-purple) 10%, transparent) 0%,
+        transparent 60%
+      );
+    background-attachment: fixed;
   }
   .flex {
     min-width: 0;
     min-height: 0;
+  }
+  /* Restrained scrollbar — visible but not loud */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.30 0.030 300);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.38 0.034 300);
   }
 }
 
@@ -249,8 +272,89 @@
         180deg,
         var(--color-intel-page-landing-from),
         var(--color-intel-page-landing-to)
-      );
+            );
   }
+}
+
+/* ── Hierarchy-aware depth + color semantics ─────────────────────────────── */
+/*
+ * Rules:
+ *   card-base  : standard cards. Depth via contrast + spacing, no glow.
+ *   card-raised: hero/featured cards. One subtle shadow layer.
+ *   card-primary: primary CTA card only (one per screen). Lime border.
+ *   card-ai    : AI / Rivals Intelligence surfaces only. Purple border.
+ *
+ * Color semantics:
+ *   Lime   → positive, active, current user, primary action
+ *   Purple → AI, Rivals Intelligence, premium
+ *   Amber  → caution, watch, deadline approaching
+ *   Red    → danger, critical, poor grade
+ *   Teal   → informational, neutral comparison
+ */
+.card-base {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--color-foreground) 8%, transparent),
+    0 1px 4px oklch(0.04 0.010 300 / 0.50);
+}
+.card-raised {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--color-foreground) 10%, transparent),
+    0 2px 8px oklch(0.04 0.010 300 / 0.55),
+    0 8px 24px oklch(0.04 0.010 300 / 0.30);
+}
+/* Primary CTA card — lime accent. One per screen max. */
+.card-primary {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--color-brand-lime) 28%, transparent),
+    0 0 14px color-mix(in oklch, var(--color-brand-lime) 5%, transparent),
+    0 4px 16px oklch(0.04 0.010 300 / 0.50);
+}
+/* AI / Rivals Intelligence surface — purple accent. One per screen max. */
+.card-ai {
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--color-brand-purple) 32%, transparent),
+    0 0 14px color-mix(in oklch, var(--color-brand-purple) 7%, transparent),
+    0 4px 16px oklch(0.04 0.010 300 / 0.50);
+}
+/* Fade-in page transition */
+.page-enter {
+  animation: page-enter 0.30s ease-out both;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Tabular numbers */
+.num-display {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+/* Active tab trigger — restrained lime tint, no glow */
+[data-slot="tabs-trigger"][data-state="active"] {
+  background: color-mix(in oklch, var(--color-brand-lime) 10%, transparent) !important;
+  border-color: color-mix(in oklch, var(--color-brand-lime) 22%, transparent) !important;
+  color: var(--color-brand-lime) !important;
+}
+/* Input focus — lime ring, no spread glow */
+input:focus-visible, textarea:focus-visible {
+  border-color: color-mix(in oklch, var(--color-brand-lime) 45%, transparent) !important;
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-brand-lime) 12%, transparent) !important;
+  outline: none !important;
+}
+/* Skeleton shimmer */
+[data-slot="skeleton"] {
+  background: linear-gradient(
+    90deg,
+    oklch(0.18 0.022 300) 0%,
+    oklch(0.24 0.028 300) 50%,
+    oklch(0.18 0.022 300) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ── Light mode theme overrides ─────────────────────────────────────────── */

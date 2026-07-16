@@ -261,7 +261,7 @@ function RivalCard({
   pending: boolean;
 }) {
   return (
-    <section className="flex h-full flex-col rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
+    <section className="card-ai flex h-full flex-col rounded-2xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
       <p className="text-label font-bold uppercase tracking-[0.14em] text-violet-300/80">
         {BRIEFING.rivalOfTheWeek}
       </p>
@@ -483,7 +483,7 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
       minHeight="none"
       bleed={false}
       padding="default"
-      className="mx-auto max-w-[1200px] space-y-8 pb-12"
+      className="mx-auto max-w-[1200px] space-y-8 pb-12 page-enter"
     >
       <BriefingMasthead
         season={props.season}

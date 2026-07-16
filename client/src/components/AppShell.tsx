@@ -325,9 +325,10 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-2xs font-bold uppercase tracking-[0.2em] text-muted-foreground",
+        "px-3 pb-1.5 text-2xs font-bold uppercase tracking-[0.2em]",
         isFirst ? "pt-0" : "pt-4"
       )}
+      style={{ color: "oklch(0.62 0.16 295 / 0.70)" }}
     >
       {title}
     </div>
@@ -438,7 +439,7 @@ function NavGroupList({
 function SidebarFooter() {
   const { user, isLoaded } = useUser();
   return (
-    <div className="space-y-2 border-t border-border/60 p-3">
+    <div className="space-y-2 border-t border-border/70 p-3" style={{ background: "oklch(0.115 0.018 300 / 0.90)" }}>
       {isLoaded && user ? (
         <div className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-2">
           <img
@@ -506,7 +507,7 @@ function Sidebar({
   }, [isMobile, hasAccess]);
 
   return (
-    <div className="flex h-full flex-col border-r border-border bg-card">
+    <div className="flex h-full flex-col border-r border-border" style={{ background: "linear-gradient(180deg, oklch(0.145 0.022 300) 0%, oklch(0.125 0.018 300) 100%)" }}>
       {/* Logo */}
       <div className="flex items-center justify-between border-b border-border px-4 py-4">
         <img src="/logo.png" alt="Fantasy Football Rivals - Own Your Rivals" className="max-h-[132px] w-auto object-contain" />
@@ -590,7 +591,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const location = useLocation();
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-md md:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border/70 px-4 md:px-6" style={{ background: "oklch(0.12 0.015 300 / 0.92)", backdropFilter: "blur(14px) saturate(1.3)", WebkitBackdropFilter: "blur(14px) saturate(1.3)" }}>
       <div className="flex items-center gap-3">
         <button
           type="button"

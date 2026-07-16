@@ -18,18 +18,24 @@ function Card({
   onKeyDown,
   role,
   tabIndex,
+  style,
   ...props
 }: React.ComponentProps<"div"> & { interactive?: boolean }) {
   // A card is keyboard-activatable only when it is interactive AND has a click handler.
   const clickable = Boolean(interactive) && typeof onClick === "function";
+  const baseStyle: React.CSSProperties = {
+    background: "linear-gradient(145deg, oklch(0.155 0.022 300) 0%, oklch(0.135 0.018 300) 100%)",
+    boxShadow: "0 0 0 1px color-mix(in oklch, oklch(0.96 0.006 300) 7%, transparent), 0 1px 4px oklch(0.04 0.010 300 / 0.50)",
+  };
   return (
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        "text-card-foreground flex flex-col gap-6 rounded-xl border py-6",
         interactive && interactiveCardClasses,
         className
       )}
+      style={{ ...baseStyle, ...style }}
       onClick={onClick}
       onKeyDown={(e) => {
         if (clickable && (e.key === "Enter" || e.key === " ")) {
