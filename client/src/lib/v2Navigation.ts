@@ -99,7 +99,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals",
     icon: Swords,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: false,
   },
   {
@@ -109,9 +109,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/cast",
     icon: Clapperboard,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/the-cast",
   },
   {
     id: "rivals-owner-dossier",
@@ -120,9 +119,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/owners",
     icon: Users,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/owner-profiles",
   },
   {
     id: "rivals-head-to-head",
@@ -131,9 +129,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/head-to-head",
     icon: ScrollText,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rivalry-center",
   },
   {
     id: "rivals-rivalries",
@@ -142,9 +139,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/rivalries",
     icon: Swords,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rivalry-center",
   },
   {
     id: "rivals-league-map",
@@ -153,7 +149,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/league-map",
     icon: MapIcon,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
   },
   {
@@ -163,7 +159,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rivals/relationships",
     icon: Network,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
   },
 

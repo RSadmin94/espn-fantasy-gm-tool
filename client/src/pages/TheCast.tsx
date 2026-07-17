@@ -1,7 +1,9 @@
 import { type CSSProperties, type ReactNode } from "react";
+import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { castMemberDossierOwnerKey, rivalsOwnerDossierPath } from "@/lib/ownerIdentity";
 import { useState } from "react";
 import { Crown, Loader2, Clapperboard, Share2 } from "lucide-react";
 
@@ -20,6 +22,8 @@ const PAGEBG: CSSProperties = {
 type Badge = { label: string; receipt: string; tier: string };
 type CastMember = {
   memberId: string;
+  /** Canonical owners.ownerList / owners.ownerProfile key when provided by dna.leagueCast. */
+  ownerKey?: string;
   ownerName: string;
   archetype: string;
   archetypeReceipt: string;
@@ -28,7 +32,13 @@ type CastMember = {
   isYou: boolean;
 };
 
-type PastChampion = { memberId: string; ownerName: string; championships: number; championshipYears: number[] };
+type PastChampion = {
+  memberId: string;
+  ownerKey?: string;
+  ownerName: string;
+  championships: number;
+  championshipYears: number[];
+};
 
 const PERSONALITY = new Set(["The Trade Shark", "The Chaos Agent", "The Hothead"]);
 const BADGE_RANK: Record<string, number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3, playoff_fixture: 4 };
@@ -60,8 +70,13 @@ function Headliner({ m }: { m: CastMember }) {
   const champ = m.badges.find((b) => b.tier === "champion");
   const others = m.badges.filter((b) => b.tier !== "champion");
   const fallback = !champ && others.length ? others[0] : null;
+  const dossierHref = rivalsOwnerDossierPath(castMemberDossierOwnerKey(m));
   return (
-    <div className="relative overflow-hidden rounded-2xl p-5" style={{ background: "linear-gradient(160deg,rgba(245,197,24,.12),rgba(245,197,24,.03))", border: `1px solid ${GOLD}55` }}>
+    <Link
+      to={dossierHref}
+      className="relative block overflow-hidden rounded-2xl p-5 transition-opacity hover:opacity-95"
+      style={{ background: "linear-gradient(160deg,rgba(245,197,24,.12),rgba(245,197,24,.03))", border: `1px solid ${GOLD}55` }}
+    >
       <Crown className="absolute right-3 top-3 h-7 w-7 opacity-30" style={{ color: GOLD }} />
       {others.length > 0 && (
         <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{others.map((b) => b.label).join(" · ")}</div>
@@ -75,26 +90,36 @@ function Headliner({ m }: { m: CastMember }) {
       )}
       {fallback && <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{fallback.receipt}</div>}
       <div className="mt-2 text-sm font-semibold" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
-    </div>
+    </Link>
   );
 }
 
 function PersonaCard({ m }: { m: CastMember }) {
+  const dossierHref = rivalsOwnerDossierPath(castMemberDossierOwnerKey(m));
   return (
-    <div className="rounded-xl p-4" style={{ background: "rgba(163,230,53,.05)", border: `1px solid ${LIME}33` }}>
+    <Link
+      to={dossierHref}
+      className="block rounded-xl p-4 transition-opacity hover:opacity-95"
+      style={{ background: "rgba(163,230,53,.05)", border: `1px solid ${LIME}33` }}
+    >
       <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: LIME }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
       <div className="mt-1 text-lg font-black leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
       <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{m.archetypeReceipt}</div>
-    </div>
+    </Link>
   );
 }
 function WildCard({ m }: { m: CastMember }) {
+  const dossierHref = rivalsOwnerDossierPath(castMemberDossierOwnerKey(m));
   return (
-    <div className="rounded-lg p-3" style={{ background: "rgba(196,181,253,.05)", border: `1px solid ${VIOLET}33` }}>
+    <Link
+      to={dossierHref}
+      className="block rounded-lg p-3 transition-opacity hover:opacity-95"
+      style={{ background: "rgba(196,181,253,.05)", border: `1px solid ${VIOLET}33` }}
+    >
       <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: VIOLET }}>{m.archetype}</div>
       <div className="mt-0.5 text-base font-bold leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
       <div className="mt-1 text-[11px] leading-snug" style={{ color: MUTED }}>{m.archetypeReceipt}</div>
-    </div>
+    </Link>
   );
 }
 
@@ -222,14 +247,19 @@ export function TheCast() {
             <SectionTitle color={GOLD}>Past Champions</SectionTitle>
             <div className="grid gap-2.5 sm:grid-cols-2 md:grid-cols-3">
               {pastChampions.map((m) => (
-                <div key={m.memberId} className="rounded-lg p-3" style={{ background: "rgba(245,197,24,.05)", border: `1px solid ${GOLD}33` }}>
+                <Link
+                  key={m.memberId}
+                  to={rivalsOwnerDossierPath(castMemberDossierOwnerKey(m))}
+                  className="block rounded-lg p-3 transition-opacity hover:opacity-95"
+                  style={{ background: "rgba(245,197,24,.05)", border: `1px solid ${GOLD}33` }}
+                >
                   <div className="flex items-center gap-1.5">
                     <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: GOLD }} />
                     <span className="text-sm font-black leading-tight">{m.ownerName}</span>
                   </div>
                   <div className="mt-0.5 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: GOLD }}>{m.championships > 1 ? `${m.championships}x Champion` : "Champion"}</div>
                   <div className="text-[11px]" style={{ color: MUTED }}>{m.championshipYears.join(", ")}</div>
-                </div>
+                </Link>
               ))}
             </div>
             <p className="mt-2 text-[11px]" style={{ color: MUTED }}>No longer in the league - their banners stay up.</p>

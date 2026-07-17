@@ -16,8 +16,10 @@
  */
 
 import { z } from "zod";
+import { asc, eq } from "drizzle-orm";
 import { router, publicProcedure, resolvePremiumAccess } from "./_core/trpc";
-import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId, reconcileActiveLeague } from "./db";
+import { getCachedView, getAllCachedSeasons, resolveActiveLeagueId, reconcileActiveLeague, getDb } from "./db";
+import { gmTeams } from "../drizzle/schema";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import {
   calcLeagueDNA,
@@ -35,6 +37,11 @@ import { careerSimGrades } from "./draftGradeForDna";
 import { signReceipt, verifyReceipt, type ReceiptPayload } from "./receiptToken";
 import { mintShareCode, resolveShareToken } from "./receiptShare";
 import { getRivalryScoresFromDb } from "./rivalryService";
+import {
+  buildRawKeyToCanonicalProfileKey,
+  canonicalOwnerKeyForMemberId,
+  type GmTeamRow,
+} from "./ownerProfileService";
 
 // ─── ESPN data extraction helpers ────────────────────────────────────────────
 
@@ -309,6 +316,21 @@ export const dnaRouter = router({
       if (nm?.name) leagueName = String(nm.name);
     } catch { /* best-effort name + trophies */ }
 
+    // Same ownerKey authority as owners.ownerList / owners.ownerProfile.
+    let ownerKeyRemap = new Map<string, string>();
+    try {
+      const db = await getDb();
+      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      if (db && leagueId) {
+        const teamRows = await db
+          .select()
+          .from(gmTeams)
+          .where(eq(gmTeams.leagueId, String(leagueId).trim().slice(0, 32)))
+          .orderBy(asc(gmTeams.season), asc(gmTeams.teamId));
+        ownerKeyRemap = buildRawKeyToCanonicalProfileKey(teamRows as GmTeamRow[]);
+      }
+    } catch { /* fall back to id:{memberId} without person-merge remap */ }
+
     const co = await resolveCurrentOwner({ id: ctx.user.id });
     const focalId = co.isSetupComplete ? co.ownerId : null;
     const currentIds = new Set(
@@ -322,6 +344,8 @@ export const dnaRouter = router({
         if (!prof) return null;
         return {
           memberId: d.memberId,
+          /** Canonical key shared with owners.ownerList / owners.ownerProfile. */
+          ownerKey: canonicalOwnerKeyForMemberId(d.memberId, ownerKeyRemap),
           ownerName: prof.ownerName,
           archetype: prof.archetype,
           archetypeReceipt: prof.archetypeReceipt,
@@ -336,7 +360,13 @@ export const dnaRouter = router({
     // title-holder. Sourced from the same authority (person-merged), keyed off currentIds.
     const pastChampions = [...trophyRaw.entries()]
       .filter(([memberId, t]) => t.championships >= 1 && !currentIds.has(memberId))
-      .map(([memberId, t]) => ({ memberId, ownerName: t.name, championships: t.championships, championshipYears: [...t.championshipYears].sort((a, b) => a - b) }))
+      .map(([memberId, t]) => ({
+        memberId,
+        ownerKey: canonicalOwnerKeyForMemberId(memberId, ownerKeyRemap),
+        ownerName: t.name,
+        championships: t.championships,
+        championshipYears: [...t.championshipYears].sort((a, b) => a - b),
+      }))
       .sort((a, b) => b.championships - a.championships || a.ownerName.localeCompare(b.ownerName));
 
     return { leagueName, season: latestSeason, cast, pastChampions };

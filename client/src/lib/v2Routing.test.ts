@@ -63,6 +63,28 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(homePage).not.toContain("V2PlaceholderRoute");
     expect(homePage).not.toContain("V2PlaceholderPage");
   });
+
+  it("mounts live Rivals pages at canonical routes instead of V2PlaceholderRoute", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    const live = [
+      ["/rivals", "RivalsHub"],
+      ["/rivals/cast", "RivalsCast"],
+      ["/rivals/owners", "RivalsOwners"],
+      ["/rivals/owners/:ownerId", "RivalsOwnerDossier"],
+      ["/rivals/head-to-head", "RivalsHeadToHead"],
+      ["/rivals/rivalries", "RivalsRivalries"],
+      ["/rivals/league-map", "RivalsLeagueMap"],
+      ["/rivals/relationships", "RivalsRelationships"],
+    ] as const;
+    for (const [route, component] of live) {
+      expect(main).toContain(`path: "${route}"`);
+      expect(main).toContain(`element: <${component} />`);
+    }
+    expect(main).toContain('path: "/the-cast"');
+    expect(main).toContain('path: "/owner-profiles"');
+    expect(main).toContain('path: "/rivalry-center"');
+    expect(main).toContain('path: "/league-dna"');
+  });
   it("does not redirect /draft to dashboard (V2 Draft hub owns /draft)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).not.toMatch(/path:\s*"\/draft"\s*,\s*element:\s*<Navigate to="\/dashboard"/);

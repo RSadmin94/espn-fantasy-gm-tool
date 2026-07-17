@@ -198,7 +198,20 @@ function HeatBadge({ label }: { label?: string }) {
   );
 }
 
-export function RivalryCenter() {
+export function RivalryCenter({
+  variant = "full",
+}: {
+  variant?: "full" | "rivalries" | "head-to-head";
+} = {}) {
+  const showRivalryNarrative = variant !== "head-to-head";
+  const showMatrix = variant !== "rivalries";
+  const showH2hBoards = variant === "full" || variant === "head-to-head";
+  const pageTitle = variant === "head-to-head" ? "Head-to-Head Ledger" : "Rivalries";
+  const pageSubtitle =
+    variant === "head-to-head"
+      ? "Owner-versus-owner records, the matrix, and the dossiers behind every series."
+      : "Head-to-head records, heat, playoff scars, and the receipts behind every feud.";
+
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
 
@@ -472,8 +485,8 @@ export function RivalryCenter() {
   return (
     <IntelPageShell bleed minHeight="full" background="cinematic-token" padding="default">
       <CinematicPageHeader
-        title="Rivalries"
-        subtitle="Head-to-head records, heat, playoff scars, and the receipts behind every feud."
+        title={pageTitle}
+        subtitle={pageSubtitle}
         className="mb-5"
         meta={
           <>
@@ -555,7 +568,7 @@ export function RivalryCenter() {
         ) : (
           <>
             {/* ── Rivalry of the Year (featured) ─────────────────── */}
-            {hero && (
+            {showRivalryNarrative && hero && (
               <Panel>
                 <SectionHead
                   icon={Flame}
@@ -725,6 +738,7 @@ export function RivalryCenter() {
             </Panel>
 
             {/* ── Your Feuds (Rod's personalized rivalries) ──────── */}
+            {showRivalryNarrative && (
             <Panel>
               <SectionHead icon={Swords} title="Your Feuds" caption="Tap any rivalry for the full dossier." />
               {ranked.length === 0 && (
@@ -800,11 +814,12 @@ export function RivalryCenter() {
                 })}
               </div>
             </Panel>
+            )}
 
             {/* ── The Legends (league mythology) ─────────────────── */}
             </div>
 
-            {mythology.length > 0 && (
+            {showRivalryNarrative && mythology.length > 0 && (
               <Panel>
                 <SectionHead icon={Crown} title="The Legends" caption="League mythology, pulled from every recorded meeting." iconColor={GOLD} />
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -824,7 +839,7 @@ export function RivalryCenter() {
             )}
 
             {/* ── The Matrix (head-to-head grid) ─────────────────── */}
-            {gridOwners.length > 1 && (
+            {showMatrix && gridOwners.length > 1 && (
               <Panel>
                 <SectionHead icon={Users} title="The Matrix" caption="Each cell is the row owner's all-time record vs the column owner. Tap a cell for the dossier." />
                 {leagueLoading ? (
@@ -875,7 +890,7 @@ export function RivalryCenter() {
             )}
 
             {/* ── Nemesis Board ──────────────────────────────────── */}
-            {nemeses.length > 0 && (
+            {showH2hBoards && nemeses.length > 0 && (
               <Panel>
                 <SectionHead icon={Skull} title="Nemesis Board" caption="The active owner each manager has lost to most (min 3 meetings). Percent is the rival's win rate." iconColor={RED} />
                 <div className="mt-4 grid gap-2 md:grid-cols-2">
@@ -897,6 +912,7 @@ export function RivalryCenter() {
             )}
 
             {/* ── Historical Receipts ────────────────────────────── */}
+            {showRivalryNarrative && (
             <Panel id="receipts">
               <SectionHead icon={ScrollText} title="Historical Receipts" caption="Evidence from synced matchups, playoffs and trades." />
               {(() => {
@@ -947,8 +963,10 @@ export function RivalryCenter() {
                 );
               })()}
             </Panel>
+            )}
 
             {/* ── Revenge Watch + Trophies ───────────────────────── */}
+            {showRivalryNarrative && (
             <div className="grid gap-3 md:grid-cols-2">
               <Panel>
                 <SectionHead icon={Crosshair} title="Revenge Watch" caption="Unfinished business — outstanding playoff debts." iconColor={RED} />
@@ -1004,6 +1022,7 @@ export function RivalryCenter() {
                 })()}
               </Panel>
             </div>
+            )}
           </>
         )}
       </main>

@@ -34,7 +34,7 @@ export type CuratedHomeProps = {
 const JUMP_LINKS: { label: string; href: string; hint: string }[] = [
   { label: "My Team", href: "/roster", hint: "Roster" },
   { label: "Matchup", href: "/matchups", hint: "This week" },
-  { label: "Rivalries", href: "/rivalry-center", hint: "Rivals" },
+  { label: "Rivalries", href: "/rivals/rivalries", hint: "Rivals" },
   { label: "RFSN", href: "/rfsn", hint: "Wire" },
   { label: "War Room", href: "/draft-war-room", hint: "Draft" },
   { label: "Standings", href: "/standings", hint: "League" },
@@ -145,7 +145,7 @@ export function CuratedHome({
                 <ChevronRight className="h-3.5 w-3.5" />
               </Link>
               <Link
-                to="/owner-profiles"
+                to="/rivals/owners"
                 className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
                 My GM
@@ -162,7 +162,7 @@ export function CuratedHome({
           eyebrow="Rivals"
           title="Rival Watch"
           action={
-            <Link to="/rivalry-center" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+            <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
               Open rivalries →
             </Link>
           }

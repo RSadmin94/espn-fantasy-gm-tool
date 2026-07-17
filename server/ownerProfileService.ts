@@ -458,6 +458,19 @@ export function resolveOwnerKey(
   return bridged ? `id:${bridged}` : `name:${pk || "unknown"}`;
 }
 
+/**
+ * Map a bare ESPN member id (dna.leagueCast.memberId / gmTeams.ownerId) onto the same
+ * canonical `owners.ownerList.ownerKey` space via an existing remap ledger.
+ */
+export function canonicalOwnerKeyForMemberId(
+  memberId: string,
+  remap: ReadonlyMap<string, string> = new Map(),
+): string {
+  const raw = resolveOwnerKey(String(memberId || "").trim(), "", "", new Map());
+  if (!raw || raw === "id:") return "";
+  return remap.get(raw) ?? raw;
+}
+
 /** All team rows for this human owner (cross-season ownerId / person key / name bridge). */
 export function resolveOwnerTeamsForProfile(
   allRows: GmTeamRow[],

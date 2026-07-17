@@ -178,4 +178,26 @@ describe("v2Navigation — locked FFR 2.0", () => {
     const warRoom = getAllV2Destinations().find((d) => d.id === "draft-war-room")!;
     expect(getV2NavHref(warRoom)).toBe("/draft-war-room");
   });
+
+  it("points Rivals sidebar items to canonical live routes", () => {
+    const rivals = buildV2NavGroups().find((g) => g.id === "rivals")!;
+    const expected = [
+      ["/rivals/cast", "rivals-cast"],
+      ["/rivals/owners", "rivals-owner-dossier"],
+      ["/rivals/head-to-head", "rivals-head-to-head"],
+      ["/rivals/rivalries", "rivals-rivalries"],
+      ["/rivals/league-map", "rivals-league-map"],
+      ["/rivals/relationships", "rivals-relationships"],
+    ] as const;
+    for (const [route, id] of expected) {
+      const dest = rivals.items.find((i) => i.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.legacyRoute).toBeUndefined();
+      expect(getV2NavHref(dest)).toBe(route);
+      expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    const hub = V2_DESTINATIONS.find((d) => d.id === "rivals-hub")!;
+    expect(hub.kind).toBe("live");
+    expect(getV2NavHref(hub)).toBe("/rivals");
+  });
 });

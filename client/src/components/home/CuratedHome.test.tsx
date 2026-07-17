@@ -84,7 +84,8 @@ describe("CuratedHome", () => {
     const hrefs = Array.from(el.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/matchups");
     expect(hrefs).toContain("/roster");
-    expect(hrefs).toContain("/rivalry-center");
+    expect(hrefs).toContain("/rivals/rivalries");
+    expect(hrefs).toContain("/rivals/owners");
     expect(hrefs).toContain("/rfsn");
     expect(hrefs).toContain("/standings");
     expect(hrefs).toContain("/draft-war-room");

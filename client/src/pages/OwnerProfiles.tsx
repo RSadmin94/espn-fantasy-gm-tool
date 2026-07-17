@@ -1,8 +1,10 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
+import { ownerKeysEqual, resolveDirectoryOwnerKey, rivalsOwnerDossierPath } from "@/lib/ownerIdentity";
 import {
   AlertTriangle,
   ChevronDown,
@@ -490,20 +492,6 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
   const k = typeof o?.ownerKey === "string" ? o.ownerKey.trim() : "";
   if (k) return k;
   return String(o?.ownerName ?? "").trim();
-}
-
-function ownerKeysMatch(a: string | null | undefined, b: string | null | undefined): boolean {
-  const norm = (key: string) =>
-    key
-      .replace(/^\{?id:\{?/i, "")
-      .replace(/\}?\}?$/, "")
-      .trim()
-      .toUpperCase();
-  const left = a?.trim();
-  const right = b?.trim();
-  if (!left || !right) return false;
-  if (left === right) return true;
-  return norm(left) === norm(right);
 }
 
 // ─── Dynasty Identity badge ───────────────────────────────────────────────────
@@ -1958,9 +1946,26 @@ function ProfilePanel({
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export function OwnerProfiles() {
+export type OwnerProfilesProps = {
+  /** Canonical dossier owner id from `/rivals/owners/:ownerId`. */
+  routeOwnerId?: string | null;
+  /** When true, selecting an owner navigates to `/rivals/owners/:ownerId`. */
+  syncSelectionToRoute?: boolean;
+  pageEyebrow?: string;
+  pageTitle?: string;
+  pageSubtitle?: string;
+};
+
+export function OwnerProfiles({
+  routeOwnerId = null,
+  syncSelectionToRoute = false,
+  pageEyebrow = "League Intelligence Desk",
+  pageTitle = "My GM Profile",
+  pageSubtitle,
+}: OwnerProfilesProps = {}) {
   const trpcAny = trpc as any;
   const utils = trpc.useUtils();
+  const navigate = useNavigate();
 
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -1999,11 +2004,23 @@ export function OwnerProfiles() {
 
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
   const [showGraveyard, setShowGraveyard] = useState(false);
+  const [routeOwnerMissing, setRouteOwnerMissing] = useState(false);
   const profileRef = useRef<HTMLDivElement | null>(null);
+
+  const selectOwner = (id: string) => {
+    if (!id) return;
+    setSelectedOwnerKey(id);
+    setRouteOwnerMissing(false);
+    if (syncSelectionToRoute) {
+      navigate(rivalsOwnerDossierPath(id), { replace: true });
+    }
+    setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+  };
 
   useEffect(() => {
     setSelectedOwnerKey(null);
     setShowGraveyard(false);
+    setRouteOwnerMissing(false);
     void utils.owners.ownerList.invalidate();
     void utils.owners.ownerProfile.invalidate();
   }, [leagueContextKey, utils]);
@@ -2076,9 +2093,32 @@ export function OwnerProfiles() {
   }, [ownerHomeQ.data?.owner?.ownerKey, active]);
 
   useEffect(() => {
+    if (!ownerListHydrated) return;
+    const requested = typeof routeOwnerId === "string" ? routeOwnerId.trim() : "";
+    if (!requested) {
+      setRouteOwnerMissing(false);
+      return;
+    }
+    const directoryKeys = [...active, ...graveyard]
+      .map((o: any) => listRowLookupKey(o))
+      .filter(Boolean);
+    const resolved = resolveDirectoryOwnerKey(requested, directoryKeys);
+    if (resolved) {
+      setSelectedOwnerKey(resolved);
+      setRouteOwnerMissing(false);
+      if (syncSelectionToRoute && resolved !== requested) {
+        navigate(rivalsOwnerDossierPath(resolved), { replace: true });
+      }
+      return;
+    }
+    setRouteOwnerMissing(true);
+  }, [ownerListHydrated, routeOwnerId, active, graveyard, syncSelectionToRoute, navigate]);
+
+  useEffect(() => {
+    if (routeOwnerId) return;
     if (!ownerListHydrated || !listGated || !viewerOwnerKey) return;
     if (!selectedOwnerKey) setSelectedOwnerKey(viewerOwnerKey);
-  }, [ownerListHydrated, listGated, viewerOwnerKey, selectedOwnerKey]);
+  }, [ownerListHydrated, listGated, viewerOwnerKey, selectedOwnerKey, routeOwnerId]);
 
   useEffect(() => {
     if (!ownerListHydrated) return;
@@ -2089,6 +2129,7 @@ export function OwnerProfiles() {
   }, [ownerListHydrated, selectedOwnerKey, currentLeagueOwnerKeys]);
 
   useEffect(() => {
+    if (routeOwnerId) return;
     if (!ownerListHydrated) return;
     if (selectedOwnerKey != null && selectedOwnerKey !== "") return;
 
@@ -2096,7 +2137,7 @@ export function OwnerProfiles() {
     if (focalKey) {
       for (const o of [...active, ...graveyard] as any[]) {
         const rowKey = listRowLookupKey(o);
-        if (rowKey && ownerKeysMatch(rowKey, focalKey)) {
+        if (rowKey && ownerKeysEqual(rowKey, focalKey)) {
           setSelectedOwnerKey(rowKey);
           return;
         }
@@ -2108,7 +2149,7 @@ export function OwnerProfiles() {
       listRowLookupKey(graveyard[0]) ||
       "";
     if (first) setSelectedOwnerKey(first);
-  }, [ownerListHydrated, active, graveyard, selectedOwnerKey, ownerHomeQ.data?.owner?.ownerKey]);
+  }, [ownerListHydrated, active, graveyard, selectedOwnerKey, ownerHomeQ.data?.owner?.ownerKey, routeOwnerId]);
 
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
@@ -2153,14 +2194,15 @@ export function OwnerProfiles() {
   return (
     <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
       <CinematicPageHeader
-        eyebrowMono="League Intelligence Desk"
+        eyebrowMono={pageEyebrow}
         icon={Users}
         iconAccent="purple"
-        title="My GM Profile"
+        title={pageTitle}
         subtitle={
-          listGated
+          pageSubtitle ??
+          (listGated
             ? "Your identity preview — unlock Rivals Pro to scout every manager in your league."
-            : `${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`
+            : `${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`)
         }
         className="mb-5"
       />
@@ -2171,18 +2213,21 @@ export function OwnerProfiles() {
         </IntelPanel>
       ) : null}
 
+      {routeOwnerMissing ? (
+        <IntelPanel variant="warm" className="mb-4 border-red-500/25 bg-red-500/[0.06] px-4 py-3 text-sm text-zinc-300">
+          Owner not found in this league. Pick someone from the directory.
+        </IntelPanel>
+      ) : null}
+
       <div className="flex gap-6">
         <div className="w-72 shrink-0 space-y-2">
           {(() => {
-            const selectAndScroll = (id: string) => {
-              if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
-            };
             const renderCard = (o: any, key: string) => (
               <OwnerCard
                 key={key}
                 o={o}
                 selected={listRowLookupKey(o) !== "" && selectedOwnerKey === listRowLookupKey(o)}
-                onClick={() => selectAndScroll(listRowLookupKey(o))}
+                onClick={() => selectOwner(listRowLookupKey(o))}
                 onLockedClick={startScoutCheckout}
               />
             );
@@ -2236,7 +2281,7 @@ export function OwnerProfiles() {
                   {graveyard.map((o: any, gi: number) => (
                     <button key={listRowLookupKey(o) || `grave-${gi}`} type="button" onClick={() => {
                       const id = listRowLookupKey(o);
-                      if (id) { setSelectedOwnerKey(id); setTimeout(() => profileRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 60); }
+                      if (id) selectOwner(id);
                     }}
                       className={cn(
                         "w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors",

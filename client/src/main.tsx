@@ -60,6 +60,14 @@ import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
 import { Home } from "./pages/Home";
+import { RivalsHub } from "./pages/rivals/RivalsHub";
+import { RivalsCast } from "./pages/rivals/RivalsCast";
+import { RivalsOwners } from "./pages/rivals/RivalsOwners";
+import { RivalsOwnerDossier } from "./pages/rivals/RivalsOwnerDossier";
+import { RivalsHeadToHead } from "./pages/rivals/RivalsHeadToHead";
+import { RivalsRivalries } from "./pages/rivals/RivalsRivalries";
+import { RivalsLeagueMap } from "./pages/rivals/RivalsLeagueMap";
+import { RivalsRelationships } from "./pages/rivals/RivalsRelationships";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
 import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
@@ -210,6 +218,14 @@ const router = createBrowserRouter([
           // ── Active routes ─────────────────────────────────────────────
           ...v2PlaceholderRoutes,
           { path: "/home", element: <Home /> },
+          { path: "/rivals", element: <RivalsHub /> },
+          { path: "/rivals/cast", element: <RivalsCast /> },
+          { path: "/rivals/owners", element: <RivalsOwners /> },
+          { path: "/rivals/owners/:ownerId", element: <RivalsOwnerDossier /> },
+          { path: "/rivals/head-to-head", element: <RivalsHeadToHead /> },
+          { path: "/rivals/rivalries", element: <RivalsRivalries /> },
+          { path: "/rivals/league-map", element: <RivalsLeagueMap /> },
+          { path: "/rivals/relationships", element: <RivalsRelationships /> },
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },
