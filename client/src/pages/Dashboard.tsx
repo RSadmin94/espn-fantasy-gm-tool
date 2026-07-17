@@ -11,6 +11,7 @@ import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/Da
 import { type TimelineChamp } from "@/components/dashboard/DashboardTimelineStrip";
 import { WelcomeBackCoachHome } from "@/components/dashboard/welcomeBackCoach/WelcomeBackCoachHome";
 import { GmBriefingPage } from "@/components/briefing/GmBriefingPage";
+import { CuratedHome } from "@/components/home/CuratedHome";
 import { Link } from "react-router";
 import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,7 @@ function toMarqueeTeam(t: NormalizedStanding): MarqueeTeam {
   };
 }
 
-export function Dashboard() {
+export function Dashboard({ variant = "briefing" }: { variant?: "briefing" | "curated" }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const espnConnected = searchParams.get("espnConnected") === "1";
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
@@ -640,6 +641,50 @@ export function Dashboard() {
       </Link>
     </Button>
   );
+
+  const myStanding = leagueCtx.myTeamId != null ? ranked.find((t) => t.teamId === leagueCtx.myTeamId) : null;
+  const seasonRecordLine = myStanding ? formatRecord(myStanding) : freeProfileCareerLine;
+  const nextMatchupLine =
+    isInSeason && thisWeekOpponent
+      ? `vs ${thisWeekOpponent.ownerName}${thisWeekOpponent.teamName ? ` (${thisWeekOpponent.teamName})` : ""}`
+      : null;
+  const rosterAlertLine =
+    isPreseason && draftMemo
+      ? draftMemo
+      : playoffOutlook
+        ? playoffOutlook
+        : null;
+  const leagueMovementLine =
+    [acquisitionHeadline, dynastyLine].filter((line): line is string => Boolean(line && String(line).trim())).join(" · ") ||
+    null;
+  const showRecentEvents = (recentEventsQ.data?.length ?? 0) > 0;
+  const rivalInsight =
+    oh?.threat?.primary?.reason?.trim() ||
+    (oh?.rival?.heatLabel ? `${oh.rival.heatLabel} rivalry` : null);
+
+  if (variant === "curated") {
+    return (
+      <CuratedHome
+        welcomeName={welcomeName}
+        leagueName={leagueName}
+        weekLabel={weekLabel}
+        season={season}
+        briefingParagraph={executiveBriefing.paragraph}
+        briefingActionLabel={executiveBriefing.action.label}
+        briefingActionHref={executiveBriefing.action.href}
+        recordLine={seasonRecordLine}
+        rankLine={rankLine}
+        nextMatchupLine={nextMatchupLine}
+        rosterAlertLine={rosterAlertLine}
+        rivalName={oh?.rival?.rivalName?.trim() || oh?.threat?.primary?.ownerName?.trim() || null}
+        rivalInsight={rivalInsight}
+        leagueMovementLine={leagueMovementLine}
+        eventSeasons={eventSeasons}
+        showRecentEvents={showRecentEvents}
+        headerActions={syncHeaderAction}
+      />
+    );
+  }
 
   if (USE_GM_BRIEFING) {
     return (

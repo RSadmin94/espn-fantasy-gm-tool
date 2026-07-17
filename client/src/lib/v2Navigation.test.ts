@@ -168,10 +168,12 @@ describe("v2Navigation — locked FFR 2.0", () => {
     }
   });
 
-  it("uses legacy hrefs for Phase 1 sidebar preservation where mapped", () => {
-    const briefing = V2_DESTINATIONS.find((d) => d.id === "home")!;
-    expect(getV2NavHref(briefing)).toBe("/dashboard");
-    expect(isV2RouteActive("/dashboard", briefing)).toBe(true);
+  it("points Home sidebar to canonical /home and keeps Draft legacy hrefs", () => {
+    const home = V2_DESTINATIONS.find((d) => d.id === "home")!;
+    expect(home.kind).toBe("live");
+    expect(getV2NavHref(home)).toBe("/home");
+    expect(isV2RouteActive("/home", home)).toBe(true);
+    expect(isV2RouteActive("/dashboard", home)).toBe(false);
 
     const warRoom = getAllV2Destinations().find((d) => d.id === "draft-war-room")!;
     expect(getV2NavHref(warRoom)).toBe("/draft-war-room");

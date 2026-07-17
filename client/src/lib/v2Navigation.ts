@@ -87,9 +87,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/home",
     icon: LayoutDashboard,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/dashboard",
   },
 
   // ── Rivals ────────────────────────────────────────────────────────────

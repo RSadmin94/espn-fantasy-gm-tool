@@ -59,6 +59,7 @@ import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
+import { Home } from "./pages/Home";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
 import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
@@ -208,6 +209,7 @@ const router = createBrowserRouter([
         children: [
           // ── Active routes ─────────────────────────────────────────────
           ...v2PlaceholderRoutes,
+          { path: "/home", element: <Home /> },
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },

@@ -53,6 +53,16 @@ describe("v2Routing — locked FFR 2.0", () => {
     }
   });
 
+  it("mounts the curated Home page at /home instead of V2PlaceholderRoute", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    expect(main).toContain('path: "/home"');
+    expect(main).toContain("element: <Home />");
+    expect(main).toMatch(/import \{ Home \} from "\.\/pages\/Home"/);
+    const homePage = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "Home.tsx"), "utf-8");
+    expect(homePage).toContain('variant="curated"');
+    expect(homePage).not.toContain("V2PlaceholderRoute");
+    expect(homePage).not.toContain("V2PlaceholderPage");
+  });
   it("does not redirect /draft to dashboard (V2 Draft hub owns /draft)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).not.toMatch(/path:\s*"\/draft"\s*,\s*element:\s*<Navigate to="\/dashboard"/);
