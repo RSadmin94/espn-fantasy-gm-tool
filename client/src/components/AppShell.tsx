@@ -35,42 +35,31 @@ import {
 import { useTheme, LOCK_DARK } from "@/context/ThemeContext";
 import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboarding";
 import { V1 } from "@/lib/v1Copy";
-import { buildNavGroups, type RouteFeatureEntry } from "@/lib/featureRegistry";
+import { buildV2NavGroups, getV2NavHref, isV2RouteActive, type V2Destination } from "@/lib/v2Navigation";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
 
-type NavEntry =
-  | { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean }
-  | { kind: "placeholder"; label: string; icon: LucideIcon };
+type NavEntry = { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean };
 
 type NavGroup = { id: string; title: string; items: NavEntry[] };
 
-const NAV_GROUP_TITLES = {
-  home: V1.navGroups.home,
-  media: V1.navGroups.media,
-  weekly: V1.navGroups.weekly,
-  knowRivals: V1.navGroups.knowRivals,
-  knowYourself: V1.navGroups.knowYourself,
-  league: V1.navGroups.league,
-  history: V1.navGroups.history,
-} as const;
-
-function featureToNavEntry(feature: RouteFeatureEntry, locked: boolean): NavEntry {
+function destinationToNavEntry(destination: V2Destination, locked: boolean): NavEntry {
   return {
     kind: "link",
-    label: feature.label,
-    href: feature.route,
-    icon: feature.icon,
+    label: destination.label,
+    href: getV2NavHref(destination),
+    icon: destination.icon,
     locked,
   };
 }
 
-function buildSidebarNavGroups(hasAccess: boolean): NavGroup[] {
-  return buildNavGroups((category) => NAV_GROUP_TITLES[category]).map((group) => ({
+function buildSidebarNavGroups(hasAccess: boolean): Array<NavGroup & { destinations: V2Destination[] }> {
+  return buildV2NavGroups().map((group) => ({
     id: group.id,
     title: group.title,
-    items: group.items.map((feature) =>
-      featureToNavEntry(feature, feature.requiredPlan === "pro" && !hasAccess),
+    destinations: group.items,
+    items: group.items.map((destination) =>
+      destinationToNavEntry(destination, destination.requiredPlan === "pro" && !hasAccess),
     ),
   }));
 }
@@ -338,41 +327,94 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
 function NavItemRow({
   entry,
   pathname,
+  destination,
+  hasAccess,
   onNavigate,
+  depth = 0,
 }: {
   entry: NavEntry;
   pathname: string;
+  destination: V2Destination;
+  hasAccess: boolean;
   onNavigate?: () => void;
+  depth?: number;
 }) {
-  if (entry.kind === "placeholder") {
-    const Icon = entry.icon;
+  const Icon = entry.icon;
+  const locked = entry.locked === true;
+  const isActive = isV2RouteActive(pathname, destination);
+  const children = destination.children?.filter((c) => c.showInSidebar) ?? [];
+  const [open, setOpen] = useState(isActive);
+
+  useEffect(() => {
+    if (isActive) setOpen(true);
+  }, [isActive]);
+
+  if (children.length > 0) {
     return (
       <li>
-        <div
-          className="flex cursor-not-allowed items-center gap-2.5 rounded-lg border border-transparent px-3 py-2 text-xs font-medium text-muted-foreground"
-          aria-disabled
-        >
-          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate">{entry.label}</span>
-          <Badge
-            variant="outline"
-            className="shrink-0 border-lime-500/25 bg-lime-500/[0.05] px-1.5 py-0 text-2xs font-medium text-lime-300/90"
-          >
-            Coming Soon
-          </Badge>
-        </div>
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <div className="flex items-center gap-1">
+            <Link
+              to={entry.href}
+              onClick={onNavigate}
+              className={cn(
+                "group flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+                depth > 0 && "pl-5",
+                locked
+                  ? "cursor-pointer border border-transparent text-muted-foreground/50 hover:border-border/60 hover:bg-muted/50"
+                  : isActive
+                    ? "border border-lime-500/30 border-l-2 border-l-lime-400 bg-lime-500/10 text-foreground"
+                    : "border border-transparent text-muted-foreground hover:border-border hover:bg-muted hover:text-foreground",
+              )}
+            >
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0",
+                  locked
+                    ? "text-muted-foreground/40"
+                    : isActive
+                      ? "text-lime-300"
+                      : "text-muted-foreground group-hover:text-foreground",
+                )}
+              />
+              <span className="min-w-0 flex-1 truncate">{entry.label}</span>
+              {locked ? (
+                <Badge
+                  variant="outline"
+                  className="shrink-0 border-amber-500/25 bg-amber-500/[0.06] px-1.5 py-0 text-2xs font-medium text-amber-300/90"
+                >
+                  🔒 Rivals Pro
+                </Badge>
+              ) : null}
+            </Link>
+            <CollapsibleTrigger
+              type="button"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              aria-label={`Toggle ${entry.label}`}
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent>
+            <ul className="mt-0.5 space-y-0.5 border-l border-border/40 ml-4 pl-1">
+              {children.map((child) => (
+                <NavItemRow
+                  key={child.id}
+                  entry={destinationToNavEntry(child, child.requiredPlan === "pro" && !hasAccess)}
+                  pathname={pathname}
+                  destination={child}
+                  hasAccess={hasAccess}
+                  onNavigate={onNavigate}
+                  depth={depth + 1}
+                />
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       </li>
     );
   }
 
-  const Icon = entry.icon;
-  const locked = entry.locked === true;
-  const isActive =
-    pathname === entry.href ||
-    (entry.href === "/rfsn" && pathname.startsWith("/rfsn")) ||
-    (entry.href === "/hall-of-fame" &&
-      (pathname === "/ring-of-honor" || pathname === "/championships")) ||
-    (entry.href === "/history" && pathname === "/history");
   return (
     <li>
       <Link
@@ -380,6 +422,7 @@ function NavItemRow({
         onClick={onNavigate}
         className={cn(
           "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all",
+          depth > 0 && "pl-5 text-xs",
           locked
             ? "cursor-pointer border border-transparent text-muted-foreground/50 hover:border-border/60 hover:bg-muted/50 hover:text-muted-foreground/70"
             : isActive
@@ -416,19 +459,23 @@ function NavItemRow({
 function NavGroupList({
   group,
   pathname,
+  hasAccess,
   onNavigate,
 }: {
-  group: NavGroup;
+  group: NavGroup & { destinations: V2Destination[] };
   pathname: string;
+  hasAccess: boolean;
   onNavigate?: () => void;
 }) {
   return (
     <ul className="space-y-0.5">
-      {group.items.map((entry) => (
+      {group.items.map((entry, index) => (
         <NavItemRow
-          key={entry.kind === "link" ? entry.href : entry.label}
+          key={group.destinations[index]!.id}
           entry={entry}
           pathname={pathname}
+          destination={group.destinations[index]!}
+          hasAccess={hasAccess}
           onNavigate={onNavigate}
         />
       ))}
@@ -546,7 +593,7 @@ function Sidebar({
               return (
                 <div key={group.id} className={cn(idx > 0 && "mt-2 border-t border-border/40 pt-2")}>
                   <SidebarGroupTitle title={group.title} isFirst={idx === 0} />
-                  <NavGroupList group={group} pathname={pathname} onNavigate={onClose} />
+                  <NavGroupList group={group} pathname={pathname} hasAccess={hasAccess} onNavigate={onClose} />
                 </div>
               );
             }
@@ -571,7 +618,7 @@ function Sidebar({
                   />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <NavGroupList group={group} pathname={pathname} onNavigate={onClose} />
+                  <NavGroupList group={group} pathname={pathname} hasAccess={hasAccess} onNavigate={onClose} />
                 </CollapsibleContent>
               </Collapsible>
             );

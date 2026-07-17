@@ -59,6 +59,8 @@ import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
+import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
+import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -139,15 +141,17 @@ function ProtectedLayout() {
   );
 }
 
-// Placeholder page component
-function PlaceholderPage({ title }: { title: string }) {
-  return (
-    <div className="flex h-full flex-col items-center justify-center p-8">
-      <h1 className="text-5xl font-bold text-foreground">{title}</h1>
-      <p className="mt-4 text-muted-foreground">Coming soon</p>
-    </div>
-  );
-}
+/** Phase 1: register every canonical V2 path that is not already a live page. */
+const v2PlaceholderRoutes = getV2CanonicalRoutes()
+  .filter((route) => {
+    if (route.includes(":")) return true;
+    const destination = getV2DestinationByRoute(route);
+    return destination == null || destination.kind === "placeholder";
+  })
+  .map((route) => ({
+    path: route,
+    element: <V2PlaceholderRoute route={route.includes(":") ? route.replace(/\/:[^/]+/g, "") : route} />,
+  }));
 
 // Branded catch-all for unmatched routes (replaces React Router's default error UI).
 function NotFoundPage() {
@@ -203,6 +207,7 @@ const router = createBrowserRouter([
         element: <ProtectedLayout />,
         children: [
           // ── Active routes ─────────────────────────────────────────────
+          ...v2PlaceholderRoutes,
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },
@@ -267,7 +272,7 @@ const router = createBrowserRouter([
           { path: "/opponent-intel", element: <Navigate to="/dashboard" replace /> },
           { path: "/backtesting", element: <Navigate to="/dashboard" replace /> },
           { path: "/gm-memory", element: <Navigate to="/dashboard" replace /> },
-          { path: "/draft", element: <Navigate to="/dashboard" replace /> },
+          // `/draft` is owned by V2 Draft hub (placeholder) — do not redirect to dashboard.
           { path: "/keepers", element: <Navigate to="/dashboard" replace /> },
           { path: "/keeper-calculator", element: <Navigate to="/dashboard" replace /> },
           { path: "/keeper-roi", element: <Navigate to="/dashboard" replace /> },
