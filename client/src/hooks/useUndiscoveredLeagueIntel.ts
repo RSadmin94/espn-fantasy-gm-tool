@@ -59,7 +59,7 @@ export function useUndiscoveredLeagueIntel() {
         id: "rivalry-stories",
         label: "Rivalry Stories",
         count: rivalryStories,
-        href: "/rivalry-center",
+        href: "/rivals/rivalries",
         source: "rivalry.getScores.totalRivalries",
       });
     }
@@ -97,7 +97,7 @@ export function useUndiscoveredLeagueIntel() {
         id: "gm-profiles",
         label: "GM Profiles",
         count: gmProfiles,
-        href: "/owner-profiles",
+        href: "/rivals/owners",
         source: "owners.ownerList.active + graveyard",
       });
     }

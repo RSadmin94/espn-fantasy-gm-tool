@@ -120,13 +120,13 @@ export function CommandDashboard(){
   ].filter(Boolean) as any[];
   const shortcuts = [
     { t:"Draft War Room", to:"/draft-war-room", d:"Live pick board, rival threat windows, and decision memo." },
-    { t:"Rivalries", to:"/rivalry-center", d:"Head-to-head records, heat, and matchup history." },
+    { t:"Rivalries", to:"/rivals/rivalries", d:"Head-to-head records, heat, and matchup history." },
     { t:"RFSN", to:"/rfsn", d:"League news, wire reports, and year-round media." },
-    { t:"My GM Profile", to:"/owner-profiles", d:"Scouting report, historical behavior, and career arc." },
+    { t:"My GM Profile", to:"/my-team/profile", d:"Scouting report, historical behavior, and career arc." },
   ];
   const actions = [
     { t:"Open Draft War Room", to:"/draft-war-room", d: topRun?`${topRun.position} run risk building — get owner-risk context.`:"Next pick needs owner-risk context.", cta:"Review" },
-    { t:"Open My GM Profile", to:"/owner-profiles", d: scanOwnerDnaLine, cta:"Open" },
+    { t:"Open My GM Profile", to:"/my-team/profile", d: scanOwnerDnaLine, cta:"Open" },
     ...(keepersCap ? [{ t:"Check Keeper Lab", to:"/keeper-advisor", d:"Confirm your value holds before the draft.", cta:"Compare" }] as const : []),
   ];
   const rings = [

@@ -29,7 +29,6 @@ import { ConnectedLeagues } from "./pages/ConnectedLeagues";
 import { EspnSelectTeam } from "./pages/EspnSelectTeam";
 import { LeagueHistory } from "./pages/LeagueHistory";
 import { LeagueSettings } from "./pages/LeagueSettings";
-import { OwnerProfiles } from "./pages/OwnerProfiles";
 import { DraftRealitySimulator } from "./pages/DraftRealitySimulator";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
@@ -43,7 +42,6 @@ import { RfsnRecaps } from "./pages/rfsn/RfsnRecaps";
 import { RfsnAnalysts } from "./pages/rfsn/RfsnAnalysts";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
-import { RivalryCenter }     from "./pages/RivalryCenter";
 import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
@@ -52,7 +50,6 @@ import { RivalsHub } from "./pages/rivals/RivalsHub";
 import { RivalsCast } from "./pages/rivals/RivalsCast";
 import { RivalsOwners } from "./pages/rivals/RivalsOwners";
 import { RivalsOwnerDossier } from "./pages/rivals/RivalsOwnerDossier";
-import { RivalsHeadToHead } from "./pages/rivals/RivalsHeadToHead";
 import { RivalsRivalries } from "./pages/rivals/RivalsRivalries";
 import { RivalsLeagueMap } from "./pages/rivals/RivalsLeagueMap";
 import { RivalsRelationships } from "./pages/rivals/RivalsRelationships";
@@ -239,7 +236,7 @@ const router = createBrowserRouter([
           { path: "/rivals/cast", element: <RivalsCast /> },
           { path: "/rivals/owners", element: <RivalsOwners /> },
           { path: "/rivals/owners/:ownerId", element: <RivalsOwnerDossier /> },
-          { path: "/rivals/head-to-head", element: <RivalsHeadToHead /> },
+          { path: "/rivals/head-to-head", element: <Navigate to="/rivals/rivalries" replace /> },
           { path: "/rivals/rivalries", element: <RivalsRivalries /> },
           { path: "/rivals/league-map", element: <RivalsLeagueMap /> },
           { path: "/rivals/relationships", element: <RivalsRelationships /> },
@@ -257,7 +254,7 @@ const router = createBrowserRouter([
           { path: "/sync", element: <SyncData /> },
           { path: "/commissioner-command-center", element: <Navigate to="/league/commissioner" replace /> },
           { path: "/league-settings",      element: <LeagueSettings /> },
-          { path: "/owner-profiles",         element: <FeatureRouteGate route="/owner-profiles"><OwnerProfiles /></FeatureRouteGate> },
+          { path: "/owner-profiles", element: <Navigate to="/rivals/owners" replace /> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
           { path: "/owner-identity-review",  element: <OwnerIdentityReview /> },
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
@@ -310,7 +307,7 @@ const router = createBrowserRouter([
           { path: "/standings", element: <Navigate to="/league/standings" replace /> },
           { path: "/dynasty-power-rankings", element: <Navigate to="/league/standings/power-rankings" replace /> },
           { path: "/matchups", element: <Navigate to="/my-team/matchup" replace /> },
-          { path: "/rivalry-center", element: <RivalryCenter /> },
+          { path: "/rivalry-center", element: <Navigate to="/rivals/rivalries" replace /> },
           { path: "/history", element: <LeagueHistory /> },
           { path: "/league-timeline", element: <Navigate to="/history" replace /> },
           { path: "/draft-history", element: <Navigate to="/draft/history" replace /> },

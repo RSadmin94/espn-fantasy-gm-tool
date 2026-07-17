@@ -1,4 +1,4 @@
-/** Canonical `/rivals/head-to-head` — Head-to-Head Ledger (matrix + series records). */
+/** Formerly `/rivals/head-to-head` — H2H Ledger merged into Rivalries; route redirects. */
 import { RivalryCenter } from "@/pages/RivalryCenter";
 
 export function RivalsHeadToHead() {

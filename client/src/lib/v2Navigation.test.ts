@@ -51,11 +51,14 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(rivals?.items.map((i) => i.label)).toEqual([
       "The Cast",
       "Owner Dossier",
-      "Head-to-Head Ledger",
       "Rivalries",
-      "League Map",
-      "Relationship Map",
     ]);
+    // Maps + H2H remain live destinations but are not sidebar entries (H2H redirects into Rivalries).
+    for (const id of ["rivals-league-map", "rivals-relationships", "rivals-head-to-head"] as const) {
+      const dest = V2_DESTINATIONS.find((d) => d.id === id)!;
+      expect(dest.showInSidebar).toBe(false);
+      expect(dest.kind).toBe("live");
+    }
   });
 
   it("nests History inside League", () => {
@@ -183,13 +186,13 @@ describe("v2Navigation — locked FFR 2.0", () => {
 
   it("points Rivals sidebar items to canonical live routes", () => {
     const rivals = buildV2NavGroups().find((g) => g.id === "rivals")!;
+    expect(rivals.items.find((i) => i.id === "rivals-head-to-head")).toBeUndefined();
+    expect(rivals.items.find((i) => i.id === "rivals-league-map")).toBeUndefined();
+    expect(rivals.items.find((i) => i.id === "rivals-relationships")).toBeUndefined();
     const expected = [
       ["/rivals/cast", "rivals-cast"],
       ["/rivals/owners", "rivals-owner-dossier"],
-      ["/rivals/head-to-head", "rivals-head-to-head"],
       ["/rivals/rivalries", "rivals-rivalries"],
-      ["/rivals/league-map", "rivals-league-map"],
-      ["/rivals/relationships", "rivals-relationships"],
     ] as const;
     for (const [route, id] of expected) {
       const dest = rivals.items.find((i) => i.id === id)!;
@@ -197,6 +200,16 @@ describe("v2Navigation — locked FFR 2.0", () => {
       expect(dest.legacyRoute).toBeUndefined();
       expect(getV2NavHref(dest)).toBe(route);
       expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    for (const [route, id] of [
+      ["/rivals/head-to-head", "rivals-head-to-head"],
+      ["/rivals/league-map", "rivals-league-map"],
+      ["/rivals/relationships", "rivals-relationships"],
+    ] as const) {
+      const dest = V2_DESTINATIONS.find((d) => d.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.showInSidebar).toBe(false);
+      expect(getV2NavHref(dest)).toBe(route);
     }
     const hub = V2_DESTINATIONS.find((d) => d.id === "rivals-hub")!;
     expect(hub.kind).toBe("live");

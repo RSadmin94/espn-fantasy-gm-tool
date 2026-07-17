@@ -240,7 +240,7 @@ function IdentityCard({ identity }: { identity: GmBriefingEdition["identity"] })
         </div>
       )}
       <Link
-        to="/owner-profiles"
+        to="/my-team/profile"
         className="mt-auto pt-4 text-[13px] font-semibold text-lime-400/90 hover:text-lime-300"
       >
         {BRIEFING.viewFullProfile}

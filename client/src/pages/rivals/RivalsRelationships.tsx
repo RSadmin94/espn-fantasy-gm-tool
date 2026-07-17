@@ -156,8 +156,8 @@ export function RivalsRelationships() {
             <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
               Closest by matchup volume
             </h2>
-            <Link to="/rivals/head-to-head" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-              Ledger →
+            <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+              Rivalries →
             </Link>
           </div>
           {byVolume.length === 0 ? (

@@ -84,7 +84,7 @@ export function LeagueRevealModal({
               size="sm"
               className="font-semibold"
               disabled={isLoading}
-              onClick={() => finish("/owner-profiles")}
+              onClick={() => finish("/my-team/profile")}
             >
               View My GM Profile
             </Button>
@@ -94,7 +94,7 @@ export function LeagueRevealModal({
               size="sm"
               className="font-semibold"
               disabled={isLoading}
-              onClick={() => finish("/rivalry-center")}
+              onClick={() => finish("/rivals/rivalries")}
             >
               See My Rivalries
             </Button>

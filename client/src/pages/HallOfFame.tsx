@@ -1183,7 +1183,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
         <div className="mt-6 rounded-xl border border-violet-500/30 bg-violet-500/[0.08] px-4 py-3 text-center">
           <p className="text-sm font-semibold text-violet-50">Rivalry intelligence</p>
           <p className="mt-1 text-[13px] text-violet-100/75">Head-to-head feuds live in Rivalries.</p>
-          <Link to="/rivalry-center" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-violet-300 hover:text-violet-200">
+          <Link to="/rivals/rivalries" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-violet-300 hover:text-violet-200">
             Open Rivalries →
           </Link>
         </div>

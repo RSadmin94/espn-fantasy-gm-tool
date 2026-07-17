@@ -223,7 +223,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
 
       <div className="mt-4">
         <a
-          href="/rivalry-center"
+          href="/rivals/rivalries"
           className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-opacity hover:opacity-85"
           style={{ color: c.text, background: c.bg, border: `1px solid ${c.ring}` }}
         >

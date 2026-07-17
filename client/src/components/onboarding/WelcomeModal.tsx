@@ -43,7 +43,7 @@ export function WelcomeModal({
           <Button
             type="button"
             className="w-full justify-center bg-lime-500 font-semibold text-black hover:bg-lime-400"
-            onClick={() => handleExplore("/owner-profiles", "gm-intelligence")}
+            onClick={() => handleExplore("/my-team/profile", "gm-intelligence")}
           >
             Explore My GM Profile
           </Button>
@@ -51,7 +51,7 @@ export function WelcomeModal({
             type="button"
             variant="secondary"
             className="w-full justify-center font-semibold"
-            onClick={() => handleExplore("/rivalry-center", "rivalry-documentary")}
+            onClick={() => handleExplore("/rivals/rivalries", "rivalry-documentary")}
           >
             Explore My Biggest Rivalry
           </Button>

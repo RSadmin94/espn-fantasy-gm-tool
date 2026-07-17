@@ -18,7 +18,7 @@ export function FirstWowMomentCard({ className }: { className?: string }) {
         </div>
         <div className="flex flex-col gap-2 sm:items-end">
           <Button asChild className="gap-2">
-            <Link to="/rivalry-center">
+            <Link to="/rivals/rivalries">
               <Flame className="h-4 w-4" />
               {ONBOARDING_COPY.wowPrimaryCta}
             </Link>

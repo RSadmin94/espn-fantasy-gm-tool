@@ -71,7 +71,6 @@ describe("v2Routing — locked FFR 2.0", () => {
       ["/rivals/cast", "RivalsCast"],
       ["/rivals/owners", "RivalsOwners"],
       ["/rivals/owners/:ownerId", "RivalsOwnerDossier"],
-      ["/rivals/head-to-head", "RivalsHeadToHead"],
       ["/rivals/rivalries", "RivalsRivalries"],
       ["/rivals/league-map", "RivalsLeagueMap"],
       ["/rivals/relationships", "RivalsRelationships"],
@@ -80,8 +79,11 @@ describe("v2Routing — locked FFR 2.0", () => {
       expect(main).toContain(`path: "${route}"`);
       expect(main).toContain(`element: <${component} />`);
     }
+    expect(main).toContain('path: "/rivals/head-to-head"');
+    expect(main).toContain('to="/rivals/rivalries"');
     expect(main).toContain('path: "/the-cast"');
     expect(main).toContain('path: "/owner-profiles"');
+    expect(main).toContain('to="/rivals/owners"');
     expect(main).toContain('path: "/rivalry-center"');
     expect(main).toContain('path: "/league-dna"');
   });

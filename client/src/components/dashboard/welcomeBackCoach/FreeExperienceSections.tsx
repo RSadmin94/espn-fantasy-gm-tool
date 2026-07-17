@@ -61,7 +61,7 @@ export function FreeGmProfileTeaser({
         eyebrow={V1.navGroups.knowYourself}
         title={V1.home.freeJourney.myGmProfile}
         action={
-          <Link to="/owner-profiles" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
+          <Link to="/my-team/profile" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
             {V1.features.myGmProfile} →
           </Link>
         }
@@ -95,7 +95,7 @@ export function FreeGmProfileTeaser({
           ) : null}
         </div>
         <Link
-          to="/owner-profiles"
+          to="/my-team/profile"
           className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-lime-400/90 hover:text-lime-300"
         >
           Open {V1.features.myGmProfile}
@@ -178,7 +178,7 @@ export function FreeOneRivalSection() {
         eyebrow={V1.navGroups.knowRivals}
         title={V1.home.freeJourney.oneRival}
         action={
-          <Link to="/rivalry-center" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+          <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
             {V1.features.rivalries} →
           </Link>
         }

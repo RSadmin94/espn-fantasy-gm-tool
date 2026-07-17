@@ -1,6 +1,6 @@
-/** Canonical `/rivals/rivalries` — mounts Rivalry Center (narrative + rankings). */
+/** Canonical `/rivals/rivalries` — full Rivalry Center (narrative + H2H matrix / nemesis). */
 import { RivalryCenter } from "@/pages/RivalryCenter";
 
 export function RivalsRivalries() {
-  return <RivalryCenter variant="rivalries" />;
+  return <RivalryCenter variant="full" />;
 }

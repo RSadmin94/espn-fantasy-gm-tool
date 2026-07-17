@@ -149,8 +149,8 @@ export function RivalsLeagueMap() {
             <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
               <Swords className="h-3.5 w-3.5 text-violet-300" /> Rivalry clusters
             </h2>
-            <Link to="/rivals/head-to-head" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-              Head-to-head →
+            <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+              Rivalries →
             </Link>
           </div>
           {clusters.length === 0 ? (

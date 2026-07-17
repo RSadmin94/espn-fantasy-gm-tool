@@ -126,11 +126,12 @@ export const V2_DESTINATIONS: V2Destination[] = [
     id: "rivals-head-to-head",
     label: "Head-to-Head Ledger",
     navCategory: "rivals",
+    // Merged into Rivalries (full RivalryCenter) — route redirects; not a sidebar entry.
     route: "/rivals/head-to-head",
     icon: ScrollText,
     requiredPlan: "free",
     kind: "live",
-    showInSidebar: true,
+    showInSidebar: false,
   },
   {
     id: "rivals-rivalries",
@@ -150,7 +151,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     icon: MapIcon,
     requiredPlan: "free",
     kind: "live",
-    showInSidebar: true,
+    // Deep-link / hub previews only — not a sidebar entry.
+    showInSidebar: false,
   },
   {
     id: "rivals-relationships",
@@ -160,7 +162,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     icon: Network,
     requiredPlan: "free",
     kind: "live",
-    showInSidebar: true,
+    // Deep-link / hub previews only — not a sidebar entry.
+    showInSidebar: false,
   },
 
   // ── My Team ───────────────────────────────────────────────────────────

@@ -69,16 +69,27 @@ describe("v2Routing — Commit 8 cleanup", () => {
 
   it("preserves distinct legacy routes that differ from canonical wrappers", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
-    expect(main).toContain('path: "/rivalry-center"');
-    expect(main).toContain("element: <RivalryCenter />");
-    expect(main).toContain('path: "/owner-profiles"');
-    expect(main).toContain("<OwnerProfiles />");
     expect(main).toContain('path: "/league-dna"');
     expect(main).toContain('path: "/draft-war-room"');
     expect(main).toContain('path: "/draft-commentary"');
     expect(main).toContain('path: "/draft-reality"');
     expect(main).toContain('path: "/history"');
     expect(main).toContain("element: <LeagueHistory />");
+  });
+
+  it("redirects legacy rivalry and owner-profile aliases to canonical Rivals routes", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    const redirects: [string, string][] = [
+      ["/rivalry-center", "/rivals/rivalries"],
+      ["/owner-profiles", "/rivals/owners"],
+      ["/rivals/head-to-head", "/rivals/rivalries"],
+    ];
+    for (const [legacy, canonical] of redirects) {
+      expect(main).toContain(`path: "${legacy}"`);
+      expect(main).toContain(`to="${canonical}"`);
+    }
+    expect(main).not.toContain("element: <RivalryCenter />");
+    expect(main).not.toContain("element: <RivalsHeadToHead />");
   });
 
   it("removed dead ChampionshipPath page file (canonical uses ChampionshipDiagnosis)", () => {

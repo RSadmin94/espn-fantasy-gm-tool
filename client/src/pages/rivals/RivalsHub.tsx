@@ -3,7 +3,7 @@
  * Curates existing Cast, rivalry, DNA behavior, and H2H signals — no new calculations.
  */
 import { Link } from "react-router";
-import { Clapperboard, Map as MapIcon, Network, ScrollText, Swords, Users } from "lucide-react";
+import { Clapperboard, Map as MapIcon, Network, Swords, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -15,10 +15,7 @@ import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from 
 const DESTINATIONS = [
   { label: "The Cast", href: "/rivals/cast", hint: "League characters", icon: Clapperboard },
   { label: "Owner Dossier", href: "/rivals/owners", hint: "Manager scouting", icon: Users },
-  { label: "Head-to-Head Ledger", href: "/rivals/head-to-head", hint: "Series records", icon: ScrollText },
-  { label: "Rivalries", href: "/rivals/rivalries", hint: "Heat & feuds", icon: Swords },
-  { label: "League Map", href: "/rivals/league-map", hint: "Owner landscape", icon: MapIcon },
-  { label: "Relationship Map", href: "/rivals/relationships", hint: "How owners connect", icon: Network },
+  { label: "Rivalries", href: "/rivals/rivalries", hint: "Heat, feuds & series records", icon: Swords },
 ] as const;
 
 export function RivalsHub() {
@@ -158,8 +155,8 @@ export function RivalsHub() {
             <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
               Head-to-head snapshot
             </h2>
-            <Link to="/rivals/head-to-head" className="text-xs font-medium text-violet-400 hover:text-violet-300">
-              Full ledger →
+            <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+              Full rivalries →
             </Link>
           </div>
           {topMeeting ? (

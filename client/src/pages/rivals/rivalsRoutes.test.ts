@@ -48,10 +48,11 @@ describe("Rivals V2 — Commit 3 route ownership", () => {
     expect(dossier).toContain("useParams");
 
     const rivalries = fs.readFileSync(path.join(repoRoot, "client/src/pages/rivals/RivalsRivalries.tsx"), "utf-8");
-    expect(rivalries).toContain('variant="rivalries"');
+    expect(rivalries).toContain('variant="full"');
 
-    const h2h = fs.readFileSync(path.join(repoRoot, "client/src/pages/rivals/RivalsHeadToHead.tsx"), "utf-8");
-    expect(h2h).toContain('variant="head-to-head"');
+    const main = fs.readFileSync(path.join(repoRoot, "client/src/main.tsx"), "utf-8");
+    expect(main).toContain('path: "/rivals/head-to-head"');
+    expect(main).toContain('to="/rivals/rivalries"');
   });
 
   it("OwnerProfiles supports route owner selection and missing-owner safety", () => {
@@ -64,7 +65,7 @@ describe("Rivals V2 — Commit 3 route ownership", () => {
     expect(src).toContain("rivalsOwnerDossierPath");
   });
 
-  it("RivalryCenter variants separate rivalries narrative from H2H matrix focus", () => {
+  it("RivalryCenter variants still support narrative and H2H matrix focus", () => {
     const src = fs.readFileSync(path.join(repoRoot, "client/src/pages/RivalryCenter.tsx"), "utf-8");
     expect(src).toContain('variant = "full"');
     expect(src).toContain("showRivalryNarrative");
@@ -78,8 +79,10 @@ describe("Rivals V2 — Commit 3 route ownership", () => {
     expect(hub).toContain("OwnerBehaviorDnaInsight");
     expect(hub).toContain("RivalrySummaryCard");
     expect(hub).toContain("/rivals/cast");
+    expect(hub).toContain("/rivals/rivalries");
     expect(hub).toContain("/rivals/league-map");
     expect(hub).toContain("/rivals/relationships");
+    expect(hub).not.toContain("/rivals/head-to-head");
   });
 
   it("League Map and Relationship Map document existing data sources", () => {
