@@ -49,6 +49,24 @@ describe("rfsnLivePickNotify", () => {
     expect(detected).toHaveLength(0);
   });
 
+  it("ignores keeper/preloaded slots", () => {
+    const keeperSchedule = [
+      { pickNumber: 1, round: 1, roundPick: 1, teamId: "1", ownerName: "Alice", isKeeperSlot: true },
+      { pickNumber: 2, round: 1, roundPick: 2, teamId: "2", ownerName: "Bob" },
+    ];
+    const detected = detectNewlyLockedPicks(
+      {},
+      {
+        1: { name: "Jaxon Smith-Njigba", position: "WR", id: "keeper:jsn" },
+        2: { name: "CeeDee Lamb", position: "WR", id: "p1" },
+      },
+      keeperSchedule,
+    );
+    expect(detected).toHaveLength(1);
+    expect(detected[0]!.slot.pickNumber).toBe(2);
+    expect(detected[0]!.player.name).toBe("CeeDee Lamb");
+  });
+
   it("does not notify when player name changes before finalization stabilizes", () => {
     const prev = { 1: { name: "Player A", position: "WR", id: "a" } };
     const next = { 1: { name: "Player B", position: "WR", id: "b" } };

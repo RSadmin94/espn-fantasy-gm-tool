@@ -18,6 +18,11 @@ describe("RfsnBroadcastPanel replay reset wiring", () => {
     expect(panel).toMatch(/\[draftId,\s*sessionResetKey,\s*audio\.clearReplay\]/);
   });
 
+  it("renders the written commentary running log", () => {
+    expect(panel).toContain("RfsnCommentaryLog");
+    expect(panel).toContain("appendCommentaryLogEntry");
+  });
+
   it("passes a composite session reset key from Live Draft reset and schedule identity", () => {
     expect(warRoom).toContain("sessionResetKey={`${draftId}:${scheduleSig}:${resetCounter}`}");
     expect(warRoom).toContain("setResetCounter((n) => n + 1)");

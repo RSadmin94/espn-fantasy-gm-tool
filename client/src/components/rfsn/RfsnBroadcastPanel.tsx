@@ -8,16 +8,22 @@
  * redesign. Polls the same getLiveSnapshot(draftId) RFSN Live polls.
  */
 import { skipToken } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useRfsnAudioPlayback } from "@/hooks/useRfsnAudioPlayback";
 import { useRfsnBoothController } from "@/hooks/useRfsnBoothController";
 import { buildBoothCommentarySequence } from "@/lib/rfsnBoothPresentation";
+import {
+  appendCommentaryLogEntry,
+  type RfsnCommentaryLogEntry,
+} from "@/lib/rfsnCommentaryLog";
 import { RfsnAnalystBooth } from "./RfsnAnalystBooth";
 import { RfsnAudioControls } from "./RfsnAudioControls";
+import { RfsnCommentaryLog } from "./RfsnCommentaryLog";
 import {
   liveSessionStatusLabel,
   resolveBoothFeedSnapshot,
+  shouldRenderLiveCommentary,
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
 import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
@@ -75,6 +81,9 @@ export function RfsnBroadcastPanel({
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
   const audioIsSpeaking = audio.state === "playing" && Boolean(booth.activeCommentator);
+  const [commentaryLog, setCommentaryLog] = useState<RfsnCommentaryLogEntry[]>([]);
+  const seenLogIdsRef = useRef<Set<string>>(new Set());
+  const logResetAtRef = useRef<number>(Date.now());
 
   // A broadcast moment is "busy" (should hold the draft) while it is generating
   // (commentary_pending) or while the booth sequence is still playing (sequenceIndex >= 0).
@@ -92,6 +101,38 @@ export function RfsnBroadcastPanel({
     lastBusyRef.current = busy;
     onBusyChange?.(busy);
   }, [busy, onBusyChange]);
+
+  useEffect(() => {
+    audio.clearReplay();
+    setCommentaryLog([]);
+    seenLogIdsRef.current = new Set();
+    logResetAtRef.current = Date.now();
+  }, [draftId, sessionResetKey, audio.clearReplay]);
+
+  useEffect(() => {
+    if (!payload || !payload.snapshot || !shouldRenderLiveCommentary(payload)) return;
+    if (payload.generatedAt) {
+      const generatedAt = Date.parse(payload.generatedAt);
+      if (Number.isFinite(generatedAt) && generatedAt < logResetAtRef.current) return;
+    }
+    if (sequence.length === 0) return;
+
+    setCommentaryLog((prev) => {
+      let next = prev;
+      for (const card of sequence) {
+        const id = `${payload.activePickIdentity?.pickId ?? payload.snapshot?.overallPick ?? "pick"}:${card.id}`;
+        if (seenLogIdsRef.current.has(id)) continue;
+        seenLogIdsRef.current.add(id);
+        next = appendCommentaryLogEntry(next, {
+          id,
+          pickLabel: String(payload.snapshot?.overallPick ?? payload.activePickIdentity?.pickNumber ?? "—"),
+          commentator: card.commentator,
+          text: card.text,
+        });
+      }
+      return next;
+    });
+  }, [payload, sequence]);
 
   if (!enabled) return null; // broadcast disabled → render nothing; War Room board unaffected
 
@@ -127,6 +168,8 @@ export function RfsnBroadcastPanel({
         layout={isMobile ? "mobile" : "desktop"}
         audioIsSpeaking={audioIsSpeaking}
       />
+
+      <RfsnCommentaryLog entries={commentaryLog} />
     </div>
   );
 }

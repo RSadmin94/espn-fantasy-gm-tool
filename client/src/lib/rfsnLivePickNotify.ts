@@ -79,6 +79,7 @@ export function detectNewlyLockedPicks(
     : 14;
 
   for (const slot of schedule) {
+    if (slot.isKeeperSlot) continue;
     const pn = slot.pickNumber;
     const player = next[pn];
     if (!player?.name) continue;

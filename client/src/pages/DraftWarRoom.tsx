@@ -874,6 +874,7 @@ function LiveDraftEngine({
     let name: string | null = null;
     for (const [k, v] of Object.entries(results)) {
       const n = Number(k);
+      if ((v as any)?.isKeeper) continue;
       const playerName = String((v as any)?.name ?? "").trim();
       if (!playerName || !Number.isFinite(n) || n <= maxPick) continue;
       maxPick = n;
