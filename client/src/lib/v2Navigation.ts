@@ -171,7 +171,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team",
     icon: Users,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: false,
   },
   {
@@ -181,9 +181,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/roster",
     icon: Users,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/roster",
   },
   {
     id: "my-team-matchup",
@@ -192,9 +191,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/matchup",
     icon: Swords,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/matchups",
   },
   {
     id: "my-team-trades",
@@ -203,9 +201,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/trades",
     icon: Repeat2,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/trades",
   },
   {
     id: "my-team-advisor",
@@ -214,9 +211,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/advisor",
     icon: Bot,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/advisor",
   },
   {
     id: "my-team-profile",
@@ -225,9 +221,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/profile",
     icon: Users,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/owner-profiles",
   },
   {
     id: "my-team-championship-path",
@@ -236,9 +231,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/my-team/championship-path",
     icon: Route,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/championship-diagnosis",
   },
 
   // ── RFSN ──────────────────────────────────────────────────────────────

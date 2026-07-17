@@ -200,4 +200,26 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(hub.kind).toBe("live");
     expect(getV2NavHref(hub)).toBe("/rivals");
   });
+
+  it("points My Team sidebar items to canonical live routes", () => {
+    const myTeam = buildV2NavGroups().find((g) => g.id === "myTeam")!;
+    const expected = [
+      ["/my-team/roster", "my-team-roster"],
+      ["/my-team/matchup", "my-team-matchup"],
+      ["/my-team/trades", "my-team-trades"],
+      ["/my-team/advisor", "my-team-advisor"],
+      ["/my-team/profile", "my-team-profile"],
+      ["/my-team/championship-path", "my-team-championship-path"],
+    ] as const;
+    for (const [route, id] of expected) {
+      const dest = myTeam.items.find((i) => i.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.legacyRoute).toBeUndefined();
+      expect(getV2NavHref(dest)).toBe(route);
+      expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    const hub = V2_DESTINATIONS.find((d) => d.id === "my-team-hub")!;
+    expect(hub.kind).toBe("live");
+    expect(getV2NavHref(hub)).toBe("/my-team");
+  });
 });

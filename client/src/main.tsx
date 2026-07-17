@@ -68,6 +68,13 @@ import { RivalsHeadToHead } from "./pages/rivals/RivalsHeadToHead";
 import { RivalsRivalries } from "./pages/rivals/RivalsRivalries";
 import { RivalsLeagueMap } from "./pages/rivals/RivalsLeagueMap";
 import { RivalsRelationships } from "./pages/rivals/RivalsRelationships";
+import { MyTeamHub } from "./pages/my-team/MyTeamHub";
+import { MyTeamRoster } from "./pages/my-team/MyTeamRoster";
+import { MyTeamMatchup } from "./pages/my-team/MyTeamMatchup";
+import { MyTeamTrades } from "./pages/my-team/MyTeamTrades";
+import { MyTeamAdvisor } from "./pages/my-team/MyTeamAdvisor";
+import { MyTeamProfile } from "./pages/my-team/MyTeamProfile";
+import { MyTeamChampionshipPath } from "./pages/my-team/MyTeamChampionshipPath";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
 import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
@@ -226,6 +233,13 @@ const router = createBrowserRouter([
           { path: "/rivals/rivalries", element: <RivalsRivalries /> },
           { path: "/rivals/league-map", element: <RivalsLeagueMap /> },
           { path: "/rivals/relationships", element: <RivalsRelationships /> },
+          { path: "/my-team", element: <MyTeamHub /> },
+          { path: "/my-team/roster", element: <MyTeamRoster /> },
+          { path: "/my-team/matchup", element: <MyTeamMatchup /> },
+          { path: "/my-team/trades", element: <MyTeamTrades /> },
+          { path: "/my-team/advisor", element: <MyTeamAdvisor /> },
+          { path: "/my-team/profile", element: <MyTeamProfile /> },
+          { path: "/my-team/championship-path", element: <MyTeamChampionshipPath /> },
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },

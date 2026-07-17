@@ -32,8 +32,8 @@ export type CuratedHomeProps = {
 };
 
 const JUMP_LINKS: { label: string; href: string; hint: string }[] = [
-  { label: "My Team", href: "/roster", hint: "Roster" },
-  { label: "Matchup", href: "/matchups", hint: "This week" },
+  { label: "My Team", href: "/my-team/roster", hint: "Roster" },
+  { label: "Matchup", href: "/my-team/matchup", hint: "This week" },
   { label: "Rivalries", href: "/rivals/rivalries", hint: "Rivals" },
   { label: "RFSN", href: "/rfsn", hint: "Wire" },
   { label: "War Room", href: "/draft-war-room", hint: "Draft" },
@@ -107,7 +107,7 @@ export function CuratedHome({
             eyebrow="My Team"
             title="Team Pulse"
             action={
-              <Link to="/roster" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
+              <Link to="/my-team/roster" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
                 Open roster →
               </Link>
             }
@@ -138,7 +138,7 @@ export function CuratedHome({
             ) : null}
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                to="/matchups"
+                to="/my-team/matchup"
                 className="inline-flex items-center gap-1 text-sm font-semibold text-lime-400/90 hover:text-lime-300"
               >
                 Matchup

@@ -1951,6 +1951,11 @@ export type OwnerProfilesProps = {
   routeOwnerId?: string | null;
   /** When true, selecting an owner navigates to `/rivals/owners/:ownerId`. */
   syncSelectionToRoute?: boolean;
+  /**
+   * My GM mode: lock to `me.ownerHome` authenticated owner only.
+   * Ignores routeOwnerId / URL owner params; hides other-owner directory selection.
+   */
+  authenticatedOwnerOnly?: boolean;
   pageEyebrow?: string;
   pageTitle?: string;
   pageSubtitle?: string;
@@ -1959,6 +1964,7 @@ export type OwnerProfilesProps = {
 export function OwnerProfiles({
   routeOwnerId = null,
   syncSelectionToRoute = false,
+  authenticatedOwnerOnly = false,
   pageEyebrow = "League Intelligence Desk",
   pageTitle = "My GM Profile",
   pageSubtitle,
@@ -2009,6 +2015,10 @@ export function OwnerProfiles({
 
   const selectOwner = (id: string) => {
     if (!id) return;
+    if (authenticatedOwnerOnly) {
+      // My GM never switches to another owner via UI or URL.
+      return;
+    }
     setSelectedOwnerKey(id);
     setRouteOwnerMissing(false);
     if (syncSelectionToRoute) {
@@ -2078,11 +2088,6 @@ export function OwnerProfiles({
     return s;
   }, [active, graveyard]);
 
-  const profileKeyValid = Boolean(
-    selectedOwnerKey && ownerListHydrated && currentLeagueOwnerKeys.has(selectedOwnerKey),
-  );
-  const profileShouldRender = profileKeyValid;
-
   const availableOwnerKeysCount = ownerListHydrated ? currentLeagueOwnerKeys.size : 0;
 
   const viewerOwnerKey = useMemo(() => {
@@ -2093,6 +2098,7 @@ export function OwnerProfiles({
   }, [ownerHomeQ.data?.owner?.ownerKey, active]);
 
   useEffect(() => {
+    if (authenticatedOwnerOnly) return;
     if (!ownerListHydrated) return;
     const requested = typeof routeOwnerId === "string" ? routeOwnerId.trim() : "";
     if (!requested) {
@@ -2112,23 +2118,62 @@ export function OwnerProfiles({
       return;
     }
     setRouteOwnerMissing(true);
-  }, [ownerListHydrated, routeOwnerId, active, graveyard, syncSelectionToRoute, navigate]);
+  }, [
+    authenticatedOwnerOnly,
+    ownerListHydrated,
+    routeOwnerId,
+    active,
+    graveyard,
+    syncSelectionToRoute,
+    navigate,
+  ]);
+
+  /** My GM: always bind to me.ownerHome — never URL, never first roster row. */
+  useEffect(() => {
+    if (!authenticatedOwnerOnly) return;
+    if (!ownerListHydrated) return;
+    const focal = ownerHomeQ.data?.owner?.ownerKey?.trim() ?? "";
+    if (!focal) {
+      setSelectedOwnerKey(null);
+      setRouteOwnerMissing(false);
+      return;
+    }
+    const directoryKeys = [...active, ...graveyard]
+      .map((o: any) => listRowLookupKey(o))
+      .filter(Boolean);
+    const resolved = resolveDirectoryOwnerKey(focal, directoryKeys) ?? focal;
+    setSelectedOwnerKey(resolved);
+    setRouteOwnerMissing(false);
+  }, [authenticatedOwnerOnly, ownerListHydrated, ownerHomeQ.data?.owner?.ownerKey, active, graveyard]);
 
   useEffect(() => {
+    if (authenticatedOwnerOnly) return;
     if (routeOwnerId) return;
     if (!ownerListHydrated || !listGated || !viewerOwnerKey) return;
     if (!selectedOwnerKey) setSelectedOwnerKey(viewerOwnerKey);
-  }, [ownerListHydrated, listGated, viewerOwnerKey, selectedOwnerKey, routeOwnerId]);
+  }, [
+    authenticatedOwnerOnly,
+    ownerListHydrated,
+    listGated,
+    viewerOwnerKey,
+    selectedOwnerKey,
+    routeOwnerId,
+  ]);
 
   useEffect(() => {
     if (!ownerListHydrated) return;
     if (!selectedOwnerKey) return;
+    if (authenticatedOwnerOnly) {
+      // Keep focal key even if list lag temporarily omits it — profile fetch still uses ownerKey.
+      return;
+    }
     if (!currentLeagueOwnerKeys.has(selectedOwnerKey)) {
       setSelectedOwnerKey(null);
     }
-  }, [ownerListHydrated, selectedOwnerKey, currentLeagueOwnerKeys]);
+  }, [ownerListHydrated, selectedOwnerKey, currentLeagueOwnerKeys, authenticatedOwnerOnly]);
 
   useEffect(() => {
+    if (authenticatedOwnerOnly) return;
     if (routeOwnerId) return;
     if (!ownerListHydrated) return;
     if (selectedOwnerKey != null && selectedOwnerKey !== "") return;
@@ -2149,7 +2194,22 @@ export function OwnerProfiles({
       listRowLookupKey(graveyard[0]) ||
       "";
     if (first) setSelectedOwnerKey(first);
-  }, [ownerListHydrated, active, graveyard, selectedOwnerKey, ownerHomeQ.data?.owner?.ownerKey, routeOwnerId]);
+  }, [
+    authenticatedOwnerOnly,
+    ownerListHydrated,
+    active,
+    graveyard,
+    selectedOwnerKey,
+    ownerHomeQ.data?.owner?.ownerKey,
+    routeOwnerId,
+  ]);
+
+  const profileKeyValid = Boolean(
+    selectedOwnerKey &&
+      ownerListHydrated &&
+      (authenticatedOwnerOnly || currentLeagueOwnerKeys.has(selectedOwnerKey)),
+  );
+  const profileShouldRender = profileKeyValid;
 
   const headerDisplayName = useMemo(() => {
     if (!selectedOwnerKey) return "";
@@ -2220,6 +2280,7 @@ export function OwnerProfiles({
       ) : null}
 
       <div className="flex gap-6">
+        {!authenticatedOwnerOnly ? (
         <div className="w-72 shrink-0 space-y-2">
           {(() => {
             const renderCard = (o: any, key: string) => (
@@ -2298,6 +2359,7 @@ export function OwnerProfiles({
             </div>
           )}
         </div>
+        ) : null}
 
         <div ref={profileRef} className="flex-1 min-w-0">
           {profileKeyValid ? (
@@ -2317,7 +2379,15 @@ export function OwnerProfiles({
           ) : (
             <IntelPanel variant="warm" className="flex h-64 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
               <SectionLoading
-                message={selectedOwnerKey ? "Resolving selection…" : "Select an owner to view their profile."}
+                message={
+                  authenticatedOwnerOnly
+                    ? selectedOwnerKey
+                      ? "Loading your GM profile…"
+                      : "Finish team setup in Settings to load My GM."
+                    : selectedOwnerKey
+                      ? "Resolving selection…"
+                      : "Select an owner to view their profile."
+                }
                 className="justify-center"
               />
             </IntelPanel>
