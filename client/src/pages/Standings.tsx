@@ -198,7 +198,14 @@ function safeOwnerDisplayLabel(owners: unknown): string {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-export function Standings() {
+export function Standings({
+  initialMode = "regular",
+  context = "standings",
+}: {
+  initialMode?: StandingsMode;
+  /** When "playoffs", labels final ranks honestly — not a bracket or projection. */
+  context?: "standings" | "playoffs";
+} = {}) {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(
     authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
@@ -214,7 +221,7 @@ export function Standings() {
     cachedSeasons.length > 0 ? Math.max(...cachedSeasons) : Math.min(CURRENT_YEAR, 2025);
 
   const [season, setSeason] = useState<number>(defaultSeason);
-  const [mode, setMode] = useState<StandingsMode>("regular");
+  const [mode, setMode] = useState<StandingsMode>(initialMode);
 
   useEffect(() => {
     if (cachedSeasons.length > 0) {
@@ -261,13 +268,19 @@ export function Standings() {
     return copy;
   }, [rawTeams, mode]);
 
+  const isPlayoffView = context === "playoffs";
+
   return (
     <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
       {/* ── Header (dashboard style) ─────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-5">
         <PageHeader
-          title="Standings"
-          subtitle="League standings in ESPN layout — switch between regular-season order and final ranks."
+          title={isPlayoffView ? "Playoff Picture" : "Standings"}
+          subtitle={
+            isPlayoffView
+              ? "Final season ranks from synced standings — not a bracket, seed projection, or live playoff matchup tree."
+              : "League standings in ESPN layout — switch between regular-season order and final ranks."
+          }
         />
         <div className="flex flex-wrap items-center gap-2.5">
           <Pill gold>{season} Season</Pill>
@@ -290,6 +303,24 @@ export function Standings() {
           </button>
         </div>
       </div>
+
+      {isPlayoffView ? (
+        <div
+          className="mb-3 flex items-start gap-2 rounded-[10px] border px-4 py-3 text-sm"
+          style={{ borderColor: LINE, background: "color-mix(in oklch, var(--color-foreground) 4%, transparent)" }}
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: MUTED }} />
+          <p style={{ color: MUTED }}>
+            This view shows <strong className="font-semibold text-foreground">final standings order</strong> for the
+            selected season. It does not calculate playoff brackets, projected seeds, or matchup paths. For
+            championship history, use{" "}
+            <a href="/league/history/champions" className="font-medium text-foreground underline underline-offset-2">
+              Champions
+            </a>
+            .
+          </p>
+        </div>
+      ) : null}
 
       {/* ── Controls ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 mb-3">

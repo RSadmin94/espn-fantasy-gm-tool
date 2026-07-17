@@ -357,7 +357,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/league",
     icon: Building2,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: false,
   },
   {
@@ -367,9 +367,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/league/standings",
     icon: Trophy,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/standings",
     children: [
       {
         id: "league-standings-record",
@@ -378,9 +377,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/standings",
         icon: Trophy,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/standings",
       },
       {
         id: "league-standings-power-rankings",
@@ -389,9 +387,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/standings/power-rankings",
         icon: Gem,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/dynasty-power-rankings",
       },
       {
         id: "league-standings-playoffs",
@@ -400,7 +397,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/standings/playoffs",
         icon: Trophy,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
       },
       {
@@ -410,7 +407,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/standings/strength-of-schedule",
         icon: Calendar,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
       },
     ],
@@ -422,9 +419,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/league/history",
     icon: History,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/history",
     children: [
       {
         id: "league-history-champions",
@@ -433,9 +429,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/champions",
         icon: Crown,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/hall-of-fame",
       },
       {
         id: "league-history-hof",
@@ -444,9 +439,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/hall-of-fame",
         icon: Award,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/hall-of-fame",
       },
       {
         id: "league-history-records",
@@ -455,7 +449,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/records",
         icon: FileText,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
       },
       {
@@ -465,7 +459,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/dynasties",
         icon: Building2,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
       },
       {
@@ -475,9 +469,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/timeline",
         icon: History,
         requiredPlan: "free",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/history",
       },
       {
         id: "league-history-transactions",
@@ -486,9 +479,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
         route: "/league/history/transactions",
         icon: ArrowLeftRight,
         requiredPlan: "pro",
-        kind: "placeholder",
+        kind: "live",
         showInSidebar: true,
-        legacyRoute: "/transactions",
       },
     ],
   },
@@ -499,9 +491,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/league/acquisition-impact",
     icon: ShoppingCart,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/acquisition-impact",
   },
   {
     id: "league-commissioner",
@@ -510,9 +501,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/league/commissioner",
     icon: Shield,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/commissioner-command-center",
   },
 ];
 

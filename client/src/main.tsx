@@ -84,6 +84,15 @@ import { DraftHub } from "./pages/draft/DraftHub";
 import { DraftWarRoomLayout, DraftWarRoomFocus } from "./pages/draft/DraftWarRoomLayout";
 import { DraftKeepers } from "./pages/draft/DraftKeepers";
 import { DraftHistoryPage } from "./pages/draft/DraftHistoryPage";
+import { LeagueHub } from "./pages/league/LeagueHub";
+import { LeagueStandings } from "./pages/league/LeagueStandings";
+import { LeaguePowerRankings } from "./pages/league/LeaguePowerRankings";
+import { LeaguePlayoffs } from "./pages/league/LeaguePlayoffs";
+import { LeagueStrengthOfSchedule } from "./pages/league/LeagueStrengthOfSchedule";
+import { LeagueArchiveLayout, LeagueArchiveFocus } from "./pages/league/LeagueArchiveLayout";
+import { LeagueTransactions } from "./pages/league/LeagueTransactions";
+import { LeagueAcquisitionImpact } from "./pages/league/LeagueAcquisitionImpact";
+import { LeagueCommissioner } from "./pages/league/LeagueCommissioner";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
 import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
@@ -282,6 +291,25 @@ const router = createBrowserRouter([
           },
           { path: "/draft/keepers", element: <DraftKeepers /> },
           { path: "/draft/history", element: <DraftHistoryPage /> },
+          { path: "/league", element: <LeagueHub /> },
+          { path: "/league/standings", element: <LeagueStandings /> },
+          { path: "/league/standings/power-rankings", element: <LeaguePowerRankings /> },
+          { path: "/league/standings/playoffs", element: <LeaguePlayoffs /> },
+          { path: "/league/standings/strength-of-schedule", element: <LeagueStrengthOfSchedule /> },
+          {
+            element: <LeagueArchiveLayout />,
+            children: [
+              { path: "/league/history", element: <LeagueArchiveFocus /> },
+              { path: "/league/history/champions", element: <LeagueArchiveFocus /> },
+              { path: "/league/history/hall-of-fame", element: <LeagueArchiveFocus /> },
+              { path: "/league/history/records", element: <LeagueArchiveFocus /> },
+              { path: "/league/history/dynasties", element: <LeagueArchiveFocus /> },
+              { path: "/league/history/timeline", element: <LeagueArchiveFocus /> },
+            ],
+          },
+          { path: "/league/history/transactions", element: <LeagueTransactions /> },
+          { path: "/league/acquisition-impact", element: <LeagueAcquisitionImpact /> },
+          { path: "/league/commissioner", element: <LeagueCommissioner /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
           { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },

@@ -504,7 +504,7 @@ function NotoriousTradesSection({
   );
 }
 
-export function HallOfFame() {
+export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {}) {
   const [backfilling, setBackfilling] = useState(false);
   const [backfillNote, setBackfillNote] = useState<string | null>(null);
   const [coverageOpen, setCoverageOpen] = useState(false);
@@ -617,6 +617,13 @@ export function HallOfFame() {
     hofLog.mutate({ eventType: "cta_click", featureName: "hof_unlock_clicked" });
     hofCheckout.mutate({ origin: window.location.origin });
   };
+
+  // Canonical focused History routes share this instance — scroll after data mounts.
+  useEffect(() => {
+    if (!scrollToSection || !leagueKeyReady || hofQ.isLoading || hofQ.isError || !hofQ.data) return;
+    const t = window.setTimeout(() => archiveScrollTo(scrollToSection), 120);
+    return () => window.clearTimeout(t);
+  }, [scrollToSection, leagueKeyReady, hofQ.isLoading, hofQ.isError, hofQ.data]);
 
   if (!leagueKeyReady) {
     return (

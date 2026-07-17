@@ -146,6 +146,37 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain('path: "/keeper-forecast"');
   });
 
+  it("mounts live League pages at canonical routes instead of V2PlaceholderRoute", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    expect(main).toContain('path: "/league"');
+    expect(main).toContain("element: <LeagueHub />");
+    expect(main).toContain('path: "/league/standings"');
+    expect(main).toContain("element: <LeagueStandings />");
+    expect(main).toContain('path: "/league/standings/power-rankings"');
+    expect(main).toContain("element: <LeaguePowerRankings />");
+    expect(main).toContain('path: "/league/standings/playoffs"');
+    expect(main).toContain("element: <LeaguePlayoffs />");
+    expect(main).toContain('path: "/league/standings/strength-of-schedule"');
+    expect(main).toContain("element: <LeagueStrengthOfSchedule />");
+    expect(main).toContain("element: <LeagueArchiveLayout />");
+    expect(main).toContain('path: "/league/history"');
+    expect(main).toContain('path: "/league/history/champions"');
+    expect(main).toContain('path: "/league/history/hall-of-fame"');
+    expect(main).toContain('path: "/league/history/records"');
+    expect(main).toContain('path: "/league/history/dynasties"');
+    expect(main).toContain('path: "/league/history/timeline"');
+    expect(main).toContain('path: "/league/history/transactions"');
+    expect(main).toContain("element: <LeagueTransactions />");
+    expect(main).toContain('path: "/league/acquisition-impact"');
+    expect(main).toContain("element: <LeagueAcquisitionImpact />");
+    expect(main).toContain('path: "/league/commissioner"');
+    expect(main).toContain("element: <LeagueCommissioner />");
+    expect(main).toContain('path: "/standings"');
+    expect(main).toContain('path: "/hall-of-fame"');
+    expect(main).toContain('path: "/history"');
+    expect(main).toContain('path: "/transactions"');
+  });
+
   it("does not redirect /draft to dashboard (V2 Draft hub owns /draft)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).not.toMatch(/path:\s*"\/draft"\s*,\s*element:\s*<Navigate to="\/dashboard"/);

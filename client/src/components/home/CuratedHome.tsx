@@ -37,7 +37,7 @@ const JUMP_LINKS: { label: string; href: string; hint: string }[] = [
   { label: "Rivalries", href: "/rivals/rivalries", hint: "Rivals" },
   { label: "RFSN", href: "/rfsn/wire", hint: "Wire" },
   { label: "War Room", href: "/draft/war-room", hint: "Draft" },
-  { label: "Standings", href: "/standings", hint: "League" },
+  { label: "Standings", href: "/league/standings", hint: "League" },
 ];
 
 export function CuratedHome({
@@ -202,7 +202,7 @@ export function CuratedHome({
             eyebrow="League"
             title="League Movement"
             action={
-              <Link to="/standings" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
+              <Link to="/league/standings" className="text-xs font-medium text-lime-400/90 hover:text-lime-300">
                 Standings →
               </Link>
             }
@@ -216,20 +216,20 @@ export function CuratedHome({
             ) : null}
             <div className="mt-3 flex flex-wrap gap-3 border-t border-border pt-3">
               <Link
-                to="/dynasty-power-rankings"
+                to="/league/standings/power-rankings"
                 className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
                 <Trophy className="h-3.5 w-3.5" />
                 Power Rankings
               </Link>
               <Link
-                to="/acquisition-impact"
+                to="/league/acquisition-impact"
                 className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
                 Acquisition Impact
               </Link>
               <Link
-                to="/transactions"
+                to="/league/history/transactions"
                 className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-foreground"
               >
                 Transactions

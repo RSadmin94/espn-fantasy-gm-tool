@@ -265,4 +265,48 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(hub.kind).toBe("live");
     expect(getV2NavHref(hub)).toBe("/draft");
   });
+
+  it("points League sidebar items to canonical live routes", () => {
+    const league = buildV2NavGroups().find((g) => g.id === "league")!;
+    const standings = league.items.find((i) => i.id === "league-standings")!;
+    expect(standings.kind).toBe("live");
+    expect(standings.legacyRoute).toBeUndefined();
+    expect(getV2NavHref(standings)).toBe("/league/standings");
+    expect(standings.children?.map((c) => c.route)).toEqual([
+      "/league/standings",
+      "/league/standings/power-rankings",
+      "/league/standings/playoffs",
+      "/league/standings/strength-of-schedule",
+    ]);
+    for (const child of standings.children ?? []) {
+      expect(child.kind).toBe("live");
+      expect(child.legacyRoute).toBeUndefined();
+    }
+
+    const history = league.items.find((i) => i.id === "league-history")!;
+    expect(history.kind).toBe("live");
+    expect(getV2NavHref(history)).toBe("/league/history");
+    expect(history.children?.map((c) => c.route)).toEqual([
+      "/league/history/champions",
+      "/league/history/hall-of-fame",
+      "/league/history/records",
+      "/league/history/dynasties",
+      "/league/history/timeline",
+      "/league/history/transactions",
+    ]);
+    for (const child of history.children ?? []) {
+      expect(child.kind).toBe("live");
+      expect(child.legacyRoute).toBeUndefined();
+    }
+
+    expect(getV2NavHref(league.items.find((i) => i.id === "league-acquisition-impact")!)).toBe(
+      "/league/acquisition-impact",
+    );
+    expect(getV2NavHref(league.items.find((i) => i.id === "league-commissioner")!)).toBe(
+      "/league/commissioner",
+    );
+    const hub = V2_DESTINATIONS.find((d) => d.id === "league-hub")!;
+    expect(hub.kind).toBe("live");
+    expect(getV2NavHref(hub)).toBe("/league");
+  });
 });
