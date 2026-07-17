@@ -96,10 +96,10 @@ describe("BroadcastOrchestrator", () => {
       expect(frame.diagnostics.voiceAttempts).toHaveLength(0);
     });
 
-    it("produces coach-led value pick frame", async () => {
+    it("produces sofia-led analytical value pick frame", async () => {
       const frame = await orchestrator.buildFrame(toBroadcast(moment({ level: "notable", signals: ["STEAL"] })));
       expect(frame.public.status).toBe("ready");
-      expect(frame.public.primaryVoice?.voice).toBe("coach");
+      expect(frame.public.primaryVoice?.voice).toBe("sofia");
     });
 
     it("produces sofia-led major reach frame", async () => {
@@ -133,7 +133,7 @@ describe("BroadcastOrchestrator", () => {
         },
       });
       await orch.buildFrame(toBroadcast(moment({ level: "notable", signals: ["STEAL"] })));
-      expect(voices).toEqual(["coach"]);
+      expect(voices).toEqual(["sofia"]);
     });
   });
 

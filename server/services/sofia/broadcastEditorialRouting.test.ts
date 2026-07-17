@@ -139,11 +139,11 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).toEqual([]);
   });
 
-  it("requests coach only for value_pick", () => {
+  it("requests sofia lead for value_pick steal", () => {
     const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), ledger);
     expect(a.planId).toBe("value_pick");
-    expect(a.leadVoice).toBe("coach");
-    expect(a.request).toEqual(["coach"]);
+    expect(a.leadVoice).toBe("sofia");
+    expect(a.request).toEqual(["sofia"]);
   });
 
   it("requests sofia lead for major_reach", () => {
@@ -152,13 +152,13 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).toContain("sofia");
   });
 
-  it("requests Sofia + Coach + Roxanne for major_reach", () => {
+  it("requests Sofia + Coach (no Roxanne) for major_reach", () => {
     const a = buildEditorialAssignment(
       bm({ signals: ["REACH:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
-    expect(roxanneEligible(bm({ signals: ["REACH:strong"], significance: "major" }))).toBe(true);
-    expect(a.request).toEqual(["sofia", "coach", "roxanne"]);
+    expect(roxanneEligible(bm({ signals: ["REACH:strong"], significance: "major" }))).toBe(false);
+    expect(a.request).toEqual(["sofia", "coach"]);
   });
 
   it("keeps Roxanne off ordinary notable steals", () => {
@@ -166,13 +166,13 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).not.toContain("roxanne");
   });
 
-  it("allows Roxanne on major steals as optional", () => {
+  it("keeps Roxanne off major steals", () => {
     const a = buildEditorialAssignment(
       bm({ signals: ["STEAL:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
     expect(a.leadVoice).not.toBe("roxanne");
-    expect(a.request).toContain("roxanne");
+    expect(a.request).not.toContain("roxanne");
   });
 
   it("requests roxanne lead for rivalry_receipt", () => {
@@ -195,7 +195,7 @@ describe("buildEditorialAssignment", () => {
 
 describe("assignEditorialRoles", () => {
   it("places coach as primary when coach leads", () => {
-    const assignment = buildEditorialAssignment(bm({ signals: ["STEAL"] }), new SessionEditorialLedger());
+    const assignment = buildEditorialAssignment(bm({ signals: ["STARTER_NEED"] }), new SessionEditorialLedger());
     const roles = assignEditorialRoles(assignment, [diag("coach")]);
     expect(roles.primary?.voice).toBe("coach");
   });
