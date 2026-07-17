@@ -15,7 +15,7 @@ const sampleBeat = (id: IntelligenceBeat["id"], priority: number): IntelligenceB
   headline: `Headline ${id}`,
   detail: `Detail ${id}`,
   cta: "Open",
-  href: "/rivalry-center",
+  href: "/rivals/rivalries",
   priority,
   knowRivalsOrSelf: true,
 });

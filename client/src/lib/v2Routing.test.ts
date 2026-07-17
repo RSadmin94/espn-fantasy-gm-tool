@@ -124,8 +124,9 @@ describe("v2Routing — locked FFR 2.0", () => {
     }
     expect(main).toContain('path: "/rfsn/news"');
     expect(main).toContain('path: "/rfsn/live"');
-    expect(main).toContain("element: <RfsnNews />");
     expect(main).toContain("element: <RfsnLive />");
+    expect(main).toContain('path: "/rfsn/wire/article/:articleId"');
+    expect(main).toContain('path: "/rfsn/stories/article/:articleId"');
   });
 
   it("mounts live Draft pages at canonical routes instead of V2PlaceholderRoute", () => {

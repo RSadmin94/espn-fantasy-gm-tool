@@ -176,7 +176,7 @@ function AIInsight({ valuations, ownerFilter }: { valuations: KeeperValuation[];
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export function KeeperAdvisor() {
+export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {}) {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(
     authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
@@ -354,10 +354,10 @@ export function KeeperAdvisor() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c090e] px-4 py-6 sm:px-6">
-      <div className="mx-auto max-w-[1400px]">
+    <div className={embedded ? "" : "min-h-screen bg-[#0c090e] px-4 py-6 sm:px-6"}>
+      <div className={embedded ? "" : "mx-auto max-w-[1400px]"}>
 
-        {/* ── Header ───────────────────────────────────────────────────── */}
+        {!embedded ? (
         <div className="mb-6 flex items-start gap-4">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-red-600 bg-red-900/30">
             <span className="text-2xl font-black text-red-400">K</span>
@@ -383,6 +383,7 @@ export function KeeperAdvisor() {
             {manualError && <p className="mt-0.5 text-xs text-red-400">{manualError}</p>}
           </div>
         </div>
+        ) : null}
 
         {/* ── Filter bar ───────────────────────────────────────────────── */}
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-[#140e17] px-5 py-4">

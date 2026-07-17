@@ -23,34 +23,18 @@ import { RivalryShare } from "./pages/RivalryShare";
 import { Claim } from "./pages/Claim";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
-import { Transactions } from "./pages/Transactions";
-import { Standings } from "./pages/Standings";
-import DynastyPowerRankings from "./pages/DynastyPowerRankings";
-import { Roster } from "./pages/Roster";
-import { Trades } from "./pages/Trades";
-import { Advisor } from "./pages/Advisor";
 import { LeagueDna } from "./pages/LeagueDna";
-import { TheCast } from "./pages/TheCast";
 import { Settings } from "./pages/Settings";
 import { ConnectedLeagues } from "./pages/ConnectedLeagues";
 import { EspnSelectTeam } from "./pages/EspnSelectTeam";
-import { Matchups } from "./pages/Matchups";
 import { LeagueHistory } from "./pages/LeagueHistory";
-import { DraftHistory } from "./pages/DraftHistory";
-import { KeeperAdvisor } from "./pages/KeeperAdvisor";
-import { LeagueKeeperForecast } from "./pages/LeagueKeeperForecast";
 import { LeagueSettings } from "./pages/LeagueSettings";
 import { OwnerProfiles } from "./pages/OwnerProfiles";
-import { HallOfFame } from "./pages/HallOfFame";
 import { DraftRealitySimulator } from "./pages/DraftRealitySimulator";
-import { WhyHaventIWon } from "./pages/WhyHaventIWon";
-import { ChampionshipDiagnosis } from "./pages/ChampionshipDiagnosis";
-import { AcquisitionImpact } from "./pages/AcquisitionImpact";
 import { LeagueDataHealth } from "./pages/LeagueDataHealth";
 import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { RfsnHome } from "./pages/rfsn/RfsnHome";
-import { RfsnNews } from "./pages/rfsn/RfsnNews";
 import { RfsnLive } from "./pages/rfsn/RfsnLive";
 import { RfsnWire } from "./pages/rfsn/RfsnWire";
 import { RfsnBreaking } from "./pages/rfsn/RfsnBreaking";
@@ -61,7 +45,6 @@ import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
 import { RivalryCenter }     from "./pages/RivalryCenter";
 import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
-import { CommissionerCommandCenter } from "./pages/CommissionerCommandCenter";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
 import { Home } from "./pages/Home";
@@ -94,7 +77,7 @@ import { LeagueTransactions } from "./pages/league/LeagueTransactions";
 import { LeagueAcquisitionImpact } from "./pages/league/LeagueAcquisitionImpact";
 import { LeagueCommissioner } from "./pages/league/LeagueCommissioner";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
-import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
+import { getV2CanonicalRoutes, getV2DestinationByRoute, V2_PARAM_ROUTES } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
@@ -130,8 +113,14 @@ const trpcClient = trpc.createClient({
 
 function LegacyWireArticleRedirect() {
   const { articleId } = useParams();
-  if (!articleId) return <Navigate to="/rfsn/news" replace />;
-  return <Navigate to={`/rfsn/news/article/${articleId}`} replace />;
+  if (!articleId) return <Navigate to="/rfsn/wire" replace />;
+  return <Navigate to={`/rfsn/wire/article/${articleId}`} replace />;
+}
+
+function LegacyRfsnNewsArticleRedirect() {
+  const { articleId } = useParams();
+  if (!articleId) return <Navigate to="/rfsn/wire" replace />;
+  return <Navigate to={`/rfsn/wire/article/${articleId}`} replace />;
 }
 
 function LoadingSpinner() {
@@ -175,9 +164,12 @@ function ProtectedLayout() {
   );
 }
 
-/** Phase 1: register every canonical V2 path that is not already a live page. */
+/** Register canonical V2 paths not yet mounted as live pages (Commit 8: all destinations live). */
+const LIVE_PARAM_ROUTES = new Set(V2_PARAM_ROUTES);
+
 const v2PlaceholderRoutes = getV2CanonicalRoutes()
   .filter((route) => {
+    if (LIVE_PARAM_ROUTES.has(route)) return false;
     if (route.includes(":")) return true;
     const destination = getV2DestinationByRoute(route);
     return destination == null || destination.kind === "placeholder";
@@ -263,7 +255,7 @@ const router = createBrowserRouter([
           { path: "/connect/sleeper", element: <ConnectSleeper /> },
           { path: "/import/sleeper-workbook", element: <ImportSleeperWorkbook /> },
           { path: "/sync", element: <SyncData /> },
-          { path: "/commissioner-command-center", element: <FeatureRouteGate route="/commissioner-command-center"><CommissionerCommandCenter /></FeatureRouteGate> },
+          { path: "/commissioner-command-center", element: <Navigate to="/league/commissioner" replace /> },
           { path: "/league-settings",      element: <LeagueSettings /> },
           { path: "/owner-profiles",         element: <FeatureRouteGate route="/owner-profiles"><OwnerProfiles /></FeatureRouteGate> },
           { path: "/league-data-health",     element: <LeagueDataHealth /> },
@@ -272,14 +264,16 @@ const router = createBrowserRouter([
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/rfsn", element: <RfsnHome /> },
           { path: "/rfsn/wire", element: <RfsnWire /> },
+          { path: "/rfsn/wire/article/:articleId", element: <RfsnWire /> },
           { path: "/rfsn/breaking", element: <RfsnBreaking /> },
           { path: "/rfsn/stories", element: <RfsnStories /> },
+          { path: "/rfsn/stories/article/:articleId", element: <RfsnStories /> },
           { path: "/rfsn/recaps", element: <RfsnRecaps /> },
           { path: "/rfsn/analysts", element: <RfsnAnalysts /> },
-          { path: "/rfsn/news", element: <RfsnNews /> },
-          { path: "/rfsn/news/article/:articleId", element: <RfsnNews /> },
+          { path: "/rfsn/news", element: <Navigate to="/rfsn/wire" replace /> },
+          { path: "/rfsn/news/article/:articleId", element: <LegacyRfsnNewsArticleRedirect /> },
           { path: "/rfsn/live", element: <RfsnLive /> },
-          { path: "/league-wire", element: <Navigate to="/rfsn/news" replace /> },
+          { path: "/league-wire", element: <Navigate to="/rfsn/wire" replace /> },
           { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
           { path: "/draft", element: <DraftHub /> },
           {
@@ -312,42 +306,42 @@ const router = createBrowserRouter([
           { path: "/league/commissioner", element: <LeagueCommissioner /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
-          { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },
-          { path: "/standings", element: <Standings /> },
-          { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
-          { path: "/matchups", element: <Matchups /> },
+          { path: "/transactions", element: <Navigate to="/league/history/transactions" replace /> },
+          { path: "/standings", element: <Navigate to="/league/standings" replace /> },
+          { path: "/dynasty-power-rankings", element: <Navigate to="/league/standings/power-rankings" replace /> },
+          { path: "/matchups", element: <Navigate to="/my-team/matchup" replace /> },
           { path: "/rivalry-center", element: <RivalryCenter /> },
           { path: "/history", element: <LeagueHistory /> },
           { path: "/league-timeline", element: <Navigate to="/history" replace /> },
-          { path: "/draft-history", element: <DraftHistory /> },
-          { path: "/keeper-advisor", element: <KeeperAdvisor /> },
-      { path: "/keeper-forecast", element: <LeagueKeeperForecast /> },
-          { path: "/hall-of-fame", element: <HallOfFame /> },
+          { path: "/draft-history", element: <Navigate to="/draft/history" replace /> },
+          { path: "/keeper-advisor", element: <Navigate to="/draft/keepers" replace /> },
+          { path: "/keeper-forecast", element: <Navigate to="/draft/keepers" replace /> },
+          { path: "/hall-of-fame", element: <Navigate to="/league/history/hall-of-fame" replace /> },
           { path: "/draft-reality", element: <DraftRealitySimulator /> },
-          { path: "/why-havent-i-won", element: <Navigate to="/championship-diagnosis" replace /> },
-      { path: "/championship-diagnosis", element: <FeatureRouteGate route="/championship-diagnosis"><ChampionshipDiagnosis /></FeatureRouteGate> },
-      { path: "/league-dna", element: <LeagueDna /> },
-          { path: "/the-cast", element: <TheCast /> },
-          { path: "/championship-path", element: <Navigate to="/championship-diagnosis" replace /> },
-          { path: "/acquisition-impact", element: <FeatureRouteGate route="/acquisition-impact"><AcquisitionImpact /></FeatureRouteGate> },
-          { path: "/ring-of-honor", element: <Navigate to="/hall-of-fame" replace /> },
-          { path: "/roster", element: <Roster /> },
-          { path: "/trades", element: <FeatureRouteGate route="/trades"><Trades /></FeatureRouteGate> },
-          { path: "/advisor", element: <FeatureRouteGate route="/advisor"><Advisor /></FeatureRouteGate> },
+          { path: "/why-havent-i-won", element: <Navigate to="/my-team/championship-path" replace /> },
+          { path: "/championship-diagnosis", element: <Navigate to="/my-team/championship-path" replace /> },
+          { path: "/league-dna", element: <LeagueDna /> },
+          { path: "/the-cast", element: <Navigate to="/rivals/cast" replace /> },
+          { path: "/championship-path", element: <Navigate to="/my-team/championship-path" replace /> },
+          { path: "/acquisition-impact", element: <Navigate to="/league/acquisition-impact" replace /> },
+          { path: "/ring-of-honor", element: <Navigate to="/league/history/hall-of-fame" replace /> },
+          { path: "/roster", element: <Navigate to="/my-team/roster" replace /> },
+          { path: "/trades", element: <Navigate to="/my-team/trades" replace /> },
+          { path: "/advisor", element: <Navigate to="/my-team/advisor" replace /> },
           { path: "/settings", element: <Settings /> },
           { path: "/connected-leagues", element: <ConnectedLeagues /> },
           { path: "/select-team/espn/:leagueId", element: <EspnSelectTeam /> },
 
           // ── Legacy route redirects ────────────────────────────────────
           { path: "/command-center", element: <Navigate to="/dashboard" replace /> },
-          { path: "/championships", element: <Navigate to="/hall-of-fame" replace /> },
-          { path: "/rosters", element: <Navigate to="/roster" replace /> },
+          { path: "/championships", element: <Navigate to="/league/history/hall-of-fame" replace /> },
+          { path: "/rosters", element: <Navigate to="/my-team/roster" replace /> },
           { path: "/refresh", element: <Navigate to="/sync" replace /> },
           { path: "/data-center", element: <Navigate to="/sync" replace /> },
           { path: "/data-health", element: <Navigate to="/sync" replace /> },
-          { path: "/trade", element: <Navigate to="/trades" replace /> },
-          { path: "/trade-lab", element: <Navigate to="/trades" replace /> },
-          { path: "/trade-offer", element: <Navigate to="/trades" replace /> },
+          { path: "/trade", element: <Navigate to="/my-team/trades" replace /> },
+          { path: "/trade-lab", element: <Navigate to="/my-team/trades" replace /> },
+          { path: "/trade-offer", element: <Navigate to="/my-team/trades" replace /> },
           { path: "/billing/success", element: <Navigate to="/settings" replace /> },
           { path: "/billing/cancel", element: <Navigate to="/settings" replace /> },
           { path: "/keeper-lab", element: <Navigate to="/dashboard" replace /> },

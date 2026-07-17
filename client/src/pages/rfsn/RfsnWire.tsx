@@ -46,7 +46,7 @@ export function RfsnWire() {
         embedded
         initialView={initialView}
         initialArticleId={initialArticleId}
-        onArticleOpen={(id) => navigate(RFSN_ROUTES.newsArticle(id))}
+        onArticleOpen={(id) => navigate(RFSN_ROUTES.wireArticle(id))}
         onArticleClose={() => navigate(RFSN_ROUTES.wire, { replace: true })}
       />
     </RfsnMediaShell>

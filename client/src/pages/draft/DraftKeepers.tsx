@@ -64,7 +64,7 @@ export function DraftKeepers() {
 
       <p className="mb-4 text-xs text-muted-foreground">{active.hint}</p>
 
-      {tab === "forecast" ? <LeagueKeeperForecast /> : <KeeperAdvisor />}
+      {tab === "forecast" ? <LeagueKeeperForecast embedded /> : <KeeperAdvisor embedded />}
     </IntelPageShell>
   );
 }

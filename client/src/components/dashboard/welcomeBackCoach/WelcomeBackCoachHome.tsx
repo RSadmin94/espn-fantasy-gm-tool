@@ -280,7 +280,7 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
             eyebrow={V1.home.standingsSnapshot}
             title={V1.features.standings}
             action={
-              <Link to="/standings" className="text-xs font-medium text-violet-400 hover:text-violet-300">
+              <Link to="/league/standings" className="text-xs font-medium text-violet-400 hover:text-violet-300">
                 {V1.features.standings} →
               </Link>
             }

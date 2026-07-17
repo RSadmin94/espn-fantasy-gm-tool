@@ -85,12 +85,15 @@ describe("RFSN V2 — Commit 5 route ownership", () => {
     expect(home).toContain("RFSN_ROUTES.live");
   });
 
-  it("preserves legacy news, live, and draft commentary routes", () => {
+  it("preserves legacy news and live routes (news redirects to wire)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client/src/main.tsx"), "utf-8");
     for (const route of ["/rfsn", "/rfsn/news", "/rfsn/live", "/draft-commentary", "/draft-war-room"]) {
       expect(main).toContain(`path: "${route}"`);
     }
-    expect(main).toContain("element: <RfsnNews />");
+    expect(main).toContain('path: "/rfsn/news/article/:articleId"');
+    expect(main).toContain("LegacyRfsnNewsArticleRedirect");
+    expect(main).toContain('path: "/rfsn/wire/article/:articleId"');
+    expect(main).toContain('path: "/rfsn/stories/article/:articleId"');
     expect(main).toContain("element: <RfsnLive />");
     expect(main).toContain("DraftCommentary");
   });
@@ -115,5 +118,7 @@ describe("RFSN V2 — Commit 5 route ownership", () => {
     expect(RFSN_ROUTES.analysts).toBe("/rfsn/analysts");
     expect(RFSN_ROUTES.news).toBe("/rfsn/news");
     expect(RFSN_ROUTES.live).toBe("/rfsn/live");
+    expect(RFSN_ROUTES.wireArticle(1)).toBe("/rfsn/wire/article/1");
+    expect(RFSN_ROUTES.storiesArticle(1)).toBe("/rfsn/stories/article/1");
   });
 });

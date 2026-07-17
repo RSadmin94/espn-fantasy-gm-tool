@@ -90,7 +90,7 @@ export function buildIntelligenceBeatCandidates(input: {
         input.topRival?.loreSentence ??
         "Your hottest rivalry sets the emotional stakes this week.",
       cta: `Open ${V1.features.rivalries}`,
-      href: "/rivalry-center",
+      href: "/rivals/rivalries",
       priority: input.isPreseason ? 88 : 95,
       knowRivalsOrSelf: true,
     });
@@ -110,7 +110,7 @@ export function buildIntelligenceBeatCandidates(input: {
           ? `${Number(wp).toFixed(1)}% career win rate across ${oh?.careerRecord?.seasonsActive ?? "—"} seasons.`
           : "Your draft and trade tendencies define how opponents game-plan you.",
       cta: `Open ${V1.features.myGmProfile}`,
-      href: "/owner-profiles",
+      href: "/rivals/owners",
       priority: input.isPreseason ? 96 : 82,
       knowRivalsOrSelf: true,
     });
@@ -125,7 +125,7 @@ export function buildIntelligenceBeatCandidates(input: {
       headline: "The league identity is shifting",
       detail: input.dynastyLine,
       cta: `See ${V1.features.powerRankings}`,
-      href: "/dynasty-power-rankings",
+      href: "/league/standings/power-rankings",
       priority: 78,
       knowRivalsOrSelf: false,
     });
@@ -143,7 +143,7 @@ export function buildIntelligenceBeatCandidates(input: {
           ? `${input.recentTradeCount} recent league moves — value is moving now.`
           : "This is the stretch where roster moves reshape the standings.",
       cta: `Open ${V1.features.tradeIntelligence}`,
-      href: "/trades",
+      href: "/my-team/trades",
       priority: isTradeDeadlineWeek(input.week) ? 100 : 70,
       knowRivalsOrSelf: false,
     });
@@ -158,7 +158,7 @@ export function buildIntelligenceBeatCandidates(input: {
       headline: "Your playoff path is narrowing",
       detail: input.playoffOutlook,
       cta: `Open ${V1.features.whyHaventIWon}`,
-      href: "/championship-diagnosis",
+      href: "/my-team/championship-path",
       priority: 84,
       knowRivalsOrSelf: true,
     });
@@ -173,7 +173,7 @@ export function buildIntelligenceBeatCandidates(input: {
       headline: "Draft prep is the move",
       detail: input.draftMemo,
       cta: `Open ${V1.features.draftWarRoom}`,
-      href: "/draft-war-room",
+      href: "/draft/war-room",
       priority: input.isPreseason ? 92 : 65,
       knowRivalsOrSelf: false,
     });
@@ -188,7 +188,7 @@ export function buildIntelligenceBeatCandidates(input: {
       headline: "Recent adds changed the board",
       detail: input.acquisitionHeadline,
       cta: `Open ${V1.features.acquisitionImpact}`,
-      href: "/acquisition-impact",
+      href: "/league/acquisition-impact",
       priority: 68,
       knowRivalsOrSelf: false,
     });
@@ -203,7 +203,7 @@ export function buildIntelligenceBeatCandidates(input: {
       headline: "Legacy milestone on the record",
       detail: input.hofHeadline,
       cta: `Open ${V1.features.hallOfFame}`,
-      href: "/hall-of-fame",
+      href: "/league/history/hall-of-fame",
       priority: input.isPreseason ? 90 : 60,
       knowRivalsOrSelf: false,
     });
@@ -295,7 +295,7 @@ export function buildExecutiveBriefing(input: {
     paragraph = `${input.welcomeName}, preseason mode: ${memory} ${pattern}`;
     action = {
       label: top?.cta ?? `Open ${V1.features.myGmProfile}`,
-      href: top?.href ?? "/owner-profiles",
+      href: top?.href ?? "/rivals/owners",
       beatId: top?.id ?? "yourPattern",
     };
   } else if (input.opponentName) {
@@ -306,7 +306,7 @@ export function buildExecutiveBriefing(input: {
     }`.replace(/\s+/g, " ").trim();
     action = {
       label: top?.cta ?? `Review ${V1.features.matchups}`,
-      href: top?.href ?? "/matchups",
+      href: top?.href ?? "/my-team/matchup",
       beatId: top?.id ?? "rivalThreat",
     };
   } else {
@@ -315,7 +315,7 @@ export function buildExecutiveBriefing(input: {
     } ${second?.detail ?? ""}`.replace(/\s+/g, " ").trim();
     action = {
       label: top?.cta ?? `Open ${V1.features.myGmProfile}`,
-      href: top?.href ?? "/owner-profiles",
+      href: top?.href ?? "/rivals/owners",
       beatId: top?.id ?? "yourPattern",
     };
   }

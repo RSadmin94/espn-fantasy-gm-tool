@@ -263,7 +263,7 @@ export function FreeStorylineTeaser({
         eyebrow={V1.navGroups.weekly}
         title={V1.home.freeJourney.oneStoryline}
         action={
-          <Link to="/commissioner-command-center" className="text-xs font-medium text-orange-400/90 hover:text-orange-300">
+          <Link to="/league/commissioner" className="text-xs font-medium text-orange-400/90 hover:text-orange-300">
             More storylines →
           </Link>
         }

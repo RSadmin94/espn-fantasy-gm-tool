@@ -78,8 +78,8 @@ describe("Draft V2 — Commit 6 route ownership", () => {
       "utf-8",
     );
     expect(keepers).toContain("data-v2-draft-keepers");
-    expect(keepers).toContain("LeagueKeeperForecast");
-    expect(keepers).toContain("KeeperAdvisor");
+    expect(keepers).toContain("LeagueKeeperForecast embedded");
+    expect(keepers).toContain("KeeperAdvisor embedded");
     expect(keepers).not.toContain("keeperRecommendationEngine");
     expect(keepers).not.toContain("computeLeagueKeeperForecast");
   });

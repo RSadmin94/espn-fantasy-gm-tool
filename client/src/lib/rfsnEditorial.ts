@@ -23,7 +23,10 @@ export const RFSN_ROUTES = {
   stories: "/rfsn/stories",
   recaps: "/rfsn/recaps",
   analysts: "/rfsn/analysts",
-  newsArticle: (id: number | string) => `/rfsn/news/article/${id}`,
+  wireArticle: (id: number | string) => `/rfsn/wire/article/${id}`,
+  storiesArticle: (id: number | string) => `/rfsn/stories/article/${id}`,
+  /** Legacy deep-link alias — redirects to canonical wire article route. */
+  newsArticle: (id: number | string) => `/rfsn/wire/article/${id}`,
   legacyWire: "/league-wire",
   legacyWireArticle: (id: number | string) => `/league-wire/article/${id}`,
 } as const;

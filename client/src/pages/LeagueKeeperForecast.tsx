@@ -32,7 +32,7 @@ const STATUS_STYLE: Record<KeeperForecastStatus, string> = {
   PREDICTED: "border-amber-600 bg-amber-600/15 text-amber-300",
 };
 
-export function LeagueKeeperForecast() {
+export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean } = {}) {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(
     authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"),
@@ -60,9 +60,9 @@ export function LeagueKeeperForecast() {
   const errorMsg = (payload as { error?: string } | undefined)?.error;
 
   return (
-    <div className="min-h-screen bg-zinc-950 px-4 py-6 sm:px-8">
-      <div className="mx-auto max-w-6xl">
-        {/* Header */}
+    <div className={embedded ? "" : "min-h-screen bg-zinc-950 px-4 py-6 sm:px-8"}>
+      <div className={embedded ? "" : "mx-auto max-w-6xl"}>
+        {!embedded ? (
         <div className="mb-6 flex items-start gap-3">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-lime-700/40 bg-lime-600/10">
             <ListChecks className="h-6 w-6 text-lime-400" />
@@ -77,6 +77,7 @@ export function LeagueKeeperForecast() {
             </p>
           </div>
         </div>
+        ) : null}
 
         {/* States */}
         {loading && (

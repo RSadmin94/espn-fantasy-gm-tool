@@ -1091,7 +1091,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
         <ArchiveSectionHeader icon={<Landmark className="h-4 w-4" />} title="Dynasty Timeline" accent="#a3e635" />
         <div className="mb-6 flex flex-col gap-2 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-[13px] text-sky-100/80">Championship seasons from league medals. For current roster strength, see {V1.features.powerRankings}.</p>
-          <Link to="/dynasty-power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">{V1.features.powerRankings} →</Link>
+          <Link to="/league/standings/power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">{V1.features.powerRankings} →</Link>
         </div>
         {dynastyTimeline.length === 0 ? (
           <p className="text-sm text-zinc-500">No resolved championship seasons yet.</p>

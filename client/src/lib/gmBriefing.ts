@@ -138,7 +138,7 @@ export function buildHeroCandidates(input: {
       dek: input.rivalName
         ? `You play ${input.opponentName} this week — the ${input.rivalName} rivalry is live again.`
         : `Your Week ${input.week ?? ""} matchup is ${input.opponentName}. The league is watching.`,
-      href: "/rivalry-center",
+      href: "/rivals/rivalries",
       priority: 95,
     });
   }
@@ -148,7 +148,7 @@ export function buildHeroCandidates(input: {
       id: "preseason-kickoff",
       headline: "The Draft Begins Soon",
       dek: input.hofHeadline ?? "Your league's history is loaded. This season writes the next chapter.",
-      href: "/draft-war-room",
+      href: "/draft/war-room",
       priority: 88,
     });
   }
@@ -158,7 +158,7 @@ export function buildHeroCandidates(input: {
       id: "championship-week",
       headline: "One Game Decides Your Legacy",
       dek: "Championship week is here. Every decision you've made leads to this moment.",
-      href: "/championship-path",
+      href: "/my-team/championship-path",
       priority: 96,
     });
   }
@@ -173,7 +173,7 @@ export function selectHeroStory(candidates: BriefingHeroStory[]): BriefingHeroSt
     id: "fallback",
     headline: "Your League Has News Today",
     dek: "Connect your league history and check back for today's front-page story.",
-    href: "/owner-profiles",
+    href: "/rivals/owners",
     priority: 0,
   };
 }
@@ -308,7 +308,7 @@ export function buildRivalOfWeek(input: {
     heatLabel: rival.heatLabel ?? null,
     teaser: rival.loreSentence ?? null,
     whyNow,
-    href: "/rivalry-center",
+    href: "/rivals/rivalries",
     h2hLine,
   };
 }

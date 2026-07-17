@@ -1,9 +1,9 @@
 /**
  * Canonical `/rfsn/stories` — feature stories from the existing newsroom feed.
- * Reuses LeagueWireNewsroom; article reader remains on legacy `/rfsn/news/article/:id`.
+ * Article reader: `/rfsn/stories/article/:articleId` (legacy `/rfsn/news/article/:id` redirects).
  */
 import { useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { LeagueWireNewsroom } from "@/components/leagueWire/LeagueWireNewsroom";
@@ -12,8 +12,14 @@ import { RFSN_ROUTES } from "@/lib/rfsnEditorial";
 
 export function RfsnStories() {
   const navigate = useNavigate();
+  const { articleId: articleIdParam } = useParams();
   const [searchParams] = useSearchParams();
   const initialView = searchParams.get("view") === "archive" ? "archive" : "feed";
+  const initialArticleId = useMemo(() => {
+    if (!articleIdParam) return null;
+    const id = Number.parseInt(articleIdParam, 10);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }, [articleIdParam]);
 
   const _trpc = trpc as any;
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
@@ -46,7 +52,8 @@ export function RfsnStories() {
         hideMasthead
         embedded
         initialView={initialView}
-        onArticleOpen={(id) => navigate(RFSN_ROUTES.newsArticle(id))}
+        initialArticleId={initialArticleId}
+        onArticleOpen={(id) => navigate(RFSN_ROUTES.storiesArticle(id))}
         onArticleClose={() => navigate(RFSN_ROUTES.stories, { replace: true })}
       />
     </RfsnMediaShell>

@@ -41,19 +41,21 @@ describe("rfsnHomeNews", () => {
     expect(getRouteFeatures().some((f) => f.route === "/league-wire")).toBe(false);
   });
 
-  it("redirects /league-wire to /rfsn/news in router", () => {
+  it("redirects /league-wire to canonical RFSN wire in router", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).toContain('path: "/league-wire"');
-    expect(main).toContain('to="/rfsn/news"');
+    expect(main).toContain('to="/rfsn/wire"');
   });
 
   it("redirects legacy article deep links preserving id", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).toContain('path: "/league-wire/article/:articleId"');
     expect(main).toContain("LegacyWireArticleRedirect");
-    expect(main).toContain("/rfsn/news/article/${articleId}");
+    expect(main).toContain("/rfsn/wire/article/${articleId}");
     expect(RFSN_ROUTES.legacyWireArticle(42)).toBe("/league-wire/article/42");
-    expect(RFSN_ROUTES.newsArticle(42)).toBe("/rfsn/news/article/42");
+    expect(RFSN_ROUTES.newsArticle(42)).toBe("/rfsn/wire/article/42");
+    expect(RFSN_ROUTES.wireArticle(42)).toBe("/rfsn/wire/article/42");
+    expect(RFSN_ROUTES.storiesArticle(42)).toBe("/rfsn/stories/article/42");
   });
 
   it("selects championship march as featured when present", () => {
