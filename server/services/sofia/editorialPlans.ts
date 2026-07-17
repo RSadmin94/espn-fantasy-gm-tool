@@ -77,17 +77,17 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     energyLevel: "low",
   }),
 
-  value_pick: plan("value_pick", "coach", [], ["sofia", "roxanne"], 1, {
+  value_pick: plan("value_pick", "coach", [], ["roxanne"], 1, {
     energyLevel: "medium",
     callbackEligible: true,
   }),
 
-  slight_reach: plan("slight_reach", "coach", ["sofia"], ["roxanne"], 2, {
+  slight_reach: plan("slight_reach", "sofia", ["coach"], ["roxanne"], 2, {
     energyLevel: "medium",
     callbackEligible: true,
   }),
 
-  major_reach: plan("major_reach", "sofia", ["coach", "roxanne"], [], 3, {
+  major_reach: plan("major_reach", "sofia", ["coach"], ["roxanne"], 2, {
     energyLevel: "high",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 1,

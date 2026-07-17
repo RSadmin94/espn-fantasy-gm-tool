@@ -48,25 +48,49 @@ function hasStrongSignal(moment: BroadcastMoment, prefix: string): boolean {
 const ROXANNE_DRAMA_RE =
   /\b(rival|rivalry|drama|revenge|feud|receipt|temperature|consequence|upset|championship|dynasty|trade war)\b/i;
 
+const COACH_EVIDENCE_RE =
+  /\b(need|starter|roster|lineup|construction|fit|build|depth|hole|slot|flex|bench|positional)\b/i;
+const SOFIA_EVIDENCE_RE =
+  /\b(ADP|ahead|fell|behind|reach|steal|consensus|tier|board|trend|value|history|record|earliest|latest|zero.?rb|stack|waiting|strategy|specialist|defense|kicker)\b/i;
+
 /**
- * Roxanne stays selective: rivalry/drama evidence, or clear major/historic reach/steal.
- * Ordinary notable value picks remain Sofia/Coach.
+ * One lead for ordinary value picks: Coach = construction/need; Sofia = ADP/value/reach/steal/strategy.
+ * Never Roxanne on ordinary value. Restores Sofia as the regular analytical lead.
+ */
+export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId; reason: string } {
+  const corpus = [
+    ...moment.signals,
+    ...moment.factPacket.verifiedFacts,
+    ...moment.storylines,
+    moment.primaryStoryline ?? "",
+  ].join(" | ");
+
+  const constructionLead =
+    hasSignal(moment, "STARTER_NEED") ||
+    hasSignal(moment, "HERO_RB") ||
+    moment.primaryStoryline === "ROSTER_NEED" ||
+    moment.primaryStoryline === "HERO_RB";
+  if (constructionLead) return { lead: "coach", reason: "roster_construction_or_need" };
+
+  if (hasSignal(moment, "STEAL") || hasSignal(moment, "REACH") || SOFIA_EVIDENCE_RE.test(corpus)) {
+    return { lead: "sofia", reason: "adp_value_reach_or_steal" };
+  }
+  if (COACH_EVIDENCE_RE.test(corpus)) return { lead: "coach", reason: "roster_construction_or_need" };
+  return { lead: "sofia", reason: "default_analytical_value" };
+}
+
+/**
+ * Roxanne stays selective: rivalry/drama evidence, a historic reach, or a steal with drama.
+ * Ordinary notable/major value picks are Sofia/Coach — Roxanne no longer rides along on every reach/steal.
  */
 export function roxanneEligible(moment: BroadcastMoment): boolean {
   if (hasReceipt(moment, "rivalry", "rivalry")) return true;
   if (moment.primaryStoryline && ROXANNE_DRAMA_RE.test(moment.primaryStoryline)) return true;
   if (moment.storylines.some((s) => ROXANNE_DRAMA_RE.test(s))) return true;
   if (moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) return true;
-  if (
-    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) &&
-    (moment.significance === "historic" || moment.significance === "major")
-  ) {
-    return true;
-  }
-  if (
-    (hasSignal(moment, "STEAL") || hasStrongSignal(moment, "STEAL")) &&
-    (moment.significance === "historic" || moment.significance === "major")
-  ) {
+  if (hasSignal(moment, "REACH") && moment.significance === "historic") return true;
+  if (hasStrongSignal(moment, "REACH") && moment.significance === "historic") return true;
+  if (hasSignal(moment, "STEAL") && moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) {
     return true;
   }
   return false;
@@ -150,13 +174,18 @@ export function buildEditorialAssignment(
   const planId = resolveEditorialPlanId(moment);
   let basePlan = getEditorialPlan(planId);
 
-  // Major/historic steals otherwise prohibit Roxanne on value_pick — allow optional slot when eligible.
-  if (planId === "value_pick" && roxanneEligible(moment)) {
+  // Ordinary value picks get a single analytical lead (Sofia by default, Coach on
+  // construction/need) — never Roxanne. This restores Sofia's regular airtime and
+  // stops Roxanne riding along on every notable value pick.
+  if (planId === "value_pick") {
+    const { lead } = resolveValueLeadVoice(moment);
+    const others = (["sofia", "coach", "roxanne"] as VoiceId[]).filter((v) => v !== lead);
     basePlan = {
       ...basePlan,
-      optionalVoices: [...new Set<VoiceId>([...basePlan.optionalVoices, "roxanne"])],
-      prohibitedVoices: basePlan.prohibitedVoices.filter((v) => v !== "roxanne"),
-      maxVoices: Math.max(basePlan.maxVoices, 2),
+      leadVoice: lead,
+      optionalVoices: [],
+      prohibitedVoices: others,
+      maxVoices: 1,
     };
   }
 

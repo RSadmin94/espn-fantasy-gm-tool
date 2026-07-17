@@ -82,7 +82,7 @@ describe("broadcast shadow e2e", () => {
 
   it("routes coach-led value pick to snapshot primary", async () => {
     const state: ShadowPipelineState = { queue: [], ticker: [] };
-    const artifact = await processShadowPick(orch(), dm({ level: "notable", signals: ["STEAL"] }), state);
+    const artifact = await processShadowPick(orch(), dm({ level: "notable", signals: ["STARTER_NEED"] }), state);
     expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("coach");
     expect(artifact.snapshot.primary?.commentator).toBe("coach");
   });
