@@ -4,6 +4,8 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { castMemberDossierOwnerKey, rivalsOwnerDossierPath } from "@/lib/ownerIdentity";
+import { orderCastHeadliners } from "@/lib/castHeadlinerOrder";
+import { headlinerDisplayedBadgeText } from "@/lib/castHeadlinerDisplay";
 import { useState } from "react";
 import { Crown, Loader2, Clapperboard, Share2 } from "lucide-react";
 
@@ -29,6 +31,9 @@ type CastMember = {
   archetypeReceipt: string;
   identityRank: { rank: number; of: number } | null;
   badges: Badge[];
+  /** Hall of Fame championships.leaderboard titles (ownerKey GUID match). */
+  championships: number;
+  championshipYears?: number[];
   isYou: boolean;
 };
 
@@ -41,8 +46,6 @@ type PastChampion = {
 };
 
 const PERSONALITY = new Set(["The Trade Shark", "The Chaos Agent", "The Hothead"]);
-const BADGE_RANK: Record<string, number> = { villain: 0, dynasty: 1, champion: 2, gatekeeper: 3, playoff_fixture: 4 };
-const topBadge = (m: CastMember) => Math.min(99, ...m.badges.map((b) => BADGE_RANK[b.tier] ?? 98));
 
 function YouTag() {
   return <span className="ml-2 align-middle rounded px-1.5 py-0.5 text-[10px] font-black" style={{ background: LIME, color: "#0b0809" }}>YOU</span>;
@@ -71,6 +74,7 @@ function Headliner({ m }: { m: CastMember }) {
   const others = m.badges.filter((b) => b.tier !== "champion");
   const fallback = !champ && others.length ? others[0] : null;
   const dossierHref = rivalsOwnerDossierPath(castMemberDossierOwnerKey(m));
+  const display = headlinerDisplayedBadgeText(m.badges);
   return (
     <Link
       to={dossierHref}
@@ -78,17 +82,17 @@ function Headliner({ m }: { m: CastMember }) {
       style={{ background: "linear-gradient(160deg,rgba(245,197,24,.12),rgba(245,197,24,.03))", border: `1px solid ${GOLD}55` }}
     >
       <Crown className="absolute right-3 top-3 h-7 w-7 opacity-30" style={{ color: GOLD }} />
-      {others.length > 0 && (
-        <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{others.map((b) => b.label).join(" · ")}</div>
+      {display.eyebrowText && (
+        <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{display.eyebrowText}</div>
       )}
       <div className="mt-1 text-2xl font-black leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
-      {champ && (
+      {display.championLabel && (
         <>
-          <div className="mt-1 text-lg font-black" style={{ color: GOLD }}>{champ.label}</div>
-          <div className="text-xs leading-snug" style={{ color: MUTED }}>{champ.receipt}</div>
+          <div className="mt-1 text-lg font-black" style={{ color: GOLD }}>{display.championLabel}</div>
+          <div className="text-xs leading-snug" style={{ color: MUTED }}>{champ?.receipt}</div>
         </>
       )}
-      {fallback && <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{fallback.receipt}</div>}
+      {fallback && !champ && <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{fallback.receipt}</div>}
       <div className="mt-2 text-sm font-semibold" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
     </Link>
   );
@@ -200,8 +204,11 @@ export function TheCast() {
     );
   }
 
-  const cast = [...data.cast];
-  const headliners = cast.filter((m) => m.badges.length > 0).sort((a, b) => topBadge(a) - topBadge(b));
+  const cast = [...data.cast].map((m) => ({
+    ...m,
+    championships: Number((m as CastMember).championships ?? 0),
+  })) as CastMember[];
+  const headliners = orderCastHeadliners(cast);
   const rest = cast.filter((m) => m.badges.length === 0);
   const personalities = rest.filter((m) => PERSONALITY.has(m.archetype));
   const wildcards = rest.filter((m) => !PERSONALITY.has(m.archetype));

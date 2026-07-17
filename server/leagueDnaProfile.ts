@@ -262,9 +262,10 @@ function badgeStats(managers: ManagerRawData[], trophy: Map<string, TrophyLite>)
   return out;
 }
 
-type EarnedBadge = { label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" | "playoff_fixture" };
+export type EarnedBadge = { label: string; receipt: string; tier: "champion" | "dynasty" | "villain" | "gatekeeper" | "playoff_fixture" };
 
-function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): EarnedBadge[] {
+/** Exported for Cast / HoF badge verification tests — production Cast uses this via buildLeagueDnaProfile. */
+export function computeEarnedBadges(focalId: string, stats: Map<string, BadgeStat>): EarnedBadge[] {
   const me = stats.get(focalId);
   if (!me) return [];
   const all = [...stats.entries()];

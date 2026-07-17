@@ -33,6 +33,12 @@ import { classifyDraftPickRawPick } from "./draftTruth";
 import { buildLeagueDnaProfile } from "./leagueDnaProfile";
 import { gateLeagueDna } from "./leagueIntelGating";
 import { computeAllTrophyHistory } from "./championshipHistoryBuilder";
+import { buildHallOfFamePayload } from "./hallOfFameService";
+import {
+  hofTitlesForMember,
+  pastChampionsFromHofLeaderboard,
+  trophyByMemberFromHofLeaderboard,
+} from "./castChampionshipsFromHof";
 import { careerSimGrades } from "./draftGradeForDna";
 import { signReceipt, verifyReceipt, type ReceiptPayload } from "./receiptToken";
 import { mintShareCode, resolveShareToken } from "./receiptShare";
@@ -304,23 +310,20 @@ export const dnaRouter = router({
     const allDna = calcLeagueDNA(managers, focalLabel);
     const latestSeason = Math.max(0, ...managers.flatMap((m) => m.seasonRecords.map((r) => r.season)));
 
-    let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
-    let trophyRaw = new Map<string, { name: string; championships: number; championshipYears: number[] }>();
     let leagueName = "Your League";
-    try {
-      const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
-      trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
-      trophyRaw = new Map(Array.from(trophy, ([k, v]) => [k, { name: v.name, championships: v.championships, championshipYears: v.championshipYears }]));
-      const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
-      const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
-      if (nm?.name) leagueName = String(nm.name);
-    } catch { /* best-effort name + trophies */ }
-
-    // Same ownerKey authority as owners.ownerList / owners.ownerProfile.
+    let hofLeaderboard: Array<{
+      ownerKey: string;
+      displayName: string;
+      titles: number;
+      titleSeasons: number[];
+    }> = [];
     let ownerKeyRemap = new Map<string, string>();
+    let leagueId: string | null = null;
+
     try {
       const db = await getDb();
-      const { leagueId } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      const resolved = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+      leagueId = resolved.leagueId && resolved.leagueId !== "default" ? String(resolved.leagueId) : null;
       if (db && leagueId) {
         const teamRows = await db
           .select()
@@ -328,8 +331,14 @@ export const dnaRouter = router({
           .where(eq(gmTeams.leagueId, String(leagueId).trim().slice(0, 32)))
           .orderBy(asc(gmTeams.season), asc(gmTeams.teamId));
         ownerKeyRemap = buildRawKeyToCanonicalProfileKey(teamRows as GmTeamRow[]);
+        // Cast titles / badges: Hall of Fame championships.leaderboard (same as /league/history).
+        const hof = await buildHallOfFamePayload({ db, leagueId, userId: ctx.user.id });
+        hofLeaderboard = hof.championships.leaderboard;
       }
-    } catch { /* fall back to id:{memberId} without person-merge remap */ }
+      const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
+      const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
+      if (nm?.name) leagueName = String(nm.name);
+    } catch { /* best-effort name + HoF trophies */ }
 
     const co = await resolveCurrentOwner({ id: ctx.user.id });
     const focalId = co.isSetupComplete ? co.ownerId : null;
@@ -337,37 +346,45 @@ export const dnaRouter = router({
       managers.filter((m) => m.seasonRecords.some((r) => r.season === latestSeason)).map((m) => m.memberId),
     );
 
+    const trophyByMember = trophyByMemberFromHofLeaderboard({
+      leaderboard: hofLeaderboard,
+      memberIds: managers.map((m) => m.memberId),
+      ownerKeyRemap,
+    });
+
     const cast = allDna
       .filter((d) => currentIds.has(d.memberId))
       .map((d) => {
         const prof = buildLeagueDnaProfile({ allDna, focalMemberId: d.memberId, managers, trophyByMember });
         if (!prof) return null;
+        const ownerKey = canonicalOwnerKeyForMemberId(d.memberId, ownerKeyRemap);
+        const titles = hofTitlesForMember({
+          leaderboard: hofLeaderboard,
+          memberId: d.memberId,
+          ownerKey,
+        });
         return {
           memberId: d.memberId,
           /** Canonical key shared with owners.ownerList / owners.ownerProfile. */
-          ownerKey: canonicalOwnerKeyForMemberId(d.memberId, ownerKeyRemap),
+          ownerKey,
           ownerName: prof.ownerName,
           archetype: prof.archetype,
           archetypeReceipt: prof.archetypeReceipt,
           identityRank: prof.identityRank,
           badges: prof.badges,
+          championships: titles.championships,
+          championshipYears: titles.championshipYears,
           isYou: d.memberId === focalId,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    // Champions who are no longer in the current league - so The Cast never erases a
-    // title-holder. Sourced from the same authority (person-merged), keyed off currentIds.
-    const pastChampions = [...trophyRaw.entries()]
-      .filter(([memberId, t]) => t.championships >= 1 && !currentIds.has(memberId))
-      .map(([memberId, t]) => ({
-        memberId,
-        ownerKey: canonicalOwnerKeyForMemberId(memberId, ownerKeyRemap),
-        ownerName: t.name,
-        championships: t.championships,
-        championshipYears: [...t.championshipYears].sort((a, b) => a - b),
-      }))
-      .sort((a, b) => b.championships - a.championships || a.ownerName.localeCompare(b.ownerName));
+    const currentOwnerKeys = new Set(cast.map((c) => c.ownerKey).filter(Boolean));
+    const pastChampions = pastChampionsFromHofLeaderboard({
+      leaderboard: hofLeaderboard,
+      currentMemberIds: currentIds,
+      currentOwnerKeys,
+    });
 
     return { leagueName, season: latestSeason, cast, pastChampions };
   }),
@@ -389,12 +406,31 @@ export const dnaRouter = router({
       if (!targetId) throw new Error("Finish setup to create your Receipt.");
 
       let trophyByMember = new Map<string, { championships: number; championshipYears: number[]; runnerUps: number; thirdPlaceFinishes: number }>();
-      let trophyRaw = new Map<string, { name: string; championships: number; championshipYears: number[] }>();
       let leagueName = "Your League";
+      let hofTitles = { championships: 0, championshipYears: [] as number[] };
       try {
-        const trophy = await computeAllTrophyHistory(undefined, ctx.user.id);
-        trophyByMember = new Map(Array.from(trophy, ([k, v]) => [k, { championships: v.championships, championshipYears: v.championshipYears, runnerUps: v.runnerUps, thirdPlaceFinishes: v.thirdPlaceFinishes }]));
-        trophyRaw = new Map(Array.from(trophy, ([k, v]) => [k, { name: v.name, championships: v.championships, championshipYears: v.championshipYears }]));
+        const db = await getDb();
+        const resolved = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const leagueId = resolved.leagueId && resolved.leagueId !== "default" ? String(resolved.leagueId) : null;
+        if (db && leagueId) {
+          const teamRows = await db
+            .select()
+            .from(gmTeams)
+            .where(eq(gmTeams.leagueId, String(leagueId).trim().slice(0, 32)))
+            .orderBy(asc(gmTeams.season), asc(gmTeams.teamId));
+          const ownerKeyRemap = buildRawKeyToCanonicalProfileKey(teamRows as GmTeamRow[]);
+          const hof = await buildHallOfFamePayload({ db, leagueId, userId: ctx.user.id });
+          trophyByMember = trophyByMemberFromHofLeaderboard({
+            leaderboard: hof.championships.leaderboard,
+            memberIds: managers.map((m) => m.memberId),
+            ownerKeyRemap,
+          });
+          hofTitles = hofTitlesForMember({
+            leaderboard: hof.championships.leaderboard,
+            memberId: targetId,
+            ownerKey: canonicalOwnerKeyForMemberId(targetId, ownerKeyRemap),
+          });
+        }
         const row = latestSeason ? await getCachedView(latestSeason, "combined", undefined, { userId: ctx.user.id }) : null;
         const nm = (row?.payload as Record<string, unknown> | undefined)?.settings as Record<string, unknown> | undefined;
         if (nm?.name) leagueName = String(nm.name);
@@ -402,7 +438,12 @@ export const dnaRouter = router({
 
       const prof = buildLeagueDnaProfile({ allDna, focalMemberId: targetId, managers, trophyByMember });
       if (!prof) throw new Error("Couldn't build a Receipt for that manager.");
-      const tr = trophyRaw.get(targetId);
+      const tr = trophyByMember.get(targetId) ?? {
+        championships: hofTitles.championships,
+        championshipYears: hofTitles.championshipYears,
+        runnerUps: 0,
+        thirdPlaceFinishes: 0,
+      };
 
       // Top rival snapshot (free hook). Best-effort: if rivalry data is unavailable,
       // omit rv and still create the Receipt.
@@ -425,8 +466,8 @@ export const dnaRouter = router({
         rc: prof.archetypeReceipt,
         rk: prof.identityRank ? [prof.identityRank.rank, prof.identityRank.of] : null,
         bd: prof.badges.map((b) => ({ l: b.label, t: b.tier })),
-        ch: tr?.championships ?? 0,
-        cy: (tr?.championshipYears ?? []).slice().sort((a, b) => a - b),
+        ch: tr?.championships ?? hofTitles.championships,
+        cy: (tr?.championshipYears ?? hofTitles.championshipYears).slice().sort((a, b) => a - b),
         ts: Math.floor(Date.now() / 1000),
         tw: prof.leagueTwin ? { n: prof.leagueTwin.ownerName, m: Math.round(prof.leagueTwin.similarityPct) } : null,
         bs: prof.blindSpot ?? null,
