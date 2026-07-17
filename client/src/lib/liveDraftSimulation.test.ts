@@ -98,3 +98,6 @@ describe("live draft 168-pick simulation", () => {
     expect(remaining).toBe(0);
   });
 });
+
+// Hold-arming / suppress semantics live in draftClock.reduceBroadcastHold tests.
+// This file keeps draft-engine simulation concerns separate from broadcast lifecycle.

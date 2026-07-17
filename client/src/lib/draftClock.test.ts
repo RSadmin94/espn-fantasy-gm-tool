@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   CLOCK_STATE_LABEL,
+  INITIAL_BROADCAST_HOLD,
+  MAX_BROADCAST_HOLD_MS,
   URGENT_MS,
+  broadcastHoldRemainingMs,
   formatClock,
   isPickManual,
+  reduceBroadcastHold,
   resolveClockState,
 } from "./draftClock";
 
@@ -71,5 +75,85 @@ describe("formatClock", () => {
 describe("labels", () => {
   it("paused state announces the broadcast pause reason", () => {
     expect(CLOCK_STATE_LABEL.paused_for_broadcast).toMatch(/RFSN Broadcast/i);
+  });
+});
+
+describe("reduceBroadcastHold — draft stays authoritative over a stuck booth", () => {
+  const t0 = 1_000_000;
+
+  it("starts a hold when the booth becomes busy", () => {
+    const next = reduceBroadcastHold(INITIAL_BROADCAST_HOLD, {
+      type: "busy_changed",
+      busy: true,
+      now: t0,
+    });
+    expect(next).toEqual({ holding: true, suppressUntilIdle: false, holdStartedAt: t0 });
+  });
+
+  it("releases immediately when the booth goes idle", () => {
+    const held = reduceBroadcastHold(INITIAL_BROADCAST_HOLD, {
+      type: "busy_changed",
+      busy: true,
+      now: t0,
+    });
+    const next = reduceBroadcastHold(held, { type: "busy_changed", busy: false, now: t0 + 500 });
+    expect(next).toEqual(INITIAL_BROADCAST_HOLD);
+  });
+
+  it("watchdog releases a stuck hold and suppresses re-arm until idle", () => {
+    let state = reduceBroadcastHold(INITIAL_BROADCAST_HOLD, {
+      type: "busy_changed",
+      busy: true,
+      now: t0,
+    });
+    state = reduceBroadcastHold(state, {
+      type: "watchdog",
+      now: t0 + MAX_BROADCAST_HOLD_MS,
+    });
+    expect(state.holding).toBe(false);
+    expect(state.suppressUntilIdle).toBe(true);
+
+    // Same busy stretch must not re-hold the draft.
+    state = reduceBroadcastHold(state, {
+      type: "busy_changed",
+      busy: true,
+      now: t0 + MAX_BROADCAST_HOLD_MS + 1,
+    });
+    expect(state.holding).toBe(false);
+    expect(state.suppressUntilIdle).toBe(true);
+  });
+
+  it("after idle, a new busy moment may hold again", () => {
+    let state = reduceBroadcastHold(INITIAL_BROADCAST_HOLD, {
+      type: "busy_changed",
+      busy: true,
+      now: t0,
+    });
+    state = reduceBroadcastHold(state, {
+      type: "watchdog",
+      now: t0 + MAX_BROADCAST_HOLD_MS,
+    });
+    state = reduceBroadcastHold(state, {
+      type: "busy_changed",
+      busy: false,
+      now: t0 + MAX_BROADCAST_HOLD_MS + 100,
+    });
+    state = reduceBroadcastHold(state, {
+      type: "busy_changed",
+      busy: true,
+      now: t0 + MAX_BROADCAST_HOLD_MS + 200,
+    });
+    expect(state.holding).toBe(true);
+    expect(state.suppressUntilIdle).toBe(false);
+  });
+
+  it("broadcastHoldRemainingMs hits 0 at the cap", () => {
+    const held = reduceBroadcastHold(INITIAL_BROADCAST_HOLD, {
+      type: "busy_changed",
+      busy: true,
+      now: t0,
+    });
+    expect(broadcastHoldRemainingMs(held, t0 + MAX_BROADCAST_HOLD_MS + 50)).toBe(0);
+    expect(broadcastHoldRemainingMs(held, t0 + 5_000)).toBe(MAX_BROADCAST_HOLD_MS - 5_000);
   });
 });

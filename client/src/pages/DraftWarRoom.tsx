@@ -18,7 +18,15 @@ import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
-import { resolveClockState, isPickManual, MAX_BROADCAST_HOLD_MS, draftPaceFromTimerMs } from "@/lib/draftClock";
+import {
+  INITIAL_BROADCAST_HOLD,
+  broadcastHoldRemainingMs,
+  draftPaceFromTimerMs,
+  isPickManual,
+  reduceBroadcastHold,
+  resolveClockState,
+  type BroadcastHoldState,
+} from "@/lib/draftClock";
 import {
   Zap, BarChart2, RefreshCw, ChevronDown, ChevronUp,
   CheckCircle, AlertTriangle, Info, Trophy, Target,
@@ -598,12 +606,17 @@ function LiveDraftEngine({
     pickCounterRef.current = 0;
   }, [draftSeed, scheduleSig]);
 
-  // Authoritative clock + broadcast-hold state.
+  // Authoritative clock + observational broadcast hold (capped; never permanently blocks).
   const TICK_MS = 250;
   const [remainingMs, setRemainingMs] = useState<number>(paceMs);
   const [holding, setHolding] = useState<boolean>(false); // paused for a broadcast moment
   const [broadcastBusy, setBroadcastBusy] = useState<boolean>(false); // reported by the booth panel
-  const holdStartRef = useRef<number>(0);
+  const broadcastHoldRef = useRef<BroadcastHoldState>(INITIAL_BROADCAST_HOLD);
+
+  const applyBroadcastHold = (next: BroadcastHoldState) => {
+    broadcastHoldRef.current = next;
+    setHolding(next.holding);
+  };
 
   // ── Manual control (P6) — single source of truth `manualTeamIds`. ────────────
   // Default: the signed-in user's team. Zero selected = full AI; all selected = fully manual.
@@ -621,7 +634,8 @@ function LiveDraftEngine({
 
   useEffect(() => {
     setResults(initialResults); setIdx(0); setRunning(false);
-    setHolding(false); setRemainingMs(paceMs);
+    applyBroadcastHold(INITIAL_BROADCAST_HOLD);
+    setRemainingMs(paceMs);
     if (timer.current) clearTimeout(timer.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSig]);
@@ -793,23 +807,32 @@ function LiveDraftEngine({
     setIdx((i) => i + 1);
   }, [remainingMs, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
 
-  // Reactive broadcast pause — freeze the countdown + AI ONLY while a moment is actually on
-  // air (busy). Silent picks never set busy, so they are never extended (the 1.8s grace is
-  // gone). The hold is separate from the configured pick clock and capped at 20s.
+  // Reactive broadcast pause — freeze countdown + AI briefly while a moment is on air.
+  // After the watchdog, suppressUntilIdle prevents a stuck booth from re-arming the hold.
   useEffect(() => {
-    if (broadcastBusy && !holding) {
-      holdStartRef.current = Date.now();
-      setHolding(true);
-    } else if (!broadcastBusy && holding) {
-      setHolding(false);
+    const next = reduceBroadcastHold(broadcastHoldRef.current, {
+      type: "busy_changed",
+      busy: broadcastBusy,
+      now: Date.now(),
+    });
+    if (
+      next.holding !== broadcastHoldRef.current.holding ||
+      next.suppressUntilIdle !== broadcastHoldRef.current.suppressUntilIdle ||
+      next.holdStartedAt !== broadcastHoldRef.current.holdStartedAt
+    ) {
+      applyBroadcastHold(next);
     }
-  }, [broadcastBusy, holding]);
+  }, [broadcastBusy]);
 
-  // Watchdog — the draft can never freeze longer than 20s, even if a moment gets stuck.
+  // Watchdog — draft continues after the cap even if the booth stays busy.
   useEffect(() => {
     if (!holding) return;
-    const remaining = Math.max(0, MAX_BROADCAST_HOLD_MS - (Date.now() - holdStartRef.current));
-    const t = setTimeout(() => setHolding(false), remaining);
+    const remaining = broadcastHoldRemainingMs(broadcastHoldRef.current, Date.now());
+    const t = setTimeout(() => {
+      applyBroadcastHold(
+        reduceBroadcastHold(broadcastHoldRef.current, { type: "watchdog", now: Date.now() }),
+      );
+    }, remaining);
     return () => clearTimeout(t);
   }, [holding]);
 
@@ -850,7 +873,7 @@ function LiveDraftEngine({
       setDraftSeed(createRandomDraftSeed());
     }
     setResults(initialResults); setIdx(0); setRunning(false);
-    setHolding(false); setRemainingMs(paceMs);
+    applyBroadcastHold(INITIAL_BROADCAST_HOLD); setRemainingMs(paceMs);
     // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
     // they reset only on league/season/schedule change or via "Reset team controls".
     if (leagueId) resetSession.mutate?.({ leagueId, draftId });

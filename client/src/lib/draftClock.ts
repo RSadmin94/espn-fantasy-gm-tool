@@ -1,9 +1,11 @@
 /**
  * Draft clock state machine — authoritative pacing for the Live Draft.
  *
- * The clock DRIVES AI selection: an AI pick fires when the countdown reaches 0, and
- * advancement is paused while an approved broadcast moment is on air. It never freezes:
- * a broadcast hold is capped by MAX_BROADCAST_HOLD_MS.
+ * Invariant: the draft engine is authoritative; the broadcast layer is observational.
+ * Commentary may delay the clock briefly, but under no circumstance may booth state
+ * permanently block pick advancement. After MAX_BROADCAST_HOLD_MS the draft continues
+ * even if the booth remains busy — further holds from that same busy stretch are suppressed
+ * until the booth returns to idle.
  *
  * States:
  *   running               — AI countdown active, time remaining
@@ -44,6 +46,58 @@ export function resolveClockState(input: {
   if (input.isHolding) return "paused_for_broadcast";
   if (input.isManualPick) return "manual_team_wait";
   return input.remainingMs <= URGENT_MS ? "urgent" : "running";
+}
+
+/**
+ * Broadcast-hold reducer — keeps the draft from re-arming a pause after the watchdog.
+ *
+ * Without suppressUntilIdle, clearing `holding` while the booth is still busy immediately
+ * starts another hold (permanent stall). After the watchdog, ignore busy until idle.
+ */
+export type BroadcastHoldState = {
+  holding: boolean;
+  /** Watchdog released this busy stretch; ignore busy until booth goes idle. */
+  suppressUntilIdle: boolean;
+  holdStartedAt: number | null;
+};
+
+export type BroadcastHoldEvent =
+  | { type: "busy_changed"; busy: boolean; now: number }
+  | { type: "watchdog"; now: number };
+
+export const INITIAL_BROADCAST_HOLD: BroadcastHoldState = {
+  holding: false,
+  suppressUntilIdle: false,
+  holdStartedAt: null,
+};
+
+export function reduceBroadcastHold(
+  state: BroadcastHoldState,
+  event: BroadcastHoldEvent,
+  maxHoldMs: number = MAX_BROADCAST_HOLD_MS,
+): BroadcastHoldState {
+  if (event.type === "busy_changed") {
+    if (!event.busy) {
+      return { holding: false, suppressUntilIdle: false, holdStartedAt: null };
+    }
+    if (state.suppressUntilIdle || state.holding) return state;
+    return { holding: true, suppressUntilIdle: false, holdStartedAt: event.now };
+  }
+
+  // watchdog
+  if (!state.holding || state.holdStartedAt == null) return state;
+  if (event.now - state.holdStartedAt < maxHoldMs) return state;
+  return { holding: false, suppressUntilIdle: true, holdStartedAt: null };
+}
+
+/** Ms until the hold must release (0 if already expired / not holding). */
+export function broadcastHoldRemainingMs(
+  state: BroadcastHoldState,
+  now: number,
+  maxHoldMs: number = MAX_BROADCAST_HOLD_MS,
+): number {
+  if (!state.holding || state.holdStartedAt == null) return 0;
+  return Math.max(0, maxHoldMs - (now - state.holdStartedAt));
 }
 
 /**
