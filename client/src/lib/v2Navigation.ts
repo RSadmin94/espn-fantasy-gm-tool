@@ -253,9 +253,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rfsn/wire",
     icon: Newspaper,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rfsn/news",
   },
   {
     id: "rfsn-breaking",
@@ -264,9 +263,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rfsn/breaking",
     icon: Zap,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rfsn",
   },
   {
     id: "rfsn-stories",
@@ -275,9 +273,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rfsn/stories",
     icon: BookOpen,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rfsn/news",
   },
   {
     id: "rfsn-recaps",
@@ -286,7 +283,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rfsn/recaps",
     icon: Film,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
   },
   {
@@ -296,9 +293,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/rfsn/analysts",
     icon: Mic2,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/rfsn/live",
   },
 
   // ── Draft ─────────────────────────────────────────────────────────────

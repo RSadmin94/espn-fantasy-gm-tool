@@ -87,7 +87,7 @@ describe("CuratedHome", () => {
     expect(hrefs).toContain("/my-team/matchup");
     expect(hrefs).toContain("/rivals/rivalries");
     expect(hrefs).toContain("/rivals/owners");
-    expect(hrefs).toContain("/rfsn");
+    expect(hrefs).toContain("/rfsn/wire");
     expect(hrefs).toContain("/standings");
     expect(hrefs).toContain("/draft-war-room");
   });

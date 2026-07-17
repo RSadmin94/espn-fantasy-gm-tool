@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { RfsnDestinationNav, type RfsnDestination } from "./RfsnDestinationNav";
 
@@ -19,21 +19,24 @@ export function RfsnMediaShell({
   subtitle,
   showLive = false,
   children,
+  className,
+  ...rest
 }: {
   active: RfsnDestination;
   leagueName?: string;
   subtitle?: string;
   showLive?: boolean;
   children: ReactNode;
-}) {
+} & HTMLAttributes<HTMLDivElement>) {
   const tagline =
     subtitle ??
     (leagueName ? `${leagueName} · League Network` : "Your league's year-round sports network");
 
   return (
     <div
-      className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100"
+      className={cn("-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100", className)}
       style={{ background: RFSN_PAGE_BG }}
+      {...rest}
     >
       <header className="border-b border-white/[0.06] pb-4 mb-6">
         <RfsnBrandMark />

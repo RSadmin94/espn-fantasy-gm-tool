@@ -127,13 +127,19 @@ describe("rfsnHomeNews", () => {
     expect(rfsnNews).not.toContain("RfsnBroadcastShell");
   });
 
-  it("RFSN internal nav always includes Home and News", () => {
+  it("RFSN internal nav always includes Home and Wire destinations", () => {
     const nav = fs.readFileSync(
       path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
       "utf-8",
     );
     expect(nav).toContain('label: "Home"');
-    expect(nav).toContain('label: "News"');
+    expect(nav).toContain('label: "Wire"');
+    expect(nav).toContain('label: "Breaking"');
+    expect(nav).toContain('label: "Stories"');
+    expect(nav).toContain('label: "Recaps"');
+    expect(nav).toContain('label: "Analysts"');
+    expect(nav).toContain("RFSN_ROUTES.wire");
+    expect(nav).toContain("RFSN_ROUTES.breaking");
     expect(nav).not.toContain("/rfsn/weekly");
   });
 
@@ -151,7 +157,7 @@ describe("rfsnHomeNews", () => {
       path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
       "utf-8",
     );
-    expect(nav).toContain('href: "/rfsn/live"');
+    expect(nav).toContain("RFSN_ROUTES.live");
     const home = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnHome.tsx"), "utf-8");
     const news = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnNews.tsx"), "utf-8");
     expect(home).toContain("showLive={showLiveNav}");

@@ -107,6 +107,27 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain('path: "/advisor"');
     expect(main).toContain('path: "/championship-diagnosis"');
   });
+
+  it("mounts live RFSN pages at canonical routes instead of V2PlaceholderRoute", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    const live = [
+      ["/rfsn", "RfsnHome"],
+      ["/rfsn/wire", "RfsnWire"],
+      ["/rfsn/breaking", "RfsnBreaking"],
+      ["/rfsn/stories", "RfsnStories"],
+      ["/rfsn/recaps", "RfsnRecaps"],
+      ["/rfsn/analysts", "RfsnAnalysts"],
+    ] as const;
+    for (const [route, component] of live) {
+      expect(main).toContain(`path: "${route}"`);
+      expect(main).toContain(`element: <${component} />`);
+    }
+    expect(main).toContain('path: "/rfsn/news"');
+    expect(main).toContain('path: "/rfsn/live"');
+    expect(main).toContain("element: <RfsnNews />");
+    expect(main).toContain("element: <RfsnLive />");
+  });
+
   it("does not redirect /draft to dashboard (V2 Draft hub owns /draft)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).not.toMatch(/path:\s*"\/draft"\s*,\s*element:\s*<Navigate to="\/dashboard"/);

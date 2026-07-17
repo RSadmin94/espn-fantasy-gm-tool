@@ -83,7 +83,7 @@ export function RfsnHome() {
   const loading = !leagueKeyReady || feedQ.isLoading;
 
   return (
-    <RfsnMediaShell active="home" leagueName={leagueName} showLive={showLiveNav}>
+    <RfsnMediaShell active="home" leagueName={leagueName} showLive={showLiveNav} data-v2-rfsn-home>
       <div className="space-y-6">
         {/* Featured */}
         <section className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
@@ -132,10 +132,10 @@ export function RfsnHome() {
                   </p>
                 </div>
                 <Link
-                  to={RFSN_ROUTES.news}
+                  to={RFSN_ROUTES.wire}
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
                 >
-                  Open RFSN News <ArrowRight className="h-3.5 w-3.5" />
+                  Open Wire <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
             )}
@@ -150,8 +150,8 @@ export function RfsnHome() {
                 <Newspaper className="h-4 w-4 text-[#a3e635]" />
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#8b97a8]">Latest from RFSN</h3>
               </div>
-              <Link to={RFSN_ROUTES.news} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-300">
-                All news →
+              <Link to={RFSN_ROUTES.stories} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-300">
+                All stories →
               </Link>
             </div>
             {loading ? (
@@ -220,10 +220,16 @@ export function RfsnHome() {
                 </p>
               )}
               <Link
-                to={RFSN_ROUTES.news}
+                to={RFSN_ROUTES.wire}
                 className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
               >
-                View wire in News <ArrowRight className="h-3.5 w-3.5" />
+                Open Wire <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link
+                to={RFSN_ROUTES.recaps}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-300"
+              >
+                Weekly recaps <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </section>
 
@@ -252,7 +258,7 @@ export function RfsnHome() {
                   {archiveSeasons.slice(0, 6).map((s) => (
                     <Link
                       key={s}
-                      to={`${RFSN_ROUTES.news}?view=archive`}
+                      to={`${RFSN_ROUTES.stories}?view=archive`}
                       className="px-2 py-1 rounded text-xs font-bold border border-zinc-800 text-zinc-500 hover:border-amber-500/40 hover:text-amber-400"
                     >
                       {s}
@@ -264,15 +270,36 @@ export function RfsnHome() {
               )}
             </section>
 
-            {/* Live coverage — no fake broadcast */}
+            {/* Live coverage — link when access exists; no fake broadcast */}
             <section className="rounded-[15px] border border-red-500/15 bg-red-500/[0.04] p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Radio className="h-4 w-4 text-red-500/80" />
                 <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300">Live Coverage</h3>
               </div>
-              <p className="text-sm text-zinc-400 leading-relaxed">
-                Live Draft coverage is coming to RFSN. Written news and weekly wire reports are available now.
-              </p>
+              {showLiveNav ? (
+                <>
+                  <p className="text-sm text-zinc-400 leading-relaxed">
+                    Draft booth coverage is available on RFSN Live. War Room controls stay in Draft.
+                  </p>
+                  <Link
+                    to={RFSN_ROUTES.live}
+                    className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
+                  >
+                    Open Live <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </>
+              ) : (
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Written Wire, Stories, and Recaps are available now. Live booth access appears when
+                  draft broadcast is enabled for this league.
+                </p>
+              )}
+              <Link
+                to={RFSN_ROUTES.analysts}
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-300"
+              >
+                Meet the analysts <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </section>
           </div>
         </div>

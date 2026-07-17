@@ -1,27 +1,42 @@
 import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
+import { RFSN_ROUTES } from "@/lib/rfsnEditorial";
 
-export type RfsnDestination = "home" | "news" | "live";
+export type RfsnDestination =
+  | "home"
+  | "wire"
+  | "breaking"
+  | "stories"
+  | "recaps"
+  | "analysts"
+  | "news"
+  | "live";
 
 const BASE_ITEMS: { id: RfsnDestination; label: string; href: string }[] = [
-  { id: "home", label: "Home", href: "/rfsn" },
-  { id: "news", label: "News", href: "/rfsn/news" },
+  { id: "home", label: "Home", href: RFSN_ROUTES.home },
+  { id: "wire", label: "Wire", href: RFSN_ROUTES.wire },
+  { id: "breaking", label: "Breaking", href: RFSN_ROUTES.breaking },
+  { id: "stories", label: "Stories", href: RFSN_ROUTES.stories },
+  { id: "recaps", label: "Recaps", href: RFSN_ROUTES.recaps },
+  { id: "analysts", label: "Analysts", href: RFSN_ROUTES.analysts },
 ];
 
-const LIVE_ITEM = { id: "live" as const, label: "Live", href: "/rfsn/live" };
+const LIVE_ITEM = { id: "live" as const, label: "Live", href: RFSN_ROUTES.live };
 
 function normalizePath(pathname: string): string {
   if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
   return pathname;
 }
 
-function isNewsPath(pathname: string): boolean {
+function pathMatches(pathname: string, href: string): boolean {
   const path = normalizePath(pathname);
-  return path === "/rfsn/news" || path.startsWith("/rfsn/news/");
-}
-
-function isLivePath(pathname: string): boolean {
-  return normalizePath(pathname) === "/rfsn/live";
+  const target = normalizePath(href);
+  if (path === target) return true;
+  // Legacy news reader is part of Wire/Stories content surface.
+  if ((target === RFSN_ROUTES.wire || target === RFSN_ROUTES.stories) && path.startsWith("/rfsn/news")) {
+    return target === RFSN_ROUTES.wire;
+  }
+  return path.startsWith(`${target}/`);
 }
 
 export function RfsnDestinationNav({
@@ -47,12 +62,10 @@ export function RfsnDestinationNav({
       {items.map((item) => {
         const isActive =
           active != null
-            ? item.id === active
+            ? item.id === active || (active === "news" && item.id === "wire")
             : item.id === "home"
-              ? normalizePath(pathname) === "/rfsn"
-              : item.id === "live"
-                ? isLivePath(pathname)
-                : isNewsPath(pathname);
+              ? normalizePath(pathname) === RFSN_ROUTES.home
+              : pathMatches(pathname, item.href);
 
         return (
           <Link

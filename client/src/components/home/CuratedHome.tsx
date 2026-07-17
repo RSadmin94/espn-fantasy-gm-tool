@@ -35,7 +35,7 @@ const JUMP_LINKS: { label: string; href: string; hint: string }[] = [
   { label: "My Team", href: "/my-team/roster", hint: "Roster" },
   { label: "Matchup", href: "/my-team/matchup", hint: "This week" },
   { label: "Rivalries", href: "/rivals/rivalries", hint: "Rivals" },
-  { label: "RFSN", href: "/rfsn", hint: "Wire" },
+  { label: "RFSN", href: "/rfsn/wire", hint: "Wire" },
   { label: "War Room", href: "/draft-war-room", hint: "Draft" },
   { label: "Standings", href: "/standings", hint: "League" },
 ];
@@ -186,9 +186,9 @@ export function CuratedHome({
           eyebrow="RFSN"
           title="Lead Story"
           action={
-            <Link to="/rfsn" className="inline-flex items-center gap-1 text-xs font-medium text-lime-400/90 hover:text-lime-300">
+            <Link to="/rfsn/stories" className="inline-flex items-center gap-1 text-xs font-medium text-lime-400/90 hover:text-lime-300">
               <Radio className="h-3 w-3" />
-              Open RFSN →
+              Open Stories →
             </Link>
           }
         />

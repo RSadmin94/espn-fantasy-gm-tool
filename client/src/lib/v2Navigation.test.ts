@@ -222,4 +222,25 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(hub.kind).toBe("live");
     expect(getV2NavHref(hub)).toBe("/my-team");
   });
+
+  it("points RFSN sidebar items to canonical live routes", () => {
+    const rfsn = buildV2NavGroups().find((g) => g.id === "rfsn")!;
+    const expected = [
+      ["/rfsn/wire", "rfsn-wire"],
+      ["/rfsn/breaking", "rfsn-breaking"],
+      ["/rfsn/stories", "rfsn-stories"],
+      ["/rfsn/recaps", "rfsn-recaps"],
+      ["/rfsn/analysts", "rfsn-analysts"],
+    ] as const;
+    for (const [route, id] of expected) {
+      const dest = rfsn.items.find((i) => i.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.legacyRoute).toBeUndefined();
+      expect(getV2NavHref(dest)).toBe(route);
+      expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    const hub = V2_DESTINATIONS.find((d) => d.id === "rfsn-hub")!;
+    expect(hub.kind).toBe("live");
+    expect(getV2NavHref(hub)).toBe("/rfsn");
+  });
 });

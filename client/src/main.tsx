@@ -52,6 +52,11 @@ import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { RfsnHome } from "./pages/rfsn/RfsnHome";
 import { RfsnNews } from "./pages/rfsn/RfsnNews";
 import { RfsnLive } from "./pages/rfsn/RfsnLive";
+import { RfsnWire } from "./pages/rfsn/RfsnWire";
+import { RfsnBreaking } from "./pages/rfsn/RfsnBreaking";
+import { RfsnStories } from "./pages/rfsn/RfsnStories";
+import { RfsnRecaps } from "./pages/rfsn/RfsnRecaps";
+import { RfsnAnalysts } from "./pages/rfsn/RfsnAnalysts";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
 import { RivalryCenter }     from "./pages/RivalryCenter";
@@ -253,6 +258,11 @@ const router = createBrowserRouter([
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/rfsn", element: <RfsnHome /> },
+          { path: "/rfsn/wire", element: <RfsnWire /> },
+          { path: "/rfsn/breaking", element: <RfsnBreaking /> },
+          { path: "/rfsn/stories", element: <RfsnStories /> },
+          { path: "/rfsn/recaps", element: <RfsnRecaps /> },
+          { path: "/rfsn/analysts", element: <RfsnAnalysts /> },
           { path: "/rfsn/news", element: <RfsnNews /> },
           { path: "/rfsn/news/article/:articleId", element: <RfsnNews /> },
           { path: "/rfsn/live", element: <RfsnLive /> },
