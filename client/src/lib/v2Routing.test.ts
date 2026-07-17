@@ -128,6 +128,24 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain("element: <RfsnLive />");
   });
 
+  it("mounts live Draft pages at canonical routes instead of V2PlaceholderRoute", () => {
+    const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
+    expect(main).toContain('path: "/draft"');
+    expect(main).toContain("element: <DraftHub />");
+    expect(main).toContain("element: <DraftWarRoomLayout />");
+    expect(main).toContain('path: "/draft/war-room"');
+    expect(main).toContain('path: "/draft/mock"');
+    expect(main).toContain('path: "/draft/keepers"');
+    expect(main).toContain("element: <DraftKeepers />");
+    expect(main).toContain('path: "/draft/history"');
+    expect(main).toContain("element: <DraftHistoryPage />");
+    expect(main).toContain('path: "/draft-war-room"');
+    expect(main).toContain('path: "/draft-commentary"');
+    expect(main).toContain('path: "/draft-history"');
+    expect(main).toContain('path: "/keeper-advisor"');
+    expect(main).toContain('path: "/keeper-forecast"');
+  });
+
   it("does not redirect /draft to dashboard (V2 Draft hub owns /draft)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).not.toMatch(/path:\s*"\/draft"\s*,\s*element:\s*<Navigate to="\/dashboard"/);

@@ -80,6 +80,10 @@ import { MyTeamTrades } from "./pages/my-team/MyTeamTrades";
 import { MyTeamAdvisor } from "./pages/my-team/MyTeamAdvisor";
 import { MyTeamProfile } from "./pages/my-team/MyTeamProfile";
 import { MyTeamChampionshipPath } from "./pages/my-team/MyTeamChampionshipPath";
+import { DraftHub } from "./pages/draft/DraftHub";
+import { DraftWarRoomLayout, DraftWarRoomFocus } from "./pages/draft/DraftWarRoomLayout";
+import { DraftKeepers } from "./pages/draft/DraftKeepers";
+import { DraftHistoryPage } from "./pages/draft/DraftHistoryPage";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
 import { getV2CanonicalRoutes, getV2DestinationByRoute } from "@/lib/v2Navigation";
 import { trpc } from "@/lib/trpc";
@@ -268,6 +272,16 @@ const router = createBrowserRouter([
           { path: "/rfsn/live", element: <RfsnLive /> },
           { path: "/league-wire", element: <Navigate to="/rfsn/news" replace /> },
           { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
+          { path: "/draft", element: <DraftHub /> },
+          {
+            element: <DraftWarRoomLayout />,
+            children: [
+              { path: "/draft/war-room", element: <DraftWarRoomFocus /> },
+              { path: "/draft/mock", element: <DraftWarRoomFocus /> },
+            ],
+          },
+          { path: "/draft/keepers", element: <DraftKeepers /> },
+          { path: "/draft/history", element: <DraftHistoryPage /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
           { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },

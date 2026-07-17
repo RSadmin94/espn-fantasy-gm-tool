@@ -1897,7 +1897,7 @@ function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
   );
 }
 
-export function DraftWarRoom() {
+export function DraftWarRoom({ scrollToSection }: { scrollToSection?: string } = {}) {
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { leagueContextKey } = useLeagueActiveGate();
   const { season } = useLeagueContext();
@@ -1928,6 +1928,13 @@ export function DraftWarRoom() {
   const rfsnLiveDraftId = buildRfsnLiveDraftId(season);
   const soulsQ = { data: null as any, isLoading: false };
   void soulsQ;
+
+  // Canonical `/draft/mock` shares this instance via layout — scroll after data mounts.
+  useEffect(() => {
+    if (!scrollToSection || isLoading || !data?.ok) return;
+    const t = window.setTimeout(() => dwrScrollTo(scrollToSection), 120);
+    return () => window.clearTimeout(t);
+  }, [scrollToSection, isLoading, data?.ok]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">

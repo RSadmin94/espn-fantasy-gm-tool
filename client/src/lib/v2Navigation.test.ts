@@ -168,7 +168,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
     }
   });
 
-  it("points Home sidebar to canonical /home and keeps Draft legacy hrefs", () => {
+  it("points Home sidebar to canonical /home; Draft destinations are live", () => {
     const home = V2_DESTINATIONS.find((d) => d.id === "home")!;
     expect(home.kind).toBe("live");
     expect(getV2NavHref(home)).toBe("/home");
@@ -176,7 +176,9 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(isV2RouteActive("/dashboard", home)).toBe(false);
 
     const warRoom = getAllV2Destinations().find((d) => d.id === "draft-war-room")!;
-    expect(getV2NavHref(warRoom)).toBe("/draft-war-room");
+    expect(warRoom.kind).toBe("live");
+    expect(warRoom.legacyRoute).toBeUndefined();
+    expect(getV2NavHref(warRoom)).toBe("/draft/war-room");
   });
 
   it("points Rivals sidebar items to canonical live routes", () => {
@@ -242,5 +244,25 @@ describe("v2Navigation — locked FFR 2.0", () => {
     const hub = V2_DESTINATIONS.find((d) => d.id === "rfsn-hub")!;
     expect(hub.kind).toBe("live");
     expect(getV2NavHref(hub)).toBe("/rfsn");
+  });
+
+  it("points Draft sidebar items to canonical live routes", () => {
+    const draft = buildV2NavGroups().find((g) => g.id === "draft")!;
+    const expected = [
+      ["/draft/war-room", "draft-war-room"],
+      ["/draft/mock", "draft-mock"],
+      ["/draft/keepers", "draft-keepers"],
+      ["/draft/history", "draft-history"],
+    ] as const;
+    for (const [route, id] of expected) {
+      const dest = draft.items.find((i) => i.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.legacyRoute).toBeUndefined();
+      expect(getV2NavHref(dest)).toBe(route);
+      expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    const hub = V2_DESTINATIONS.find((d) => d.id === "draft-hub")!;
+    expect(hub.kind).toBe("live");
+    expect(getV2NavHref(hub)).toBe("/draft");
   });
 });

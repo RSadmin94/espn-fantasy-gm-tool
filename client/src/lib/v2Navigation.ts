@@ -305,7 +305,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/draft",
     icon: Calendar,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: false,
   },
   {
@@ -315,9 +315,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/draft/war-room",
     icon: Calendar,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/draft-war-room",
   },
   {
     id: "draft-mock",
@@ -326,9 +325,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/draft/mock",
     icon: Clapperboard,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/draft-war-room",
   },
   {
     id: "draft-keepers",
@@ -337,9 +335,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/draft/keepers",
     icon: Crown,
     requiredPlan: "pro",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/keeper-forecast",
   },
   {
     id: "draft-history",
@@ -348,9 +345,8 @@ export const V2_DESTINATIONS: V2Destination[] = [
     route: "/draft/history",
     icon: ScrollText,
     requiredPlan: "free",
-    kind: "placeholder",
+    kind: "live",
     showInSidebar: true,
-    legacyRoute: "/draft-history",
   },
 
   // ── League ────────────────────────────────────────────────────────────

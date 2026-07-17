@@ -89,7 +89,7 @@ describe("CuratedHome", () => {
     expect(hrefs).toContain("/rivals/owners");
     expect(hrefs).toContain("/rfsn/wire");
     expect(hrefs).toContain("/standings");
-    expect(hrefs).toContain("/draft-war-room");
+    expect(hrefs).toContain("/draft/war-room");
   });
 
   it("renders safely with partial or empty pulse data", () => {
