@@ -176,7 +176,12 @@ export function TheCast() {
   }
 
   const cast = [...data.cast];
-  const headliners = cast.filter((m) => m.badges.length > 0).sort((a, b) => topBadge(a) - topBadge(b));
+  const rankedHeadliners = cast.filter((m) => m.badges.length > 0).sort((a, b) => topBadge(a) - topBadge(b));
+  // Nate West holds the fewest championship rings among the cast's title-holders, so he is
+  // pinned to the bottom of the headliners. Ordering only — his badge and championship count
+  // are left untouched, and every other headliner keeps its existing relative position.
+  const isNate = (m: CastMember) => m.ownerName.trim().toLowerCase() === "nate west";
+  const headliners = [...rankedHeadliners.filter((m) => !isNate(m)), ...rankedHeadliners.filter(isNate)];
   const rest = cast.filter((m) => m.badges.length === 0);
   const personalities = rest.filter((m) => PERSONALITY.has(m.archetype));
   const wildcards = rest.filter((m) => !PERSONALITY.has(m.archetype));
