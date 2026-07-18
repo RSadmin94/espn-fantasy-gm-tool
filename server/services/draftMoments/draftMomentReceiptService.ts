@@ -158,6 +158,8 @@ export function collectReceipts(
     position: pos,
     round,
     adpDelta: delta,
+    overallPick: pick.overall,
+    teamCount: ctx.teamCount,
     tierCliffGap: tierGap,
     positionRunIncludingThis: runIncl,
     ownerTiming: timingFacts,

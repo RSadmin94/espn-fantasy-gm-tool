@@ -11,10 +11,28 @@ const C = (o: Partial<ClassifierInput>) => classifyMoment({ ...base, ...o });
 
 describe("classifier — recalibrated gates", () => {
   it("routine on-ADP early pick", () => { expect(C({ position: "WR", round: 1, adpDelta: 2, tierCliffGap: 5 }).level).toBe("routine"); });
-  it("notable moderate reach", () => { const r = C({ position: "RB", round: 3, adpDelta: -12, tierCliffGap: 5 }); expect(r.level).toBe("notable"); expect(r.signals.map(s => s.name)).toEqual(["REACH"]); });
-  it("major strong reach", () => { const r = C({ position: "QB", round: 1, adpDelta: -30, tierCliffGap: 5 }); expect(r.level).toBe("major"); expect(r.strongCount).toBe(1); });
+  it("notable mild reach (12 early in R3)", () => {
+    const r = C({ position: "RB", round: 3, adpDelta: -12, overallPick: 30, tierCliffGap: 5 });
+    expect(r.level).toBe("notable");
+    expect(r.signals.map(s => s.name)).toEqual(["REACH"]);
+    expect(r.reach?.severity).toBe("mild");
+  });
+  it("major big/massive reach (30 early in R1) — Coach owns until 40", () => {
+    const r = C({ position: "QB", round: 1, adpDelta: -30, overallPick: 5, tierCliffGap: 5 });
+    expect(r.level).toBe("major");
+    expect(r.strongCount).toBe(1);
+    expect(r.reach?.severity).toBe("massive");
+    expect(r.reach?.personaOwner).toBe("coach");
+  });
   it("historic strong steal + tier cliff", () => { const r = C({ position: "WR", round: 5, adpDelta: 40, tierCliffGap: 30 }); expect(r.level).toBe("historic"); expect(r.strongCount).toBe(2); });
-  it("late-round ADP delta is capped (no signal past round 10)", () => { expect(C({ position: "WR", round: 13, adpDelta: 80 }).level).toBe("routine"); });
+  it("late-round STEAL is capped (no signal past round 10 for DEFAULT config)", () => { expect(C({ position: "WR", round: 13, adpDelta: 80 }).level).toBe("routine"); });
+  it("late-round REACH uses phase thresholds (not ADP maxRound cap)", () => {
+    const mild = C({ position: "WR", round: 14, adpDelta: -20, overallPick: 180 });
+    expect(mild.signals.map(s => s.name)).toEqual(["REACH"]);
+    expect(mild.reach?.severity).toBe("mild");
+    const below = C({ position: "WR", round: 14, adpDelta: -14, overallPick: 180 });
+    expect(below.level).toBe("routine");
+  });
   it("roster need alone stays routine (need is not a classifier signal)", () => { expect(C({ position: "QB", round: 2, adpDelta: 3, tierCliffGap: 4 }).level).toBe("routine"); });
   it("latest-ever is context only", () => { expect(C({ position: "K", round: 14, ownerTiming: { anomaly: "latest_ever", priorEarliest: 10, seasons: 5 } }).level).toBe("routine"); });
   it("position frequency is context only (no anomaly, no signal)", () => { expect(C({ position: "WR", round: 6, ownerTiming: { anomaly: null, priorEarliest: 4, seasons: 8 } }).level).toBe("routine"); });

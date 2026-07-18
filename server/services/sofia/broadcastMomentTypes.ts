@@ -5,6 +5,7 @@
 import type { BroadcastContext, BroadcastMomentIdentity, BroadcastSignificance } from "./broadcastFrameContract";
 import type { FactPacket } from "./broadcastVoice";
 import type { EditorialPlanId } from "./editorialPlans";
+import type { ReachClassification } from "../draftMoments/reachClassification";
 
 export type BroadcastMomentReceipt = {
   readonly id: string;
@@ -29,4 +30,6 @@ export type BroadcastMoment = {
   readonly overrideDecompression?: boolean;
   /** Stable keys for callback deduplication (storyline ids, receipt ids). */
   readonly callbackKeys?: readonly string[];
+  /** Centralized pick-vs-ADP reach classification (when available). */
+  readonly reachClassification?: ReachClassification | null;
 };

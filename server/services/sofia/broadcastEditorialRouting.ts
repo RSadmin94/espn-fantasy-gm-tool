@@ -18,6 +18,7 @@ import {
   resolveRoleFirstLead,
   classifyEventRole,
 } from "./personaRoleAssignment";
+import { editorialPlanForReach } from "../draftMoments/reachClassification";
 
 export type { VoiceId, EditorialPlanId };
 
@@ -92,16 +93,15 @@ export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId;
 }
 
 /**
- * Roxanne stays selective: rivalry/drama evidence, a historic reach, or a steal with drama.
- * Ordinary notable/major value picks are Sofia/Coach — Roxanne no longer rides along on every reach/steal.
+ * Roxanne stays selective: rivalry/drama evidence, or an outrageous reach (massive + 40+ early).
+ * Ordinary mild/big reaches are Coach — Roxanne is not the default analyst.
  */
 export function roxanneEligible(moment: BroadcastMoment): boolean {
   if (hasReceipt(moment, "rivalry", "rivalry")) return true;
   if (moment.primaryStoryline && ROXANNE_DRAMA_RE.test(moment.primaryStoryline)) return true;
   if (moment.storylines.some((s) => ROXANNE_DRAMA_RE.test(s))) return true;
   if (moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) return true;
-  if (hasSignal(moment, "REACH") && moment.significance === "historic") return true;
-  if (hasStrongSignal(moment, "REACH") && moment.significance === "historic") return true;
+  if (moment.reachClassification?.personaOwner === "roxanne") return true;
   if (hasSignal(moment, "STEAL") && moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) {
     return true;
   }
@@ -156,6 +156,17 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
     return "draft_run";
   }
 
+  // Prefer centralized reach severity → plan mapping when REACH is present.
+  const reachPlan = moment.reachClassification
+    ? editorialPlanForReach(moment.reachClassification)
+    : null;
+  if (
+    reachPlan &&
+    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH"))
+  ) {
+    return reachPlan;
+  }
+
   if (moment.significance === "historic") {
     if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) return "historic_reach";
     if (moment.primaryStoryline === "DYNASTY" || moment.storylines.some((s) => /dynasty/i.test(s))) {
@@ -165,7 +176,6 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
   }
 
   if (moment.significance === "major") {
-    // Any major REACH is major_reach (Roxanne eligible). Slight_reach is notable-only.
     if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) return "major_reach";
     return "major_reach";
   }

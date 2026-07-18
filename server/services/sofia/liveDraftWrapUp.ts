@@ -1,12 +1,13 @@
 /**
  * End-of-draft RFSN wrap-up — one league_event moment after the final pick locks.
  */
-import { normName } from "../draftMoments/draftMomentReceiptService";
-import type { MockPickLike } from "../draftMoments/draftMomentReceiptService";
+import { selectBiggestClassifiedReach } from "../draftMoments/reachClassification";
 import { leagueEventToBroadcastMoment } from "./broadcastMomentBridge";
 import type { BroadcastMoment } from "./broadcastMomentTypes";
 import type { FactPacket } from "./broadcastVoice";
 import { makeShadowReceiptContext } from "./shadowDraftSources";
+import { normName } from "../draftMoments/draftMomentReceiptService";
+import type { MockPickLike } from "../draftMoments/draftMomentReceiptService";
 
 export type DraftWrapUpSummary = {
   totalPicks: number;
@@ -27,35 +28,49 @@ export function summarizeDraftWrapUp(
 ): DraftWrapUpSummary {
   const adp = adpByName ?? makeShadowReceiptContext().adpByName;
   let bestValue: DraftWrapUpSummary["bestValue"];
-  let biggestReach: DraftWrapUpSummary["biggestReach"];
   const posCounts = new Map<string, number>();
+  const reachCandidates: Array<{
+    name: string;
+    teamName: string;
+    pickNumber: number;
+    adp: number;
+    round: number;
+  }> = [];
 
   for (const p of picks) {
     const pos = String(p.position ?? "?").toUpperCase();
     posCounts.set(pos, (posCounts.get(pos) ?? 0) + 1);
     const playerAdp = adp.get(normName(p.playerName));
     if (playerAdp == null) continue;
-    const delta = playerAdp - p.overall;
-    if (delta >= 3 && (!bestValue || delta > bestValue.delta)) {
+    const valueDelta = playerAdp - p.overall;
+    if (valueDelta >= 3 && (!bestValue || valueDelta > bestValue.delta)) {
       bestValue = {
         playerName: p.playerName,
         ownerName: p.ownerName,
         pick: p.overall,
         adp: playerAdp,
-        delta,
+        delta: valueDelta,
       };
     }
-    const reach = p.overall - playerAdp;
-    if (reach >= 3 && (!biggestReach || reach > biggestReach.delta)) {
-      biggestReach = {
-        playerName: p.playerName,
-        ownerName: p.ownerName,
-        pick: p.overall,
-        adp: playerAdp,
-        delta: reach,
-      };
-    }
+    reachCandidates.push({
+      name: p.playerName,
+      teamName: p.ownerName,
+      pickNumber: p.overall,
+      adp: playerAdp,
+      round: p.round,
+    });
   }
+
+  const classified = selectBiggestClassifiedReach(reachCandidates, teamCount);
+  const biggestReach: DraftWrapUpSummary["biggestReach"] = classified
+    ? {
+        playerName: classified.name,
+        ownerName: classified.team,
+        pick: classified.pickNumber,
+        adp: classified.adp,
+        delta: classified.reachDelta,
+      }
+    : undefined;
 
   const topPosition = [...posCounts.entries()].sort((a, b) => b[1] - a[1])[0];
 

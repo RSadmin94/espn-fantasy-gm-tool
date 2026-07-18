@@ -965,6 +965,7 @@ function LiveDraftEngine({
           teams={teams}
           draftGrades={draftGrades}
           rostersByTeam={rostersByTeam}
+          teamCount={teams.length || 14}
           className="mb-3"
         />
       )}

@@ -4,9 +4,10 @@
  * PURE: given the derived facts for one pick + config, produce independent, receipt-backed signals
  * and a level. No DB, no I/O. This is the promoted, validated recalibration from the harness.
  *
- * Rules (all tunable via MomentConfig):
- *  - ADP delta counts only through round `adp.maxRound`; moderate at `moderateDelta`, strong only
- *    through `strongMaxRound` at `strongDelta`. Late-round ADP delta contributes nothing.
+ * Rules (all tunable via MomentConfig, except REACH which uses centralized reachClassification):
+ *  - REACH: phase-based pick-vs-ADP thresholds (see reachClassification.ts). Not pace-config ADP.
+ *  - STEAL: ADP delta counts only through round `adp.maxRound`; moderate at `moderateDelta`, strong
+ *    only through `strongMaxRound` at `strongDelta`. Late-round positive ADP delta contributes nothing.
  *  - Tier cliff counts through `tierCliff.maxRound`; moderate at `moderateGap`, strong at `strongGap`.
  *  - Pattern break: earliest-ever only, ≥ `minSeasons` tracked seasons AND ≥ `minRoundBreak` earlier.
  *  - Consequential run: ≥ `minRunInWindow` in the window AND (if required) a tier cliff.
@@ -14,11 +15,20 @@
  *  - Latest-ever, position frequency, roster need, rivalry-without-impact: context only (no signal).
  */
 import { DEFAULT_MOMENT_CONFIG, IDP_POSITIONS, type MomentConfig, type MomentLevel, type MomentSignal } from "./draftMomentTypes";
+import {
+  classifyReachFromLegacyAdpDelta,
+  reachSignalIsStrong,
+  type ReachClassification,
+} from "./reachClassification";
 
 export interface ClassifierInput {
   position: string;
   round: number;
   adpDelta: number | null;      // overall - adp; + = fell/value, - = reach
+  /** Overall pick number when known — improves reach round/delta fidelity. */
+  overallPick?: number | null;
+  /** League size when known — used only if round derivation is needed. */
+  teamCount?: number | null;
   tierCliffGap: number | null;  // ADP gap to next-best undrafted at position (offense only)
   positionRunIncludingThis: number;
   ownerTiming: { anomaly: "earliest_ever" | "latest_ever" | null; priorEarliest: number; seasons: number } | null;
@@ -29,6 +39,8 @@ export interface ClassifierResult {
   signals: MomentSignal[];
   strongCount: number;
   level: MomentLevel;
+  /** Present when REACH was evaluated (including non-reach outcomes). */
+  reach: ReachClassification | null;
 }
 
 export function classifyMoment(input: ClassifierInput, config: MomentConfig = DEFAULT_MOMENT_CONFIG): ClassifierResult {
@@ -36,11 +48,30 @@ export function classifyMoment(input: ClassifierInput, config: MomentConfig = DE
   const isIdp = IDP_POSITIONS.has(pos);
   const round = input.round;
   const signals: MomentSignal[] = [];
+  let reach: ReachClassification | null = null;
 
-  // REACH / STEAL — offense only, through adp.maxRound
-  if (!isIdp && input.adpDelta != null && round <= config.adp.maxRound && Math.abs(input.adpDelta) >= config.adp.moderateDelta) {
-    const strong = round <= config.adp.strongMaxRound && Math.abs(input.adpDelta) >= config.adp.strongDelta;
-    signals.push({ name: input.adpDelta < 0 ? "REACH" : "STEAL", strong, why: `${input.adpDelta < 0 ? "reach" : "value"} ${Math.abs(input.adpDelta)} vs ADP in R${round}` });
+  // REACH — offense only; centralized phase thresholds (not MomentConfig.adp).
+  if (!isIdp && input.adpDelta != null && input.adpDelta < 0) {
+    reach = classifyReachFromLegacyAdpDelta({
+      adpDelta: input.adpDelta,
+      round,
+      pickNumber: input.overallPick ?? undefined,
+      numberOfTeams: input.teamCount,
+    });
+    if (reach.isReach) {
+      const strong = reachSignalIsStrong(reach);
+      signals.push({
+        name: "REACH",
+        strong,
+        why: `reach ${reach.reachDelta} vs ADP in R${reach.round} (${reach.severity})`,
+      });
+    }
+  }
+
+  // STEAL — offense only, through adp.maxRound (unchanged from prior steal rules).
+  if (!isIdp && input.adpDelta != null && input.adpDelta > 0 && round <= config.adp.maxRound && input.adpDelta >= config.adp.moderateDelta) {
+    const strong = round <= config.adp.strongMaxRound && input.adpDelta >= config.adp.strongDelta;
+    signals.push({ name: "STEAL", strong, why: `value ${input.adpDelta} vs ADP in R${round}` });
   }
 
   // TIER CLIFF — offense only, through tierCliff.maxRound
@@ -73,5 +104,5 @@ export function classifyMoment(input: ClassifierInput, config: MomentConfig = DE
     strongCount >= 1 || signals.length >= 2 ? "major" :
     signals.length === 1 ? "notable" : "routine";
 
-  return { signals, strongCount, level };
+  return { signals, strongCount, level, reach };
 }

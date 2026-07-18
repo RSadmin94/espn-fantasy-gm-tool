@@ -45,7 +45,7 @@ export function buildDraftMomentsFromContext(b: BuildContext): DraftMoment[] {
       const owner = b.resolver.resolve(b.season, pick.teamId, pick.ownerName); // current-season resolution
       const before = { ...(rosterByKey.get(owner.historyKey) ?? {}) };
       const { receipts, facts } = collectReceipts(pick, b.ctx, owner, before, recent, drafted, config);
-      const { signals, level } = classifyMoment(facts, config);
+      const { signals, level, reach } = classifyMoment(facts, config);
       const fin = finalizeClaims({ receipts, owner });
       const budget = config.commentary[level];
       const stories = signals.map((s) => STORY_BY_SIGNAL[s.name] ?? s.name);
@@ -69,6 +69,7 @@ export function buildDraftMomentsFromContext(b: BuildContext): DraftMoment[] {
         secondaryStoryline: stories[1] ?? null,
         commentaryBudget: { enabled: budget.enabled, maxSentences: budget.maxSentences, maxWords: budget.maxWords },
         validation: fin.validation,
+        reach,
       };
       if (!fin.validation.valid) moment = degradeToRoutine(moment, fin.validation.errors[0] ?? "validation failed");
     } catch (err: any) {

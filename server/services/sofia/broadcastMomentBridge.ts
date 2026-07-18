@@ -126,6 +126,7 @@ export function draftMomentToBroadcastMoment(
     editorialPlanId: opts.editorialPlanId,
     overrideDecompression: opts.overrideDecompression,
     callbackKeys: buildCallbackKeys(moment),
+    reachClassification: moment.reach ?? null,
   };
 }
 

@@ -204,8 +204,11 @@ export function classifyEventRole(
     return { category: "entertainment", primary: "roxanne", reason: "role_roxanne_entertainment_plan" };
   }
 
-  // Strategy — Coach
+  // Strategy — Coach owns ordinary reaches; Roxanne only when classifier marks outrageous (40+ massive).
   if (hasSignal(moment, "REACH") || planId === "slight_reach" || planId === "major_reach" || planId === "historic_reach") {
+    if (moment.reachClassification?.personaOwner === "roxanne") {
+      return { category: "entertainment", primary: "roxanne", reason: "role_roxanne_historic_override" };
+    }
     return { category: "strategy", primary: "coach", reason: "role_coach_reach" };
   }
   if (hasSignal(moment, "STEAL")) {

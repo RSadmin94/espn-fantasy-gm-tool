@@ -1,3 +1,5 @@
+import type { ReachClassification } from "./reachClassification";
+
 /**
  * Draft Moment Engine — types + tunable configuration.
  *
@@ -54,6 +56,8 @@ export interface DraftMoment {
   secondaryStoryline: string | null;
   commentaryBudget: { enabled: boolean; maxSentences: number; maxWords: number };
   validation: { valid: boolean; errors: string[]; warnings: string[] };
+  /** Centralized reach classification when ADP was evaluated for this pick. */
+  reach?: ReachClassification | null;
 }
 
 /** A detected significance signal (internal to the classifier). */
@@ -66,8 +70,12 @@ export interface MomentSignal {
 /**
  * Tunable thresholds — validated against the harness recalibration on league 457622
  * (routine 62% / notable 32% / major 5% / historic 2%). Change here, never in the classifier body.
+ *
+ * NOTE (P4): `adp.moderateDelta` / `adp.strongDelta` / `adp.maxRound` / `adp.strongMaxRound`
+ * apply to STEAL classification only. REACH uses `@shared/reachClassification` phase floors.
  */
 export interface MomentConfig {
+  /** STEAL-only ADP gates (REACH is centralized in `@shared/reachClassification`). */
   adp: { moderateDelta: number; strongDelta: number; maxRound: number; strongMaxRound: number };
   tierCliff: { moderateGap: number; strongGap: number; maxRound: number };
   patternBreak: { minSeasons: number; minRoundBreak: number };

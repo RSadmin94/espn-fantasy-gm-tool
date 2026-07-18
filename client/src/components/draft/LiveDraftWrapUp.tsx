@@ -1,9 +1,12 @@
 import { cn } from "@/lib/utils";
+import { selectBiggestClassifiedReach } from "@shared/reachClassification";
 
 export type LiveDraftWrapUpProps = {
   teams: Array<{ teamId: number; teamName: string; ownerName?: string }>;
   draftGrades: Map<number, { letter: string; avgDelta: number; strength: number }>;
-  rostersByTeam: Map<number, Array<{ name: string; position: string; pickNumber: number; adp?: number | null }>>;
+  rostersByTeam: Map<number, Array<{ name: string; position: string; pickNumber: number; adp?: number | null; round?: number | null }>>;
+  /** League size for round derivation — required for authoritative reach classification. */
+  teamCount: number;
   className?: string;
 };
 
@@ -11,6 +14,7 @@ export function LiveDraftWrapUp({
   teams,
   draftGrades,
   rostersByTeam,
+  teamCount,
   className,
 }: LiveDraftWrapUpProps) {
   const ranked = [...teams]
@@ -24,24 +28,37 @@ export function LiveDraftWrapUp({
 
   const top = ranked[0];
   let bestValue: { name: string; delta: number; team: string } | null = null;
-  let biggestReach: { name: string; delta: number; team: string } | null = null;
   const posCounts: Record<string, number> = {};
+  const reachCandidates: Array<{
+    name: string;
+    teamName: string;
+    pickNumber: number;
+    adp?: number | null;
+    round?: number | null;
+  }> = [];
 
   for (const t of teams) {
     const roster = rostersByTeam.get(Number(t.teamId)) ?? [];
     for (const p of roster) {
-      if (p.adp == null) continue;
-      const delta = Number(p.pickNumber) - Number(p.adp);
-      if (!bestValue || delta > bestValue.delta) {
-        bestValue = { name: p.name, delta, team: t.teamName };
-      }
-      if (!biggestReach || delta < biggestReach.delta) {
-        biggestReach = { name: p.name, delta, team: t.teamName };
+      if (p.adp != null && Number.isFinite(Number(p.adp))) {
+        const delta = Number(p.pickNumber) - Number(p.adp);
+        if (!bestValue || delta > bestValue.delta) {
+          bestValue = { name: p.name, delta, team: t.teamName };
+        }
+        reachCandidates.push({
+          name: p.name,
+          teamName: t.teamName,
+          pickNumber: Number(p.pickNumber),
+          adp: Number(p.adp),
+          round: p.round ?? null,
+        });
       }
       const pos = String(p.position ?? "").toUpperCase();
       posCounts[pos] = (posCounts[pos] ?? 0) + 1;
     }
   }
+
+  const biggestReach = selectBiggestClassifiedReach(reachCandidates, teamCount);
 
   const notableRun = Object.entries(posCounts)
     .filter(([pos]) => !["K", "DEF", "DST", "DP"].includes(pos))
@@ -74,8 +91,8 @@ export function LiveDraftWrapUp({
         <div>
           <span className="text-zinc-500">Biggest reach</span>
           <p className="font-bold text-zinc-100">
-            {biggestReach && biggestReach.delta < 0
-              ? `${biggestReach.name} (${biggestReach.delta.toFixed(0)} vs ADP, ${biggestReach.team})`
+            {biggestReach
+              ? `${biggestReach.name} (${biggestReach.reachDelta.toFixed(0)} picks early, ${biggestReach.team})`
               : "—"}
           </p>
         </div>
