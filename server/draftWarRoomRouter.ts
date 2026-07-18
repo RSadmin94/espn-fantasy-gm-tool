@@ -27,6 +27,12 @@ import { getEspnPlayerInfoMap, getEspnDefensiveInfoMap } from "./playerStatsRout
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { rosterRulesFromLineupSlotCounts } from "./draftEngine/phase5/leagueRosterRules";
 import {
+  draftPoolPositionAllowList,
+  isDraftPoolPositionEligible,
+  PRIMARY_IDP_LINEUP_REQS,
+  resolveLeagueLineupReqsForDraftPool,
+} from "./draftLeagueFormatPool";
+import {
   buildSkillStarvationSoftIncludes,
   isSkillStarvedMergedPool,
 } from "./mockDraftPoolResilience";
@@ -71,35 +77,19 @@ const SLOT_MAP: Record<number, string> = {
   15: "RB", 16: "DEF", 17: "K", 20: "BE", 21: "IR", 23: "FLEX",
 };
 
-const LINEUP_REQS: Record<string, number> = {
-  QB: 1, RB: 1, WR: 2, TE: 1, FLEX: 2, DP: 1, K: 1,
-  // This league starts an individual defensive player in a DP slot (ESPN slot 15), not team D/ST.
-  // IDP positions (DL/LB/DB/S/CB/DE/DT) are normalized to "DP" in the draft pool so they fill it.
-};
+const LINEUP_REQS: Record<string, number> = PRIMARY_IDP_LINEUP_REQS;
 
 // Every individual-defensive position fills the single DP lineup slot — collapse them to "DP"
 // for the draft pool so the DP need is matched and drafted like any other slot.
 const IDP_POSITIONS = new Set(["DL", "LB", "DB", "S", "CB", "DE", "DT"]);
 const normalizeDraftPos = (pos: string): string => (IDP_POSITIONS.has(pos) ? "DP" : pos);
 
-// Per-league starting lineup. Reuses the exact ESPN-slot parser the souls engine uses, so non-IDP
-// leagues (e.g. team D/ST) no longer inherit the hardcoded IDP "DP" slot. SAFE BY DESIGN: the
-// primary league (457622) always keeps the hardcoded LINEUP_REQS, and any league whose settings
-// don't parse cleanly falls back to it too — so nothing changes for leagues that work today.
+// RFSN-014 — lineup reqs from league format (unknown → standard non-IDP; 457622 → IDP).
 function leagueLineupReqs(leagueId: string, payload: Record<string, unknown> | null): Record<string, number> {
-  if (String(leagueId) === "457622") return LINEUP_REQS; // primary league: untouched, guaranteed
-  const counts = (payload as any)?.settings?.rosterSettings?.lineupSlotCounts;
-  if (!counts) return LINEUP_REQS;
-  try {
-    const s = rosterRulesFromLineupSlotCounts({ leagueId: String(leagueId), lineupSlotCounts: counts }).starters;
-    if (!(s.QB > 0 && s.WR > 0 && s.TE > 0)) return LINEUP_REQS; // degenerate parse → fall back, don't touch
-    const reqs: Record<string, number> = { QB: s.QB, RB: s.RB, WR: s.WR, TE: s.TE, FLEX: s.FLEX, K: s.K };
-    if (s.DP > 0) reqs.DP = s.DP;   // IDP league
-    if (s.DST > 0) reqs.DEF = s.DST; // team D/ST league (Teco's): key under "DEF" so the pool/need/cap/counts (which use the registry's "DEF" label) all reconcile — DEF players satisfy the team-defense requirement
-    return reqs;
-  } catch {
-    return LINEUP_REQS;
-  }
+  return resolveLeagueLineupReqsForDraftPool({
+    leagueId: String(leagueId),
+    lineupSlotCounts: (payload as any)?.settings?.rosterSettings?.lineupSlotCounts ?? null,
+  });
 }
 
 // Phase 1 foundation cleanup: the hardcoded value tables (POS_ROUND_VALUE, POS_SCARCITY,
@@ -1424,7 +1414,6 @@ export const draftWarRoomRouter = router({
       const leagueCapabilities = buildLeagueCapabilities(leagueId, season, payload);
       // Per-league starting-lineup requirements (drives the pool filter, roster needs, and caps).
       const leagueReqs = leagueLineupReqs(leagueId, payload);
-      const rostersTeamDefense = (leagueReqs.DEF ?? 0) > 0;
       const geo = await resolveKeeperDraftGeometryForSeason(leagueId, season, ctx.user.id, payload);
       const totalRounds = Math.max(1, geo.roundCount || 1);
       const draftBoardSummary = summarizeDraftBoardCounts(allPicks);
@@ -1468,7 +1457,8 @@ export const draftWarRoomRouter = router({
         seenPool.add(nameLc);
         const pid = Number(espnId);
         const draftPos = normalizeDraftPos(String(reg.position || "?"));
-        if (draftPos === "DEF" && !rostersTeamDefense) continue; // team defenses only enter the pool for leagues that roster one (457622 stays DEF-free)
+        // RFSN-014 — only positions this league can roster (DP for IDP, DEF for team D/ST).
+        if (!isDraftPoolPositionEligible(draftPos, leagueReqs)) continue;
         mvInputs.push({
           playerId: pid, position: draftPos, adpRank: null,
           projection: info.projection ?? null, keeperRoundSavings: null,
@@ -1642,10 +1632,8 @@ export const draftWarRoomRouter = router({
 
       // Board-reality pool — keepers + mock-drafted players removed by espnId / normalized name.
       // availablePool and availablePoolAfterKeepers are the SAME single board (Rule 4).
-      // Include DP (IDP) and DEF (team D/ST) so defenders surface in the Available Players board.
-      // The upstream playerPool is already league-scoped (DEF only for leagues that roster a team
-      // defense, DP only for IDP leagues), so this static allow-list stays league-correct.
-      const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DP", "DEF"]);
+      // RFSN-014 — allow-list from league format (DP only for IDP, DEF only for team D/ST).
+      const DRAFT_POSITIONS = draftPoolPositionAllowList(leagueReqs);
       const mockDraftedIdentities = (mockDraft as any[])
         .filter((p) => !p.isKeeperSlot && p.player)
         .map((p) => ({ name: String(p.player), espnId: p.espnId ?? null }));

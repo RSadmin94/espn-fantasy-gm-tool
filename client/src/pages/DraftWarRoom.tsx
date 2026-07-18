@@ -671,8 +671,19 @@ function LiveDraftEngine({
     return s;
   }, [results]);
 
+  /** RFSN-014 — client belt-and-suspenders: hide positions the league does not roster. */
+  const formatEligiblePool = useMemo(() => {
+    const caps = POS_CAPS;
+    return availablePool.filter((p: any) => {
+      const pos = String(p.position ?? "").toUpperCase();
+      if (pos === "DP") return (caps.DP ?? 0) > 0;
+      if (pos === "DEF" || pos === "DST" || pos === "D/ST") return (caps.DEF ?? 0) > 0;
+      return true;
+    });
+  }, [availablePool, POS_CAPS]);
+
   const available = useMemo(() => {
-    let list = availablePool.filter((p: any) => !draftedKeys.has(keyOf(p)));
+    let list = formatEligiblePool.filter((p: any) => !draftedKeys.has(keyOf(p)));
     if (posFilter !== "ALL") {
       const want = posFilter.toUpperCase();
       const defVariants = new Set(["DEF", "DST", "D/ST"]);
@@ -692,7 +703,7 @@ function LiveDraftEngine({
     else if (sort === "pos") s.sort((a, b) => (a.position ?? "").localeCompare(b.position ?? "") || byAdp(a) - byAdp(b));
     else s.sort((a, b) => a.name.localeCompare(b.name));
     return s;
-  }, [availablePool, draftedKeys, posFilter, searchQ, sort]);
+  }, [formatEligiblePool, draftedKeys, posFilter, searchQ, sort]);
 
   const rostersByTeam = useMemo(() => {
     const m = new Map<number, any[]>();
@@ -964,14 +975,13 @@ function LiveDraftEngine({
   }, [results]);
 
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
-  // Position filter tabs are data-driven from the pool, so a team-D/ST league shows a DEF tab and
-  // an IDP league shows a DP tab (instead of a hardcoded DP assumption).
+  // Position tabs follow league-eligible pool (RFSN-014): DP only when IDP is rostered.
   const POSES = useMemo(() => {
     const up = (s: any) => String(s ?? "").toUpperCase();
-    const hasDef = availablePool.some((p: any) => ["DEF", "DST", "D/ST"].includes(up(p.position)));
-    const hasDp = availablePool.some((p: any) => up(p.position) === "DP");
+    const hasDef = formatEligiblePool.some((p: any) => ["DEF", "DST", "D/ST"].includes(up(p.position)));
+    const hasDp = formatEligiblePool.some((p: any) => up(p.position) === "DP");
     return ["ALL", "QB", "RB", "WR", "TE", "K", ...(hasDef ? ["DEF"] : []), ...(hasDp ? ["DP"] : [])];
-  }, [availablePool]);
+  }, [formatEligiblePool]);
 
   return (
     <div className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden">
