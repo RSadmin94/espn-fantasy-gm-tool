@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:rfsn-playback": "cross-env NODE_ENV=development vite --open /rfsn-playback.html --port 5174 --strictPort",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:../../vite.config --external:vite --external:vite-plugin-manus-runtime --external:vite-plugin-manus-debug-collector && node scripts/copy-migrations.mjs",
+    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --external:../../vite.config --external:vite --external:vite-plugin-manus-runtime --external:vite-plugin-manus-debug-collector && node scripts/copy-migrations.mjs && node scripts/write-build-meta.mjs",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "emit:draft-2010": "node scripts/draft-data/emit-2010-json.mjs",

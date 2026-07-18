@@ -47,13 +47,6 @@ export async function createContext(
   opts: CreateExpressContextOptions
 ): Promise<TrpcContext> {
   const auth = getAuth(opts.req);
-  console.log("CLERK AUTH DEBUG", {
-    userId: auth.userId,
-    sessionId: auth.sessionId,
-    hasCookie: !!opts.req.headers.cookie,
-    proto: opts.req.headers["x-forwarded-proto"],
-    host: opts.req.headers.host,
-  });
 
   let user: User | null = null;
 
