@@ -1,5 +1,6 @@
 /**
  * RFSN-016 — Live Draft IDP presentation tests.
+ * RFSN-017B — Available-pool ADP ordering regressions.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -7,6 +8,7 @@ import {
   compareLiveDraftAvailableRows,
   defaultLiveDraftPosFilter,
   matchesLiveDraftPosFilter,
+  orderLiveDraftAvailablePool,
 } from "./liveDraftPoolPresentation";
 
 describe("RFSN-016 liveDraftPoolPresentation", () => {
@@ -62,5 +64,40 @@ describe("RFSN-016 liveDraftPoolPresentation", () => {
         compareLiveDraftAvailableRows(a, b, "adp", { prioritizeOffenseInAll: true }),
       );
     expect(offenseSorted.map((r) => r.name)).toEqual(["RB One", "WR Ace"]);
+  });
+});
+
+describe("RFSN-017B Live Draft availablePool ADP ordering", () => {
+  it("Test 1 — synthetic/fallback ADP cannot outrank real ADP", () => {
+    const rows = [
+      { name: "Aaron Rodgers", position: "QB", adp: 169, rank: 1, marketValue: 40 },
+      { name: "Shedeur Sanders", position: "QB", adp: 250, rank: 2, marketValue: 35 },
+      { name: "Josh Allen", position: "QB", adp: 23, rank: 40, marketValue: 90 },
+      { name: "Lamar Jackson", position: "QB", adp: 28, rank: 41, marketValue: 88 },
+    ];
+    const sorted = [...rows].sort((a, b) => compareLiveDraftAvailableRows(a, b, "adp"));
+    expect(sorted[0]!.name).toBe("Josh Allen");
+    expect(sorted.map((r) => r.name).slice(0, 2)).toEqual(["Josh Allen", "Lamar Jackson"]);
+    expect(sorted[sorted.length - 1]!.name).toBe("Shedeur Sanders");
+  });
+
+  it("Test 2 — null ADP does not beat real ADP (rank must not fake ADP)", () => {
+    const rows = [
+      { name: "Player A", position: "QB", adp: null, rank: 1, marketValue: 99 },
+      { name: "Player B", position: "QB", adp: 75, rank: 50, marketValue: 40 },
+    ];
+    const sorted = [...rows].sort((a, b) => compareLiveDraftAvailableRows(a, b, "adp"));
+    expect(sorted.map((r) => r.name)).toEqual(["Player B", "Player A"]);
+  });
+
+  it("Test 3 — live consumption preserved; next real-ADP QB surfaces", () => {
+    const eligible = [
+      { name: "Josh Allen", position: "QB", adp: 23, rank: 1, marketValue: 90 },
+      { name: "Lamar Jackson", position: "QB", adp: 28, rank: 2, marketValue: 88 },
+      { name: "Aaron Rodgers", position: "QB", adp: 250, rank: 3, marketValue: 40 },
+    ];
+    const available = orderLiveDraftAvailablePool(eligible, new Set(["Josh Allen"]), "adp");
+    expect(available.map((r) => r.name)).toEqual(["Lamar Jackson", "Aaron Rodgers"]);
+    expect(available[0]!.name).toBe("Lamar Jackson");
   });
 });
