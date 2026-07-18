@@ -14,6 +14,7 @@ export function scheduleLiveBroadcastForDraftMoment(
     draftComplete?: boolean;
     useDeterministicProvider?: boolean;
     teamCount?: number;
+    userId?: number | null;
   } = {},
 ): void {
   if (!isRfsnLiveBroadcastEnabled()) return;
@@ -25,7 +26,11 @@ export function scheduleLiveBroadcastForDraftMoment(
   const prior = inFlight.get(sessionKey);
   const work = (async () => {
     if (prior) await prior.catch(() => null);
-    const result = await processLockedDraftMoment(draftMoment, opts);
+    const result = await processLockedDraftMoment(draftMoment, {
+      draftComplete: opts.draftComplete,
+      useDeterministicProvider: opts.useDeterministicProvider,
+      userId: opts.userId,
+    });
     if (opts.draftComplete) {
       await processDraftWrapUp({
         leagueId: draftMoment.leagueId,

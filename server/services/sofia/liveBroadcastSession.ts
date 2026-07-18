@@ -5,6 +5,7 @@ import type { RfsnBroadcastSnapshot } from "../../../client/src/lib/rfsnPresenta
 import type { BroadcastFrameStatus } from "./broadcastFrameContract";
 
 import type { RfsnLiveAudioStatus } from "../rfsn/rfsnAudioTypes";
+import type { LeagueContextDebug } from "../rfsn/leagueContextDebug";
 
 export type RfsnLiveSessionState =
   | "waiting_for_draft"
@@ -29,6 +30,11 @@ export type PublicLiveBroadcastPayload = {
   draftComplete: boolean;
   /** Additive audio transport — text broadcast works without this. */
   audioStatus?: RfsnLiveAudioStatus | null;
+  /**
+   * Temporary acceptance-only trace (RFSN_LEAGUE_CONTEXT_DEBUG).
+   * Not a product UI surface — omit when debug flag is off.
+   */
+  leagueContextDebug?: LeagueContextDebug | null;
 };
 
 type DraftSession = {

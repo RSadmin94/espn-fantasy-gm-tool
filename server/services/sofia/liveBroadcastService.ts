@@ -28,7 +28,11 @@ import {
 } from "./liveBroadcastSession";
 import { recordLiveBroadcastTelemetry, summarizeFrameTelemetry } from "./liveBroadcastTelemetry";
 import { scheduleLiveFrameAudio } from "../rfsn/rfsnLiveTtsService";
-import { leagueContextEngine } from "../rfsn/leagueContextEngine";
+import {
+  leagueContextEngine,
+  isLeagueContextDebugEnabled,
+  type LeagueContextDebug,
+} from "../rfsn/leagueContextEngine";
 import {
   createDeterministicLiveOrchestrator,
   createProductionLiveOrchestrator,
@@ -52,6 +56,8 @@ export type BuildLiveBroadcastFrameInput = {
   useDeterministicProvider?: boolean;
   /** When true, public payload is marked draft-complete (wrap-up / final frame). */
   markDraftComplete?: boolean;
+  /** Temporary acceptance-only context engine trace. */
+  leagueContextDebug?: LeagueContextDebug | null;
 };
 
 export type LiveBroadcastBuildResult = {
@@ -109,8 +115,9 @@ function toPublicPayload(
   draftComplete: boolean,
   moment: BroadcastMoment,
   draftId: string,
+  leagueContextDebug?: LeagueContextDebug | null,
 ): PublicLiveBroadcastPayload {
-  return {
+  const payload: PublicLiveBroadcastPayload = {
     schemaVersion: 1,
     sessionState,
     snapshot,
@@ -119,6 +126,10 @@ function toPublicPayload(
     generatedAt: frame.public.generatedAt,
     draftComplete,
   };
+  if (isLeagueContextDebugEnabled() && leagueContextDebug) {
+    payload.leagueContextDebug = leagueContextDebug;
+  }
+  return payload;
 }
 
 function snapshotFromFrame(
@@ -263,6 +274,7 @@ export async function buildLiveBroadcastFrame(
     draftComplete,
     input.moment,
     input.draftId,
+    input.leagueContextDebug,
   );
 
   updateLiveSession(input.leagueId, input.draftId, {
@@ -354,7 +366,7 @@ export async function processLockedDraftMoment(
 
   const broadcastMoment = draftMomentToBroadcastMoment(draftMoment);
   // RFSN-005 — League Context Engine (after moment build, before editorial routing).
-  const { moment: enrichedMoment } = await leagueContextEngine.enrich(broadcastMoment, {
+  const { moment: enrichedMoment, debug } = await leagueContextEngine.enrich(broadcastMoment, {
     leagueId: draftMoment.leagueId,
     draftId: draftMoment.draftId,
     userId: opts.userId,
@@ -366,6 +378,7 @@ export async function processLockedDraftMoment(
     draftId: draftMoment.draftId,
     draftMoment,
     useDeterministicProvider: opts.useDeterministicProvider,
+    leagueContextDebug: isLeagueContextDebugEnabled() ? debug : null,
     isStillActive: (id) =>
       id.kind === "draft_pick" &&
       id.draftId === draftMoment.draftId &&

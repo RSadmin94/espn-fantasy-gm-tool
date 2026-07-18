@@ -277,11 +277,15 @@ describe("leagueContextEngine Phase 1", () => {
 
   it("enrich injects aired facts into verifiedFacts without commentary", () => {
     const snap = fixtureSnapshot();
-    const { moment, aired } = enrichMomentWithSnapshot(baseMoment({ significance: "major" }), snap, {
+    const { moment, aired, debug } = enrichMomentWithSnapshot(baseMoment({ significance: "major" }), snap, {
       leagueId: "457622",
       draftId: "draft-1",
+      userIdPresent: true,
     });
     expect(aired.length).toBeGreaterThan(0);
+    expect(debug.factsFound).toBeGreaterThan(0);
+    expect(debug.factsAired).toBe(aired.length);
+    expect(debug.userIdPresent).toBe(true);
     for (const c of aired) {
       expect(moment.factPacket.verifiedFacts).toContain(c.fact);
       // Engine must not emit interpretive personality lines

@@ -127,6 +127,7 @@ export const rfsnBroadcastRouter = router({
       scheduleLiveBroadcastForDraftMoment(draftMoment, {
         draftComplete: input.draftComplete,
         useDeterministicProvider: input.useDeterministicProvider ?? false,
+        userId: ctx.user?.id ?? null,
       });
 
       return { accepted: true, pickId: draftMoment.eventId };

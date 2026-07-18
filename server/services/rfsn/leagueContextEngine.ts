@@ -8,6 +8,7 @@ import type { BroadcastMoment } from "../sofia/broadcastMomentTypes";
 import { shareContextForVoices, sharedFactsForVerifiedPacket } from "./analystExchange";
 import {
   type HistoricalContext,
+  DEFAULT_CONFIDENCE_THRESHOLD,
   passesAirRule,
 } from "./historicalContext";
 import { shouldTriggerHistoricalContext } from "./historicalTrigger";
@@ -17,6 +18,10 @@ import {
   getOrLoadLeagueContextCache,
   getLeagueContextCache,
 } from "./leagueContextCache";
+import {
+  type LeagueContextDebug,
+  isLeagueContextDebugEnabled,
+} from "./leagueContextDebug";
 import { recordAiredStoryThreads } from "./storyThreads";
 
 export type EnrichLeagueContextOpts = {
@@ -34,7 +39,33 @@ export type EnrichLeagueContextResult = {
   aired: HistoricalContext[];
   benched: HistoricalContext[];
   all: HistoricalContext[];
+  debug: LeagueContextDebug;
 };
+
+function buildDebug(
+  moment: BroadcastMoment,
+  all: HistoricalContext[],
+  aired: HistoricalContext[],
+  benched: HistoricalContext[],
+  opts: { confidenceThreshold?: number; userIdPresent: boolean },
+): LeagueContextDebug {
+  const Tc = opts.confidenceThreshold ?? DEFAULT_CONFIDENCE_THRESHOLD;
+  const eligible = all.filter((c) => c.confidence >= Tc);
+  const pickNumber =
+    moment.identity.kind === "draft_pick" ? moment.identity.pickNumber : null;
+  return {
+    owner: moment.factPacket.subject.ownerName,
+    pickNumber,
+    factsFound: all.length,
+    factsEligible: eligible.length,
+    factsAired: aired.length,
+    typesFound: [...new Set(all.map((c) => c.narrativeType))],
+    typesAired: [...new Set(aired.map((c) => c.narrativeType))],
+    sampleAired: aired.map((c) => c.fact).slice(0, 3),
+    sampleBenched: benched.map((c) => c.fact).slice(0, 3),
+    userIdPresent: opts.userIdPresent,
+  };
+}
 
 /**
  * Pure enrich against an already-loaded snapshot.
@@ -47,10 +78,21 @@ export function enrichMomentWithSnapshot(
     draftId: string;
     confidenceThreshold?: number;
     heatThreshold?: number;
+    userIdPresent?: boolean;
   },
 ): EnrichLeagueContextResult {
+  const userIdPresent = Boolean(opts.userIdPresent);
   if (!shouldTriggerHistoricalContext(moment.significance)) {
-    return { moment, aired: [], benched: [], all: [] };
+    return {
+      moment,
+      aired: [],
+      benched: [],
+      all: [],
+      debug: buildDebug(moment, [], [], [], {
+        confidenceThreshold: opts.confidenceThreshold,
+        userIdPresent,
+      }),
+    };
   }
 
   const all = collectHistoricalContexts(moment, snapshot);
@@ -88,7 +130,16 @@ export function enrichMomentWithSnapshot(
     contexts: aired,
   });
 
-  return { moment: enriched, aired, benched, all };
+  return {
+    moment: enriched,
+    aired,
+    benched,
+    all,
+    debug: buildDebug(moment, all, aired, benched, {
+      confidenceThreshold: opts.confidenceThreshold,
+      userIdPresent,
+    }),
+  };
 }
 
 /**
@@ -109,8 +160,12 @@ export async function enrich(moment: BroadcastMoment, opts: EnrichLeagueContextO
     draftId: opts.draftId,
     confidenceThreshold: opts.confidenceThreshold,
     heatThreshold: opts.heatThreshold,
+    userIdPresent: opts.userId != null,
   });
 }
 
 /** Alias matching the locked build-spec call site name. */
 export const leagueContextEngine = { enrich, enrichMomentWithSnapshot };
+
+export { isLeagueContextDebugEnabled };
+export type { LeagueContextDebug };
