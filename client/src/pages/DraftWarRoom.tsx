@@ -9,6 +9,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
+import { useEspnLiveDraftMonitor } from "@/hooks/useEspnLiveDraftMonitor";
 import {
   createRandomDraftSeed,
   formatDraftSeed,
@@ -16,6 +17,7 @@ import {
   selectAiPick,
 } from "@/lib/liveDraftSeed";
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
+import { buildEspnLiveDraftId } from "@shared/espnLiveDraftMonitor";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import { DraftNightShow } from "@/components/draft/DraftNightShow";
@@ -547,11 +549,12 @@ interface KeeperOverride {
 // ── Live Draft Engine (real, stateful: AI fills other teams, you take your picks) ──
 function LiveDraftEngine({
   picks, teams, availablePool, positionCaps,
-  leagueId, draftId,
+  leagueId, draftId, season,
 }: {
   picks: any[]; teams: any[]; availablePool: any[]; positionCaps: Record<string, number> | null;
   leagueId?: string | null;
   draftId: string;
+  season: number;
 }) {
   // Match drafted players to the pool by NORMALIZED NAME (strip punctuation + Jr/Sr/III suffixes),
   // because the souls board and the available pool carry different ids/name spellings — id matching
@@ -589,6 +592,8 @@ function LiveDraftEngine({
   const [sort, setSort]       = useState<"adp" | "proj" | "value" | "pos" | "name">("adp");
   const [posFilter, setPos]   = useState<string>("ALL");
   const [searchQ, setSearchQ] = useState("");
+  /** Sprint 10.1 — poll ESPN mDraftDetail → notifyLockedPick (isolated draftId). */
+  const [espnLiveMonitor, setEspnLiveMonitor] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Pace between AI auto-picks. Default "Broadcast" gives the RFSN booth time to
   // generate + play a line before the next pick; Brisk/Turbo for quick sims.
@@ -722,7 +727,7 @@ function LiveDraftEngine({
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
   useRfsnLiveLockedPickNotify({
-    enabled: Boolean(leagueId),
+    enabled: Boolean(leagueId) && !espnLiveMonitor,
     leagueId,
     draftId,
     schedule: schedule.map((s: any) => ({
@@ -740,6 +745,28 @@ function LiveDraftEngine({
     resetKey: scheduleSig,
     baselineResults: initialResults,
   });
+
+  const ownerNameByTeamId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of teams) {
+      const tid = String(t.teamId ?? "");
+      const name = String(t.ownerName ?? t.teamName ?? "").trim();
+      if (tid && name) m.set(tid, name);
+    }
+    return m;
+  }, [teams]);
+
+  const espnMonitor = useEspnLiveDraftMonitor({
+    enabled: Boolean(leagueId) && espnLiveMonitor,
+    leagueId,
+    season,
+    draftPace: draftPaceFromTimerMs(paceMs),
+    ownerNameByTeamId,
+  });
+
+  const boothDraftId = espnLiveMonitor && leagueId
+    ? buildEspnLiveDraftId(leagueId, season)
+    : draftId;
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
 
@@ -958,11 +985,50 @@ function LiveDraftEngine({
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => setEspnLiveMonitor((v) => !v)}
+          className={cn(
+            "px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider border",
+            espnLiveMonitor
+              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
+              : "border-zinc-600 text-zinc-400 hover:text-zinc-200",
+          )}
+          title="Poll ESPN mDraftDetail and feed locked picks into RFSN (Sprint 10.1)"
+        >
+          ESPN Live {espnLiveMonitor ? "ON" : "OFF"}
+        </button>
         <span className="text-[11px] text-zinc-400 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
         <span className="text-[11px] text-zinc-500 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
       </div>
 
       {/* Authoritative pick clock — drives AI timing + shows the broadcast pause. */}
+      {espnLiveMonitor && (
+        <div
+          className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[11px] text-zinc-300 space-y-0.5"
+          data-espn-live-monitor
+        >
+          <div className="font-black uppercase tracking-wider text-emerald-200 text-xs">ESPN Live Monitor</div>
+          <div>
+            Session <span className="font-mono text-zinc-400">{espnMonitor.draftId}</span>
+            {" · "}
+            locked {espnMonitor.lockedCount}
+            {" · "}
+            notified {espnMonitor.notifiedCount}
+            {espnMonitor.draftComplete ? " · draft complete" : ""}
+          </div>
+          <div className="text-zinc-500">
+            {espnMonitor.extensionPresent ? "Connector detected" : "Connector not detected — ESPN auth may fail"}
+            {espnMonitor.lastPollAt ? ` · polled ${new Date(espnMonitor.lastPollAt).toLocaleTimeString()}` : ""}
+          </div>
+          {espnMonitor.lastError && (
+            <div className="text-amber-300">{espnMonitor.lastError}</div>
+          )}
+          <div className="text-zinc-600">
+            Sim notify paused while ESPN Live is on. Booth follows the ESPN session id.
+          </div>
+        </div>
+      )}
       {!done && (
         <RfsnPickClock
           state={clockState}
@@ -1103,9 +1169,9 @@ function LiveDraftEngine({
           <aside className="lg:col-span-1 min-w-0">
             <RfsnBroadcastPanel
               leagueId={leagueId}
-              draftId={draftId}
-              sessionResetKey={`${draftId}:${scheduleSig}:${resetCounter}`}
-              draftPaused={!running}
+              draftId={boothDraftId}
+              sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${espnLiveMonitor ? "espn" : "sim"}`}
+              draftPaused={!running && !espnLiveMonitor}
               onBusyChange={setBroadcastBusy}
             />
           </aside>
@@ -1169,7 +1235,7 @@ function SoulsBoardView({ board }: {
 function MockDraftBoard({
   picks, teams, availablePool, positionCaps, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
-  leagueId, draftId,
+  leagueId, draftId, season,
 }: {
   picks: any[]; teams: any[];
   availablePool: any[];
@@ -1181,6 +1247,7 @@ function MockDraftBoard({
   keepersEnabled?: boolean;
   leagueId?: string | null;
   draftId: string;
+  season: number;
 }) {
   const [view, setView]           = useState<"board" | "team" | "live">("board");
   const [selTeam, setSelTeam]     = useState<number | null>(null);
@@ -1448,6 +1515,7 @@ function MockDraftBoard({
           positionCaps={positionCaps}
           leagueId={leagueId}
           draftId={draftId}
+          season={season}
         />
       )}
 
@@ -2172,6 +2240,7 @@ export function DraftWarRoom({ scrollToSection }: { scrollToSection?: string } =
             keepersEnabled={keepersOn}
             leagueId={leagueId}
             draftId={rfsnLiveDraftId}
+            season={season}
             onKeeperOverride={(overrides) => {
               setKeeperOverrides(overrides);
             }}
