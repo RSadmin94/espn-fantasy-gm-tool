@@ -1,6 +1,8 @@
 /**
  * Sprint 10.1 — poll ESPN draft detail and notify RFSN on newly locked picks.
  * Reuses notifyLockedPick; does not touch P3A routing or TTS.
+ *
+ * RFSN-012 (10.3): connector health / connection-state UX — not in this slice.
  */
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -103,10 +105,10 @@ export function useEspnLiveDraftMonitor({
         if (!res.ok) {
           const msg =
             res.kind === "auth"
-              ? "ESPN auth required — open fantasy.espn.com or enable the connector"
+              ? "League auth required — sign in to your fantasy provider or enable the connector"
               : res.kind === "cors_or_network"
                 ? res.message || "Network/CORS — install Fantasy Football Rivals connector"
-                : `ESPN fetch failed (${res.kind}${ "status" in res ? ` ${res.status}` : ""})`;
+                : `League fetch failed (${res.kind}${ "status" in res ? ` ${res.status}` : ""})`;
           setStatus((s) => ({
             ...s,
             active: true,
@@ -125,7 +127,7 @@ export function useEspnLiveDraftMonitor({
             active: true,
             extensionPresent,
             lastPollAt: new Date().toISOString(),
-            lastError: "No draftDetail in ESPN payload yet",
+            lastError: "No draft detail in league payload yet",
             draftId,
           }));
           return;

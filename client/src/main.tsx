@@ -276,6 +276,7 @@ const router = createBrowserRouter([
             element: <DraftWarRoomLayout />,
             children: [
               { path: "/draft/war-room", element: <DraftWarRoomFocus /> },
+              { path: "/draft/live", element: <DraftWarRoomFocus /> },
               { path: "/draft/mock", element: <DraftWarRoomFocus /> },
             ],
           },

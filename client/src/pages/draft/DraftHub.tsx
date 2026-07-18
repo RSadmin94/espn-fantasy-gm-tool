@@ -2,6 +2,8 @@
  * Canonical V2 Draft hub at `/draft`.
  * Curates draft status from existing War Room / keeper / history signals.
  * Does not duplicate the War Room or invent projections.
+ *
+ * RFSN-013 — Live Draft is the real-draft entry; Mock Draft is practice only.
  */
 import { Link } from "react-router";
 import {
@@ -20,8 +22,8 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from "@/components/layout";
 
 const DESTINATIONS = [
-  { label: "War Room", href: "/draft/war-room", hint: "Live draft tools & board", icon: Zap },
-  { label: "Mock Draft", href: "/draft/mock", hint: "Simulate the draft", icon: Target },
+  { label: "Live Draft", href: "/draft/live", hint: "Real drafts → RFSN booth", icon: Radio },
+  { label: "Mock Draft", href: "/draft/mock", hint: "Practice drafts & strategy", icon: Target },
   { label: "Keeper Center", href: "/draft/keepers", hint: "Forecast & advisor", icon: Crown },
   { label: "Draft History", href: "/draft/history", hint: "Past boards & picks", icon: ScrollText },
 ] as const;
@@ -73,9 +75,9 @@ export function DraftHub() {
 
   const nextAction = !data
     ? {
-        title: "Sync league data, then open the War Room",
-        href: "/draft/war-room",
-        detail: "Draft tools load from synced ESPN draft and roster data.",
+        title: "Sync league data, then open Live Draft",
+        href: "/draft/live",
+        detail: "Live Draft monitors your connected league and feeds the RFSN booth.",
       }
     : keepersOn && (forecastRows == null || forecastRows === 0)
       ? {
@@ -84,9 +86,9 @@ export function DraftHub() {
           detail: "Keeper Center combines league forecast and owner-level advisor.",
         }
       : {
-          title: "Enter the War Room",
-          href: "/draft/war-room",
-          detail: "Live controls, grades, mock board, and draft prep live here.",
+          title: "Open Live Draft",
+          href: "/draft/live",
+          detail: "Real draft monitoring and booth coverage start here.",
         };
 
   return (
@@ -153,17 +155,17 @@ export function DraftHub() {
         <section className="grid gap-3 sm:grid-cols-2">
           <IntelPanel variant="card" className="px-4 py-4">
             <div className="mb-2 flex items-center gap-2">
-              <Zap className="h-4 w-4 text-amber-400" />
-              <h3 className="text-sm font-bold text-foreground">War Room</h3>
+              <Radio className="h-4 w-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-foreground">Live Draft</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Live draft controls, player pool, grades, and board.
+              Real drafts feed the RFSN booth. Source stays behind the scenes.
             </p>
             <Link
-              to="/draft/war-room"
+              to="/draft/live"
               className="mt-3 inline-flex text-xs font-bold text-lime-400 hover:text-lime-300"
             >
-              Open War Room →
+              Open Live Draft →
             </Link>
           </IntelPanel>
           <IntelPanel variant="card" className="px-4 py-4">
@@ -172,7 +174,7 @@ export function DraftHub() {
               <h3 className="text-sm font-bold text-foreground">Mock Draft</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Same War Room engine — jumps to the mock draft board.
+              Practice drafts, AI simulation, grading, and strategy testing.
             </p>
             <Link
               to="/draft/mock"
@@ -193,14 +195,14 @@ export function DraftHub() {
                 <Radio className="mt-0.5 h-4 w-4 text-red-400" />
                 <div>
                   <p className="text-sm text-foreground">
-                    RFSN Live presents the draft booth. Controls stay in the War Room.
+                    RFSN Live presents the draft booth. Controls stay in Live Draft.
                   </p>
                   <div className="mt-2 flex flex-wrap gap-3">
                     <Link to="/rfsn/live" className="text-xs font-bold text-lime-400 hover:text-lime-300">
                       Open RFSN Live →
                     </Link>
-                    <Link to="/draft/war-room" className="text-xs font-bold text-muted-foreground hover:text-foreground">
-                      War Room controls →
+                    <Link to="/draft/live" className="text-xs font-bold text-muted-foreground hover:text-foreground">
+                      Live Draft controls →
                     </Link>
                   </div>
                 </div>
@@ -231,6 +233,13 @@ export function DraftHub() {
               );
             })}
           </div>
+          <Link
+            to="/draft/war-room"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Zap className="h-3.5 w-3.5" />
+            War Room prep desk →
+          </Link>
         </section>
       </main>
     </IntelPageShell>

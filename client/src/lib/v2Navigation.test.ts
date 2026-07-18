@@ -103,7 +103,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
   it("exposes Draft destinations in locked order", () => {
     const draft = buildV2NavGroups().find((g) => g.id === "draft");
     expect(draft?.items.map((i) => i.label)).toEqual([
-      "War Room",
+      "Live Draft",
       "Mock Draft",
       "Keeper Center",
       "Draft History",
@@ -147,6 +147,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
       "/rfsn/recaps",
       "/rfsn/analysts",
       "/draft",
+      "/draft/live",
       "/draft/war-room",
       "/draft/mock",
       "/draft/keepers",
@@ -262,7 +263,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
   it("points Draft sidebar items to canonical live routes", () => {
     const draft = buildV2NavGroups().find((g) => g.id === "draft")!;
     const expected = [
-      ["/draft/war-room", "draft-war-room"],
+      ["/draft/live", "draft-live"],
       ["/draft/mock", "draft-mock"],
       ["/draft/keepers", "draft-keepers"],
       ["/draft/history", "draft-history"],

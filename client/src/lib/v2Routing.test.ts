@@ -20,6 +20,7 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(routes).toContain("/rivals/rivalries");
     expect(routes).toContain("/my-team/championship-path");
     expect(routes).toContain("/rfsn/wire");
+    expect(routes).toContain("/draft/live");
     expect(routes).toContain("/draft/war-room");
     expect(routes).toContain("/league/history/hall-of-fame");
     expect(routes).toContain("/rivals/owners/:ownerId");
@@ -137,6 +138,7 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain("element: <DraftHub />");
     expect(main).toContain("element: <DraftWarRoomLayout />");
     expect(main).toContain('path: "/draft/war-room"');
+    expect(main).toContain('path: "/draft/live"');
     expect(main).toContain('path: "/draft/mock"');
     expect(main).toContain('path: "/draft/keepers"');
     expect(main).toContain("element: <DraftKeepers />");

@@ -35,14 +35,15 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     const hub = fs.readFileSync(path.join(repoRoot, "client/src/pages/draft/DraftHub.tsx"), "utf-8");
     expect(hub).toContain("data-v2-draft-hub");
     expect(hub).toContain("getDraftWarRoomData");
-    expect(hub).toContain("/draft/war-room");
+    expect(hub).toContain("/draft/live");
     expect(hub).toContain("/draft/mock");
     expect(hub).toContain("/draft/keepers");
     expect(hub).toContain("/draft/history");
     expect(hub).not.toContain("LiveDraftEngine");
+    expect(hub).toContain("Practice drafts");
   });
 
-  it("War Room + Mock share one layout instance to preserve live state", () => {
+  it("War Room + Live + Mock share one layout instance to preserve live state", () => {
     const layout = fs.readFileSync(
       path.join(repoRoot, "client/src/pages/draft/DraftWarRoomLayout.tsx"),
       "utf-8",
@@ -52,13 +53,17 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(layout).toContain("scrollToSection");
     expect(layout).toContain("Outlet");
     expect(layout).toContain("data-v2-draft-war-room");
+    expect(layout).toContain("preferLiveDraft");
     expect(main).toContain("element: <DraftWarRoomLayout />");
     expect(main).toContain('path: "/draft/war-room"');
+    expect(main).toContain('path: "/draft/live"');
     expect(main).toContain('path: "/draft/mock"');
 
     const warRoom = fs.readFileSync(path.join(repoRoot, "client/src/pages/DraftWarRoom.tsx"), "utf-8");
     expect(warRoom).toContain("scrollToSection");
     expect(warRoom).toContain("dwr-mock");
+    expect(warRoom).toContain("LiveDraftControlPanel");
+    expect(warRoom).not.toContain("ESPN Live");
   });
 
   it("Mock Draft reuses War Room engine — not Draft Reality Simulator", () => {

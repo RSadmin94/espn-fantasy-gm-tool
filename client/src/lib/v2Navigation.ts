@@ -312,11 +312,11 @@ export const V2_DESTINATIONS: V2Destination[] = [
     showInSidebar: false,
   },
   {
-    id: "draft-war-room",
-    label: "War Room",
+    id: "draft-live",
+    label: "Live Draft",
     navCategory: "draft",
-    route: "/draft/war-room",
-    icon: Calendar,
+    route: "/draft/live",
+    icon: Radio,
     requiredPlan: "pro",
     kind: "live",
     showInSidebar: true,
@@ -330,6 +330,17 @@ export const V2_DESTINATIONS: V2Destination[] = [
     requiredPlan: "pro",
     kind: "live",
     showInSidebar: true,
+  },
+  {
+    id: "draft-war-room",
+    label: "War Room",
+    navCategory: "draft",
+    route: "/draft/war-room",
+    icon: Calendar,
+    requiredPlan: "pro",
+    kind: "live",
+    /** Prep desk — reachable from hub; Live Draft is the primary real-draft entry. */
+    showInSidebar: false,
   },
   {
     id: "draft-keepers",
