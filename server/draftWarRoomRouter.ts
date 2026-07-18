@@ -38,10 +38,10 @@ import {
 } from "./mockDraftPoolResilience";
 import {
   countSkillPlayers,
-  excludeIdentitiesFromPool,
   isSkillStarvedPool,
   mockDraftPlayerKey,
 } from "./mockDraftPoolGuards";
+import { deriveModeAvailablePool } from "@shared/draftPoolModeState";
 import { normalizePlayerKey } from "./draftEngine/phase1/types";
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
@@ -1630,34 +1630,36 @@ export const draftWarRoomRouter = router({
           .map((r) => ({ playerId: r.playerId, playerName: r.playerName, position: r.position, source: r.source })),
       };
 
-      // Board-reality pool — keepers + mock-drafted players removed by espnId / normalized name.
-      // availablePool and availablePoolAfterKeepers are the SAME single board (Rule 4).
-      // RFSN-014 — allow-list from league format (DP only for IDP, DEF only for team D/ST).
+      // RFSN-017 — Shared eligible universe (keepers out, mock NOT applied).
+      // Mock Available = shared − mock drafted; Live Available = shared − live locked (client).
       const DRAFT_POSITIONS = draftPoolPositionAllowList(leagueReqs);
+      const sharedEligibleRaw = playerPool.filter(
+        (p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position),
+      );
+      const toPoolRow = (p: any, idx: number) => ({
+        id: p.espnId ? `espn:${p.espnId}` : `name:${p.name.toLowerCase().trim()}`,
+        espnId: p.espnId ?? null,
+        playerId: p.espnId ? Number(p.espnId) : null,
+        name: p.name,
+        position: p.position,
+        projectedPoints: p.projectedPoints,
+        adp: p.adp ?? null,
+        marketValue: p.marketValue ?? null,
+        rank: idx + 1,
+      });
+      const eligiblePool = sharedEligibleRaw.slice(0, 320).map(toPoolRow);
+
       const mockDraftedIdentities = (mockDraft as any[])
         .filter((p) => !p.isKeeperSlot && p.player)
         .map((p) => ({ name: String(p.player), espnId: p.espnId ?? null }));
-      const availableAfterDrafted = excludeIdentitiesFromPool(
-        playerPool.filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position)),
-        mockDraftedIdentities,
-      );
+      // Mock / Reality residual board — does not feed Live Draft.
+      const availableAfterDrafted = deriveModeAvailablePool(sharedEligibleRaw, mockDraftedIdentities);
       if (isSkillStarvedPool(playerPool)) {
         console.warn(
           `[Draft War Room] Final playerPool still skill-starved (skill=${countSkillPlayers(playerPool)}) — check ESPN offense feed`,
         );
       }
-      const availablePoolAfterKeepers = availableAfterDrafted
-        .slice(0, 320)
-        .map((p, idx) => ({
-          id: p.espnId ? `espn:${p.espnId}` : `name:${p.name.toLowerCase().trim()}`,
-          espnId: p.espnId ?? null,
-          playerId: p.espnId ? Number(p.espnId) : null,
-          name: p.name, position: p.position,
-          projectedPoints: p.projectedPoints,
-          adp: p.adp ?? null,
-          marketValue: p.marketValue ?? null,
-          rank: idx + 1,
-        }));
+      const availablePoolAfterKeepers = availableAfterDrafted.slice(0, 320).map(toPoolRow);
       const availablePool = availablePoolAfterKeepers;
 
       // League-driven position caps for the interactive Live Draft — derived from THIS league's real
@@ -1684,6 +1686,9 @@ export const draftWarRoomRouter = router({
         teamCount: teams.length,
         draftBoardSummary,
         keeperPredictions,
+        /** RFSN-017 — shared eligible ranked universe (no mock residual). Live Draft uses this. */
+        eligiblePool,
+        /** Mock residual: shared − mock drafted − keepers. Mock board / Reality Mode. */
         availablePool,
         availablePoolAfterKeepers,
         removedKeepers,

@@ -20,6 +20,12 @@ import {
   selectAiPick,
 } from "@/lib/liveDraftSeed";
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
+import {
+  buildLiveDraftPosTabs,
+  compareLiveDraftAvailableRows,
+  defaultLiveDraftPosFilter,
+  matchesLiveDraftPosFilter,
+} from "@/lib/liveDraftPoolPresentation";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
@@ -601,6 +607,7 @@ function LiveDraftEngine({
   const [sort, setSort]       = useState<"adp" | "proj" | "value" | "pos" | "name">("adp");
   const [posFilter, setPos]   = useState<string>("ALL");
   const [searchQ, setSearchQ] = useState("");
+  const posDefaultApplied = useRef(false);
   const [liveDraftActive, setLiveDraftActive] = useState(preferLiveDraft);
   const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("connected-league");
   const connectedLeagueLive = liveDraftActive && liveDraftSource === "connected-league";
@@ -663,15 +670,15 @@ function LiveDraftEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSig]);
 
-  const byAdp = (p: any) => (p.adp != null ? Number(p.adp) : (p.rank ?? 9999));
-
   const draftedKeys = useMemo(() => {
     const s = new Set<string>();
     for (const k of Object.keys(results)) s.add(keyOf(results[Number(k)]));
     return s;
   }, [results]);
 
-  /** RFSN-014 — client belt-and-suspenders: hide positions the league does not roster. */
+  /** RFSN-014 — client belt-and-suspenders: hide positions the league does not roster.
+   *  availablePool here is the shared eligible universe (RFSN-017), not mock residual.
+   *  Live locked picks are subtracted via draftedKeys below. */
   const formatEligiblePool = useMemo(() => {
     const caps = POS_CAPS;
     return availablePool.filter((p: any) => {
@@ -684,24 +691,16 @@ function LiveDraftEngine({
 
   const available = useMemo(() => {
     let list = formatEligiblePool.filter((p: any) => !draftedKeys.has(keyOf(p)));
-    if (posFilter !== "ALL") {
-      const want = posFilter.toUpperCase();
-      const defVariants = new Set(["DEF", "DST", "D/ST"]);
-      list = list.filter((p: any) => {
-        const pos = String(p.position ?? "").toUpperCase();
-        return want === "DEF" ? defVariants.has(pos) : pos === want;
-      });
-    }
+    list = list.filter((p: any) => matchesLiveDraftPosFilter(p.position, posFilter));
     if (searchQ) {
       const q = searchQ.toLowerCase();
       list = list.filter((p: any) => p.name.toLowerCase().includes(q) || (p.position ?? "").toLowerCase().includes(q));
     }
+    const prioritizeOffenseInAll = posFilter === "OFFENSE";
     const s = [...list];
-    if (sort === "adp") s.sort((a, b) => byAdp(a) - byAdp(b));
-    else if (sort === "proj") s.sort((a, b) => (b.projectedPoints ?? 0) - (a.projectedPoints ?? 0));
-    else if (sort === "value") s.sort((a, b) => (b.marketValue ?? -1) - (a.marketValue ?? -1));
-    else if (sort === "pos") s.sort((a, b) => (a.position ?? "").localeCompare(b.position ?? "") || byAdp(a) - byAdp(b));
-    else s.sort((a, b) => a.name.localeCompare(b.name));
+    s.sort((a, b) =>
+      compareLiveDraftAvailableRows(a, b, sort, { prioritizeOffenseInAll }),
+    );
     return s;
   }, [formatEligiblePool, draftedKeys, posFilter, searchQ, sort]);
 
@@ -975,12 +974,20 @@ function LiveDraftEngine({
   }, [results]);
 
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
-  // Position tabs follow league-eligible pool (RFSN-014): DP only when IDP is rostered.
+  // Position tabs: IDP leagues open on OFFENSE (RFSN-016); DP remains a first-class tab.
   const POSES = useMemo(() => {
     const up = (s: any) => String(s ?? "").toUpperCase();
     const hasDef = formatEligiblePool.some((p: any) => ["DEF", "DST", "D/ST"].includes(up(p.position)));
     const hasDp = formatEligiblePool.some((p: any) => up(p.position) === "DP");
-    return ["ALL", "QB", "RB", "WR", "TE", "K", ...(hasDef ? ["DEF"] : []), ...(hasDp ? ["DP"] : [])];
+    return buildLiveDraftPosTabs({ hasDef, hasDp });
+  }, [formatEligiblePool]);
+
+  useEffect(() => {
+    if (posDefaultApplied.current) return;
+    const hasDp = formatEligiblePool.some((p: any) => String(p.position ?? "").toUpperCase() === "DP");
+    if (formatEligiblePool.length === 0) return;
+    posDefaultApplied.current = true;
+    setPos(defaultLiveDraftPosFilter(hasDp));
   }, [formatEligiblePool]);
 
   return (
@@ -1250,13 +1257,16 @@ function SoulsBoardView({ board }: {
 }
 
 function MockDraftBoard({
-  picks, teams, availablePool, positionCaps, keeperPredictions, rosterNeeds,
+  picks, teams, availablePool, eligiblePool, positionCaps, keeperPredictions, rosterNeeds,
   onKeeperOverride, keeperOverrides, keepersEnabled = true,
   leagueId, draftId, season,
   preferLiveDraft = false,
 }: {
   picks: any[]; teams: any[];
+  /** Mock residual board (shared − mock drafted). */
   availablePool: any[];
+  /** RFSN-017 — shared eligible universe for Live Draft (not mock residual). */
+  eligiblePool: any[];
   positionCaps: Record<string, number> | null;
   keeperPredictions: any[];
   rosterNeeds: any[];
@@ -1529,12 +1539,12 @@ function MockDraftBoard({
         </div>
       )}
 
-      {/* Practice simulator (Mock) vs Live Draft shell */}
+      {/* Live Draft uses shared eligiblePool (RFSN-017) — not mock residual availablePool */}
       {view === "live" && (
         <LiveDraftEngine
           picks={picks}
           teams={teams}
-          availablePool={availablePool}
+          availablePool={eligiblePool.length > 0 ? eligiblePool : availablePool}
           positionCaps={positionCaps}
           leagueId={leagueId}
           draftId={draftId}
@@ -2099,7 +2109,10 @@ export function DraftWarRoom({
 
   const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
           keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
-          mockDraft, availablePool, teamCount, totalPicks, draftBoardSummary, leagueCapabilities } = data;
+          mockDraft, availablePool, eligiblePool, teamCount, totalPicks, draftBoardSummary, leagueCapabilities } = data;
+  const sharedEligiblePool = Array.isArray(eligiblePool) && eligiblePool.length > 0
+    ? eligiblePool
+    : (availablePool ?? []);
   const keepersOn = leagueCapabilities?.keepers !== false;
   const keeperSlotsReported =
     typeof leagueCapabilities?.keeperSlotsPerTeam === "number" && Number.isFinite(leagueCapabilities.keeperSlotsPerTeam)
@@ -2269,6 +2282,7 @@ export function DraftWarRoom({
             picks={mockDraft ?? []}
             teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName, ownerName: n.ownerName }))}
             availablePool={data?.availablePool ?? []}
+            eligiblePool={sharedEligiblePool}
             positionCaps={data?.positionCaps ?? null}
             keeperPredictions={keeperPredictions ?? []}
             rosterNeeds={rosterNeeds ?? []}
