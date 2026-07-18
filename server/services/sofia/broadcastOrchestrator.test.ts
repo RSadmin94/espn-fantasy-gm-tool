@@ -99,19 +99,26 @@ describe("BroadcastOrchestrator", () => {
     it("produces sofia-led analytical value pick frame", async () => {
       const frame = await orchestrator.buildFrame(toBroadcast(moment({ level: "notable", signals: ["STEAL"] })));
       expect(frame.public.status).toBe("ready");
-      expect(frame.public.primaryVoice?.voice).toBe("sofia");
+      expect(frame.public.primaryVoice?.voice).toBe("coach");
     });
 
-    it("produces sofia-led major reach frame", async () => {
+    it("produces coach-led major reach frame", async () => {
       const frame = await orchestrator.buildFrame(toBroadcast(moment({ level: "major", signals: ["REACH:strong"] })));
-      expect(frame.public.primaryVoice?.voice).toBe("sofia");
-      expect(frame.public.secondaryVoice?.voice).toBe("coach");
+      expect(frame.public.primaryVoice?.voice).toBe("coach");
+      expect(frame.public.secondaryVoice?.voice).toBe("sofia");
     });
 
     it("produces roxanne-led rivalry receipt frame", async () => {
       const frame = await orchestrator.buildFrame(toBroadcast(moment({
         level: "major",
-        receipts: [{ id: "rivalry", type: "rivalry", status: "available", source: "x", authority: "x", confidence: 1 }],
+        receipts: [
+          { id: "rivalry", type: "rivalry", status: "available", source: "x", authority: "x", confidence: 1 },
+          { id: "rivalryImpact", type: "rivalryImpact", status: "available", source: "x", authority: "x", confidence: 1 },
+        ],
+        permittedClaims: [
+          "Alice Owner selected Test Player (WR) at pick 42, round 3.",
+          "Championship rematch humiliation vs rival Bob.",
+        ],
       })));
       expect(frame.public.primaryVoice?.voice).toBe("roxanne");
     });
@@ -133,7 +140,7 @@ describe("BroadcastOrchestrator", () => {
         },
       });
       await orch.buildFrame(toBroadcast(moment({ level: "notable", signals: ["STEAL"] })));
-      expect(voices).toEqual(["sofia"]);
+      expect(voices).toEqual(["coach"]);
     });
   });
 

@@ -79,14 +79,34 @@ function seededSpeakingMoments(seed: number): BroadcastMoment[] {
         }),
       );
     } else if (n < 92) {
-      out.push(
-        bm({
-          ...base,
-          significance: "major",
-          receipts: [{ id: "rivalry", type: "rivalry" }],
-          storylines: [`${owner} rivalry heat`],
-        }),
-      );
+      // Half decorative rivalry-on-value (Sofia), half substantive rivalry (Roxanne)
+      if (i % 2 === 0) {
+        out.push(
+          bm({
+            ...base,
+            significance: "notable",
+            signals: [],
+            receipts: [{ id: "rivalry", type: "rivalry" }],
+            storylines: [`${owner} rivalry heat`],
+          }),
+        );
+      } else {
+        out.push(
+          bm({
+            ...base,
+            significance: "major",
+            receipts: [
+              { id: "rivalry", type: "rivalry" },
+              { id: "rivalryImpact", type: "rivalryImpact" },
+            ],
+            storylines: [`${owner} championship rematch`],
+            factPacket: {
+              ...base.factPacket,
+              verifiedFacts: [`${owner} championship rematch vs rival.`],
+            },
+          }),
+        );
+      }
     } else if (n < 96) {
       out.push(bm({ ...base, significance: "historic", signals: ["REACH:strong"] }));
     } else {

@@ -43,11 +43,23 @@ describe("classifyEventRole", () => {
     expect(classifyEventRole(bm(), "value_pick").primary).toBe("sofia");
   });
 
-  it("assigns Roxanne for rivalry and championship", () => {
+  it("assigns Roxanne for substantive rivalry plan and championship", () => {
     expect(classifyEventRole(bm({ receipts: [{ id: "rivalry", type: "rivalry" }] }), "rivalry_receipt").primary).toBe(
       "roxanne",
     );
     expect(classifyEventRole(bm({ momentType: "championship" }), "championship").primary).toBe("roxanne");
+  });
+
+  it("keeps Coach on reach even when a decorative rivalry receipt is attached", () => {
+    const role = classifyEventRole(
+      bm({
+        signals: ["REACH"],
+        receipts: [{ id: "rivalry", type: "rivalry" }],
+      }),
+      "slight_reach",
+    );
+    expect(role.primary).toBe("coach");
+    expect(role.reason).toBe("primary_event_coach");
   });
 });
 
@@ -70,11 +82,34 @@ describe("applyConversationMemory", () => {
       recentLeads: ["roxanne", "roxanne"],
       moment: bm({
         significance: "historic",
-        receipts: [{ id: "rivalry", type: "rivalry" }],
+        receipts: [
+          { id: "rivalry", type: "rivalry" },
+          { id: "rivalryImpact", type: "rivalryImpact" },
+        ],
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+          verifiedFacts: ["Head-to-head championship rematch."],
+          entities: ["Alice", "Player"],
+        },
       }),
     });
     expect(res.lead).toBe("roxanne");
     expect(res.rotationOverride).toBe(true);
+  });
+
+  it("does not override rotation for decorative rivalry receipt alone", () => {
+    const res = applyConversationMemory({
+      primary: "roxanne",
+      secondary: "sofia",
+      recentLeads: ["roxanne", "roxanne"],
+      moment: bm({
+        significance: "major",
+        receipts: [{ id: "rivalry", type: "rivalry" }],
+      }),
+    });
+    expect(res.lead).toBe("sofia");
+    expect(res.reasonSuffix).toBe("rotation_secondary_owner");
+    expect(res.rotationOverride).toBe(false);
   });
 });
 
@@ -102,7 +137,7 @@ describe("role-first via buildEditorialAssignment", () => {
     expect(a.leadVoice).toBe("sofia");
   });
 
-  it("Roxanne correctly overrides rotation on historic rivalry", () => {
+  it("Roxanne correctly overrides rotation on substantive historic rivalry", () => {
     const ledger = new SessionEditorialLedger();
     for (let i = 0; i < 2; i++) {
       ledger.recordFrame({
@@ -121,12 +156,25 @@ describe("role-first via buildEditorialAssignment", () => {
     const a = buildEditorialAssignment(
       bm({
         significance: "historic",
-        receipts: [{ id: "rivalry", type: "rivalry" }],
+        receipts: [
+          { id: "rivalry", type: "rivalry" },
+          { id: "rivalryImpact", type: "rivalryImpact" },
+        ],
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+          verifiedFacts: ["Dynasty championship rematch vs Bob."],
+          entities: ["Alice", "Player"],
+        },
       }),
       ledger,
     );
     expect(a.leadVoice).toBe("roxanne");
-    expect(a.rotationOverrideReason === "historic_or_extraordinary_moment" || a.assignmentReason === "rotation_override_historic" || a.leadVoice === "roxanne").toBe(true);
+    expect(
+      a.rotationOverrideReason === "historic_or_extraordinary_moment" ||
+        a.assignmentReason === "rotation_override_historic" ||
+        a.assignmentReason === "substantive_rivalry_override" ||
+        a.leadVoice === "roxanne",
+    ).toBe(true);
   });
 
   it("records assignment metrics for verification", () => {
@@ -134,7 +182,18 @@ describe("role-first via buildEditorialAssignment", () => {
     buildEditorialAssignment(bm({ signals: ["STEAL"] }), ledger);
     buildEditorialAssignment(bm({ significance: "notable" }), ledger);
     buildEditorialAssignment(
-      bm({ significance: "major", receipts: [{ id: "rivalry", type: "rivalry" }] }),
+      bm({
+        significance: "major",
+        receipts: [
+          { id: "rivalry", type: "rivalry" },
+          { id: "rivalryImpact", type: "rivalryImpact" },
+        ],
+        factPacket: {
+          subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+          verifiedFacts: ["Notorious head-to-head championship feud."],
+          entities: ["Alice", "Player"],
+        },
+      }),
       ledger,
     );
     const snap = getPersonaAssignmentMetrics()?.snapshot();
@@ -153,6 +212,6 @@ describe("resolveRoleFirstLead", () => {
       allowedVoices: ["coach", "sofia"],
     });
     expect(d.lead).toBe("coach");
-    expect(d.reason).toBe("role_coach_positional_run");
+    expect(d.reason).toBe("primary_event_coach");
   });
 });

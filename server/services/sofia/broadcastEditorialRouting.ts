@@ -17,6 +17,7 @@ import {
   getPersonaAssignmentMetrics,
   resolveRoleFirstLead,
   classifyEventRole,
+  hasSubstantiveRivalryEvidence,
 } from "./personaRoleAssignment";
 import { editorialPlanForReach } from "../draftMoments/reachClassification";
 
@@ -54,9 +55,6 @@ function hasStrongSignal(moment: BroadcastMoment, prefix: string): boolean {
   return moment.signals.some((s) => s === `${prefix}:strong`);
 }
 
-const ROXANNE_DRAMA_RE =
-  /\b(rival|rivalry|drama|revenge|feud|receipt|temperature|consequence|upset|championship|dynasty|trade war)\b/i;
-
 const COACH_EVIDENCE_RE =
   /\b(need|starter|roster|lineup|construction|fit|build|depth|hole|slot|flex|bench|positional)\b/i;
 const SOFIA_EVIDENCE_RE =
@@ -93,22 +91,16 @@ export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId;
 }
 
 /**
- * Roxanne stays selective: rivalry/drama evidence, or an outrageous reach (massive + 40+ early).
- * Ordinary mild/big reaches are Coach — Roxanne is not the default analyst.
+ * Roxanne stays selective: substantive rivalry/historic drama, or outrageous reach (massive + 40+).
+ * A decorative rivalry membership receipt alone is never enough.
  */
 export function roxanneEligible(moment: BroadcastMoment): boolean {
-  if (hasReceipt(moment, "rivalry", "rivalry")) return true;
-  if (moment.primaryStoryline && ROXANNE_DRAMA_RE.test(moment.primaryStoryline)) return true;
-  if (moment.storylines.some((s) => ROXANNE_DRAMA_RE.test(s))) return true;
-  if (moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) return true;
+  if (hasSubstantiveRivalryEvidence(moment)) return true;
   if (moment.reachClassification?.personaOwner === "roxanne") return true;
-  if (hasSignal(moment, "STEAL") && moment.factPacket.verifiedFacts.some((f) => ROXANNE_DRAMA_RE.test(f))) {
-    return true;
-  }
   return false;
 }
 
-/** Classify moment into an editorial plan — explicit rules, not significance passthrough. */
+/** Classify moment into an editorial plan — football primary events beat decorative rivalry. */
 export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId {
   if (moment.editorialPlanId) return moment.editorialPlanId;
 
@@ -122,12 +114,49 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
 
   if (ctx.kind === "breaking_news") return "breaking_news";
 
-  if (hasReceipt(moment, "rivalry", "rivalry")) {
+  // --- Football event ownership (always before decorative rivalry) ---
+  if (ctx.kind === "position_run" || moment.primaryStoryline === "POSITION_RUN") {
+    return "position_run";
+  }
+
+  if (hasSignal(moment, "CONSEQUENTIAL_RUN") || moment.primaryStoryline === "CONSEQUENTIAL_RUN") {
+    return "draft_run";
+  }
+
+  // Prefer centralized reach severity → plan mapping when REACH is present.
+  const reachPlan = moment.reachClassification
+    ? editorialPlanForReach(moment.reachClassification)
+    : null;
+  if (
+    reachPlan &&
+    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH"))
+  ) {
+    return reachPlan;
+  }
+
+  if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) {
+    if (moment.significance === "historic") return "historic_reach";
+    if (moment.significance === "major" || hasStrongSignal(moment, "REACH")) return "major_reach";
+    return "slight_reach";
+  }
+
+  if (hasSignal(moment, "STEAL")) {
+    return "value_pick";
+  }
+
+  // Substantive rivalry only — generic rivalry receipts fall through as context.
+  if (hasSubstantiveRivalryEvidence(moment)) {
     if (ctx.kind === "league_storyline" && /trade/i.test(ctx.title)) return "rivalry_trade";
     if (moment.primaryStoryline === "TRADE" || moment.signals.some((s) => s.startsWith("TRADE"))) {
       return "rivalry_trade";
     }
-    return "rivalry_receipt";
+    if (
+      hasReceipt(moment, "rivalry", "rivalry") ||
+      hasReceipt(moment, "rivalryImpact", "rivalryImpact") ||
+      hasReceipt(moment, "playoff_upset")
+    ) {
+      return "rivalry_receipt";
+    }
   }
 
   if (hasReceipt(moment, "keeper", "keeper") || moment.primaryStoryline === "KEEPER_SURPRISE") {
@@ -148,27 +177,7 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
     return "season_story";
   }
 
-  if (ctx.kind === "position_run" || moment.primaryStoryline === "POSITION_RUN") {
-    return "position_run";
-  }
-
-  if (hasSignal(moment, "CONSEQUENTIAL_RUN") || moment.primaryStoryline === "CONSEQUENTIAL_RUN") {
-    return "draft_run";
-  }
-
-  // Prefer centralized reach severity → plan mapping when REACH is present.
-  const reachPlan = moment.reachClassification
-    ? editorialPlanForReach(moment.reachClassification)
-    : null;
-  if (
-    reachPlan &&
-    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH"))
-  ) {
-    return reachPlan;
-  }
-
   if (moment.significance === "historic") {
-    if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) return "historic_reach";
     if (moment.primaryStoryline === "DYNASTY" || moment.storylines.some((s) => /dynasty/i.test(s))) {
       return "dynasty_moment";
     }
@@ -176,13 +185,10 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
   }
 
   if (moment.significance === "major") {
-    if (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH")) return "major_reach";
     return "major_reach";
   }
 
   if (moment.significance === "notable") {
-    if (hasSignal(moment, "STEAL")) return "value_pick";
-    if (hasSignal(moment, "REACH")) return "slight_reach";
     return "value_pick";
   }
 

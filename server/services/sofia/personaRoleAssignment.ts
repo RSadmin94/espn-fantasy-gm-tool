@@ -19,6 +19,15 @@ export type EventRoleCategory =
   | "mixed_analysis_strategy";
 
 export type AssignmentReasonCode =
+  | "primary_event_coach"
+  | "primary_event_sofia"
+  | "primary_event_roxanne"
+  | "rivalry_context_only"
+  | "substantive_rivalry_override"
+  | "rotation_secondary_owner"
+  | "rotation_override_historic"
+  | "silence"
+  /** @deprecated Prefer primary_event_* — kept for older snapshots. */
   | "role_coach_reach"
   | "role_coach_steal"
   | "role_coach_construction"
@@ -30,10 +39,7 @@ export type AssignmentReasonCode =
   | "role_roxanne_rivalry"
   | "role_roxanne_entertainment_plan"
   | "role_roxanne_historic_override"
-  | "rotation_secondary_owner"
-  | "rotation_override_historic"
-  | "plan_default_lead"
-  | "silence";
+  | "plan_default_lead";
 
 export type PersonaAssignmentDecision = {
   lead: VoiceId;
@@ -176,7 +182,51 @@ function hasReceipt(moment: BroadcastMoment, id: string, type?: string): boolean
 }
 
 /**
- * Map moment + plan → role category (event owns the analyst).
+ * Substantive rivalry / historic entertainment trigger.
+ * A generic rivalry membership receipt alone is never enough.
+ */
+const SUBSTANTIVE_RIVALRY_RE =
+  /\b(head-?to-?head|championship|dynasty|hall of fame|\bhof\b|notorious|revenge|rematch|humiliat|title game|all-time series|grudge|feud|trade war|playoff upset)\b/i;
+
+export function hasDecorativeRivalryReceipt(moment: BroadcastMoment): boolean {
+  return hasReceipt(moment, "rivalry", "rivalry") && !hasSubstantiveRivalryEvidence(moment);
+}
+
+export function hasSubstantiveRivalryEvidence(moment: BroadcastMoment): boolean {
+  if (hasReceipt(moment, "rivalryImpact", "rivalryImpact")) return true;
+  if (hasReceipt(moment, "playoff_upset")) return true;
+  if (moment.momentType === "championship") return true;
+
+  const corpus = [
+    moment.primaryStoryline ?? "",
+    ...moment.storylines,
+    ...moment.factPacket.verifiedFacts,
+  ].join(" | ");
+
+  if (!SUBSTANTIVE_RIVALRY_RE.test(corpus)) return false;
+
+  // Championship / dynasty / HOF language is entertainment even without a rivalry receipt.
+  if (/\b(championship|dynasty|hall of fame|\bhof\b)\b/i.test(corpus)) return true;
+
+  // Other drama language requires a rivalry receipt (named opponent relationship is still
+  // insufficient without this historic/consequence framing).
+  return hasReceipt(moment, "rivalry", "rivalry");
+}
+
+function withRivalryContextReason(
+  moment: BroadcastMoment,
+  base: AssignmentReasonCode,
+): AssignmentReasonCode {
+  // Football ownership keeps primary_event_*; annotate Sofia analysis when rivalry is decorative context only.
+  if (hasDecorativeRivalryReceipt(moment) && base === "primary_event_sofia") {
+    return "rivalry_context_only";
+  }
+  return base;
+}
+
+/**
+ * Map moment + plan → role category (football primary event owns the analyst).
+ * Decorative rivalry receipts are context only — they never reassign the lead.
  */
 export function classifyEventRole(
   moment: BroadcastMoment,
@@ -186,33 +236,28 @@ export function classifyEventRole(
     return { category: "silence", primary: null, reason: "silence" };
   }
 
-  // Entertainment first when rivalry / championship drama is grounded.
-  if (
-    planId === "rivalry_receipt" ||
-    planId === "rivalry_trade" ||
-    planId === "playoff_upset" ||
-    hasReceipt(moment, "rivalry", "rivalry")
-  ) {
-    return { category: "entertainment", primary: "roxanne", reason: "role_roxanne_rivalry" };
-  }
-
-  if (
-    planId === "championship" ||
-    planId === "hall_of_fame" ||
-    planId === "dynasty_moment"
-  ) {
-    return { category: "entertainment", primary: "roxanne", reason: "role_roxanne_entertainment_plan" };
-  }
-
   // Strategy — Coach owns ordinary reaches; Roxanne only when classifier marks outrageous (40+ massive).
+  // Football events beat decorative rivalry context.
   if (hasSignal(moment, "REACH") || planId === "slight_reach" || planId === "major_reach" || planId === "historic_reach") {
     if (moment.reachClassification?.personaOwner === "roxanne") {
-      return { category: "entertainment", primary: "roxanne", reason: "role_roxanne_historic_override" };
+      return {
+        category: "entertainment",
+        primary: "roxanne",
+        reason: "primary_event_roxanne",
+      };
     }
-    return { category: "strategy", primary: "coach", reason: "role_coach_reach" };
+    return {
+      category: "strategy",
+      primary: "coach",
+      reason: withRivalryContextReason(moment, "primary_event_coach"),
+    };
   }
   if (hasSignal(moment, "STEAL")) {
-    return { category: "strategy", primary: "coach", reason: "role_coach_steal" };
+    return {
+      category: "strategy",
+      primary: "coach",
+      reason: withRivalryContextReason(moment, "primary_event_coach"),
+    };
   }
   if (
     planId === "position_run" ||
@@ -221,7 +266,11 @@ export function classifyEventRole(
     moment.primaryStoryline === "POSITION_RUN" ||
     hasSignal(moment, "CONSEQUENTIAL_RUN")
   ) {
-    return { category: "strategy", primary: "coach", reason: "role_coach_positional_run" };
+    return {
+      category: "strategy",
+      primary: "coach",
+      reason: withRivalryContextReason(moment, "primary_event_coach"),
+    };
   }
   if (
     hasSignal(moment, "STARTER_NEED") ||
@@ -233,7 +282,28 @@ export function classifyEventRole(
     planId === "weekly_story" ||
     planId === "keeper_surprise"
   ) {
-    return { category: "strategy", primary: "coach", reason: "role_coach_construction" };
+    return {
+      category: "strategy",
+      primary: "coach",
+      reason: withRivalryContextReason(moment, "primary_event_coach"),
+    };
+  }
+
+  // Entertainment — only substantive rivalry / championship plans (not decorative rivalry receipts).
+  if (planId === "rivalry_receipt" || planId === "rivalry_trade" || planId === "playoff_upset") {
+    return {
+      category: "entertainment",
+      primary: "roxanne",
+      reason: "substantive_rivalry_override",
+    };
+  }
+
+  if (
+    planId === "championship" ||
+    planId === "hall_of_fame" ||
+    planId === "dynasty_moment"
+  ) {
+    return { category: "entertainment", primary: "roxanne", reason: "primary_event_roxanne" };
   }
 
   // Analysis — Sofia
@@ -245,10 +315,18 @@ export function classifyEventRole(
     planId === "documentary" ||
     planId === "draft_wrap_up"
   ) {
-    return { category: "analysis", primary: "sofia", reason: "role_sofia_value" };
+    return {
+      category: "analysis",
+      primary: "sofia",
+      reason: withRivalryContextReason(moment, "primary_event_sofia"),
+    };
   }
 
-  return { category: "analysis", primary: "sofia", reason: "role_sofia_default" };
+  return {
+    category: "analysis",
+    primary: "sofia",
+    reason: withRivalryContextReason(moment, "primary_event_sofia"),
+  };
 }
 
 export function secondaryOwnerFor(primary: VoiceId, category: EventRoleCategory): VoiceId | null {
@@ -258,11 +336,15 @@ export function secondaryOwnerFor(primary: VoiceId, category: EventRoleCategory)
   return null;
 }
 
+/**
+ * Narrow rotation override: substantive historic/rivalry only.
+ * A decorative rivalry_receipt must not bypass the ≤2 streak preference.
+ */
 export function isHistoricOrExtraordinary(moment: BroadcastMoment): boolean {
   return (
     moment.significance === "historic" ||
     moment.momentType === "championship" ||
-    hasReceipt(moment, "rivalry", "rivalry")
+    hasSubstantiveRivalryEvidence(moment)
   );
 }
 

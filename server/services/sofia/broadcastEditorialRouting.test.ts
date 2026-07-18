@@ -96,17 +96,37 @@ describe("resolveEditorialPlanId", () => {
     expect(resolveEditorialPlanId(bm({ signals: ["CONSEQUENTIAL_RUN"], significance: "major" }))).toBe("draft_run");
   });
 
-  it("resolves rivalry_receipt", () => {
+  it("resolves rivalry_receipt only with substantive rivalry evidence", () => {
     expect(resolveEditorialPlanId(bm({
       significance: "major",
       receipts: [{ id: "rivalry", type: "rivalry" }],
+    }))).not.toBe("rivalry_receipt");
+    expect(resolveEditorialPlanId(bm({
+      significance: "major",
+      receipts: [
+        { id: "rivalry", type: "rivalry" },
+        { id: "rivalryImpact", type: "rivalryImpact" },
+      ],
+      factPacket: {
+        subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+        verifiedFacts: ["Alice denies rival Bob in a championship rematch."],
+        entities: ["Alice", "Player"],
+      },
     }))).toBe("rivalry_receipt");
   });
 
-  it("resolves rivalry_trade", () => {
+  it("resolves rivalry_trade with substantive rivalry + trade context", () => {
     expect(resolveEditorialPlanId(bm({
       significance: "major",
-      receipts: [{ id: "rivalry", type: "rivalry" }],
+      receipts: [
+        { id: "rivalry", type: "rivalry" },
+        { id: "rivalryImpact", type: "rivalryImpact" },
+      ],
+      factPacket: {
+        subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+        verifiedFacts: ["Head-to-head championship grudge trade."],
+        entities: ["Alice", "Player"],
+      },
       context: { kind: "league_storyline", title: "Blockbuster trade", body: "WR swap" },
     }))).toBe("rivalry_trade");
   });
@@ -175,10 +195,18 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).not.toContain("roxanne");
   });
 
-  it("requests roxanne lead for rivalry_receipt", () => {
+  it("requests roxanne lead for substantive rivalry_receipt", () => {
     const a = buildEditorialAssignment(bm({
       significance: "major",
-      receipts: [{ id: "rivalry", type: "rivalry" }],
+      receipts: [
+        { id: "rivalry", type: "rivalry" },
+        { id: "rivalryImpact", type: "rivalryImpact" },
+      ],
+      factPacket: {
+        subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+        verifiedFacts: ["Alice humiliates Bob in a championship rematch."],
+        entities: ["Alice", "Player"],
+      },
     }), ledger);
     expect(a.leadVoice).toBe("roxanne");
     expect(a.request[0]).toBe("roxanne");
@@ -210,10 +238,18 @@ describe("assignEditorialRoles", () => {
     expect(roles.secondary?.voice).toBe("sofia");
   });
 
-  it("places roxanne as primary for rivalry_receipt", () => {
+  it("places roxanne as primary for substantive rivalry_receipt", () => {
     const assignment = buildEditorialAssignment(bm({
       significance: "major",
-      receipts: [{ id: "rivalry", type: "rivalry" }],
+      receipts: [
+        { id: "rivalry", type: "rivalry" },
+        { id: "rivalryImpact", type: "rivalryImpact" },
+      ],
+      factPacket: {
+        subject: { ownerName: "Alice", playerName: "Player", position: "WR", overallPick: 10, round: 1 },
+        verifiedFacts: ["Championship rematch humiliation vs Bob."],
+        entities: ["Alice", "Player"],
+      },
     }), new SessionEditorialLedger());
     const roles = assignEditorialRoles(assignment, [diag("roxanne"), diag("coach"), diag("sofia")]);
     expect(roles.primary?.voice).toBe("roxanne");

@@ -4,6 +4,7 @@
  */
 import type { BroadcastMoment } from "./broadcastMomentTypes";
 import type { EditorialEnergyLevel, EditorialPlan, VoiceId } from "./editorialPlans";
+import { hasSubstantiveRivalryEvidence } from "./personaRoleAssignment";
 
 export type EditorialLedgerSnapshot = {
   momentIndex: number;
@@ -121,7 +122,7 @@ export class SessionEditorialLedger implements EditorialLedger {
       const historic =
         moment.significance === "historic" ||
         moment.momentType === "championship" ||
-        moment.receipts.some((r) => r.id === "rivalry" && r.type === "rivalry");
+        hasSubstantiveRivalryEvidence(moment);
       if (!historic) {
         const alt = plan.optionalVoices.find(
           (v) => v !== plan.leadVoice && !plan.prohibitedVoices.includes(v),

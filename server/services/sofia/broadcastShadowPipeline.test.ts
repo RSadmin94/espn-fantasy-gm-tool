@@ -87,19 +87,26 @@ describe("broadcast shadow e2e", () => {
     expect(artifact.snapshot.primary?.commentator).toBe("coach");
   });
 
-  it("routes sofia-led major reach with coach secondary", async () => {
+  it("routes coach-led major reach with sofia secondary", async () => {
     const state: ShadowPipelineState = { queue: [], ticker: [] };
     const artifact = await processShadowPick(orch(), dm({ level: "major", signals: ["REACH(strong)"] }), state);
-    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("sofia");
-    expect(artifact.snapshot.primary?.commentator).toBe("sofia");
-    expect(artifact.snapshot.secondary?.commentator).toBe("coach");
+    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("coach");
+    expect(artifact.snapshot.primary?.commentator).toBe("coach");
+    expect(artifact.snapshot.secondary?.commentator).toBe("sofia");
   });
 
     it("routes roxanne-led rivalry with deferred voices on frame", async () => {
       const state: ShadowPipelineState = { queue: [], ticker: [] };
       const artifact = await processShadowPick(orch(), dm({
         level: "major",
-        receipts: [{ id: "rivalry", type: "rivalry", status: "available", source: "x", authority: "x", confidence: 1 }],
+        receipts: [
+          { id: "rivalry", type: "rivalry", status: "available", source: "x", authority: "x", confidence: 1 },
+          { id: "rivalryImpact", type: "rivalryImpact", status: "available", source: "x", authority: "x", confidence: 1 },
+        ],
+        permittedClaims: [
+          "Alice selected CeeDee Lamb (WR) at pick 10, round 1.",
+          "Championship rematch humiliation vs rival Bob.",
+        ],
       }), state);
       expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("roxanne");
       expect(artifact.snapshot.primary?.commentator).toBe("roxanne");
@@ -129,7 +136,7 @@ describe("broadcast shadow e2e", () => {
       momentType: "championship",
       editorialPlanId: "championship",
     });
-    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("sofia");
+    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("roxanne");
     expect(artifact.snapshot.significance).toBe("historic");
   });
 
@@ -174,14 +181,14 @@ describe("broadcast shadow e2e", () => {
     const artifact = await processShadowPick(orch(), dm({ level: "major", signals: ["REACH(strong)"] }), state);
     const parsed = JSON.parse(artifact.snapshotJson);
     expect(parsed.significance).toBe("major");
-    expect(parsed.primary?.commentator).toBe("sofia");
+    expect(parsed.primary?.commentator).toBe("coach");
   });
 
   it("assigns editorial roles on commentary results", async () => {
     const state: ShadowPipelineState = { queue: [], ticker: [] };
     const artifact = await processShadowPick(orch(), dm({ level: "major", signals: ["REACH(strong)"] }), state);
     const primary = artifact.commentaryResults.find((r) => r.editorialRole === "primary");
-    expect(primary?.commentator).toBe("sofia");
+    expect(primary?.commentator).toBe("coach");
   });
 });
 
@@ -192,6 +199,6 @@ describe("broadcastMoment bridge in e2e", () => {
     expect(bm.signals).toContain("REACH:strong");
     const state: ShadowPipelineState = { queue: [], ticker: [] };
     const artifact = await processShadowPick(orch(), m, state);
-    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("sofia");
+    expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("coach");
   });
 });
