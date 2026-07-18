@@ -26,6 +26,10 @@ import { buildLeagueCapabilities } from "./leagueCapabilities";
 import { getEspnPlayerInfoMap, getEspnDefensiveInfoMap } from "./playerStatsRouter";          // real ADP + projection + percentStarted (single ESPN source) + IDP feed
 import { computeMarketValues, type MarketValueInput } from "./marketValue"; // sole player-value engine (0–100)
 import { rosterRulesFromLineupSlotCounts } from "./draftEngine/phase5/leagueRosterRules";
+import {
+  buildSkillStarvationSoftIncludes,
+  isSkillStarvedMergedPool,
+} from "./mockDraftPoolResilience";
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
 import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
@@ -1459,6 +1463,33 @@ export const draftWarRoomRouter = router({
         });
         poolMeta.push({ name: reg.fullName, position: draftPos, espnId, playerId: pid, adp: info.adp ?? null, projection: info.projection ?? null });
       }
+
+      // Soft-include registry QB/RB/WR/TE/K when ESPN offense missed and IDP still flooded the pool
+      // (or both feeds missed). Fallback ADP is floored ≥200 so soft-includes never sit at 1.01.
+      if (isSkillStarvedMergedPool(poolMeta)) {
+        console.warn(
+          `[Draft War Room] Skill-starved ESPN pool (rows=${poolMeta.length}) — soft-including registry QB/RB/WR/TE/K`,
+        );
+        const soft = buildSkillStarvationSoftIncludes(regRows as any[], seenPool, normalizeDraftPos);
+        for (const m of soft) {
+          seenPool.add(m.name.toLowerCase().trim());
+          mvInputs.push({
+            playerId: m.playerId, position: m.position, adpRank: null,
+            projection: null, keeperRoundSavings: null,
+            percentStarted: null,
+            currentSeasonWeekly: [], history: [], currentSeason: season,
+          });
+          poolMeta.push({
+            name: m.name,
+            position: m.position,
+            espnId: m.espnId,
+            playerId: m.playerId,
+            adp: m.adp,
+            projection: null,
+          });
+        }
+      }
+
       const mvMap = computeMarketValues(mvInputs, { playedWeeks: 0 });
 
       const playerPool: any[] = poolMeta.map((m) => {

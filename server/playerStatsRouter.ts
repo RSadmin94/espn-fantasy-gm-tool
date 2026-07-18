@@ -69,14 +69,104 @@ let _espnInfoCache: Map<string, EspnPlayerInfo> | null = null;
 let _espnInfoCacheTime = 0;
 const ESPN_INFO_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
+/** Season try order for the public offense ADP feed: requested year, then year − 1. */
+export function espnOffenseSeasonsToTry(calendarYear: number): number[] {
+  return [calendarYear, calendarYear - 1];
+}
+
+/** Empty offense feeds must never enter the long-lived process cache (DP-only lock-in). */
+export function shouldPersistEspnOffenseCache(playerCount: number): boolean {
+  return Number.isFinite(playerCount) && playerCount > 0;
+}
+
+/** Test-only: clear the in-memory ESPN offense cache. */
+export function __resetEspnPlayerInfoCacheForTests(): void {
+  _espnInfoCache = null;
+  _espnInfoCacheTime = 0;
+}
+
+/** Test-only: expire TTL while retaining any cached map (for overwrite-guard tests). */
+export function __forceExpireEspnPlayerInfoCacheForTests(): void {
+  _espnInfoCacheTime = 0;
+}
+
+type EspnOffenseSeasonFetcher = (year: number, filterJson: string) => Promise<any[]>;
+
+let _espnOffenseFetchForTests: EspnOffenseSeasonFetcher | null = null;
+
+/** Test-only: inject a season fetcher (null restores network fetch). */
+export function __setEspnOffenseFetchForTests(fn: EspnOffenseSeasonFetcher | null): void {
+  _espnOffenseFetchForTests = fn;
+}
+
+async function fetchEspnOffensePlayersForSeason(year: number, filterJson: string): Promise<any[]> {
+  if (_espnOffenseFetchForTests) {
+    try {
+      return await _espnOffenseFetchForTests(year, filterJson);
+    } catch {
+      return [];
+    }
+  }
+  try {
+    const resp = await fetch(
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leaguedefaults/3?view=kona_player_info&scoringPeriodId=1`,
+      { headers: { "X-Fantasy-Filter": filterJson } },
+    );
+    if (!resp.ok) return [];
+    const d = await resp.json();
+    return Array.isArray(d?.players) ? d.players : [];
+  } catch {
+    // Network / parse errors stay contained — caller tries the next season or degrades.
+    return [];
+  }
+}
+
+function parseEspnOffenseEntry(entry: any, usedYear: number): EspnPlayerInfo | null {
+  const id = String(entry?.id ?? "").trim();
+  if (!id) return null;
+  const own = entry?.player?.ownership ?? {};
+
+  const adpRaw = own.averageDraftPosition;
+  const adp = (typeof adpRaw === "number" && adpRaw > 0 && adpRaw < 500)
+    ? Math.round(adpRaw * 100) / 100
+    : null;
+
+  const psRaw = own.percentStarted;
+  const percentStarted = (typeof psRaw === "number" && psRaw >= 0)
+    ? Math.round(psRaw * 10) / 10
+    : null;
+
+  let projection: number | null = null;
+  const stats = Array.isArray(entry?.player?.stats) ? entry.player.stats : [];
+  for (const s of stats) {
+    if (s?.statSourceId === 1 && Number(s?.scoringPeriodId) === 0 && Number(s?.seasonId) === usedYear) {
+      const at = Number(s?.appliedTotal);
+      if (Number.isFinite(at)) { projection = Math.round(at * 10) / 10; break; }
+    }
+  }
+  if (projection == null) {
+    for (const s of stats) {
+      if (s?.statSourceId === 1 && Number(s?.scoringPeriodId) === 0) {
+        const at = Number(s?.appliedTotal);
+        if (Number.isFinite(at)) { projection = Math.round(at * 10) / 10; break; }
+      }
+    }
+  }
+
+  return { adp, projection, percentStarted };
+}
+
 /** Fetch ESPN live draft inputs (ADP + season projection + percentStarted) from the
  * leaguedefaults/3 kona_player_info endpoint — same data as ESPN Live Draft Trends.
- * Single request returns ~1025 ranked players. Cached for 4h. The sole ESPN draft-data source. */
+ * Tries the calendar year, then year−1 when the current season feed is empty/fails.
+ * Non-empty results are cached for 4h. Empty results are never persisted, and never
+ * replace a previously valid non-empty cache entry. */
 async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   const now = Date.now();
   if (_espnInfoCache && (now - _espnInfoCacheTime) < ESPN_INFO_TTL_MS) return _espnInfoCache;
 
-  const year = new Date().getFullYear();
+  const calendarYear = new Date().getFullYear();
+  const yearsToTry = espnOffenseSeasonsToTry(calendarYear);
   const filter = JSON.stringify({
     players: {
       limit: 1500,
@@ -88,49 +178,43 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   });
 
   let players: any[] = [];
-  try {
-    const resp = await fetch(
-      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${year}/segments/0/leaguedefaults/3?view=kona_player_info&scoringPeriodId=1`,
-      { headers: { "X-Fantasy-Filter": filter } },
-    );
-    if (resp.ok) {
-      const d = await resp.json();
-      players = d?.players ?? [];
+  let usedYear = calendarYear;
+  for (const year of yearsToTry) {
+    const batch = await fetchEspnOffensePlayersForSeason(year, filter);
+    if (batch.length > 0) {
+      players = batch;
+      usedYear = year;
+      break;
     }
-  } catch { /* network error - fall through to empty cache */ }
+  }
 
   const cache = new Map<string, EspnPlayerInfo>();
   for (const entry of players) {
     const id = String(entry?.id ?? "").trim();
     if (!id) continue;
-    const own = entry?.player?.ownership ?? {};
+    const parsed = parseEspnOffenseEntry(entry, usedYear);
+    if (parsed) cache.set(id, parsed);
+  }
 
-    const adpRaw = own.averageDraftPosition;
-    const adp = (typeof adpRaw === "number" && adpRaw > 0 && adpRaw < 500)
-      ? Math.round(adpRaw * 100) / 100
-      : null;
-
-    const psRaw = own.percentStarted;
-    const percentStarted = (typeof psRaw === "number" && psRaw >= 0)
-      ? Math.round(psRaw * 10) / 10
-      : null;
-
-    // Season projection: projected source (1), full-season split (scoringPeriodId 0), current year.
-    let projection: number | null = null;
-    const stats = Array.isArray(entry?.player?.stats) ? entry.player.stats : [];
-    for (const s of stats) {
-      if (s?.statSourceId === 1 && Number(s?.scoringPeriodId) === 0 && Number(s?.seasonId) === year) {
-        const at = Number(s?.appliedTotal);
-        if (Number.isFinite(at)) { projection = Math.round(at * 10) / 10; break; }
-      }
+  if (!shouldPersistEspnOffenseCache(cache.size)) {
+    // Keep a previously valid non-empty cache rather than poisoning the process with empty.
+    if (_espnInfoCache && _espnInfoCache.size > 0) {
+      console.warn(
+        `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — retaining prior non-empty cache (${_espnInfoCache.size})`,
+      );
+      return _espnInfoCache;
     }
-
-    cache.set(id, { adp, projection, percentStarted });
+    console.warn(
+      `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — not caching`,
+    );
+    return cache;
   }
 
   _espnInfoCache = cache;
   _espnInfoCacheTime = now;
-  console.log(`[ESPN INFO] Cached ${cache.size} players (adp/proj/pStart) from ${players.length} fetched`);
+  console.log(
+    `[ESPN INFO] Cached ${cache.size} players (adp/proj/pStart) from ${players.length} fetched (season ${usedYear})`,
+  );
   return cache;
 }
 
