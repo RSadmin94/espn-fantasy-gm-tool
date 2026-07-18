@@ -30,11 +30,10 @@ export type PublicLiveBroadcastPayload = {
   draftComplete: boolean;
   /** Additive audio transport — text broadcast works without this. */
   audioStatus?: RfsnLiveAudioStatus | null;
-  /**
-   * Temporary acceptance-only trace (RFSN_LEAGUE_CONTEXT_DEBUG).
-   * Not a product UI surface — omit when debug flag is off.
-   */
+  /** Temporary acceptance-only trace (RFSN_LEAGUE_CONTEXT_DEBUG). */
   leagueContextDebug?: LeagueContextDebug | null;
+  /** Draft Night Show awards — populated after final pick wrap-up. */
+  draftNightShow?: import("../rfsn/draftNightShowEngine").DraftNightShowPayload | null;
 };
 
 type DraftSession = {

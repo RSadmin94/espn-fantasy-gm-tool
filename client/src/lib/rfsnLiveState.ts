@@ -52,6 +52,8 @@ export type RfsnLivePublicPayload = {
   generatedAt: string | null;
   draftComplete: boolean;
   audioStatus?: RfsnLiveAudioStatus | null;
+  /** Draft Night Show awards — set after wrap-up. */
+  draftNightShow?: import("./draftNightShowTypes").DraftNightShowPayload | null;
 };
 
 export function createRfsnLiveStandbySnapshot(

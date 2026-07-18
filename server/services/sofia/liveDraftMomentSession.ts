@@ -57,6 +57,14 @@ export function getLockedPicksForSession(leagueId: string, draftId: string): Moc
   return acc ? [...acc.picks] : [];
 }
 
+export function getLiveAdpByNameForSession(
+  leagueId: string,
+  draftId: string,
+): Map<string, number> {
+  const acc = accumulators.get(accKey(leagueId, draftId));
+  return acc?.liveAdpByName ? new Map(acc.liveAdpByName) : new Map();
+}
+
 function resolverForPicks(picks: MockPickLike[]) {
   const rows = new Map<string, { season: number; teamId: number; name: string; ownerName: string; ownerId: string }>();
   for (const p of picks) {

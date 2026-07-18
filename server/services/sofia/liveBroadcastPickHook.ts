@@ -38,6 +38,7 @@ export function scheduleLiveBroadcastForDraftMoment(
         finalDraftMoment: draftMoment,
         teamCount: opts.teamCount,
         useDeterministicProvider: opts.useDeterministicProvider,
+        userId: opts.userId,
       });
     }
     return result;

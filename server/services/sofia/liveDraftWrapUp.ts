@@ -90,6 +90,7 @@ export function buildDraftWrapUpBroadcastMoment(
   leagueId: string,
   draftId: string,
   summary: DraftWrapUpSummary,
+  extraClaims: string[] = [],
 ): BroadcastMoment {
   const claims: string[] = [
     `Draft complete: ${summary.totalPicks} picks across ${summary.teamCount} teams.`,
@@ -108,6 +109,9 @@ export function buildDraftWrapUpBroadcastMoment(
     claims.push(
       `Most drafted position: ${summary.topPosition.position} (${summary.topPosition.count} picks).`,
     );
+  }
+  for (const c of extraClaims) {
+    if (c.trim() && !claims.includes(c.trim())) claims.push(c.trim());
   }
 
   const entities = new Set<string>(["League"]);
@@ -130,7 +134,7 @@ export function buildDraftWrapUpBroadcastMoment(
       roundPick: 0,
     },
     verifiedFacts: claims,
-    storylines: ["DRAFT_WRAP_UP"],
+    storylines: ["DRAFT_WRAP_UP", "DRAFT_NIGHT_SHOW"],
     entities: [...entities],
   };
 
@@ -140,12 +144,12 @@ export function buildDraftWrapUpBroadcastMoment(
     occurredAt: new Date().toISOString(),
     momentType: "draft_wrap_up",
     significance: "historic",
-    headline: "Draft complete",
-    context: { kind: "league_storyline", title: "Draft wrap-up", body: claims[0]! },
+    headline: "Draft Night Show",
+    context: { kind: "league_storyline", title: "Draft Night Show", body: claims[0]! },
     factPacket,
     commentaryBudget: { enabled: true, maxSentences: 2, maxWords: 45 },
     editorialPlanId: "draft_wrap_up",
     overrideDecompression: true,
-    storylines: ["DRAFT_WRAP_UP"],
+    storylines: ["DRAFT_WRAP_UP", "DRAFT_NIGHT_SHOW"],
   });
 }

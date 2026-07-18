@@ -124,6 +124,8 @@ describe("live draft wrap-up", () => {
     expect(payload?.draftComplete).toBe(true);
     expect(payload?.sessionState).toBe("draft_complete");
     expect(payload?.snapshot).toBeDefined();
+    expect(payload?.draftNightShow).toBeDefined();
+    expect(payload?.draftNightShow?.awards ?? payload?.draftNightShow?.suppressed).toBeTruthy();
     expect(
       payload?.snapshot?.primary?.text ??
         payload?.snapshot?.secondary?.text ??

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import { skipToken } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { APP_VERSION } from "@/lib/version";
@@ -17,6 +18,9 @@ import {
 import { buildRfsnLiveDraftId } from "@/lib/rfsnLiveDraftId";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
+import { DraftNightShow } from "@/components/draft/DraftNightShow";
+import type { DraftNightShowPayload } from "@/lib/draftNightShowTypes";
+import type { RfsnLivePublicPayload } from "@/lib/rfsnLiveState";
 import { RfsnPickClock } from "@/components/rfsn/RfsnPickClock";
 import {
   INITIAL_BROADCAST_HOLD,
@@ -739,6 +743,18 @@ function LiveDraftEngine({
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
 
+  // Poll live session for Draft Night Show awards after wrap-up (same source as booth).
+  const liveSnapQ = (trpc as any).rfsnBroadcast.getLiveSnapshot.useQuery(
+    leagueId && done ? { leagueId, draftId } : skipToken,
+    { refetchInterval: done ? 2000 : false, staleTime: 1000 },
+  );
+  const livePayload = liveSnapQ.data as RfsnLivePublicPayload | undefined;
+  const draftNightShow = livePayload?.draftNightShow as DraftNightShowPayload | null | undefined;
+  const analystRecap =
+    livePayload?.snapshot?.primary?.text ??
+    livePayload?.snapshot?.secondary?.text ??
+    null;
+
   // ── Authoritative clock engine (reactive broadcast pause; never extends routine picks) ──
   const onClockIsManual = awaitingUser;
 
@@ -1004,6 +1020,13 @@ function LiveDraftEngine({
               </button>
             ))}
           </div>
+          {done && (
+            <DraftNightShow
+              show={draftNightShow}
+              analystRecap={analystRecap}
+              className="mt-3"
+            />
+          )}
         </div>
 
         {/* Live team rosters + per-team manual control */}

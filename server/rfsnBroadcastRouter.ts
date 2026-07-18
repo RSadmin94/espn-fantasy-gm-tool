@@ -97,6 +97,7 @@ export const rfsnBroadcastRouter = router({
         pick: lockedPickSchema,
         draftComplete: z.boolean().optional(),
         draftPace: z.enum(["broadcast", "brisk", "turbo"]).optional(),
+        teamCount: z.number().int().min(2).max(32).optional(),
         /** Test-only — forces deterministic provider (no API calls). */
         useDeterministicProvider: z.boolean().optional(),
       }),
@@ -128,6 +129,7 @@ export const rfsnBroadcastRouter = router({
         draftComplete: input.draftComplete,
         useDeterministicProvider: input.useDeterministicProvider ?? false,
         userId: ctx.user?.id ?? null,
+        teamCount: input.teamCount,
       });
 
       return { accepted: true, pickId: draftMoment.eventId };

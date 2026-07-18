@@ -40,7 +40,7 @@ import {
 } from "./liveBroadcastOrchestratorFactory";
 import type { RealShadowTelemetry } from "./realBroadcastShadowDeps";
 import type { BroadcastOrchestrator } from "./broadcastOrchestrator";
-import { getLockedPicksForSession } from "./liveDraftMomentSession";
+import { getLockedPicksForSession, getLiveAdpByNameForSession } from "./liveDraftMomentSession";
 import {
   buildDraftWrapUpBroadcastMoment,
   summarizeDraftWrapUp,
@@ -321,6 +321,7 @@ export async function processDraftWrapUp(
     finalDraftMoment: DraftMoment;
     teamCount?: number;
     useDeterministicProvider?: boolean;
+    userId?: number | null;
   },
 ): Promise<PublicLiveBroadcastPayload | null> {
   if (!isRfsnLiveBroadcastEnabled()) return null;
@@ -333,8 +334,25 @@ export async function processDraftWrapUp(
   markWrapUpProcessed(input.leagueId, input.draftId, eventId);
 
   const picks = getLockedPicksForSession(input.leagueId, input.draftId);
-  const summary = summarizeDraftWrapUp(picks, input.teamCount ?? 14);
-  const wrapMoment = buildDraftWrapUpBroadcastMoment(input.leagueId, input.draftId, summary);
+  const teamCount = input.teamCount ?? 14;
+  const summary = summarizeDraftWrapUp(picks, teamCount);
+
+  const { buildDraftNightShowForSession, awardFactsForWrapUp } = await import("../rfsn/draftNightShowEngine");
+  const draftNightShow = await buildDraftNightShowForSession({
+    leagueId: input.leagueId,
+    draftId: input.draftId,
+    picks,
+    teamCount,
+    userId: input.userId,
+    adpByName: getLiveAdpByNameForSession(input.leagueId, input.draftId),
+  });
+
+  const wrapMoment = buildDraftWrapUpBroadcastMoment(
+    input.leagueId,
+    input.draftId,
+    summary,
+    awardFactsForWrapUp(draftNightShow),
+  );
 
   const result = await buildLiveBroadcastFrame({
     moment: wrapMoment,
@@ -352,7 +370,12 @@ export async function processDraftWrapUp(
 
   updateLiveSession(input.leagueId, input.draftId, {
     state: "draft_complete",
-    payload: { ...result.publicPayload, draftComplete: true, sessionState: "draft_complete" },
+    payload: {
+      ...result.publicPayload,
+      draftComplete: true,
+      sessionState: "draft_complete",
+      draftNightShow,
+    },
   });
 
   return getLiveSessionPayload(input.leagueId, input.draftId);

@@ -124,5 +124,6 @@ describe("rfsnLivePickNotify", () => {
       draftComplete: true,
     });
     expect(payload.draftComplete).toBe(true);
+    expect(payload.teamCount).toBe(14);
   });
 });
