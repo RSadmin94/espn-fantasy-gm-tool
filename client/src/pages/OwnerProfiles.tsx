@@ -6,6 +6,13 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { ownerKeysEqual, resolveDirectoryOwnerKey, rivalsOwnerDossierPath } from "@/lib/ownerIdentity";
 import {
+  buildSelfIdentityTendencies,
+  isSelfMode,
+  matchupTagLabel,
+  ownerProfilesLensCopy,
+  type OwnerProfilesMode,
+} from "@/lib/ownerProfilesLens";
+import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
@@ -352,10 +359,11 @@ const EARLY_CONIC: Record<string, string> = {
   DST: "#71717a",
 };
 
-function MatchupTag({ tag }: { tag: string }) {
+function MatchupTag({ tag, mode = "scout" }: { tag: string; mode?: OwnerProfilesMode }) {
+  const label = matchupTagLabel(tag, mode);
   return (
     <span className={cn("inline-flex items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide", TAG_STYLES[tag] ?? TAG_STYLES.Normal)}>
-      {tag}
+      {label}
     </span>
   );
 }
@@ -643,28 +651,32 @@ function DossierSectionHeader({
   );
 }
 
-const DOSSIER_NAV_ITEMS = [
-  { id: "dossier-summary", label: "Summary" },
-  { id: "dossier-gm", label: "GM Profile" },
-  { id: "dossier-building", label: "Team Building" },
-  { id: "dossier-trading", label: "Trading" },
-  { id: "dossier-matchups", label: "Matchups" },
-  { id: "dossier-rivalries", label: "Rivalries" },
-  { id: "dossier-highlights", label: "Highlights" },
-] as const;
+function dossierNavItems(mode: OwnerProfilesMode) {
+  const copy = ownerProfilesLensCopy(mode);
+  return [
+    { id: "dossier-summary", label: "Summary" },
+    { id: "dossier-gm", label: copy.navGm },
+    { id: "dossier-building", label: copy.navBuilding },
+    { id: "dossier-trading", label: copy.navTrading },
+    { id: "dossier-matchups", label: copy.navMatchups },
+    { id: "dossier-rivalries", label: copy.navRivalries },
+    { id: "dossier-highlights", label: copy.navHighlights },
+  ] as const;
+}
 
 function dossierScrollTo(sectionId: string) {
   document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function DossierSectionNav() {
+function DossierSectionNav({ mode }: { mode: OwnerProfilesMode }) {
+  const items = dossierNavItems(mode);
   return (
     <nav
-      aria-label="Dossier sections"
+      aria-label={mode === "self" ? "My GM sections" : "Dossier sections"}
       className="sticky top-16 z-10 overflow-x-auto rounded-xl border border-white/[0.08] bg-[#110c14]/95 px-2 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.65)] backdrop-blur-md"
     >
       <ul className="flex min-w-max gap-1">
-        {DOSSIER_NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <li key={item.id}>
             <button
               type="button"
@@ -828,6 +840,7 @@ function CompareOwnersPanel({
 }
 
 function ProfilePanel({
+  mode,
   profileLookupKey,
   headerDisplayName,
   powerRankings,
@@ -839,6 +852,7 @@ function ProfilePanel({
   leagueContextKey,
   leagueKeyReady,
 }: {
+  mode: OwnerProfilesMode;
   /** Canonical `owners.ownerList` row id — sent as `ownerKey` on `owners.ownerProfile`. */
   profileLookupKey: string;
   headerDisplayName: string;
@@ -853,6 +867,8 @@ function ProfilePanel({
   leagueKeyReady: boolean;
 }) {
   const trpcAny = trpc as any;
+  const lens = ownerProfilesLensCopy(mode);
+  const selfLens = isSelfMode(mode);
   const [compareWith, setCompareWith] = useState("");
   const profileArgs = useMemo(() => {
     const base = compareWith ? { compareWith } : {};
@@ -878,9 +894,9 @@ function ProfilePanel({
   const [dataSourceOpen, setDataSourceOpen] = useState(false);
   const [developerOpen, setDeveloperOpen] = useState(false);
 
-  const gated = Boolean(p?.gated);
-  const ownProfile = Boolean(p?.ownProfile);
-  const profileLocked = Boolean(p?.locked);
+  // RFSN-023: self lens never applies scouting paywalls; scout lens keeps server gating.
+  const gated = selfLens ? false : Boolean(p?.gated);
+  const profileLocked = selfLens ? false : Boolean(p?.locked);
   const draftUnlocked = !gated;
   const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
@@ -1003,7 +1019,7 @@ function ProfilePanel({
     return (
       <IntelPanel variant="warm" className="scroll-mt-24 overflow-hidden p-6 sm:p-8">
         <ScoutingLock
-          title={`${headerDisplayName}'s GM Profile`}
+          title={`${headerDisplayName}'s Opponent Scout Report`}
           blurb="Scout how this manager drafts, trades, and builds rosters — unlock Rivals Pro for the full scouting report."
           onUnlock={startScoutCheckout}
           pending={scoutCheckout.isPending}
@@ -1136,6 +1152,14 @@ function ProfilePanel({
   const currentSeasonRow = seasonRecords.length > 0 ? (seasonRecords as any[])[seasonRecords.length - 1] : null;
   const draftStyle = str((draft as Record<string, unknown>).draftStyleBadge ?? "");
   const { topRival, biggestThreat } = pickRivalryHighlights(intel);
+  const selfTendencies = selfLens
+    ? buildSelfIdentityTendencies({
+        draftStyle: draftStyle || undefined,
+        mostDraftedPos,
+        earliestAvgPos,
+        earlyLead: earlyLead ? [earlyLead[0], earlyLead[1]] : null,
+      })
+    : [];
   const careerTimeline = buildCareerTimelineEvents(
     champSeasons,
     runnerUpSeasons,
@@ -1152,7 +1176,7 @@ function ProfilePanel({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-owner-profiles-mode={mode}>
       {/* ── 1. Executive Summary ───────────────────────────────────────────── */}
       <IntelPanel id="dossier-summary" variant="warm" className="scroll-mt-24 overflow-hidden" style={{ borderTop: "3px solid #f5c65a" }}>
         <div className="border-b border-white/[0.06] px-4 py-3">
@@ -1227,7 +1251,7 @@ function ProfilePanel({
         {!gated ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
             <GitCompare className="h-4 w-4 shrink-0 text-violet-400/90" aria-hidden />
-            <span className="text-xs font-semibold text-zinc-400">Compare with another owner</span>
+            <span className="text-xs font-semibold text-zinc-400">{lens.compareLabel}</span>
             <select
               id="owner-compare-hero-select"
               aria-label="Compare with another owner"
@@ -1256,7 +1280,7 @@ function ProfilePanel({
         <DynastyIdentityStrip row={dynastyIdentityRow} />
       </IntelPanel>
 
-      <DossierSectionNav />
+      <DossierSectionNav mode={mode} />
 
       {!gated ? (
         <CompareOwnersPanel
@@ -1279,20 +1303,43 @@ function ProfilePanel({
         />
       ) : null}
 
-      {/* ── 2. GM Profile ──────────────────────────────────────────────────── */}
+      {/* ── 2. GM Identity / GM Profile ────────────────────────────────────── */}
       <IntelPanel id="dossier-gm" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-        <DossierSectionHeader icon={<Dna className="h-4 w-4" />} title="GM Profile" />
+        <DossierSectionHeader icon={<Dna className="h-4 w-4" />} title={lens.sectionGm} />
         {gated ? (
           <ScoutingLock title="GM Profile" blurb="Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals Pro." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Owner DNA</p>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-300">{p.scoutingSummary || "—"}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.dnaEyebrow}</p>
+                {selfLens ? (
+                  <>
+                    <p className="mt-2 text-lg font-extrabold tracking-tight text-zinc-50">
+                      {draftStyle || "GM Style forming"}
+                    </p>
+                    {selfTendencies.length > 0 ? (
+                      <div className="mt-3">
+                        <p className="text-[11px] font-semibold text-zinc-400">You tend to:</p>
+                        <ul className="mt-1.5 space-y-1">
+                          {selfTendencies.map((t) => (
+                            <li key={t.text} className="flex items-start gap-1.5 text-sm text-zinc-300">
+                              <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-lime-400/80" aria-hidden />
+                              {t.text}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-zinc-500">Not enough draft history yet for identity bullets.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">{p.scoutingSummary || "—"}</p>
+                )}
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Draft DNA</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.draftDnaEyebrow}</p>
                 <StatRow label="Draft style" value={draftStyle || "—"} />
                 <StatRow label="Open-draft picks" value={num(draft.totalPicks)} />
                 <StatRow label="Top positions" value={mostDraftedPos.slice(0, 3).join(" › ") || "—"} />
@@ -1303,9 +1350,9 @@ function ProfilePanel({
         )}
       </IntelPanel>
 
-      {/* ── 3. Team Building Philosophy ────────────────────────────────────── */}
+      {/* ── 3. Team Building / Draft Pattern ───────────────────────────────── */}
       <IntelPanel id="dossier-building" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-        <DossierSectionHeader icon={<Shield className="h-4 w-4" />} title="Team Building Philosophy" accent="#f5c65a" />
+        <DossierSectionHeader icon={<Shield className="h-4 w-4" />} title={lens.sectionBuilding} accent="#f5c65a" />
         <div className="mb-4 grid gap-2 sm:grid-cols-3">
           <StatRow label="Acquisitions" value={num(activity.totalAcq)} />
           <StatRow label="Trades" value={num(activity.totalTrades)} />
@@ -1560,7 +1607,7 @@ function ProfilePanel({
       {/* ── 4. Trading Profile ─────────────────────────────────────────────── */}
       {!gated ? (
         <IntelPanel id="dossier-trading" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-          <DossierSectionHeader icon={<ArrowLeftRight className="h-4 w-4" />} title="Trading Profile" accent="#c4b5fd" />
+          <DossierSectionHeader icon={<ArrowLeftRight className="h-4 w-4" />} title={lens.sectionTrading} accent="#c4b5fd" />
           {acqFocal ? (
             <div className="mb-4 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
@@ -1590,11 +1637,11 @@ function ProfilePanel({
         <ScoutingLock title="Trading Profile" blurb="Trade history, completed trade intelligence, and acquisition impact." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
       )}
 
-      {/* ── 5. Matchup Intelligence ───────────────────────────────────────── */}
+      {/* ── 5. Matchup / Rivalry History ───────────────────────────────────── */}
       {!gated ? (
         <IntelPanel id="dossier-matchups" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-          <DossierSectionHeader icon={<Swords className="h-4 w-4" />} title="Matchup Intelligence" accent="#c4b5fd" />
-          <p className="mb-3 text-[11px] text-zinc-500">
+          <DossierSectionHeader icon={<Swords className="h-4 w-4" />} title={lens.sectionMatchups} accent="#c4b5fd" />
+            <p className="mb-3 text-[11px] text-zinc-500">
             Intel uses matchup pipeline with cache fallback; dossier uses completed gmMatchups (RS + playoffs).
           </p>
           {intel.length === 0 ? (
@@ -1661,7 +1708,7 @@ function ProfilePanel({
                           </span>
                         </td>
                         <td className="text-right">
-                          <MatchupTag tag={row.tag} />
+                          <MatchupTag tag={row.tag} mode={mode} />
                         </td>
                       </tr>
                       {open && (
@@ -1732,7 +1779,7 @@ function ProfilePanel({
             <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
               {Object.entries(TAG_STYLES).map(([tag, cls]) => (
                 <span key={tag} className={cn("rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wide", cls)}>
-                  {tag}
+                  {matchupTagLabel(tag, mode)}
                 </span>
               ))}
             </div>
@@ -1746,10 +1793,10 @@ function ProfilePanel({
       {/* ── 6. Rivalries ───────────────────────────────────────────────────── */}
       {!gated ? (
         <IntelPanel id="dossier-rivalries" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-          <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title="Rivalries" accent="#f472b6" />
+          <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title={lens.sectionRivalries} accent="#f472b6" />
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Top rival</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.topRivalLabel}</div>
               {topRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{topRival.opponentOwner}</div>
@@ -1759,7 +1806,7 @@ function ProfilePanel({
                   </div>
                   {topRival.tag ? (
                     <div className="mt-2">
-                      <MatchupTag tag={topRival.tag} />
+                      <MatchupTag tag={topRival.tag} mode={mode} />
                     </div>
                   ) : null}
                 </>
@@ -1770,7 +1817,7 @@ function ProfilePanel({
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Biggest threat</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.toughestLabel}</div>
               {biggestThreat ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{biggestThreat.opponentOwner}</div>
@@ -1780,12 +1827,12 @@ function ProfilePanel({
                   </div>
                   {biggestThreat.tag ? (
                     <div className="mt-2">
-                      <MatchupTag tag={biggestThreat.tag} />
+                      <MatchupTag tag={biggestThreat.tag} mode={mode} />
                     </div>
                   ) : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">No threat profile yet.</p>
+                <p className="mt-2 text-sm text-zinc-500">No tough H2H profile yet.</p>
               )}
             </div>
           </div>
@@ -1797,7 +1844,7 @@ function ProfilePanel({
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"
               >
                 <Clapperboard className="h-3.5 w-3.5" aria-hidden />
-                Open Rivalries · {topRival.opponentOwner}
+                {lens.openRivalriesCta} · {topRival.opponentOwner}
               </button>
             ) : null}
             {biggestThreat && biggestThreat.opponentOwner !== topRival?.opponentOwner ? (
@@ -1807,7 +1854,7 @@ function ProfilePanel({
                 className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:bg-white/[0.06]"
               >
                 <Clapperboard className="h-3.5 w-3.5" aria-hidden />
-                Open Rivalries · {biggestThreat.opponentOwner}
+                {lens.openRivalriesCta} · {biggestThreat.opponentOwner}
               </button>
             ) : null}
           </div>
@@ -1825,9 +1872,9 @@ function ProfilePanel({
         </IntelPanel>
       ) : null}
 
-      {/* ── 7. Career Highlights ───────────────────────────────────────────── */}
+      {/* ── 7. Career Highlights / Legacy ──────────────────────────────────── */}
       <IntelPanel id="dossier-highlights" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
-        <DossierSectionHeader icon={<History className="h-4 w-4" />} title="Career Highlights" accent="#f5c65a" />
+        <DossierSectionHeader icon={<History className="h-4 w-4" />} title={lens.sectionHighlights} accent="#f5c65a" />
         {careerTimeline.length === 0 ? (
           <p className="text-sm text-zinc-500">No career highlights on file yet.</p>
         ) : (
@@ -1947,31 +1994,38 @@ function ProfilePanel({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export type OwnerProfilesProps = {
-  /** Canonical dossier owner id from `/rivals/owners/:ownerId`. */
-  routeOwnerId?: string | null;
-  /** When true, selecting an owner navigates to `/rivals/owners/:ownerId`. */
-  syncSelectionToRoute?: boolean;
   /**
-   * My GM mode: lock to `me.ownerHome` authenticated owner only.
-   * Ignores routeOwnerId / URL owner params; hides other-owner directory selection.
+   * RFSN-023 lens — source of truth.
+   * `self` = My GM (auth-bound, no scouting paywall / opponent language).
+   * `scout` = Owner Dossier (directory + premium scouting gates).
    */
-  authenticatedOwnerOnly?: boolean;
+  mode?: OwnerProfilesMode;
+  /** Canonical dossier owner id from `/rivals/owners/:ownerId`. Ignored when mode is `self`. */
+  routeOwnerId?: string | null;
+  /** When true, selecting an owner navigates to `/rivals/owners/:ownerId`. Ignored when mode is `self`. */
+  syncSelectionToRoute?: boolean;
   pageEyebrow?: string;
   pageTitle?: string;
   pageSubtitle?: string;
 };
 
 export function OwnerProfiles({
+  mode = "scout",
   routeOwnerId = null,
   syncSelectionToRoute = false,
-  authenticatedOwnerOnly = false,
   pageEyebrow = "League Intelligence Desk",
-  pageTitle = "My GM Profile",
+  pageTitle,
   pageSubtitle,
 }: OwnerProfilesProps = {}) {
   const trpcAny = trpc as any;
   const utils = trpc.useUtils();
   const navigate = useNavigate();
+  // Mode is source of truth — never allow scout directory behavior in self lens.
+  const authenticatedOwnerOnly = mode === "self";
+  const lens = ownerProfilesLensCopy(mode);
+  const resolvedTitle =
+    pageTitle ?? (mode === "self" ? "My GM" : "Owner Dossier");
+  const resolvedSubtitle = pageSubtitle ?? lens.defaultSubtitle;
 
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -1995,7 +2049,8 @@ export function OwnerProfiles({
     staleTime: 60_000,
     enabled: leagueKeyReady,
   });
-  const listGated = Boolean(listQ.data?.gated);
+  // Scout directory paywall banner only — never on My GM self lens.
+  const listGated = mode === "scout" && Boolean(listQ.data?.gated);
   const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
     onSuccess: (r) => {
       if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
@@ -2252,17 +2307,16 @@ export function OwnerProfiles({
   }
 
   return (
-    <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100">
+    <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100" data-owner-profiles-mode={mode}>
       <CinematicPageHeader
         eyebrowMono={pageEyebrow}
         icon={Users}
         iconAccent="purple"
-        title={pageTitle}
+        title={resolvedTitle}
         subtitle={
-          pageSubtitle ??
-          (listGated
+          listGated
             ? "Your identity preview — unlock Rivals Pro to scout every manager in your league."
-            : `${active.length} active manager${active.length !== 1 ? "s" : ""} — unified scouting report per owner`)
+            : resolvedSubtitle
         }
         className="mb-5"
       />
@@ -2365,6 +2419,7 @@ export function OwnerProfiles({
           {profileKeyValid ? (
             <ProfilePanel
               key={`${leagueContextKey}:${selectedOwnerKey}`}
+              mode={mode}
               profileLookupKey={selectedOwnerKey!}
               headerDisplayName={headerDisplayName}
               powerRankings={powerRankings}

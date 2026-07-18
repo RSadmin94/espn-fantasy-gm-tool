@@ -42,10 +42,12 @@ describe("Rivals V2 — Commit 3 route ownership", () => {
     const owners = fs.readFileSync(path.join(repoRoot, "client/src/pages/rivals/RivalsOwners.tsx"), "utf-8");
     expect(owners).toContain("OwnerProfiles");
     expect(owners).toContain("syncSelectionToRoute");
+    expect(owners).toContain('mode="scout"');
 
     const dossier = fs.readFileSync(path.join(repoRoot, "client/src/pages/rivals/RivalsOwnerDossier.tsx"), "utf-8");
     expect(dossier).toContain("routeOwnerId");
     expect(dossier).toContain("useParams");
+    expect(dossier).toContain('mode="scout"');
 
     const rivalries = fs.readFileSync(path.join(repoRoot, "client/src/pages/rivals/RivalsRivalries.tsx"), "utf-8");
     expect(rivalries).toContain('variant="full"');

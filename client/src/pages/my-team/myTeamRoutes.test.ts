@@ -56,7 +56,7 @@ describe("My Team V2 — Commit 4 route ownership", () => {
       path.join(repoRoot, "client/src/pages/my-team/MyTeamProfile.tsx"),
       "utf-8",
     );
-    expect(profile).toContain("authenticatedOwnerOnly");
+    expect(profile).toContain('mode="self"');
     expect(profile).not.toContain("routeOwnerId");
     expect(profile).not.toContain("useParams");
   });
@@ -78,11 +78,11 @@ describe("My Team V2 — Commit 4 route ownership", () => {
       path.join(repoRoot, "client/src/pages/my-team/MyTeamProfile.tsx"),
       "utf-8",
     );
-    expect(profile).toContain("authenticatedOwnerOnly");
+    expect(profile).toContain('mode="self"');
     expect(profile).not.toContain("useParams");
 
     const owners = fs.readFileSync(path.join(repoRoot, "client/src/pages/OwnerProfiles.tsx"), "utf-8");
-    expect(owners).toContain("authenticatedOwnerOnly");
+    expect(owners).toContain('mode === "self"');
     expect(owners).toContain("me.ownerHome");
     expect(owners).toContain("never URL");
   });
@@ -94,13 +94,14 @@ describe("My Team V2 — Commit 4 route ownership", () => {
     );
     expect(rivalsDossier).toContain("routeOwnerId");
     expect(rivalsDossier).toContain("useParams");
-    expect(rivalsDossier).not.toContain("authenticatedOwnerOnly");
+    expect(rivalsDossier).toContain('mode="scout"');
+    expect(rivalsDossier).not.toContain('mode="self"');
 
     const myGm = fs.readFileSync(
       path.join(repoRoot, "client/src/pages/my-team/MyTeamProfile.tsx"),
       "utf-8",
     );
-    expect(myGm).toContain("authenticatedOwnerOnly");
+    expect(myGm).toContain('mode="self"');
     expect(myGm).not.toContain("routeOwnerId");
   });
 
