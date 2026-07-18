@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
@@ -52,6 +52,26 @@ import {
   Flame, Lock, Gauge, Wind,
 } from "lucide-react";
 
+/** RFSN-019: expand collapsed sections then scroll (sticky nav offset via scroll-mt). */
+type DwrExpandToken = { id: string; n: number };
+type DwrExpandCtx = {
+  expandToken: DwrExpandToken | null;
+  openSection: (id: string) => void;
+};
+const DwrExpandContext = createContext<DwrExpandCtx>({
+  expandToken: null,
+  openSection: () => {},
+});
+
+function dwrScrollTo(sectionId: string) {
+  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function openAndScrollTo(openSection: (id: string) => void, sectionId: string) {
+  openSection(sectionId);
+  window.setTimeout(() => dwrScrollTo(sectionId), 80);
+}
+
 // ── Shared UI atoms ───────────────────────────────────────────────────────────
 
 const POS_CFG: Record<string, { pill: string }> = {
@@ -98,11 +118,16 @@ function Section({ id, title, icon, badge, children, defaultOpen = true, accent 
   id?: string; title: string; icon: any; badge?: string | number; children: React.ReactNode;
   defaultOpen?: boolean; accent?: string;
 }) {
+  const { expandToken } = useContext(DwrExpandContext);
   const [open, setOpen] = useState(defaultOpen);
   const Icon = icon;
+  useEffect(() => {
+    if (id && expandToken?.id === id) setOpen(true);
+  }, [expandToken, id]);
+  void accent;
   return (
-    <div id={id} className="scroll-mt-24 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
-      <button onClick={() => setOpen(o => !o)}
+    <div id={id} className="scroll-mt-28 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
+      <button type="button" onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
         <div className="flex items-center gap-2.5">
           <Icon className="h-5 w-5 text-lime-400" />
@@ -137,68 +162,100 @@ function KeeperTierBadge({ recommendation, valueTier, roundSavings }: { recommen
   );
 }
 
-// ── Confidence Dashboard ──────────────────────────────────────────────────────
+// ── Draft Briefing (RFSN-019 scan layer — opens detailed sections) ────────────
 
-function ConfidenceDashboard({ data, showKeeperInsights = true }: { data: any; showKeeperInsights?: boolean }) {
+function briefingFirstName(name?: string | null) {
+  const n = String(name ?? "").trim().split(/\s+/)[0];
+  return n || "This GM";
+}
+
+function ConfidenceDashboard({
+  data,
+  showKeeperInsights = true,
+  onOpenSection,
+}: {
+  data: any;
+  showKeeperInsights?: boolean;
+  onOpenSection?: (sectionId: string) => void;
+}) {
   if (!data) return null;
+
+  const holePos = data.biggestRosterHole?.position;
+  const holeOwner = briefingFirstName(data.biggestRosterHole?.ownerName);
+  const mostOwner = briefingFirstName(data.mostPredictable?.ownerName);
+  const leastOwner = briefingFirstName(data.leastPredictable?.ownerName);
+  const reachOwner = briefingFirstName(data.biggestReach?.ownerName);
+  const keeperPlayer = data.bestKeeperValue?.player;
 
   const cardsAll = [
     {
-      icon: ShieldCheck, label: "Most Predictable",
-      title: data.mostPredictable?.teamName,
-      sub: data.mostPredictable?.ownerName,
-      value: `${data.mostPredictable?.score}%`,
-      detail: data.mostPredictable?.reason,
+      icon: ShieldCheck,
+      label: "Most Predictable",
+      headline: data.mostPredictable?.ownerName
+        ? `${mostOwner} drafts by the book`
+        : "No read yet",
+      signal: data.mostPredictable?.score != null ? `${data.mostPredictable.score}% predictability` : "—",
+      hint: data.mostPredictable?.teamName ?? "",
+      sectionId: "dwr-dna",
+      cta: "Open draft DNA",
       color: "border-lime-500/25 bg-lime-500/5",
       iconColor: "text-lime-400",
     },
     {
-      icon: Activity, label: "Least Predictable",
-      title: data.leastPredictable?.teamName,
-      sub: data.leastPredictable?.ownerName,
-      value: `${data.leastPredictable?.score}%`,
-      detail: data.leastPredictable?.reason,
+      icon: Activity,
+      label: "Least Predictable",
+      headline: data.leastPredictable?.ownerName
+        ? `${leastOwner} is the league's wildcard`
+        : "No wildcard yet",
+      signal: data.leastPredictable?.score != null ? `${data.leastPredictable.score}% predictability` : "—",
+      hint: data.leastPredictable?.teamName ?? "",
+      sectionId: "dwr-dna",
+      cta: "Open draft DNA",
       color: "border-violet-500/25 bg-violet-500/5",
       iconColor: "text-violet-400",
     },
     {
-      icon: ArrowUpRight, label: "Biggest Roster Hole",
-      title: data.biggestRosterHole?.teamName ?? "—",
-      sub: data.biggestRosterHole?.ownerName ?? "",
-      value: data.biggestRosterHole?.position ?? "—",
-      detail: data.biggestRosterHole?.reason ?? "No critical gaps found",
+      icon: ArrowUpRight,
+      label: "Roster Priority",
+      headline: holePos
+        ? `${holePos} scarcity detected — ${holeOwner}'s board is thin`
+        : "No critical roster gaps",
+      signal: data.biggestRosterHole?.teamName ?? "League-wide",
+      hint: data.biggestRosterHole?.reason ?? "",
+      sectionId: "dwr-build",
+      cta: "View Build Targets",
       color: "border-amber-500/25 bg-amber-500/5",
       iconColor: "text-amber-400",
     },
     {
-      icon: Trophy, label: "Best Keeper Value",
-      title: data.bestKeeperValue?.player ?? "—",
-      sub: data.bestKeeperValue?.teamName ?? "",
-      value: data.bestKeeperValue
+      icon: Trophy,
+      label: "Best Keeper Value",
+      headline: keeperPlayer
+        ? `${keeperPlayer} is the steal keep`
+        : "No keeper edge yet",
+      signal: data.bestKeeperValue
         ? `${data.bestKeeperValue.recommendation ?? "—"}${data.bestKeeperValue.roundSavings != null ? ` · +${data.bestKeeperValue.roundSavings} rd` : ""}`
         : "—",
-      detail: data.bestKeeperValue?.reason ?? "No keepers predicted",
+      hint: data.bestKeeperValue?.teamName ?? "",
+      sectionId: "dwr-keepers",
+      cta: "Open keeper read",
       color: "border-violet-500/25 bg-violet-500/5",
       iconColor: "text-violet-400",
     },
     {
-      icon: ArrowDownRight, label: "Projected Reach",
-      title: data.biggestReach?.teamName ?? "—",
-      sub: data.biggestReach?.ownerName ?? "",
-      value: data.biggestReach?.position ?? "—",
-      detail: data.biggestReach?.reason ?? "No clear reaches projected",
+      icon: ArrowDownRight,
+      label: "Projected Reach",
+      headline: data.biggestReach?.ownerName
+        ? `${reachOwner} may reach early at ${data.biggestReach?.position ?? "need"}`
+        : "No clear reach projected",
+      signal: data.biggestReach?.teamName ?? "—",
+      hint: data.biggestReach?.reason ?? "",
+      sectionId: "dwr-dna",
+      cta: "Open draft DNA",
       color: "border-violet-500/25 bg-violet-500/5",
       iconColor: "text-violet-400",
     },
-    {
-      icon: TrendingUp, label: "Most Likely to Surprise",
-      title: data.mostLikelyToChange?.teamName,
-      sub: data.mostLikelyToChange?.ownerName,
-      value: `${data.mostLikelyToChange?.score}% surprise`,
-      detail: data.mostLikelyToChange?.reason,
-      color: "border-orange-500/25 bg-orange-500/5",
-      iconColor: "text-orange-400",
-    },
+    // "Most Likely to Surprise" removed — Duplicate Data of Least Predictable (insight remains in Owner DNA)
   ];
 
   const cards = showKeeperInsights
@@ -206,27 +263,40 @@ function ConfidenceDashboard({ data, showKeeperInsights = true }: { data: any; s
     : cardsAll.filter((c) => c.label !== "Best Keeper Value");
 
   return (
-    <div
-      className={cn(
-        "grid grid-cols-2 md:grid-cols-3 gap-2 p-4",
-        cards.length >= 6 ? "lg:grid-cols-6" : "lg:grid-cols-5",
-      )}
-    >
-      {cards.map((c, i) => {
-        const Icon = c.icon;
-        return (
-          <div key={i} className={cn("rounded-xl border p-3 space-y-1.5", c.color)}>
-            <div className="flex items-center gap-1.5">
-              <Icon className={cn("h-3 w-3 shrink-0", c.iconColor)} />
-              <span className={cn("text-[10px] font-black uppercase tracking-wider", c.iconColor)}>{c.label}</span>
-            </div>
-            <div className="font-black text-zinc-100 text-xs leading-tight line-clamp-1">{c.title}</div>
-            <div className="text-[11px] text-zinc-500 truncate">{c.sub}</div>
-            <div className={cn("text-sm font-black", c.iconColor)}>{c.value}</div>
-            <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-2">{c.detail}</p>
-          </div>
-        );
-      })}
+    <div className="p-4 space-y-3">
+      <p className="text-[11px] text-zinc-500 px-0.5">
+        Analyst briefing — tap a card for the full intelligence read below.
+      </p>
+      <div
+        className={cn(
+          "grid grid-cols-2 md:grid-cols-3 gap-2",
+          cards.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4",
+        )}
+      >
+        {cards.map((c) => {
+          const Icon = c.icon;
+          return (
+            <button
+              key={c.label}
+              type="button"
+              onClick={() => onOpenSection?.(c.sectionId)}
+              className={cn(
+                "rounded-xl border p-3 space-y-1.5 text-left transition-all hover:scale-[1.02] hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400/40",
+                c.color,
+              )}
+            >
+              <div className="flex items-center gap-1.5">
+                <Icon className={cn("h-3 w-3 shrink-0", c.iconColor)} />
+                <span className={cn("text-[10px] font-black uppercase tracking-wider", c.iconColor)}>{c.label}</span>
+              </div>
+              <div className="font-black text-zinc-100 text-xs leading-snug line-clamp-3">{c.headline}</div>
+              <div className={cn("text-[11px] font-bold tabular-nums", c.iconColor)}>{c.signal}</div>
+              {c.hint ? <div className="text-[10px] text-zinc-500 line-clamp-2">{c.hint}</div> : null}
+              <div className={cn("text-[10px] font-bold pt-0.5", c.iconColor)}>{c.cta} →</div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -403,6 +473,15 @@ function ownerArchetype(m: any): { label: string; cls: string } {
   return { label: "Wildcard", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" };
 }
 
+/** Primary archetype language; predictability stays visible (not hover-only). */
+function draftBehaviorLabel(m: any): string {
+  const pred = Number(m?.predictabilityScore ?? 0);
+  const surp = Number(m?.surpriseProbability ?? 0);
+  if (surp >= 55 || pred < 46) return "High variation";
+  if (pred >= 72) return "Consistent patterns";
+  return "Mixed tendencies";
+}
+
 function ShockMeterSection({ meters }: { meters: any[] }) {
   const [sel, setSel] = useState<number | null>(null);
   const sorted = useMemo(() => [...meters].sort((a, b) => b.surpriseProbability - a.surpriseProbability), [meters]);
@@ -411,30 +490,23 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
     <div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 p-4">
         {sorted.map(m => {
-          const isHighSurprise = m.surpriseProbability >= 50;
+          const arc = ownerArchetype(m);
+          const behavior = draftBehaviorLabel(m);
           return (
-            <button key={m.teamId} onClick={() => setSel(sel === m.teamId ? null : m.teamId)}
+            <button key={m.teamId} type="button" onClick={() => setSel(sel === m.teamId ? null : m.teamId)}
+              title={`${m.ownerName} · ${m.predictabilityScore}% predictability`}
               className={cn("rounded-lg border p-3 text-left transition-all hover:scale-105 space-y-1.5",
                 sel === m.teamId ? "border-violet-500/40 bg-white/[0.04] shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-700")}>
-              <div className="text-[10px] font-black uppercase tracking-wider text-zinc-600 truncate">{m.teamName}</div>
-              <div className="text-[11px] text-zinc-500 truncate">{m.ownerName?.split(" ")[0]}</div>
-              {(() => { const __a = ownerArchetype(m); return <span className={cn("inline-block text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border", __a.cls)}>{__a.label}</span>; })()}
-              {/* Predict bar */}
-              <div>
-                <div className="flex items-center justify-between mb-0.5">
-                  <span className="text-[10px] text-zinc-600">PREDICT</span>
-                  <span className={cn("text-[10px] font-bold", isHighSurprise ? "text-violet-400" : "text-violet-400")}>
-                    {m.predictabilityScore}%
-                  </span>
-                </div>
-                <ConfBar value={m.predictabilityScore} small />
+              <div className="text-[12px] font-bold text-zinc-100 truncate">{m.ownerName?.split(" ")[0] ?? m.ownerName}</div>
+              <div className="text-[10px] text-zinc-600 truncate">{m.teamName}</div>
+              <span className={cn("inline-block text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border", arc.cls)}>{arc.label}</span>
+              <div className="text-[11px] text-zinc-400">Draft behavior: {behavior}</div>
+              <div className="text-[11px] font-bold text-zinc-300 tabular-nums">
+                {m.predictabilityScore}% predictability
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-zinc-600">Likely: </span>
+              <div className="flex items-center justify-between pt-0.5">
+                <span className="text-[10px] text-zinc-600">Likely</span>
                 <PosPill pos={m.mostLikelyPosition} />
-              </div>
-              <div className={cn("text-[10px] font-bold uppercase", isHighSurprise ? "text-violet-400/80" : "text-zinc-600")}>
-                {m.surpriseProbability}% surprise
               </div>
             </button>
           );
@@ -450,6 +522,9 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
               <div>
                 <h3 className="font-bold text-zinc-100">{m.teamName}</h3>
                 <p className="text-xs text-zinc-500">{m.ownerName}</p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  {ownerArchetype(m).label} · Draft behavior: {draftBehaviorLabel(m)}
+                </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
@@ -1768,7 +1843,7 @@ function DraftEnvironmentSection({ env, showKeeperDistortion = true }: { env: an
 
   const envCardsAll = [
     { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
-    { icon: Wind,          label: "Weakest Position",   val: env.weakestPosition?.position ?? "—",   sub: env.weakestPosition?.reason,   color: "text-violet-400",     border: "border-violet-500/25 bg-violet-500/5" },
+    // Weakest Position removed (RFSN-019) — Duplicate Data of Roster Priority / Build Targets
     { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
     { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-violet-400",    border: "border-violet-500/25 bg-violet-500/5" },
     { icon: Lock,          label: "Keeper Distortion",  val: env.mostDistortedByKeepers?.position ?? "—", sub: env.mostDistortedByKeepers?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
@@ -1780,7 +1855,7 @@ function DraftEnvironmentSection({ env, showKeeperDistortion = true }: { env: an
   return (
     <div className="p-4 space-y-4">
       {/* Stat cards row */}
-      <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-2", envCards.length >= 5 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
+      <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-2", envCards.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
         {envCards.map((c, i) => {
           const Icon = c.icon;
           return (
@@ -2009,7 +2084,7 @@ function CompressionSection({ compression }: { compression: any[] }) {
 const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
   { id: "dwr-briefing", label: "Briefing" },
   { id: "dwr-keepers", label: "Keepers", keeperOnly: true },
-  { id: "dwr-build", label: "Build Targets" },
+  { id: "dwr-build", label: "Roster Priorities" },
   { id: "dwr-dna", label: "Owner DNA" },
   { id: "dwr-runs", label: "Run Windows" },
   { id: "dwr-value", label: "Value Windows" },
@@ -2018,11 +2093,13 @@ const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
   { id: "dwr-mock", label: "Mock Draft" },
 ];
 
-function dwrScrollTo(sectionId: string) {
-  document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
+function DwrSectionNav({
+  keepersOn,
+  onOpenSection,
+}: {
+  keepersOn: boolean;
+  onOpenSection: (sectionId: string) => void;
+}) {
   const items = DWR_NAV_ITEMS.filter((i) => !i.keeperOnly || keepersOn);
   return (
     <nav
@@ -2034,7 +2111,7 @@ function DwrSectionNav({ keepersOn }: { keepersOn: boolean }) {
           <li key={item.id}>
             <button
               type="button"
-              onClick={() => dwrScrollTo(item.id)}
+              onClick={() => openAndScrollTo(onOpenSection, item.id)}
               className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
             >
               {item.label}
@@ -2057,6 +2134,13 @@ export function DraftWarRoom({
   const { leagueContextKey } = useLeagueActiveGate();
   const { season } = useLeagueContext();
   const [keeperOverrides, setKeeperOverrides] = useState<any[]>([]);
+  const [expandToken, setExpandToken] = useState<DwrExpandToken | null>(null);
+  const openSection = useCallback((id: string) => {
+    setExpandToken({ id, n: Date.now() });
+  }, []);
+  const handleOpenSection = useCallback((id: string) => {
+    openAndScrollTo(openSection, id);
+  }, [openSection]);
   const leagueKeyReady =
     authLoaded && isSignedIn && !leagueContextKey.startsWith("__");
 
@@ -2084,12 +2168,12 @@ export function DraftWarRoom({
   const soulsQ = { data: null as any, isLoading: false };
   void soulsQ;
 
-  // Canonical `/draft/mock` shares this instance via layout — scroll after data mounts.
+  // Canonical `/draft/mock` shares this instance via layout — expand + scroll after data mounts.
   useEffect(() => {
     if (!scrollToSection || isLoading || !data?.ok) return;
-    const t = window.setTimeout(() => dwrScrollTo(scrollToSection), 120);
+    const t = window.setTimeout(() => openAndScrollTo(openSection, scrollToSection), 120);
     return () => window.clearTimeout(t);
-  }, [scrollToSection, isLoading, data?.ok]);
+  }, [scrollToSection, isLoading, data?.ok, openSection]);
 
   if (isLoading) return (
     <div className="min-h-screen bg-[#110c14] flex items-center justify-center gap-2 text-zinc-500 text-sm">
@@ -2132,6 +2216,7 @@ export function DraftWarRoom({
   ];
 
   return (
+    <DwrExpandContext.Provider value={{ expandToken, openSection }}>
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
 
       {/* Header */}
@@ -2188,7 +2273,7 @@ export function DraftWarRoom({
         )}
 
         {/* Editorial intelligence desk — mockup layout, real data */}
-        <DraftWarRoomDesk data={data} sectionNav={<DwrSectionNav keepersOn={keepersOn} />} />
+        <DraftWarRoomDesk data={data} sectionNav={<DwrSectionNav keepersOn={keepersOn} onOpenSection={openSection} />} />
 
         {/* Detailed analytics divider */}
         <div className="flex items-center gap-3 pt-1">
@@ -2222,10 +2307,14 @@ export function DraftWarRoom({
           )}
         </div>
 
-        {/* 1. Confidence Dashboard */}
+        {/* 1. Draft Briefing — scan layer */}
         <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}
           accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
-          <ConfidenceDashboard data={confidenceDashboard} showKeeperInsights={keepersOn} />
+          <ConfidenceDashboard
+            data={confidenceDashboard}
+            showKeeperInsights={keepersOn}
+            onOpenSection={handleOpenSection}
+          />
         </Section>
 
         {/* 2. Keeper Predictions */}
@@ -2235,8 +2324,8 @@ export function DraftWarRoom({
         </Section>
         )}
 
-        {/* 3. Roster Construction */}
-        <Section id="dwr-build" title="Build Targets" icon={BarChart2} badge={rosterNeeds?.length}>
+        {/* 3. Roster Priorities (was Build Targets) */}
+        <Section id="dwr-build" title="Roster Priorities" icon={BarChart2} badge={rosterNeeds?.length}>
           <RosterNeedsSection needs={rosterNeeds ?? []} />
         </Section>
 
@@ -2300,5 +2389,6 @@ export function DraftWarRoom({
 
       </div>
     </div>
+    </DwrExpandContext.Provider>
   );
 }

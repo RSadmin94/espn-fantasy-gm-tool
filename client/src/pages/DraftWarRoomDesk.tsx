@@ -109,21 +109,6 @@ function Avatar({ name, color, size = 40 }: { name: string; color: string; size?
   );
 }
 
-function Bar({ label, value, color }: { label: string; value: number; color: string }) {
-  const v = clamp(value);
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[12px] uppercase tracking-wider" style={{ color: MUTED }}>{label}</span>
-        <span className="text-[12px] font-bold" style={{ color }}>{v}</span>
-      </div>
-      <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,.06)" }}>
-        <div className="h-full rounded-full" style={{ width: v + "%", background: color }} />
-      </div>
-    </div>
-  );
-}
-
 function SectionTitle({ icon: Icon, kicker, title, color }: any) {
   return (
     <div className="flex items-center gap-3">
@@ -690,7 +675,7 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
             {dna.length === 0 && <Empty>No owner profiles yet.</Empty>}
             {dna.map((m) => (
               <div key={m.teamId} className="p-3.5" style={SUB}>
-                <div className="flex items-center gap-3 mb-3">
+                <div className="flex items-center gap-3 mb-2">
                   <Avatar name={m.ownerName} color={m.arc.color} size={36} />
                   <div className="min-w-0 flex-1">
                     <div className="text-[14px] font-bold truncate" style={{ color: TEXT }}>{m.ownerName}</div>
@@ -698,10 +683,18 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
                   </div>
                   <span className="text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0" style={{ color: m.arc.color, background: m.arc.color + "18" }}>{m.arc.label}</span>
                 </div>
-                <div className="space-y-2">
-                  <Bar label="Scarcity Seeking" value={m.scarcity} color={GOLD} />
-                  <Bar label="Risk Tolerance" value={m.risk} color={RISK} />
-                  <Bar label="Pick Volatility" value={m.volatility} color={CYAN} />
+                <div className="text-[12px] mb-1.5" style={{ color: MUTED }}>
+                  Draft behavior:{" "}
+                  <span style={{ color: TEXT }}>
+                    {m.risk >= 55 || clamp(m.predictabilityScore || 0) < 46
+                      ? "High variation"
+                      : clamp(m.predictabilityScore || 0) >= 72
+                        ? "Consistent patterns"
+                        : "Mixed tendencies"}
+                  </span>
+                </div>
+                <div className="text-[13px] font-bold tabular-nums" style={{ color: TEXT }} title={`${clamp(m.predictabilityScore || 0)}% predictability`}>
+                  {clamp(m.predictabilityScore || 0)}% predictability
                 </div>
               </div>
             ))}
