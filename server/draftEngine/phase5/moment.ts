@@ -33,6 +33,14 @@ import {
 } from "./rosterConstruction";
 import { timingDraftability, type PositionTimingProfile } from "./positionTiming";
 
+/** Thrown when ADP-anchored scoring is requested but no consideration candidate has ADP. */
+export class AdpScoringUnavailableError extends Error {
+  constructor(message = "resolveMoment: ADP-anchored scoring requested but no candidate has ADP — refusing pick") {
+    super(message);
+    this.name = "AdpScoringUnavailableError";
+  }
+}
+
 // --- Data-driven timing (Souls v2 gate fix) -------------------------------------------------
 // K/DP/DST admission ramp opens this many rounds before the position's historical mean.
 const TIMING_ADMIT_EARLINESS = 1.5;
@@ -486,6 +494,10 @@ export function resolveMoment(args: {
     const conf = Math.max(0, Math.min(1, args.soul.avgChosenProbability ?? 0.3));
     const tOwner = Math.max(1, w.T * (1.5 - conf));
     probs = softmaxProbs(utils.map((u) => u / tOwner));
+  } else if (args.scoring) {
+    // Scoring weights were requested but no candidate has ADP — refuse silent garbage picks
+    // (e.g. 0-projection fullbacks at 1.01). Callers must attach ADP or omit scoring.
+    throw new AdpScoringUnavailableError();
   } else {
     utils = alts.map(
       (_, i) =>

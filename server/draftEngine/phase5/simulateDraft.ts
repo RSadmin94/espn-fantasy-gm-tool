@@ -14,7 +14,7 @@ import {
   roundForPick,
   type DraftSlot,
 } from "./loadSimDraftSetup";
-import { resolveMoment, type MomentDecision } from "./moment";
+import { resolveMoment, AdpScoringUnavailableError, type MomentDecision } from "./moment";
 import type { ScoringWeights } from "./moment";
 import type { PositionTimingProfile } from "./positionTiming";
 import { mulberry32, type Rng } from "./rng";
@@ -138,22 +138,34 @@ export function simulateDraft(args: {
     const ownerPicksMade = picks.filter((p) => p.chooserProfileKey === chooser.profileOwnerKey).length;
     const ownerPicksRemaining = (pickCountByOwner.get(chooser.profileOwnerKey) ?? rounds) - ownerPicksMade;
 
-    const moment = resolveMoment({
-      soul,
-      weather,
-      terrainLookup,
-      season: args.season,
-      round,
-      totalRounds: rounds,
-      ownerPicksRemaining,
-      ownerRoster: roster,
-      rosterRules: args.rosterRules,
-      poolHas,
-      ownerPriorKeys: priors,
-      rng,
-      positionTiming: args.positionTiming,
-      scoring: args.scoring,
-    });
+    let moment: MomentDecision | null = null;
+    try {
+      moment = resolveMoment({
+        soul,
+        weather,
+        terrainLookup,
+        season: args.season,
+        round,
+        totalRounds: rounds,
+        ownerPicksRemaining,
+        ownerRoster: roster,
+        rosterRules: args.rosterRules,
+        poolHas,
+        ownerPriorKeys: priors,
+        rng,
+        positionTiming: args.positionTiming,
+        scoring: args.scoring,
+      });
+    } catch (err) {
+      // Controlled stop: do not crash the War Room / souls board / API route.
+      if (err instanceof AdpScoringUnavailableError) {
+        console.warn(
+          `[simulateDraft] ${err.message} at overall pick ${overallPick} — ending board early`,
+        );
+        break;
+      }
+      throw err;
+    }
     if (!moment) break;
 
     const chosen = moment.chosen;

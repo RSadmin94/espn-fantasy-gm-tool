@@ -30,6 +30,13 @@ import {
   buildSkillStarvationSoftIncludes,
   isSkillStarvedMergedPool,
 } from "./mockDraftPoolResilience";
+import {
+  countSkillPlayers,
+  excludeIdentitiesFromPool,
+  isSkillStarvedPool,
+  mockDraftPlayerKey,
+} from "./mockDraftPoolGuards";
+import { normalizePlayerKey } from "./draftEngine/phase1/types";
 import { computeKeeperValuations, type KeeperPoolRowLite } from "./keeperValuationService"; // sole keeper engine
 import { getManualKeeperSelections } from "./manualKeeperSelections"; // user keeper overrides (degrades safely if table absent)
 import { computeLeaguePositionTimingProfiles, type PositionTimingProfile } from "./leagueDraftTimingProfile";
@@ -916,7 +923,14 @@ export function evaluateRosterCompletion(args: {
 export function buildMockDraft(params: MockDraftInputs) {
   const { allPicks, rosterNeeds, keeperPredictions, tradedPicks, playerPool, dpTiming = null, ownerDnaContext = null, lineupReqs = LINEUP_REQS } = params;
   const picks: any[] = [];
+  // Track drafted by normalized identity (espnId preferred) — never raw display name alone.
   const drafted = new Set<string>();
+  const markDrafted = (p: { name: string; espnId?: string | number | null }) => {
+    drafted.add(mockDraftPlayerKey(p));
+    drafted.add(`name:${normalizePlayerKey(p.name)}`);
+  };
+  const isDrafted = (p: { name: string; espnId?: string | number | null }) =>
+    drafted.has(mockDraftPlayerKey(p)) || drafted.has(`name:${normalizePlayerKey(p.name)}`);
 
   // Pre-mark keeper players — removed from the draftable pool by playerId (never by name).
   const keeperPlayerIds = new Set<number>();
@@ -1080,7 +1094,7 @@ export function buildMockDraft(params: MockDraftInputs) {
         default:    return 3;
       }
     };
-    const undrafted = pool.filter(p => !drafted.has(p.name) && !keeperPlayerIds.has(Number(p.espnId)));
+    const undrafted = pool.filter(p => !isDrafted(p) && !keeperPlayerIds.has(Number(p.espnId)));
     if (undrafted.length === 0) { continue; }
 
     // Phase 1 DP intelligence: defenders are not draftable before the league timing window opens.
@@ -1278,10 +1292,10 @@ export function buildMockDraft(params: MockDraftInputs) {
     }
 
     if (!pick) { continue; }
-    drafted.add(pick.name);
+    markDrafted(pick);
     counts[pick.position] = (counts[pick.position] ?? 0) + 1;
 
-    const available = undrafted.filter(p => p.position === targetPos && p.name !== pick.name);
+    const available = undrafted.filter(p => p.position === targetPos && !isDrafted(p) && mockDraftPlayerKey(p) !== mockDraftPlayerKey(pick));
     const needUrg = needs?.needs.find((n: any) => n.position === targetPos)?.urgency;
 
     const mv = pick.marketValue;
@@ -1626,15 +1640,25 @@ export const draftWarRoomRouter = router({
           .map((r) => ({ playerId: r.playerId, playerName: r.playerName, position: r.position, source: r.source })),
       };
 
-      // Board-reality pool — keepers removed by playerId (Deliverable B). Replaces the
-      // previous name-based removal. availablePool and availablePoolAfterKeepers are the
-      // SAME single board (Rule 4: no duplicate boards), named explicitly for clarity.
+      // Board-reality pool — keepers + mock-drafted players removed by espnId / normalized name.
+      // availablePool and availablePoolAfterKeepers are the SAME single board (Rule 4).
       // Include DP (IDP) and DEF (team D/ST) so defenders surface in the Available Players board.
       // The upstream playerPool is already league-scoped (DEF only for leagues that roster a team
       // defense, DP only for IDP leagues), so this static allow-list stays league-correct.
       const DRAFT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DP", "DEF"]);
-      const availablePoolAfterKeepers = playerPool
-        .filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position))
+      const mockDraftedIdentities = (mockDraft as any[])
+        .filter((p) => !p.isKeeperSlot && p.player)
+        .map((p) => ({ name: String(p.player), espnId: p.espnId ?? null }));
+      const availableAfterDrafted = excludeIdentitiesFromPool(
+        playerPool.filter((p) => !removedKeeperIds.has(Number(p.espnId)) && DRAFT_POSITIONS.has(p.position)),
+        mockDraftedIdentities,
+      );
+      if (isSkillStarvedPool(playerPool)) {
+        console.warn(
+          `[Draft War Room] Final playerPool still skill-starved (skill=${countSkillPlayers(playerPool)}) — check ESPN offense feed`,
+        );
+      }
+      const availablePoolAfterKeepers = availableAfterDrafted
         .slice(0, 320)
         .map((p, idx) => ({
           id: p.espnId ? `espn:${p.espnId}` : `name:${p.name.toLowerCase().trim()}`,
