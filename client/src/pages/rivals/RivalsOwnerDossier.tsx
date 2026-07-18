@@ -1,4 +1,4 @@
-/** Canonical `/rivals/owners/:ownerId` — Owner Dossier detail. */
+/** Canonical `/rivals/owners/:ownerId` — Owner Dossier detail (scout lens). */
 import { useParams } from "react-router";
 import { FeatureRouteGate } from "@/components/FeatureRouteGate";
 import { OwnerProfiles } from "@/pages/OwnerProfiles";
@@ -10,11 +10,12 @@ export function RivalsOwnerDossier() {
   return (
     <FeatureRouteGate route="/owner-profiles">
       <OwnerProfiles
+        mode="scout"
         routeOwnerId={decoded}
         syncSelectionToRoute
         pageEyebrow="Rivals"
         pageTitle="Owner Dossier"
-        pageSubtitle="Canonical manager dossier — identity, career, tendencies, and rivalry history."
+        pageSubtitle="Opponent scout report — tendencies, matchup intel, and how to attack this manager."
       />
     </FeatureRouteGate>
   );

@@ -1,5 +1,5 @@
 /**
- * Canonical `/rivals/owners` — structured Owner Dossier directory.
+ * Canonical `/rivals/owners` — structured Owner Dossier directory (scout lens).
  * Same underlying OwnerProfiles component as the dossier detail route;
  * Cast remains the narrative presentation at `/rivals/cast`.
  */
@@ -10,6 +10,7 @@ export function RivalsOwners() {
   return (
     <FeatureRouteGate route="/owner-profiles">
       <OwnerProfiles
+        mode="scout"
         syncSelectionToRoute
         pageEyebrow="Rivals"
         pageTitle="Owner Dossier"
