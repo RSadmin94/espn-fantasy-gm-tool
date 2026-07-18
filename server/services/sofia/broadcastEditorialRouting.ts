@@ -123,13 +123,16 @@ export function resolveEditorialPlanId(moment: BroadcastMoment): EditorialPlanId
     return "draft_run";
   }
 
-  // Prefer centralized reach severity → plan mapping when REACH is present.
+  // Prefer centralized reach severity → plan mapping when REACH is present
+  // OR reachClassification already marked isReach (signal must not be required twice).
   const reachPlan = moment.reachClassification
     ? editorialPlanForReach(moment.reachClassification)
     : null;
   if (
     reachPlan &&
-    (hasSignal(moment, "REACH") || hasStrongSignal(moment, "REACH"))
+    (hasSignal(moment, "REACH") ||
+      hasStrongSignal(moment, "REACH") ||
+      moment.reachClassification?.isReach === true)
   ) {
     return reachPlan;
   }
@@ -336,6 +339,8 @@ export function buildEditorialAssignment(
 
 /**
  * Assign roles from editorial plan lead — not fixed Sofia/Coach/Roxanne order.
+ * Never promote an optional voice into primary when the assigned lead did not accept.
+ * Strategy events (reaches) must stay Coach-owned or go partial — not fall back to Sofia.
  */
 export function assignEditorialRoles(
   assignment: EditorialAssignment,
@@ -344,17 +349,20 @@ export function assignEditorialRoles(
   const accepted = attempts.filter((v) => v.accepted);
   const byVoice = new Map(accepted.map((v) => [v.voice as VoiceId, v]));
 
-  const slotOrder: VoiceId[] = [
-    assignment.leadVoice,
-    ...assignment.plan.optionalVoices.filter((v) => v !== assignment.leadVoice),
-  ];
+  const leadHit = !assignment.plan.prohibitedVoices.includes(assignment.leadVoice)
+    ? byVoice.get(assignment.leadVoice)
+    : undefined;
 
   const onAir: BroadcastVoiceDiagnostics[] = [];
-  for (const id of slotOrder) {
-    if (onAir.length >= assignment.plan.maxVoices) break;
-    if (assignment.plan.prohibitedVoices.includes(id)) continue;
-    const hit = byVoice.get(id);
-    if (hit) onAir.push(hit);
+  if (leadHit) {
+    onAir.push(leadHit);
+    for (const id of assignment.plan.optionalVoices) {
+      if (onAir.length >= assignment.plan.maxVoices) break;
+      if (id === assignment.leadVoice) continue;
+      if (assignment.plan.prohibitedVoices.includes(id)) continue;
+      const hit = byVoice.get(id);
+      if (hit) onAir.push(hit);
+    }
   }
 
   return {

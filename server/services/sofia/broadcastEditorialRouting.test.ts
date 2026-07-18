@@ -172,13 +172,14 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).toContain("coach");
   });
 
-  it("requests Coach + Sofia (no Roxanne) for major_reach", () => {
+  it("requests Coach only for major_reach (P3A — no Sofia optional)", () => {
     const a = buildEditorialAssignment(
       bm({ signals: ["REACH:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
     expect(roxanneEligible(bm({ signals: ["REACH:strong"], significance: "major" }))).toBe(false);
-    expect(a.request).toEqual(["coach", "sofia"]);
+    expect(a.request).toEqual(["coach"]);
+    expect(a.plan.maxVoices).toBe(1);
   });
 
   it("keeps Roxanne off ordinary notable steals", () => {
@@ -228,14 +229,64 @@ describe("assignEditorialRoles", () => {
     expect(roles.primary?.voice).toBe("coach");
   });
 
-  it("places coach as primary when coach leads major_reach", () => {
+  it("does not promote optional sofia when lead coach rejected on position_run", () => {
+    const plan = getEditorialPlan("position_run");
+    const assignment = {
+      planId: plan.id,
+      plan,
+      silence: false,
+      request: voicesForPlan(plan),
+      leadVoice: "coach" as const,
+      leadRotated: false,
+      callbackSuppressed: false,
+    };
+    const roles = assignEditorialRoles(assignment, [diag("sofia", true), diag("coach", false)]);
+    expect(roles.primary).toBeNull();
+    expect(roles.secondary).toBeNull();
+  });
+
+  it("places coach as sole voice on major_reach even if sofia accepted (P3A)", () => {
     const assignment = buildEditorialAssignment(
       bm({ signals: ["REACH:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
+    expect(assignment.planId).toBe("major_reach");
+    expect(assignment.plan.maxVoices).toBe(1);
+    expect(assignment.plan.optionalVoices).toEqual([]);
     const roles = assignEditorialRoles(assignment, [diag("sofia"), diag("coach")]);
     expect(roles.primary?.voice).toBe("coach");
-    expect(roles.secondary?.voice).toBe("sofia");
+    expect(roles.secondary).toBeNull();
+  });
+
+  it("does not promote sofia to primary when coach rejected on slight_reach (P3A)", () => {
+    const assignment = buildEditorialAssignment(
+      bm({ signals: ["REACH"], significance: "notable" }),
+      new SessionEditorialLedger(),
+    );
+    expect(assignment.planId).toBe("slight_reach");
+    const roles = assignEditorialRoles(assignment, [diag("sofia", true), diag("coach", false)]);
+    expect(roles.primary).toBeNull();
+    expect(roles.secondary).toBeNull();
+  });
+
+  it("resolves slight_reach from reachClassification.isReach without REACH signal (P3A)", () => {
+    expect(
+      resolveEditorialPlanId(
+        bm({
+          signals: [],
+          significance: "notable",
+          reachClassification: {
+            isReach: true,
+            severity: "mild",
+            reachDelta: 8,
+            round: 1,
+            phase: "early",
+            minimumThreshold: 8,
+            personaOwner: "coach",
+          },
+        }),
+      ),
+    ).toBe("slight_reach");
   });
 
   it("places roxanne as primary for substantive rivalry_receipt", () => {

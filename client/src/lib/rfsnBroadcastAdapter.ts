@@ -221,24 +221,24 @@ function selectByEditorialRole(
   let secondaryR = accepted.find((r) => r.editorialRole === "secondary");
   const deferred = accepted.filter((r) => r.editorialRole === "deferred");
 
-  let primary = primaryR ?? null;
-  let secondary = secondaryR ?? null;
-  let overflow = [...deferred];
-
-  // Explicit fallback when intended primary was rejected (not in accepted list)
-  if (!primary && secondary) {
-    primary = secondary;
-    secondary = overflow.shift() ?? null;
-  } else if (!primary && overflow.length > 0) {
-    primary = overflow.shift() ?? null;
+  // Preserve orchestrator ownership. If the assigned primary did not accept,
+  // do NOT promote secondary/deferred into primary (P3A: mild reach must not
+  // become Sofia-led just because Coach rejected). Orphan color without a lead
+  // also stays off-air.
+  if (!primaryR) {
+    return { primary: null, secondary: null, overflow: [...deferred] };
   }
 
-  if (secondary && primary && secondary.commentator === primary.commentator) {
+  const primary = primaryR;
+  let secondary = secondaryR ?? null;
+  const overflow = [...deferred];
+
+  if (secondary && secondary.commentator === primary.commentator) {
     secondary = overflow.shift() ?? null;
   }
 
   return {
-    primary: primary ? toCard(primary, "primary") : null,
+    primary: toCard(primary, "primary"),
     secondary: secondary ? toCard(secondary, "secondary") : null,
     overflow,
   };

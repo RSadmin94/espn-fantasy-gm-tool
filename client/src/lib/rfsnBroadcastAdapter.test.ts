@@ -214,24 +214,26 @@ describe("selectOnAirCommentary — editorial roles", () => {
     expect(sel.overflow[0]?.commentator).toBe("roxanne");
   });
 
-  it("falls back to secondary when primary rejected", () => {
+  it("does not promote secondary to primary when assigned primary rejected (P3A)", () => {
     const accepted = filterAcceptedCommentary([
       voice("coach", { editorialRole: "primary", status: "rejected" }),
       voice("sofia", { editorialRole: "secondary" }),
     ]);
     const sel = selectOnAirCommentary(accepted, "major");
-    expect(sel.primary?.commentator).toBe("sofia");
+    expect(sel.primary).toBeNull();
     expect(sel.secondary).toBeNull();
   });
 
-  it("falls back to deferred when primary and secondary rejected", () => {
+  it("does not promote deferred to primary when assigned primary and secondary rejected (P3A)", () => {
     const accepted = filterAcceptedCommentary([
       voice("roxanne", { editorialRole: "primary", status: "rejected" }),
       voice("coach", { editorialRole: "secondary", status: "rejected" }),
       voice("sofia", { editorialRole: "deferred" }),
     ]);
     const sel = selectOnAirCommentary(accepted, "major");
-    expect(sel.primary?.commentator).toBe("sofia");
+    expect(sel.primary).toBeNull();
+    expect(sel.secondary).toBeNull();
+    expect(sel.overflow.map((o) => o.commentator)).toEqual(["sofia"]);
   });
 
   it("maps deferred to overflow for ticker via buildRfsnBroadcastSnapshot", () => {

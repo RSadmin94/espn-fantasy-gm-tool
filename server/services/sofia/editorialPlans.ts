@@ -82,12 +82,15 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     callbackEligible: true,
   }),
 
-  slight_reach: plan("slight_reach", "coach", ["sofia"], ["roxanne"], 2, {
+  // Mild / big / sub-40 massive reaches: Coach only.
+  // Do not invite Sofia as optional — if Coach fails, silence/partial rather than
+  // promoting Sofia into ownership of a strategy event (P3A live leak).
+  slight_reach: plan("slight_reach", "coach", [], ["sofia", "roxanne"], 1, {
     energyLevel: "medium",
     callbackEligible: true,
   }),
 
-  major_reach: plan("major_reach", "coach", ["sofia"], ["roxanne"], 2, {
+  major_reach: plan("major_reach", "coach", [], ["sofia", "roxanne"], 1, {
     energyLevel: "high",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 1,

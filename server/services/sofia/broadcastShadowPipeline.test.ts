@@ -87,12 +87,12 @@ describe("broadcast shadow e2e", () => {
     expect(artifact.snapshot.primary?.commentator).toBe("coach");
   });
 
-  it("routes coach-led major reach with sofia secondary", async () => {
+  it("routes coach-only major reach without sofia secondary (P3A)", async () => {
     const state: ShadowPipelineState = { queue: [], ticker: [] };
     const artifact = await processShadowPick(orch(), dm({ level: "major", signals: ["REACH(strong)"] }), state);
     expect(artifact.broadcastFrame.public.primaryVoice?.voice).toBe("coach");
     expect(artifact.snapshot.primary?.commentator).toBe("coach");
-    expect(artifact.snapshot.secondary?.commentator).toBe("sofia");
+    expect(artifact.snapshot.secondary == null).toBe(true);
   });
 
     it("routes roxanne-led rivalry with deferred voices on frame", async () => {

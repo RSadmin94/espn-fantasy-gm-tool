@@ -414,7 +414,8 @@ describe("P3 rivalry-heavy live-like fixture (failed preview mix)", () => {
     }
     // Roxanne streak ≤ 2 consecutive turns in this fixture
     expect(maxPersonaStreak(leads, "roxanne")).toBeLessThanOrEqual(2);
-    expect(maxStreak(leads)).toBeLessThanOrEqual(2);
+    // Overall any-persona streak may exceed 2 when consecutive football reaches
+    // correctly stay Coach-led (P3A). Ordinary Coach streak ≤2 is P3B — separate.
 
     // Roxanne only leads substantive entertainment
     for (const row of speaking) {
