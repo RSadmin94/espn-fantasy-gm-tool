@@ -105,7 +105,8 @@ describe("BroadcastOrchestrator", () => {
     it("produces coach-led major reach frame", async () => {
       const frame = await orchestrator.buildFrame(toBroadcast(moment({ level: "major", signals: ["REACH:strong"] })));
       expect(frame.public.primaryVoice?.voice).toBe("coach");
-      expect(frame.public.secondaryVoice?.voice).toBe("sofia");
+      // P3A: reach is Coach-owned — no Sofia optional → primary promotion
+      expect(frame.public.secondaryVoice).toBeNull();
     });
 
     it("produces roxanne-led rivalry receipt frame", async () => {
@@ -145,7 +146,7 @@ describe("BroadcastOrchestrator", () => {
   });
 
   describe("failures", () => {
-    it("becomes partial when coach times out on major reach", async () => {
+    it("becomes failed (silence) when coach times out on major reach", async () => {
       const slow = new BroadcastOrchestrator({
         voices: { sofia: SOFIA, coach: COACH, roxanne: ROXANNE },
         checker: entailChecker,
@@ -158,7 +159,9 @@ describe("BroadcastOrchestrator", () => {
       }, { voiceTimeoutMs: 10, maxTransientRetries: 0 });
 
       const frame = await slow.buildFrame(toBroadcast(moment({ level: "major", signals: ["REACH:strong"] })));
-      expect(frame.public.status).toBe("partial");
+      // P3A: Coach-only reach — no Sofia backup; timeout → silence/failed, not partial
+      expect(frame.public.status).toBe("failed");
+      expect(frame.public.primaryVoice).toBeNull();
     });
 
     it("rejects entity violations", async () => {

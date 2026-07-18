@@ -28,6 +28,7 @@ import {
 } from "./liveBroadcastSession";
 import { recordLiveBroadcastTelemetry, summarizeFrameTelemetry } from "./liveBroadcastTelemetry";
 import { scheduleLiveFrameAudio } from "../rfsn/rfsnLiveTtsService";
+import { leagueContextEngine } from "../rfsn/leagueContextEngine";
 import {
   createDeterministicLiveOrchestrator,
   createProductionLiveOrchestrator,
@@ -347,13 +348,20 @@ export async function processDraftWrapUp(
 
 export async function processLockedDraftMoment(
   draftMoment: DraftMoment,
-  opts: { draftComplete?: boolean; useDeterministicProvider?: boolean } = {},
+  opts: { draftComplete?: boolean; useDeterministicProvider?: boolean; userId?: number | null } = {},
 ): Promise<PublicLiveBroadcastPayload | null> {
   if (!isRfsnLiveBroadcastEnabled()) return null;
 
   const broadcastMoment = draftMomentToBroadcastMoment(draftMoment);
+  // RFSN-005 — League Context Engine (after moment build, before editorial routing).
+  const { moment: enrichedMoment } = await leagueContextEngine.enrich(broadcastMoment, {
+    leagueId: draftMoment.leagueId,
+    draftId: draftMoment.draftId,
+    userId: opts.userId,
+  });
+
   const result = await buildLiveBroadcastFrame({
-    moment: broadcastMoment,
+    moment: enrichedMoment,
     leagueId: draftMoment.leagueId,
     draftId: draftMoment.draftId,
     draftMoment,

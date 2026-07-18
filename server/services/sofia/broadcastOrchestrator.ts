@@ -30,6 +30,7 @@ import { generateVoice } from "./broadcastVoice";
 import type { EntailmentChecker } from "./sofiaDeterministicValidation";
 import type { PlayerRegistryOracle } from "./playerRegistryOracle";
 import type { RegenerationTelemetry } from "./voiceRegeneration";
+import { intentAuditAction } from "../rfsn/intentAudit";
 
 export type BroadcastLogger = {
   warn(message: string, meta?: Record<string, unknown>): void;
@@ -316,8 +317,54 @@ export class BroadcastOrchestrator {
 
         lastResult = result;
 
-        if (result.accepted || !isTransientFailure(result) || attemptCount > maxRetries) {
-          return toDiagnostics(personality, result, {
+        // RFSN-009A — post-generation intent audit (does not change generation logic).
+        if (result.accepted && result.line) {
+          const { action, audit } = intentAuditAction(result.line, {
+            allowRegenerate: Boolean(this.deps.enableDeterministicRegeneration),
+            alreadyRegenerated: Boolean(result.regeneration?.attempted),
+          });
+          if (action === "regenerate") {
+            this.deps.logger?.warn("intent audit — regenerating once", {
+              voice: personality.id,
+              flagged: audit.ok ? [] : audit.flagged,
+            });
+            const regen = await this.withTimeout(
+              generateVoice(packet, personality, {
+                generate: generateFn,
+                checker: this.deps.checker,
+                playerOracle: this.deps.playerOracle,
+                regenerationTelemetry: this.deps.regenerationTelemetry,
+                enableDeterministicRegeneration: false,
+              }),
+              timeoutMs,
+            );
+            lastResult = regen;
+            if (regen.accepted && regen.line) {
+              const second = intentAuditAction(regen.line, {
+                allowRegenerate: false,
+                alreadyRegenerated: true,
+              });
+              if (second.action === "suppress") {
+                lastResult = {
+                  ...regen,
+                  accepted: false,
+                  rejectedBy: "parse",
+                  suppressReason: `intent audit: ${second.audit.ok ? "flagged" : second.audit.flagged.join(", ")}`,
+                };
+              }
+            }
+          } else if (action === "suppress") {
+            lastResult = {
+              ...result,
+              accepted: false,
+              rejectedBy: "parse",
+              suppressReason: `intent audit: ${audit.ok ? "flagged" : audit.flagged.join(", ")}`,
+            };
+          }
+        }
+
+        if (lastResult.accepted || !isTransientFailure(lastResult) || attemptCount > maxRetries) {
+          return toDiagnostics(personality, lastResult, {
             attemptCount,
             latencyMs: (this.deps.clock?.() ?? Date.now()) - start,
           });

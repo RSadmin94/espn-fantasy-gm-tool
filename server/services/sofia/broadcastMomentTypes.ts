@@ -6,6 +6,7 @@ import type { BroadcastContext, BroadcastMomentIdentity, BroadcastSignificance }
 import type { FactPacket } from "./broadcastVoice";
 import type { EditorialPlanId } from "./editorialPlans";
 import type { ReachClassification } from "../draftMoments/reachClassification";
+import type { HistoricalContext } from "../rfsn/historicalContext";
 
 export type BroadcastMomentReceipt = {
   readonly id: string;
@@ -32,4 +33,9 @@ export type BroadcastMoment = {
   readonly callbackKeys?: readonly string[];
   /** Centralized pick-vs-ADP reach classification (when available). */
   readonly reachClassification?: ReachClassification | null;
+  /**
+   * RFSN-005 — aired HistoricalContext from the League Context Engine (optional, additive).
+   * Facts already merged into factPacket.verifiedFacts when present.
+   */
+  readonly leagueContext?: readonly HistoricalContext[];
 };
