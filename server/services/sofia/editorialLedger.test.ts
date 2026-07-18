@@ -94,7 +94,7 @@ describe("SessionEditorialLedger", () => {
 
   it("does not rotate coach when plan has no optional voices", () => {
     const plan = getEditorialPlan("value_pick");
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       ledger.recordFrame({
         planId: "value_pick",
         leadVoice: "coach",
@@ -113,9 +113,9 @@ describe("SessionEditorialLedger", () => {
     expect(res.plan.leadVoice).toBe("coach");
   });
 
-  it("rotates coach lead on position_run with optional sofia", () => {
+  it("rotates coach lead on position_run with optional sofia after two consecutive", () => {
     const plan = getEditorialPlan("position_run");
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       ledger.recordFrame({
         planId: "position_run",
         leadVoice: "coach",

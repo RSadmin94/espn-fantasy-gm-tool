@@ -48,7 +48,8 @@ const MAX_LEAD_HISTORY = 8;
 const MAX_VOICE_HISTORY = 24;
 const MAX_CATCHPHRASE_HISTORY = 6;
 const CALLBACK_COOLDOWN_PICKS = 4;
-const COACH_LEAD_STREAK_LIMIT = 3;
+/** Soft preference: any persona ≤2 consecutive leads before preferring an optional alt. */
+const PERSONA_LEAD_STREAK_LIMIT = 2;
 
 const ROXANNE_CATCHPHRASE_PATTERNS = [
   /\bdid\s+.+\s+just\b/i,
@@ -113,16 +114,26 @@ export class SessionEditorialLedger implements EditorialLedger {
       };
     }
 
-    const coachStreak = consecutiveLeadStreak(this.recentLeadVoices, "coach");
-    if (plan.leadVoice === "coach" && coachStreak >= COACH_LEAD_STREAK_LIMIT) {
-      const alt = plan.optionalVoices.find((v) => !plan.prohibitedVoices.includes(v));
-      if (alt) {
-        plan = {
-          ...plan,
-          leadVoice: alt,
-          optionalVoices: [plan.leadVoice, ...plan.optionalVoices.filter((v) => v !== alt)],
-        };
-        leadRotated = true;
+    // Soft rotation: any lead voice that dominated the short window yields to an optional alt
+    // unless this is a historic/major extraordinary plan with no safe alt.
+    const leadStreak = consecutiveLeadStreak(this.recentLeadVoices, plan.leadVoice);
+    if (leadStreak >= PERSONA_LEAD_STREAK_LIMIT) {
+      const historic =
+        moment.significance === "historic" ||
+        moment.momentType === "championship" ||
+        moment.receipts.some((r) => r.id === "rivalry" && r.type === "rivalry");
+      if (!historic) {
+        const alt = plan.optionalVoices.find(
+          (v) => v !== plan.leadVoice && !plan.prohibitedVoices.includes(v),
+        );
+        if (alt) {
+          plan = {
+            ...plan,
+            leadVoice: alt,
+            optionalVoices: [plan.leadVoice, ...plan.optionalVoices.filter((v) => v !== alt)],
+          };
+          leadRotated = true;
+        }
       }
     }
 

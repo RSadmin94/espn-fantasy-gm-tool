@@ -76,7 +76,7 @@ describe("live draft wrap-up", () => {
     const assignment = buildEditorialAssignment(moment, ledger);
     expect(assignment.planId).toBe("draft_wrap_up");
     expect(assignment.silence).toBe(false);
-    expect(assignment.request).toEqual(["sofia", "coach", "roxanne"]);
+    expect(assignment.request).toEqual(["sofia", "coach"]);
     expect(assignment.leadVoice).toBe("sofia");
     expect(moment.factPacket.verifiedFacts[0]).toMatch(/Draft complete:/);
   });

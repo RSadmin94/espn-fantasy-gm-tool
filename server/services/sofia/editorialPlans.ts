@@ -82,19 +82,19 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     callbackEligible: true,
   }),
 
-  slight_reach: plan("slight_reach", "sofia", ["coach"], ["roxanne"], 2, {
+  slight_reach: plan("slight_reach", "coach", ["sofia"], ["roxanne"], 2, {
     energyLevel: "medium",
     callbackEligible: true,
   }),
 
-  major_reach: plan("major_reach", "sofia", ["coach"], ["roxanne"], 2, {
+  major_reach: plan("major_reach", "coach", ["sofia"], ["roxanne"], 2, {
     energyLevel: "high",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 1,
     callbackEligible: true,
   }),
 
-  historic_reach: plan("historic_reach", "sofia", ["coach", "roxanne"], [], 3, {
+  historic_reach: plan("historic_reach", "coach", ["sofia", "roxanne"], [], 3, {
     energyLevel: "peak",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 2,
@@ -151,14 +151,14 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     callbackEligible: true,
   }),
 
-  championship: plan("championship", "sofia", ["coach", "roxanne"], [], 3, {
+  championship: plan("championship", "roxanne", ["sofia", "coach"], [], 3, {
     energyLevel: "peak",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 3,
     callbackEligible: true,
   }),
 
-  dynasty_moment: plan("dynasty_moment", "sofia", ["coach"], ["roxanne"], 2, {
+  dynasty_moment: plan("dynasty_moment", "roxanne", ["sofia", "coach"], [], 3, {
     energyLevel: "peak",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 2,
@@ -177,7 +177,7 @@ export const EDITORIAL_PLANS: Record<EditorialPlanId, EditorialPlan> = {
     callbackEligible: true,
   }),
 
-  hall_of_fame: plan("hall_of_fame", "sofia", ["coach", "roxanne"], [], 3, {
+  hall_of_fame: plan("hall_of_fame", "roxanne", ["sofia", "coach"], [], 3, {
     energyLevel: "peak",
     decompressionBehavior: "trigger",
     decompressionWindowPicks: 2,

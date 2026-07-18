@@ -13,6 +13,11 @@ import {
   type EditorialPlanId,
   type VoiceId,
 } from "./editorialPlans";
+import {
+  getPersonaAssignmentMetrics,
+  resolveRoleFirstLead,
+  classifyEventRole,
+} from "./personaRoleAssignment";
 
 export type { VoiceId, EditorialPlanId };
 
@@ -25,6 +30,9 @@ export type EditorialAssignment = {
   leadVoice: VoiceId;
   leadRotated: boolean;
   callbackSuppressed: boolean;
+  /** Dev/verification — role-first assignment reason. */
+  assignmentReason?: string;
+  rotationOverrideReason?: string;
 };
 
 export type RoleAssignment = {
@@ -54,8 +62,9 @@ const SOFIA_EVIDENCE_RE =
   /\b(ADP|ahead|fell|behind|reach|steal|consensus|tier|board|trend|value|history|record|earliest|latest|zero.?rb|stack|waiting|strategy|specialist|defense|kicker)\b/i;
 
 /**
- * One lead for ordinary value picks: Coach = construction/need; Sofia = ADP/value/reach/steal/strategy.
- * Never Roxanne on ordinary value. Restores Sofia as the regular analytical lead.
+ * One lead for ordinary value picks.
+ * Coach owns reaches/steals/construction; Sofia owns ADP/value/tier analysis.
+ * Never Roxanne on ordinary value.
  */
 export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId; reason: string } {
   const corpus = [
@@ -65,6 +74,11 @@ export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId;
     moment.primaryStoryline ?? "",
   ].join(" | ");
 
+  // Role-first: reaches and steals belong to Coach (strategy), not Sofia.
+  if (hasSignal(moment, "REACH") || hasSignal(moment, "STEAL")) {
+    return { lead: "coach", reason: "reach_or_steal_strategy" };
+  }
+
   const constructionLead =
     hasSignal(moment, "STARTER_NEED") ||
     hasSignal(moment, "HERO_RB") ||
@@ -72,10 +86,8 @@ export function resolveValueLeadVoice(moment: BroadcastMoment): { lead: VoiceId;
     moment.primaryStoryline === "HERO_RB";
   if (constructionLead) return { lead: "coach", reason: "roster_construction_or_need" };
 
-  if (hasSignal(moment, "STEAL") || hasSignal(moment, "REACH") || SOFIA_EVIDENCE_RE.test(corpus)) {
-    return { lead: "sofia", reason: "adp_value_reach_or_steal" };
-  }
   if (COACH_EVIDENCE_RE.test(corpus)) return { lead: "coach", reason: "roster_construction_or_need" };
+  if (SOFIA_EVIDENCE_RE.test(corpus)) return { lead: "sofia", reason: "adp_value_or_trend" };
   return { lead: "sofia", reason: "default_analytical_value" };
 }
 
@@ -173,10 +185,9 @@ export function buildEditorialAssignment(
 ): EditorialAssignment {
   const planId = resolveEditorialPlanId(moment);
   let basePlan = getEditorialPlan(planId);
+  const metrics = getPersonaAssignmentMetrics();
 
-  // Ordinary value picks get a single analytical lead (Sofia by default, Coach on
-  // construction/need) — never Roxanne. This restores Sofia's regular airtime and
-  // stops Roxanne riding along on every notable value pick.
+  // Ordinary value picks get a single analytical/strategy lead — never Roxanne.
   if (planId === "value_pick") {
     const { lead } = resolveValueLeadVoice(moment);
     const others = (["sofia", "coach", "roxanne"] as VoiceId[]).filter((v) => v !== lead);
@@ -189,8 +200,10 @@ export function buildEditorialAssignment(
     };
   }
 
-  // Strip optional Roxanne unless grounded eligibility exists.
-  if (basePlan.optionalVoices.includes("roxanne") && !roxanneEligible(moment)) {
+  // Strip optional Roxanne unless grounded eligibility OR she owns the event role.
+  const rolePreview = classifyEventRole(moment, planId);
+  const roxanneOwnsEvent = rolePreview.primary === "roxanne";
+  if (basePlan.optionalVoices.includes("roxanne") && !roxanneEligible(moment) && !roxanneOwnsEvent) {
     basePlan = {
       ...basePlan,
       optionalVoices: basePlan.optionalVoices.filter((v) => v !== "roxanne"),
@@ -199,7 +212,7 @@ export function buildEditorialAssignment(
         : [...basePlan.prohibitedVoices, "roxanne"],
     };
   }
-  if (basePlan.leadVoice === "roxanne" && !roxanneEligible(moment)) {
+  if (basePlan.leadVoice === "roxanne" && !roxanneEligible(moment) && !roxanneOwnsEvent) {
     basePlan = {
       ...basePlan,
       leadVoice: "sofia",
@@ -208,10 +221,58 @@ export function buildEditorialAssignment(
     };
   }
 
+  // Role-first once: event → best persona (before ledger silence / soft rotation).
+  const snap = ledger.snapshot();
+  // Ordinary value: Sofia/Coach only — allow both so conversation memory can rotate.
+  const allowedPreview =
+    planId === "value_pick"
+      ? (["sofia", "coach"] as VoiceId[])
+      : voicesForPlan(basePlan).length > 0
+        ? voicesForPlan(basePlan)
+        : [basePlan.leadVoice];
+  const decision = resolveRoleFirstLead({
+    moment,
+    planId,
+    recentLeads: snap.recentLeadVoices,
+    allowedVoices: allowedPreview,
+  });
+
+  if (decision.category !== "silence" && allowedPreview.includes(decision.lead)) {
+    if (planId === "value_pick") {
+      const others = (["sofia", "coach", "roxanne"] as VoiceId[]).filter((v) => v !== decision.lead);
+      basePlan = {
+        ...basePlan,
+        leadVoice: decision.lead,
+        optionalVoices: [],
+        prohibitedVoices: others,
+        maxVoices: 1,
+      };
+    } else if (decision.lead !== basePlan.leadVoice) {
+      const prevLead = basePlan.leadVoice;
+      basePlan = {
+        ...basePlan,
+        leadVoice: decision.lead,
+        optionalVoices: [
+          prevLead,
+          ...basePlan.optionalVoices.filter((v) => v !== decision.lead && v !== prevLead),
+        ].filter((v) => !basePlan.prohibitedVoices.includes(v)),
+      };
+    }
+  }
+
+  const considered: VoiceId[] = [];
+  if (decision.primaryOwner) considered.push(decision.primaryOwner);
+  if (decision.secondaryOwner && !considered.includes(decision.secondaryOwner)) {
+    considered.push(decision.secondaryOwner);
+  }
+  if (considered.length === 0) considered.push("sofia", "coach", "roxanne");
+  metrics?.recordOpportunity(considered);
+
   const resolution = ledger.resolveForMoment(basePlan, moment);
   const plan = resolution.plan;
 
   if (resolution.silenced) {
+    metrics?.recordSilence();
     return {
       planId: plan.id,
       plan,
@@ -221,17 +282,39 @@ export function buildEditorialAssignment(
       leadVoice: plan.leadVoice,
       leadRotated: resolution.leadRotated,
       callbackSuppressed: resolution.callbackSuppressed,
+      assignmentReason: "silence",
     };
   }
+
+  // Ledger may soft-rotate after role-first; do not re-apply role-first (would undo ledger).
+  let finalDecision = decision;
+  let assignmentReason = decision.reason;
+  let rotationOverrideReason = decision.rotationOverrideReason;
+  if (resolution.leadRotated && plan.leadVoice !== decision.lead) {
+    finalDecision = {
+      ...decision,
+      lead: plan.leadVoice,
+      reason: "rotation_secondary_owner",
+      rotationOverride: false,
+      rotationOverrideReason: undefined,
+    };
+    assignmentReason = "rotation_secondary_owner";
+    rotationOverrideReason = undefined;
+  }
+
+  const request = voicesForPlan(plan);
+  metrics?.recordAssignment(finalDecision, considered);
 
   return {
     planId: plan.id,
     plan,
     silence: false,
-    request: voicesForPlan(plan),
+    request,
     leadVoice: plan.leadVoice,
-    leadRotated: resolution.leadRotated,
+    leadRotated: resolution.leadRotated || decision.reason === "rotation_secondary_owner",
     callbackSuppressed: resolution.callbackSuppressed,
+    assignmentReason,
+    rotationOverrideReason,
   };
 }
 

@@ -139,26 +139,26 @@ describe("buildEditorialAssignment", () => {
     expect(a.request).toEqual([]);
   });
 
-  it("requests sofia lead for value_pick steal", () => {
+  it("requests coach lead for value_pick steal", () => {
     const a = buildEditorialAssignment(bm({ signals: ["STEAL"] }), ledger);
     expect(a.planId).toBe("value_pick");
-    expect(a.leadVoice).toBe("sofia");
-    expect(a.request).toEqual(["sofia"]);
+    expect(a.leadVoice).toBe("coach");
+    expect(a.request).toEqual(["coach"]);
   });
 
-  it("requests sofia lead for major_reach", () => {
+  it("requests coach lead for major_reach", () => {
     const a = buildEditorialAssignment(bm({ signals: ["REACH:strong"], significance: "major" }), ledger);
-    expect(a.leadVoice).toBe("sofia");
-    expect(a.request).toContain("sofia");
+    expect(a.leadVoice).toBe("coach");
+    expect(a.request).toContain("coach");
   });
 
-  it("requests Sofia + Coach (no Roxanne) for major_reach", () => {
+  it("requests Coach + Sofia (no Roxanne) for major_reach", () => {
     const a = buildEditorialAssignment(
       bm({ signals: ["REACH:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
     expect(roxanneEligible(bm({ signals: ["REACH:strong"], significance: "major" }))).toBe(false);
-    expect(a.request).toEqual(["sofia", "coach"]);
+    expect(a.request).toEqual(["coach", "sofia"]);
   });
 
   it("keeps Roxanne off ordinary notable steals", () => {
@@ -200,14 +200,14 @@ describe("assignEditorialRoles", () => {
     expect(roles.primary?.voice).toBe("coach");
   });
 
-  it("places sofia as primary when sofia leads", () => {
+  it("places coach as primary when coach leads major_reach", () => {
     const assignment = buildEditorialAssignment(
       bm({ signals: ["REACH:strong"], significance: "major" }),
       new SessionEditorialLedger(),
     );
     const roles = assignEditorialRoles(assignment, [diag("sofia"), diag("coach")]);
-    expect(roles.primary?.voice).toBe("sofia");
-    expect(roles.secondary?.voice).toBe("coach");
+    expect(roles.primary?.voice).toBe("coach");
+    expect(roles.secondary?.voice).toBe("sofia");
   });
 
   it("places roxanne as primary for rivalry_receipt", () => {
