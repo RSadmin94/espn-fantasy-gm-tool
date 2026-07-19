@@ -120,7 +120,7 @@ describe("RFSN production recovery — five-pick seeded cert", () => {
       "******** DRAFT READY ********",
     );
     expect(tickerText()).toBe("******** DRAFT READY ********");
-    expect(logText()).toContain("Waiting for written commentary");
+    expect(logText()).toContain("RFSN is monitoring — next significant moment will trigger coverage");
 
     for (const seeded of SEEDED) {
       results = {
@@ -197,7 +197,7 @@ describe("RFSN production recovery — five-pick seeded cert", () => {
     }
     render();
     expect(tickerText()).toBe("******** DRAFT READY ********");
-    expect(logText()).toContain("Waiting for written commentary");
+    expect(logText()).toContain("RFSN is monitoring — next significant moment will trigger coverage");
     expect(log).toHaveLength(0);
 
     // Expose table for the final report harness.

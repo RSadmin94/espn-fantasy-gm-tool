@@ -16,7 +16,9 @@ export function RfsnCommentaryLog({ entries, className }: RfsnCommentaryLogProps
     >
       <p className="text-[10px] font-black uppercase tracking-wider text-white/45">Running log</p>
       {entries.length === 0 ? (
-        <p className="mt-1 text-[11px] italic text-white/30">Waiting for written commentary…</p>
+        <p className="mt-1 text-[11px] italic text-white/30" data-rfsn-commentary-empty>
+          RFSN is monitoring — next significant moment will trigger coverage
+        </p>
       ) : (
         <ul className="mt-1.5 max-h-40 space-y-1.5 overflow-y-auto pr-1">
           {[...entries].reverse().map((entry) => {

@@ -26,12 +26,19 @@ import {
   defaultLiveDraftPosFilter,
   matchesLiveDraftPosFilter,
 } from "@/lib/liveDraftPoolPresentation";
+import {
+  buildLiveDraftRecentPicks,
+  formatLiveDraftMarketValue,
+  formatLiveDraftPoolAdp,
+  formatLiveDraftValueVsMarket,
+} from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
   LiveDraftControlPanel,
   type LiveDraftSource,
 } from "@/components/draft/LiveDraftControlPanel";
+import { LiveDraftRecentPicks } from "@/components/draft/LiveDraftRecentPicks";
 import { DraftNightShow } from "@/components/draft/DraftNightShow";
 import type { DraftNightShowPayload } from "@/lib/draftNightShowTypes";
 import type { RfsnLivePublicPayload } from "@/lib/rfsnLiveState";
@@ -81,6 +88,8 @@ const POS_CFG: Record<string, { pill: string }> = {
   TE:  { pill: "bg-orange-500/20 text-orange-300 border-orange-500/40" },
   K:   { pill: "bg-zinc-700 text-zinc-300 border-zinc-600" },
   DEF: { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40" },
+  DST: { pill: "bg-violet-500/20 text-violet-300 border-violet-500/40" },
+  DP:  { pill: "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40" },
   "?": { pill: "bg-amber-500/20 text-amber-300 border-amber-500/40" },
 };
 
@@ -1048,6 +1057,19 @@ function LiveDraftEngine({
     return name;
   }, [results]);
 
+  const recentPicks = useMemo(
+    () =>
+      buildLiveDraftRecentPicks({
+        schedule,
+        results,
+        teams,
+        limit: 8,
+      }),
+    [schedule, results, teams],
+  );
+
+  const currentOverallPick = slot && !done ? Number(slot.pickNumber) : null;
+
   const SORTS: [typeof sort, string][] = [["adp","ADP"],["proj","Proj"],["value","Value"],["pos","Pos"],["name","Name"]];
   // Position tabs: IDP leagues open on OFFENSE (RFSN-016); DP remains a first-class tab.
   const POSES = useMemo(() => {
@@ -1113,7 +1135,9 @@ function LiveDraftEngine({
           status={{
             active: liveDraftActive,
             source: liveDraftSource,
-            monitoring: connectedLeagueLive && !leagueAdapter.lastError,
+            monitoring: connectedLeagueLive
+              ? !leagueAdapter.lastError
+              : running || idx > 0,
             boothOnAir: connectedLeagueLive
               ? leagueAdapter.notifiedCount > 0 || leagueAdapter.lockedCount > 0
               : running || idx > 0,
@@ -1123,6 +1147,7 @@ function LiveDraftEngine({
             lastError: connectedLeagueLive ? leagueAdapter.lastError : null,
             lastPollAt: connectedLeagueLive ? leagueAdapter.lastPollAt : null,
             connectorReady: connectedLeagueLive ? leagueAdapter.extensionPresent : true,
+            draftPaused: connectedLeagueLive ? false : !running && !done && idx > 0,
           }}
           onToggleActive={() => setLiveDraftActive((v) => !v)}
           onSourceChange={setLiveDraftSource}
@@ -1139,6 +1164,12 @@ function LiveDraftEngine({
           remainingMs={remainingMs}
           lastLockedPlayerName={lastLockedPlayerName}
           className="mb-3"
+        />
+      )}
+      {liveDraftActive && (
+        <LiveDraftRecentPicks
+          picks={recentPicks}
+          currentPickNumber={currentOverallPick}
         />
       )}
       {done && (
@@ -1170,20 +1201,66 @@ function LiveDraftEngine({
             ))}
             <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-600" />
           </div>
-          <div className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.06] max-h-[460px] overflow-auto">
-            {available.slice(0, 120).map((p: any) => (
-              <button key={keyOf(p)} disabled={!awaitingUser}
-                onClick={() => awaitingUser && userDraft(p)}
-                className={cn("w-full flex items-center gap-2 px-3 py-1.5 text-left",
-                  awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default")}>
-                <span className="text-[11px] text-zinc-600 w-8 tabular-nums shrink-0">{p.adp != null ? Number(p.adp).toFixed(1) : (p.rank ?? "—")}</span>
-                <PosPill pos={p.position} />
-                <span className="text-xs font-bold text-zinc-200 flex-1 truncate">{p.name}</span>
-                <span className="text-[11px] text-zinc-500 tabular-nums shrink-0">{Math.round(p.projectedPoints ?? 0)} pts</span>
-                <span className="text-[11px] text-zinc-600 tabular-nums shrink-0 w-12 text-right">{p.marketValue != null ? `${Math.round(p.marketValue)}` : "—"}</span>
-                {awaitingUser && <span className="text-[10px] font-black text-violet-400 shrink-0">DRAFT</span>}
-              </button>
-            ))}
+          <div className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.06] max-h-[min(560px,calc(100dvh-14rem))] overflow-auto">
+            {available.length === 0 ? (
+              <p className="px-3 py-4 text-[12px] text-zinc-500 italic" data-live-pool-empty>
+                {formatEligiblePool.length === 0
+                  ? "Waiting for live draft activity"
+                  : searchQ || (posFilter !== "ALL" && posFilter !== "OFFENSE")
+                    ? "No players match this filter"
+                    : "Waiting for live draft activity"}
+              </p>
+            ) : (
+              available.slice(0, 120).map((p: any) => {
+                const adpDisp = formatLiveDraftPoolAdp(p.adp);
+                const valueVs = formatLiveDraftValueVsMarket(p.adp, currentOverallPick);
+                const mvLabel = formatLiveDraftMarketValue(p.marketValue);
+                return (
+                  <button
+                    key={keyOf(p)}
+                    disabled={!awaitingUser}
+                    onClick={() => awaitingUser && userDraft(p)}
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-left",
+                      awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <PosPill pos={String(p.position ?? "?").toUpperCase()} />
+                        <span className="text-xs font-bold text-zinc-100 truncate">{p.name}</span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-zinc-500">
+                        <span className={adpDisp.isReal ? "text-zinc-300 tabular-nums" : "text-zinc-600"}>
+                          {adpDisp.label}
+                        </span>
+                        <span className="tabular-nums">{mvLabel}</span>
+                        {valueVs ? (
+                          <span
+                            className={cn(
+                              "tabular-nums font-semibold",
+                              valueVs.startsWith("+")
+                                ? "text-emerald-400"
+                                : valueVs.startsWith("-")
+                                  ? "text-amber-400"
+                                  : "text-zinc-400",
+                            )}
+                          >
+                            {valueVs}
+                          </span>
+                        ) : null}
+                        <span className="tabular-nums text-zinc-600">
+                          {Math.round(p.projectedPoints ?? 0)} pts
+                        </span>
+                      </div>
+                    </div>
+                    {awaitingUser && (
+                      <span className="text-[10px] font-black text-violet-400 shrink-0">DRAFT</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
           {done && (
             <DraftNightShow
@@ -1212,7 +1289,7 @@ function LiveDraftEngine({
               Reset team controls
             </button>
           </div>
-          <div className="space-y-2 max-h-[500px] overflow-auto pr-1">
+          <div className="space-y-2 max-h-[min(560px,calc(100dvh-14rem))] overflow-auto pr-1">
             {teams.map((t: any) => {
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);

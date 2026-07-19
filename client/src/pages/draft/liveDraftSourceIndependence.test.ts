@@ -10,6 +10,8 @@ const repoRoot = path.resolve(import.meta.dirname, "../../../..");
 
 const PRODUCT_UI = [
   "client/src/components/draft/LiveDraftControlPanel.tsx",
+  "client/src/components/draft/LiveDraftRecentPicks.tsx",
+  "client/src/lib/liveDraftUx.ts",
   "client/src/pages/draft/DraftWarRoomLayout.tsx",
   "client/src/lib/liveDraftConnectedLeague.ts",
 ] as const;
