@@ -4,6 +4,22 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-19 — RFSN-030C FantasyPros Solo Mock Connector (implement)
+
+**Decision:** Ship the **solo** FantasyPros mock connector as a first-class RFSN provider that normalizes to existing `notifyLockedPick` / DraftMoment / booth pipeline. Do **not** implement MUD/multiplayer in this ticket.
+
+**Upstream source (locked):** Vue `__debugStore.draftState.draftedPlayers` growth on `draftwizard.fantasypros.com` with `vueDraftTarget === "local"` and `isMultiUserDraft === false`. No pick WebSocket for solo; do not reuse ESPN `mDraftDetail`.
+
+**Extension:** Host-based FantasyPros content script + page-world observer + background relay into FFR (v1.10). ESPN paths unchanged.
+
+**Product surface:** Start/stop lives on **Mock Draft** as “RFSN FantasyPros Mock / Simulation Mode” — not ESPN Live Draft labeling. Session mode `FANTASYPROS_SIMULATION` arms booth on Mock only; ESPN connected-league monitor stays off; leaving Live/Mock tears down correctly (sticky toggle ≠ active session).
+
+**Authority:** `docs/architecture/RFSN-030C_FantasyPros_Solo_Mock_Connector.md`
+
+**Deferred:** Authenticated FantasyPros multiplayer / MUD durable pick wire (030B-3).
+
+---
+
 ## 2026-07-19 — RFSN-030B-3 first; hold 030B-1 type freeze
 
 **Decision:** Run **030B-3** evidence capture **before** **030B-1**. Do not freeze `LockedPickInput` until FantasyPros upstream event source is confirmed. Downstream shape is obvious; upstream `?` is not.
