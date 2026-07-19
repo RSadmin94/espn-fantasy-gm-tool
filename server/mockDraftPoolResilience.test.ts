@@ -61,7 +61,7 @@ describe("ESPN offense feed — season fallback + cache safety", () => {
     // Second call must re-fetch (empty was not TTL-cached).
     const second = await getEspnPlayerInfoMap();
     expect(second.size).toBe(0);
-    expect(calls).toBeGreaterThanOrEqual(4); // 2 seasons × 2 attempts
+    expect(calls).toBeGreaterThanOrEqual(6); // 2 seasons × 3 retry attempts
   });
 
   it("B: non-empty offense result is cached across subsequent calls", async () => {

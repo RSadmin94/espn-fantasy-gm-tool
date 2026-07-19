@@ -4,6 +4,16 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-19 — RFSN-031 Durable offense ADP (last-good)
+
+**Decision:** Persist last-good ESPN **offense** ADP in `fantasy_data_cache` (`espn:offense-adp:{season}`) write-through from `getEspnPlayerInfoMap`, obeying `shouldPersistEspnOffenseCache`. On cold memory / empty ESPN offense feed, seed and serve durable last-good instead of a synthetic-~170 offense board (Nick Bellore-on-top). Bounded retries (3) before fallback. No pool-ordering or UI changes.
+
+**Does not:** ship static ADP, special-case Bellore, or weaken the empty/DP-only cache guard.
+
+**Branch:** `fix/rfsn-031-durable-offense-adp`
+
+---
+
 ## 2026-07-19 — RFSN-030B-3 first; hold 030B-1 type freeze
 
 **Decision:** Run **030B-3** evidence capture **before** **030B-1**. Do not freeze `LockedPickInput` until FantasyPros upstream event source is confirmed. Downstream shape is obvious; upstream `?` is not.

@@ -45,6 +45,10 @@ import {
   GetDraftPickPerformanceInput,
 } from "./playerStatsTypes";
 import { classifyDraftPickRawPick, SlotClass } from "./draftTruth";
+import {
+  loadDurableEspnOffenseAdpForSeasons,
+  saveDurableEspnOffenseAdp,
+} from "./espnOffenseAdpDurableStore";
 
 /** SQL guard: open-draft selections only (DraftTruth `draftedForAnalytics` or legacy isKeeper=0). */
 function sqlOpenDraftAnalyticsPick(): ReturnType<typeof sql> {
@@ -59,15 +63,26 @@ function sqlOpenDraftAnalyticsPick(): ReturnType<typeof sql> {
 // and percentStarted. getEspnAdpMap() (Keeper Intelligence / Dynasty) and getEspnPlayerInfoMap()
 // (Draft War Room → computeMarketValues + real ADP) both derive from this single cached source.
 // No second ADP source. No second fetch. No estimated/synthetic values — null when absent.
+//
+// RFSN-031: last-good offense ADP is also written to fantasy_data_cache so cold starts /
+// ESPN offense blips serve durable ADP instead of a synthetic ~170 board.
 export interface EspnPlayerInfo {
   adp:            number | null; // ownership.averageDraftPosition (real live PPR ADP)
   projection:     number | null; // season projected fantasy points (statSourceId 1, scoringPeriodId 0)
   percentStarted: number | null; // ownership.percentStarted
 }
 
+export type EspnOffenseAdpSource = "memory" | "live" | "durable" | "empty";
+
 let _espnInfoCache: Map<string, EspnPlayerInfo> | null = null;
 let _espnInfoCacheTime = 0;
+let _espnInfoCacheSeason = 0;
+let _espnOffenseAdpSource: EspnOffenseAdpSource = "empty";
+let _espnOffenseAdpDegraded = false;
 const ESPN_INFO_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
+/** Bounded retries for HTTP-200-empty / transient ESPN blips before durable fallback. */
+const ESPN_OFFENSE_FETCH_ATTEMPTS = 3;
+const ESPN_OFFENSE_RETRY_BACKOFF_MS = [150, 400];
 
 /** Season try order for the public offense ADP feed: requested year, then year − 1. */
 export function espnOffenseSeasonsToTry(calendarYear: number): number[] {
@@ -79,10 +94,22 @@ export function shouldPersistEspnOffenseCache(playerCount: number): boolean {
   return Number.isFinite(playerCount) && playerCount > 0;
 }
 
+/** True when serving last-good / empty because live offense ADP is unavailable. */
+export function isEspnOffenseAdpDegraded(): boolean {
+  return _espnOffenseAdpDegraded;
+}
+
+export function getEspnOffenseAdpSource(): EspnOffenseAdpSource {
+  return _espnOffenseAdpSource;
+}
+
 /** Test-only: clear the in-memory ESPN offense cache. */
 export function __resetEspnPlayerInfoCacheForTests(): void {
   _espnInfoCache = null;
   _espnInfoCacheTime = 0;
+  _espnInfoCacheSeason = 0;
+  _espnOffenseAdpSource = "empty";
+  _espnOffenseAdpDegraded = false;
 }
 
 /** Test-only: expire TTL while retaining any cached map (for overwrite-guard tests). */
@@ -97,6 +124,10 @@ let _espnOffenseFetchForTests: EspnOffenseSeasonFetcher | null = null;
 /** Test-only: inject a season fetcher (null restores network fetch). */
 export function __setEspnOffenseFetchForTests(fn: EspnOffenseSeasonFetcher | null): void {
   _espnOffenseFetchForTests = fn;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchEspnOffensePlayersForSeason(year: number, filterJson: string): Promise<any[]> {
@@ -119,6 +150,27 @@ async function fetchEspnOffensePlayersForSeason(year: number, filterJson: string
     // Network / parse errors stay contained — caller tries the next season or degrades.
     return [];
   }
+}
+
+/** Retry empty offense responses a few times before season fallback / durable. */
+async function fetchEspnOffensePlayersWithRetry(
+  year: number,
+  filterJson: string,
+): Promise<any[]> {
+  for (let attempt = 0; attempt < ESPN_OFFENSE_FETCH_ATTEMPTS; attempt++) {
+    const batch = await fetchEspnOffensePlayersForSeason(year, filterJson);
+    if (batch.length > 0) return batch;
+    if (attempt < ESPN_OFFENSE_FETCH_ATTEMPTS - 1) {
+      const backoff = ESPN_OFFENSE_RETRY_BACKOFF_MS[attempt] ?? 400;
+      if (_espnOffenseFetchForTests) {
+        // Keep tests fast but still exercise retry path (no real delay).
+        await Promise.resolve();
+      } else {
+        await sleepMs(backoff);
+      }
+    }
+  }
+  return [];
 }
 
 function parseEspnOffenseEntry(entry: any, usedYear: number): EspnPlayerInfo | null {
@@ -159,11 +211,15 @@ function parseEspnOffenseEntry(entry: any, usedYear: number): EspnPlayerInfo | n
 /** Fetch ESPN live draft inputs (ADP + season projection + percentStarted) from the
  * leaguedefaults/3 kona_player_info endpoint — same data as ESPN Live Draft Trends.
  * Tries the calendar year, then year−1 when the current season feed is empty/fails.
- * Non-empty results are cached for 4h. Empty results are never persisted, and never
- * replace a previously valid non-empty cache entry. */
+ * Non-empty results are cached for 4h and written through to durable last-good storage.
+ * Empty / DP-only results never persist (memory or durable) and fall back to last-good. */
 async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   const now = Date.now();
-  if (_espnInfoCache && (now - _espnInfoCacheTime) < ESPN_INFO_TTL_MS) return _espnInfoCache;
+  if (_espnInfoCache && (now - _espnInfoCacheTime) < ESPN_INFO_TTL_MS) {
+    _espnOffenseAdpSource = "memory";
+    _espnOffenseAdpDegraded = false;
+    return _espnInfoCache;
+  }
 
   const calendarYear = new Date().getFullYear();
   const yearsToTry = espnOffenseSeasonsToTry(calendarYear);
@@ -177,10 +233,21 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
     },
   });
 
+  // Cold memory: seed from durable last-good before / while attempting live ESPN.
+  let durableSeed: Map<string, EspnPlayerInfo> | null = null;
+  let durableSeason = calendarYear;
+  if (!_espnInfoCache || _espnInfoCache.size === 0) {
+    const durableHit = await loadDurableEspnOffenseAdpForSeasons(yearsToTry);
+    if (durableHit) {
+      durableSeed = durableHit.map as Map<string, EspnPlayerInfo>;
+      durableSeason = durableHit.season;
+    }
+  }
+
   let players: any[] = [];
   let usedYear = calendarYear;
   for (const year of yearsToTry) {
-    const batch = await fetchEspnOffensePlayersForSeason(year, filter);
+    const batch = await fetchEspnOffensePlayersWithRetry(year, filter);
     if (batch.length > 0) {
       players = batch;
       usedYear = year;
@@ -197,24 +264,59 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   }
 
   if (!shouldPersistEspnOffenseCache(cache.size)) {
-    // Keep a previously valid non-empty cache rather than poisoning the process with empty.
+    // 1) Keep in-process last-good (TTL expired but map still present).
     if (_espnInfoCache && _espnInfoCache.size > 0) {
       console.warn(
         `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — retaining prior non-empty cache (${_espnInfoCache.size})`,
       );
+      _espnInfoCacheTime = now;
+      _espnOffenseAdpSource = "memory";
+      _espnOffenseAdpDegraded = true;
       return _espnInfoCache;
     }
+    // 2) Serve durable last-good (survives deploy / cold start).
+    if (durableSeed && durableSeed.size > 0) {
+      console.warn(
+        `[ESPN INFO] Offense feed empty — serving durable last-good (${durableSeed.size}, season ${durableSeason})`,
+      );
+      _espnInfoCache = durableSeed;
+      _espnInfoCacheTime = now;
+      _espnInfoCacheSeason = durableSeason;
+      _espnOffenseAdpSource = "durable";
+      _espnOffenseAdpDegraded = true;
+      return durableSeed;
+    }
+    const lateDurable = await loadDurableEspnOffenseAdpForSeasons(yearsToTry);
+    if (lateDurable && lateDurable.map.size > 0) {
+      const map = lateDurable.map as Map<string, EspnPlayerInfo>;
+      console.warn(
+        `[ESPN INFO] Offense feed empty — serving durable last-good (${map.size}, season ${lateDurable.season})`,
+      );
+      _espnInfoCache = map;
+      _espnInfoCacheTime = now;
+      _espnInfoCacheSeason = lateDurable.season;
+      _espnOffenseAdpSource = "durable";
+      _espnOffenseAdpDegraded = true;
+      return map;
+    }
     console.warn(
-      `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — not caching`,
+      `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — no durable last-good (degraded)`,
     );
+    _espnOffenseAdpSource = "empty";
+    _espnOffenseAdpDegraded = true;
     return cache;
   }
 
   _espnInfoCache = cache;
   _espnInfoCacheTime = now;
+  _espnInfoCacheSeason = usedYear;
+  _espnOffenseAdpSource = "live";
+  _espnOffenseAdpDegraded = false;
   console.log(
     `[ESPN INFO] Cached ${cache.size} players (adp/proj/pStart) from ${players.length} fetched (season ${usedYear})`,
   );
+  // Write-through durable last-good (same guard — never persist empty/DP-only).
+  await saveDurableEspnOffenseAdp(usedYear, cache);
   return cache;
 }
 
