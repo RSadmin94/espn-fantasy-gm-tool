@@ -31,6 +31,8 @@ import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
+import { loadGmTradeLegs } from "./completedTradeAuthority";
+import { enrichNormalizedTransactionsWithReconstruction } from "./transactionTradeClusterEnrichment";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
@@ -4229,6 +4231,28 @@ export const appRouter = router({
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         let txs = normalizeTransactions(data) as Record<string, unknown>[];
+
+        // RFSN-029 — reconcile incomplete accepted trades with gmTransactions reconstruction
+        // (same authority Owner Dossier uses). Non-fatal if league/db unavailable.
+        if (ctx.user?.id) {
+          try {
+            const { leagueId } = await resolveActiveLeagueId(
+              { user: { id: ctx.user.id } },
+              null,
+              undefined,
+            );
+            if (leagueId) {
+              const db = await getDb();
+              if (db) {
+                const legs = await loadGmTradeLegs(db, leagueId, [input.season]);
+                txs = enrichNormalizedTransactionsWithReconstruction(txs, legs, input.season);
+              }
+            }
+          } catch {
+            /* keep ESPN-normalized rows */
+          }
+        }
+
         const tf = input.typeFilter?.trim();
         if (tf && tf !== "ALL") {
           txs = txs.filter((t) => {
