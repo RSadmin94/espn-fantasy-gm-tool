@@ -13,10 +13,13 @@ import {
 import {
   fantasyProsPickDedupeKey,
   mapFantasyProsDraftedPick,
-  selectFantasyProsPicksToNotify,
-  toNotifyLockedPickPayload,
   type FantasyProsLockedPick,
 } from "@shared/fantasyProsMockDraftMonitor";
+import {
+  observeFantasyProsMock,
+  toNotifyLockedPickRequest,
+  type NormalizedPickBatch,
+} from "@shared/draftSource";
 
 export type FantasyProsMockMonitorStatus = {
   active: boolean;
@@ -49,6 +52,10 @@ type Args = {
   commentaryEnabled?: boolean;
   /** When true, arm extension observer. */
   armExtension?: boolean;
+  /** Shared board projection — idempotent NormalizedPickBatch (may include reconnect baseline). */
+  onNormalizedBatch?: (batch: NormalizedPickBatch) => void;
+  /** Fired when FantasyPros starts a new draft session (board must reset). */
+  onSessionReset?: (draftId: string) => void;
 };
 
 const INITIAL: FantasyProsMockMonitorStatus = {
@@ -75,6 +82,8 @@ export function useFantasyProsMockDraftMonitor({
   seatTeamIdByPos,
   draftPace = "broadcast",
   armExtension = true,
+  onNormalizedBatch,
+  onSessionReset,
 }: Args): FantasyProsMockMonitorStatus {
   const _trpc = trpc as any;
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, {
@@ -91,6 +100,14 @@ export function useFantasyProsMockDraftMonitor({
   useEffect(() => {
     resetMutRef.current = resetMut;
   }, [resetMut]);
+  const onNormalizedBatchRef = useRef(onNormalizedBatch);
+  useEffect(() => {
+    onNormalizedBatchRef.current = onNormalizedBatch;
+  }, [onNormalizedBatch]);
+  const onSessionResetRef = useRef(onSessionReset);
+  useEffect(() => {
+    onSessionResetRef.current = onSessionReset;
+  }, [onSessionReset]);
 
   const notifiedRef = useRef<Set<string>>(new Set());
   const draftIdRef = useRef<string | null>(null);
@@ -210,6 +227,7 @@ export function useFantasyProsMockDraftMonitor({
         void resetMutRef.current
           .mutateAsync({ leagueId: String(leagueId), draftId: parsed.draftId })
           .catch(() => {});
+        onSessionResetRef.current?.(parsed.draftId);
         setStatus((s) => ({
           ...s,
           draftId: parsed.draftId,
@@ -265,39 +283,38 @@ export function useFantasyProsMockDraftMonitor({
       }
       mapped.sort((a, b) => a.overallPick - b.overallPick);
 
-      const { toNotify, nextNotified } = selectFantasyProsPicksToNotify(
-        batch.draftId,
-        mapped,
-        notifiedRef.current,
-      );
-      notifiedRef.current = nextNotified;
+      const teamCountResolved = teams || Number(batch.room?.teamCount) || 12;
+      const observed = observeFantasyProsMock({
+        leagueId: lid,
+        draftId: batch.draftId,
+        teamCount: teamCountResolved,
+        draftComplete: Boolean(batch.room?.draftComplete),
+        draftPace: pace,
+        newlyLocked: mapped,
+        alreadyNotified: notifiedRef.current,
+      });
+      notifiedRef.current = observed.nextNotified;
+
+      if (observed.projectionBatch?.picks.length) {
+        onNormalizedBatchRef.current?.(observed.projectionBatch);
+      }
 
       let lastPick: FantasyProsLockedPick | null = null;
-      for (const pick of toNotify) {
-        const payload = toNotifyLockedPickPayload(pick, {
-          leagueId: lid,
-          draftId: batch.draftId,
-          teamCount: teams || Number(batch.room?.teamCount) || 12,
-          draftComplete: Boolean(batch.room?.draftComplete),
+      for (const event of observed.batch?.picks ?? []) {
+        const request = toNotifyLockedPickRequest(event, {
+          teamCount: teamCountResolved,
+          draftComplete: Boolean(event.metadata?.draftCompletePick),
           draftPace: pace,
         });
-        // Strip provider metadata for server contract (keep pick fields only)
         try {
-          await notifyMutRef.current.mutateAsync({
-            leagueId: payload.leagueId,
-            draftId: payload.draftId,
-            pick: payload.pick,
-            draftComplete: payload.draftComplete,
-            draftPace: payload.draftPace,
-            teamCount: payload.teamCount,
-          });
-          lastPick = pick;
+          await notifyMutRef.current.mutateAsync(request);
+          lastPick = mapped.find((p) => p.overallPick === event.overallPick) ?? lastPick;
           if (import.meta.env.DEV) {
             console.debug("[rfsn-030c] FantasyPros pick → notifyLockedPick", {
-              overallPick: pick.overallPick,
-              playerName: pick.playerName,
+              provider: event.provider,
+              overallPick: event.overallPick,
+              playerName: event.playerName,
               draftId: batch.draftId,
-              providerPlayerId: pick.providerPlayerId,
             });
           }
         } catch (err) {

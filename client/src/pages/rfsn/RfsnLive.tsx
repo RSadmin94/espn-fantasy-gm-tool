@@ -1,7 +1,8 @@
 /**
- * RFSN Live — Live Draft operational control center.
- * Mounts the same Live Draft engine as `/draft/live` (source, start/pause,
- * board, booth). Broadcast booth remains one section of the workspace.
+ * RFSN Live — Live Draft operational control center (real league drafts).
+ * Mounts the Live Draft engine with ESPN League as the pick source.
+ * Mock drafts (RFSN Local / FantasyPros) live on `/draft/mock`.
+ * Broadcast booth remains one section of the workspace.
  */
 import { Link } from "react-router";
 import { Loader2, Radio } from "lucide-react";

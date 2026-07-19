@@ -5,20 +5,31 @@ import { describe, expect, it } from "vitest";
 import {
   isEspnLiveDraftSource,
   isRfsnLiveDraftSource,
+  normalizeDraftControlSource,
   normalizeLiveDraftSource,
+  normalizeMockDraftSource,
 } from "./liveDraftSource";
 
-describe("liveDraftSource", () => {
-  it("normalizes canonical and legacy aliases", () => {
-    expect(normalizeLiveDraftSource("rfsn")).toBe("rfsn");
+describe("liveDraftSource product model", () => {
+  it("Live normalizes only to ESPN League", () => {
     expect(normalizeLiveDraftSource("espn")).toBe("espn");
-    expect(normalizeLiveDraftSource("manual")).toBe("rfsn");
     expect(normalizeLiveDraftSource("connected-league")).toBe("espn");
+    expect(normalizeLiveDraftSource("rfsn")).toBe("espn");
+    expect(normalizeLiveDraftSource("manual")).toBe("espn");
+    expect(normalizeLiveDraftSource(undefined)).toBe("espn");
   });
 
-  it("defaults unknown to rfsn (built-in Live Draft)", () => {
-    expect(normalizeLiveDraftSource(undefined)).toBe("rfsn");
-    expect(normalizeLiveDraftSource("")).toBe("rfsn");
+  it("Mock normalizes RFSN Local vs FantasyPros", () => {
+    expect(normalizeMockDraftSource("rfsn")).toBe("rfsn");
+    expect(normalizeMockDraftSource("manual")).toBe("rfsn");
+    expect(normalizeMockDraftSource("fantasypros")).toBe("fantasypros");
+    expect(normalizeMockDraftSource("fantasypros-mock")).toBe("fantasypros");
+  });
+
+  it("control-source helper preserves both experiences", () => {
+    expect(normalizeDraftControlSource("espn")).toBe("espn");
+    expect(normalizeDraftControlSource("rfsn")).toBe("rfsn");
+    expect(normalizeDraftControlSource("fantasypros")).toBe("fantasypros");
   });
 
   it("gate helpers", () => {

@@ -10,11 +10,11 @@ import { fetchEspnLiveDraftDetail } from "@/lib/espnLiveDraftFetch";
 import { isGmWarRoomExtensionPresent } from "@/lib/espnApi";
 import {
   buildEspnLiveDraftId,
-  diffEspnLiveLockedPicks,
-  parseEspnLiveDraftSnapshot,
-  selectEspnLivePicksToNotify,
-  type EspnLiveLockedPick,
-} from "@shared/espnLiveDraftMonitor";
+  observeEspnLive,
+  toNotifyLockedPickRequest,
+  type NormalizedPickBatch,
+} from "@shared/draftSource";
+import type { EspnLiveLockedPick } from "@shared/espnLiveDraftMonitor";
 
 export const ESPN_LIVE_POLL_MS_DEFAULT = 2000;
 
@@ -37,6 +37,8 @@ type Args = {
   pollMs?: number;
   draftPace?: "broadcast" | "brisk" | "turbo";
   ownerNameByTeamId?: ReadonlyMap<string, string>;
+  /** Shared board projection — idempotent NormalizedPickBatch (may include reconnect baseline). */
+  onNormalizedBatch?: (batch: NormalizedPickBatch) => void;
 };
 
 export function useEspnLiveDraftMonitor({
@@ -46,6 +48,7 @@ export function useEspnLiveDraftMonitor({
   pollMs = ESPN_LIVE_POLL_MS_DEFAULT,
   draftPace = "broadcast",
   ownerNameByTeamId,
+  onNormalizedBatch,
 }: Args): EspnLiveMonitorStatus {
   const _trpc = trpc as any;
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, {
@@ -58,6 +61,10 @@ export function useEspnLiveDraftMonitor({
   useEffect(() => {
     notifyMutRef.current = notifyMut;
   }, [notifyMut]);
+  const onNormalizedBatchRef = useRef(onNormalizedBatch);
+  useEffect(() => {
+    onNormalizedBatchRef.current = onNormalizedBatch;
+  }, [onNormalizedBatch]);
 
   const draftId = buildEspnLiveDraftId(String(leagueId ?? ""), season);
   const canRun = Boolean(
@@ -129,7 +136,16 @@ export function useEspnLiveDraftMonitor({
           return;
         }
 
-        const snap = parseEspnLiveDraftSnapshot(res.data, { ownerNameByTeamId });
+        const observed = observeEspnLive({
+          leagueId,
+          season,
+          rawPayload: res.data,
+          prevPicks: prevPicksRef.current,
+          alreadyNotified: notifiedRef.current,
+          ownerNameByTeamId,
+          draftPace,
+        });
+        const snap = observed.snapshot;
         if (!snap) {
           setStatus((s) => ({
             ...s,
@@ -142,47 +158,29 @@ export function useEspnLiveDraftMonitor({
           return;
         }
 
-        const newly = diffEspnLiveLockedPicks(prevPicksRef.current, snap.picks);
-        prevPicksRef.current = snap.picks;
-
-        const { toNotify, nextNotified } = selectEspnLivePicksToNotify(
-          draftId,
-          newly,
-          notifiedRef.current,
-        );
-        notifiedRef.current = nextNotified;
+        prevPicksRef.current = observed.nextPrevPicks;
+        notifiedRef.current = observed.nextNotified;
         const notifiedCount = notifiedRef.current.size;
 
-        for (const pick of toNotify) {
-          const isLast =
-            snap.draftComplete &&
-            snap.picks.length > 0 &&
-            pick.overallPick === Math.max(...snap.picks.map((p) => p.overallPick));
+        if (observed.projectionBatch?.picks.length) {
+          onNormalizedBatchRef.current?.(observed.projectionBatch);
+        }
 
+        for (const event of observed.batch?.picks ?? []) {
+          const isLast = Boolean(event.metadata?.draftCompletePick);
           void notifyMutRef.current
-            .mutateAsync({
-              leagueId,
-              draftId,
-              pick: {
-                overallPick: pick.overallPick,
-                round: pick.round,
-                roundPick: pick.roundPick,
-                teamId: pick.teamId,
-                ownerName: pick.ownerName,
-                playerId: pick.playerId,
-                playerName: pick.playerName,
-                position: pick.position,
-                nflTeam: pick.nflTeam,
-                adp: pick.adp,
-              },
-              draftComplete: isLast,
-              draftPace,
-              teamCount: snap.teamCount,
-            })
+            .mutateAsync(
+              toNotifyLockedPickRequest(event, {
+                teamCount: snap.teamCount,
+                draftComplete: isLast,
+                draftPace,
+              }),
+            )
             .catch((err: unknown) => {
               if (import.meta.env.DEV) {
                 console.debug("[espn-live] notifyLockedPick failed", {
-                  overallPick: pick.overallPick,
+                  provider: event.provider,
+                  overallPick: event.overallPick,
                   message: err instanceof Error ? err.message : "unknown",
                 });
               }

@@ -24,7 +24,31 @@ describe("isRfsnWarRoomBroadcastActive", () => {
     ).toBe(true);
   });
 
-  it("does not arm FantasyPros booth on Live surface", () => {
+  it("arms booth for RFSN Local Mock on Mock surface", () => {
+    expect(
+      isRfsnWarRoomBroadcastActive({
+        liveDraftActive: true,
+        preferLiveDraft: false,
+        rfsnLocalMockSessionActive: true,
+      }),
+    ).toBe(true);
+    expect(
+      isRfsnWarRoomBroadcastActive({
+        liveDraftActive: false,
+        preferLiveDraft: false,
+        rfsnLocalMockSessionActive: true,
+      }),
+    ).toBe(false);
+    expect(
+      isRfsnWarRoomBroadcastActive({
+        liveDraftActive: true,
+        preferLiveDraft: true,
+        rfsnLocalMockSessionActive: true,
+      }),
+    ).toBe(true); // Live surface still wins via ESPN path
+  });
+
+  it("does not arm FantasyPros booth on Live surface without Live session", () => {
     expect(
       isRfsnWarRoomBroadcastActive({
         liveDraftActive: true,

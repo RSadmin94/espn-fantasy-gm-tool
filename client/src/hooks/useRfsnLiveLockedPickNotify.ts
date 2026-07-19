@@ -9,6 +9,10 @@ import {
   type LockedPickPlayerResult,
   type LockedPickScheduleSlot,
 } from "@/lib/rfsnLivePickNotify";
+import {
+  observeRfsnLocalMock,
+  toNotifyLockedPickRequest,
+} from "@shared/draftSource";
 
 type UseRfsnLiveLockedPickNotifyArgs = {
   enabled: boolean;
@@ -24,7 +28,8 @@ type UseRfsnLiveLockedPickNotifyArgs = {
 };
 
 /**
- * Fire-and-forget locked-pick notifications for RFSN Live.
+ * Fire-and-forget locked-pick notifications for RFSN Local Mock.
+ * Diff → RfsnLocalMockAdapter → NormalizedPickEvent → notifyLockedPick.
  * Never throws; failures are swallowed so the draft UI keeps working.
  */
 export function useRfsnLiveLockedPickNotify({
@@ -81,7 +86,7 @@ export function useRfsnLiveLockedPickNotify({
       ? Math.max(...schedule.map((s) => s.pickNumber))
       : 0;
 
-    for (const item of toNotify) {
+    const lockedPicks = toNotify.map((item) => {
       const payload = buildLockedPickNotifyPayload({
         ...item,
         leagueId,
@@ -90,11 +95,33 @@ export function useRfsnLiveLockedPickNotify({
         draftPace,
         draftComplete: draftComplete && item.slot.pickNumber === lastPickNumber,
       });
-      void notifyMut.mutateAsync(payload).catch((err: unknown) => {
+      return payload.pick;
+    });
+
+    const batch = observeRfsnLocalMock({
+      leagueId,
+      draftId,
+      teamCount,
+      draftComplete,
+      draftPace,
+      picks: lockedPicks,
+    });
+    if (!batch) return;
+
+    for (const event of batch.picks) {
+      const isComplete =
+        draftComplete && event.overallPick === lastPickNumber;
+      const request = toNotifyLockedPickRequest(event, {
+        teamCount: batch.teamCount,
+        draftComplete: isComplete,
+        draftPace: batch.draftPace,
+      });
+      void notifyMut.mutateAsync(request).catch((err: unknown) => {
         if (import.meta.env.DEV) {
-          console.debug("[rfsn] notifyLockedPick failed", {
-            pickNumber: payload.pick.overallPick,
-            draftId: payload.draftId,
+          console.debug("[rfsn-local-mock] notifyLockedPick failed", {
+            provider: event.provider,
+            pickNumber: event.overallPick,
+            draftId: event.draftId,
             message: err instanceof Error ? err.message : "unknown",
           });
         }

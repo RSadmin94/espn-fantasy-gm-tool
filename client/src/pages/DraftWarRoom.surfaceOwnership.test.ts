@@ -1,5 +1,5 @@
 /**
- * Draft surface ownership — Live keeps RFSN sim; Mock is FantasyPros-only.
+ * Draft surface ownership — Live = real league; Mock = RFSN local / FantasyPros.
  * @vitest-environment node
  */
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { isConnectedLeagueLiveActive } from "@/lib/liveDraftSurfaceActive";
 import { isFantasyProsSimulationBroadcastActive } from "@/lib/fantasyProsMockSession";
+import {
+  availableSourcesForExperience,
+  LIVE_DRAFT_SOURCES,
+  MOCK_DRAFT_SOURCES,
+} from "@shared/draftSource";
 
 const warRoom = readFileSync(
   join(process.cwd(), "client/src/pages/DraftWarRoom.tsx"),
@@ -22,32 +27,44 @@ const livePanel = readFileSync(
 );
 
 describe("Draft surface ownership (Live vs Mock)", () => {
-  it("Live Draft source radios are rfsn | espn", () => {
-    expect(livePanel).toContain('onSourceChange("rfsn")');
-    expect(livePanel).toContain('onSourceChange("espn")');
-    expect(livePanel).toContain("Connected League");
-    expect(livePanel).not.toContain("Manual Draft");
-  });
-
-  it("internal sim controls are gated to preferLiveDraft + RFSN source", () => {
-    expect(warRoom).toContain("data-live-sim-controls");
-    expect(warRoom).toMatch(
-      /\{preferLiveDraft && liveSource === "rfsn" && \(\s*<div[^>]*data-live-sim-controls/,
+  it("product catalog: Live = ESPN League; Mock = RFSN Local + FantasyPros", () => {
+    expect(availableSourcesForExperience("live").map((s) => s.id)).toEqual(["espn-live"]);
+    expect(availableSourcesForExperience("mock").map((s) => s.id)).toEqual([
+      "rfsn-local-mock",
+      "fantasypros-mock",
+    ]);
+    expect(LIVE_DRAFT_SOURCES.find((s) => s.id === "espn-live")?.label).toBe("ESPN League");
+    expect(MOCK_DRAFT_SOURCES.find((s) => s.id === "rfsn-local-mock")?.label).toBe(
+      "RFSN Local Mock",
     );
-    expect(warRoom).toContain("allowInternalSimPicks");
   });
 
-  it("FantasyPros panel only mounts when !preferLiveDraft", () => {
-    expect(warRoom).toMatch(/\{!preferLiveDraft && \(\s*<FantasyProsMockControlPanel/);
-  });
-
-  it("LiveDraftControlPanel mounts on Live surface (always, not only when active)", () => {
-    expect(warRoom).toMatch(/\{preferLiveDraft && \(\s*<LiveDraftControlPanel/);
-    expect(warRoom).toContain("sessionActions=");
-    expect(livePanel).toContain("data-live-draft-ops");
+  it("control panel uses shared catalog + board driver copy", () => {
+    expect(livePanel).toContain("LIVE_DRAFT_SOURCES");
+    expect(livePanel).toContain("MOCK_DRAFT_SOURCES");
     expect(livePanel).toContain("data-live-source-picker");
     expect(livePanel).toContain("data-live-board-driver");
-    expect(livePanel).toContain("data-live-session-actions");
+    expect(livePanel).toContain("shared Draft Engine");
+  });
+
+  it("internal sim controls are gated to Mock + RFSN Local (allowInternalSimPicks)", () => {
+    expect(warRoom).toContain("data-live-sim-controls");
+    expect(warRoom).toMatch(
+      /\{allowInternalSimPicks && \(\s*<div[^>]*data-live-sim-controls/,
+    );
+    expect(warRoom).toContain('allowInternalSimPicks = !preferLiveDraft && mockSource === "rfsn"');
+  });
+
+  it("FantasyPros panel only mounts on Mock + fantasypros source", () => {
+    expect(warRoom).toMatch(
+      /\{!preferLiveDraft && mockSource === "fantasypros" && \(\s*<FantasyProsMockControlPanel/,
+    );
+  });
+
+  it("LiveDraftControlPanel mounts for both experiences", () => {
+    expect(warRoom).toContain("experience={preferLiveDraft ? \"live\" : \"mock\"}");
+    expect(warRoom).toContain("sessionActions=");
+    expect(livePanel).toContain("data-live-draft-ops");
   });
 
   it("Mock diagnostics are collapsed by default", () => {
@@ -108,9 +125,12 @@ describe("Draft surface ownership (Live vs Mock)", () => {
     ).toBe(false);
   });
 
-  it("FP monitor enabled expression requires Mock surface", () => {
+  it("FP monitor enabled expression requires Mock + fantasypros source (not commentary toggle)", () => {
     expect(warRoom).toMatch(
-      /useFantasyProsMockDraftMonitor\(\{[\s\S]*enabled:\s*Boolean\(leagueId\)\s*&&\s*fpMockActive\s*&&\s*!preferLiveDraft/,
+      /useFantasyProsMockDraftMonitor\(\{[\s\S]*enabled:\s*Boolean\(leagueId\)\s*&&\s*fpSessionArmed,/,
+    );
+    expect(warRoom).not.toMatch(
+      /useFantasyProsMockDraftMonitor\(\{[\s\S]*enabled:\s*Boolean\(leagueId\)\s*&&\s*fpSessionArmed\s*&&\s*fpCommentaryEnabled/,
     );
   });
 });

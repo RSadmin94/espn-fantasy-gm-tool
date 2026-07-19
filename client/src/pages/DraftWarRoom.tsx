@@ -1,3 +1,15 @@
+import {
+  applyNormalizedPickBatch,
+  applyNormalizedPickEvent,
+  computeDraftGradesFromRosters,
+  computeScheduleCursor,
+  createDraftSessionState,
+  isDraftSessionComplete,
+  normalizeRfsnLocalMockPick,
+  type DraftSessionState,
+  type NormalizedPickBatch,
+  type NormalizedPickEvent,
+} from "@shared/draftSource";
 import { Link } from "react-router";
 import { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import { skipToken } from "@tanstack/react-query";
@@ -35,12 +47,17 @@ import {
 } from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { isConnectedLeagueLiveActive } from "@/lib/liveDraftSurfaceActive";
-import { normalizeLiveDraftSource } from "@/lib/liveDraftSource";
 import { isRfsnWarRoomBroadcastActive } from "@/lib/rfsnWarRoomBroadcastActive";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
-  LiveDraftControlPanel,
+  normalizeLiveDraftSource,
+  normalizeMockDraftSource,
+  type DraftControlSource,
   type LiveDraftSource,
+  type MockDraftSource,
+} from "@/lib/liveDraftSource";
+import {
+  LiveDraftControlPanel,
 } from "@/components/draft/LiveDraftControlPanel";
 import { FantasyProsMockControlPanel } from "@/components/draft/FantasyProsMockControlPanel";
 import { useFantasyProsMockDraftMonitor } from "@/hooks/useFantasyProsMockDraftMonitor";
@@ -801,7 +818,14 @@ function LiveDraftEngine({
     return r;
   }, [schedule]);
 
-  const [results, setResults] = useState<Record<number, any>>(initialResults);
+  const [session, setSession] = useState<DraftSessionState>(() =>
+    createDraftSessionState({
+      sessionKey: "init",
+      draftId,
+      baselineResults: initialResults,
+    }),
+  );
+  const results = session.results;
   const [idx, setIdx]         = useState(0);
   const [running, setRunning] = useState(false);
   const [sort, setSort]       = useState<"adp" | "proj" | "value" | "pos" | "name">("adp");
@@ -809,47 +833,86 @@ function LiveDraftEngine({
   const [searchQ, setSearchQ] = useState("");
   const posDefaultApplied = useRef(false);
   const [liveDraftActive, setLiveDraftActive] = useState(preferLiveDraft);
-  const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("rfsn");
-  /** RFSN-030C — FantasyPros solo mock connector (Mock surface only). */
+  /** Live experience — real league only (ESPN today). */
+  const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("espn");
+  /** Mock experience — RFSN Local Mock or FantasyPros Mock. */
+  const [mockDraftSource, setMockDraftSource] = useState<MockDraftSource>("rfsn");
+  /** RFSN-030C — FantasyPros solo mock connector (Mock surface + fantasypros source). */
   const [fpMockActive, setFpMockActive] = useState(false);
   const [fpUserOwnerPos, setFpUserOwnerPos] = useState(0);
   const [fpVoiceEnabled, setFpVoiceEnabled] = useState(true);
   const [fpCommentaryEnabled, setFpCommentaryEnabled] = useState(true);
   const [fpSessionEpoch, setFpSessionEpoch] = useState(0);
   const liveSource = normalizeLiveDraftSource(liveDraftSource);
-  /** Built-in RFSN sim may generate picks only on Live + RFSN source. */
-  const allowInternalSimPicks = preferLiveDraft && liveSource === "rfsn";
+  const mockSource = normalizeMockDraftSource(mockDraftSource);
+  /** Built-in RFSN local mock may generate picks only on Mock + RFSN source. */
+  const allowInternalSimPicks = !preferLiveDraft && mockSource === "rfsn";
+  const fpSessionArmed =
+    !preferLiveDraft && mockSource === "fantasypros" && fpMockActive;
   const connectedLeagueLive = isConnectedLeagueLiveActive({
     liveDraftActive,
     preferLiveDraft,
     source: liveSource,
-    fantasyProsSessionActive: fpMockActive && !preferLiveDraft,
+    fantasyProsSessionActive: fpSessionArmed,
   });
+
+  const availablePoolRef = useRef(availablePool);
+  useEffect(() => {
+    availablePoolRef.current = availablePool;
+  }, [availablePool]);
+
+  const enrichFromPool = useCallback((event: NormalizedPickEvent) => {
+    const target = norm(event.playerName);
+    const hit = availablePoolRef.current.find((p: any) => norm(p?.name) === target);
+    if (!hit) {
+      return {
+        adp: event.adp ?? null,
+        nflTeam: event.nflTeam ?? null,
+        isKeeper: Boolean(event.metadata?.isKeeper),
+      };
+    }
+    return {
+      adp: hit.adp ?? event.adp ?? null,
+      marketValue: hit.marketValue ?? null,
+      projectedPoints: hit.projectedPoints,
+      nflTeam: hit.nflTeam ?? event.nflTeam ?? null,
+      isKeeper: Boolean(event.metadata?.isKeeper),
+    };
+  }, []);
+
+  const applyProjectionBatch = useCallback((batch: NormalizedPickBatch) => {
+    setSession((prev) => applyNormalizedPickBatch(prev, batch, enrichFromPool).state);
+  }, [enrichFromPool]);
 
   useEffect(() => {
     if (preferLiveDraft) {
       setLiveDraftActive(true);
+      setLiveDraftSource("espn");
       setFpMockActive(false);
-    } else {
-      // Entering Mock: stop Live Draft sim/clock/ESPN surface ownership.
       setRunning(false);
-      setLiveDraftActive(false);
+    } else {
+      // Entering Mock: stop ESPN Live; default to RFSN Local Mock.
+      setLiveDraftActive(true);
+      setRunning(false);
       setFpMockActive(false);
+      setMockDraftSource((s) => normalizeMockDraftSource(s));
     }
   }, [preferLiveDraft]);
 
-  // ESPN source must not generate internal simulated picks.
+  // ESPN Live must not generate internal simulated picks.
   useEffect(() => {
-    if (liveSource === "espn") setRunning(false);
-  }, [liveSource]);
+    if (preferLiveDraft || mockSource === "fantasypros") setRunning(false);
+  }, [preferLiveDraft, mockSource]);
 
-  // Leaving Mock surface must tear down FantasyPros connector.
+  // Leaving FantasyPros mock source must tear down FantasyPros connector.
   useEffect(() => {
-    if (preferLiveDraft && fpMockActive) {
-      setFpMockActive(false);
-      void postFantasyProsMockDisarm().catch(() => {});
+    if (preferLiveDraft || mockSource !== "fantasypros") {
+      if (fpMockActive) {
+        setFpMockActive(false);
+        void postFantasyProsMockDisarm().catch(() => {});
+      }
     }
-  }, [preferLiveDraft, fpMockActive]);
+  }, [preferLiveDraft, mockSource, fpMockActive]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Pace between AI auto-picks. Default "Broadcast" gives the RFSN booth time to
   // generate + play a line before the next pick; Brisk/Turbo for quick sims.
@@ -898,10 +961,12 @@ function LiveDraftEngine({
   }, [scheduleSig, myTeamId]);
 
   useEffect(() => {
-    setResults(initialResults); setIdx(0); setRunning(false);
+    setIdx(0);
+    setRunning(false);
     applyBroadcastHold(INITIAL_BROADCAST_HOLD);
     setRemainingMs(paceMs);
     if (timer.current) clearTimeout(timer.current);
+    // Session board reset is owned by draftSessionIdentity (includes scheduleSig).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scheduleSig]);
 
@@ -951,37 +1016,26 @@ function LiveDraftEngine({
     return m;
   }, [schedule, results]);
 
-  // Draft grades (A–F) per team: value captured (players landed later than their ADP = steals,
-  // vs reaches) blended with roster strength (avg market value of who they drafted). Scored 0–1
-  // then graded on a curve relative to the rest of the league. Drafted players only (not keepers).
-  const draftGrades = useMemo(() => {
-    const raw = new Map<number, { score: number; avgDelta: number; strength: number; n: number }>();
-    for (const [tid, roster] of rostersByTeam) {
-      const drafted = roster.filter((r: any) => !r.isKeeper && r.marketValue != null);
-      const withAdp = drafted.filter((r: any) => r.adp != null);
-      const avgDelta = withAdp.length
-        ? withAdp.reduce((s: number, r: any) => s + (Number(r.pickNumber) - Number(r.adp)), 0) / withAdp.length
-        : 0;
-      const strength = drafted.length
-        ? drafted.reduce((s: number, r: any) => s + Number(r.marketValue || 0), 0) / drafted.length
-        : 0;
-      const valueScore = Math.max(0, Math.min(1, 0.5 + avgDelta / 50));
-      const strengthScore = Math.max(0, Math.min(1, strength / 100));
-      raw.set(tid, { score: 0.5 * valueScore + 0.5 * strengthScore, avgDelta, strength, n: drafted.length });
-    }
-    const ranked = [...raw.entries()].sort((a, b) => b[1].score - a[1].score);
-    const total = ranked.length || 1;
-    const out = new Map<number, { letter: string; avgDelta: number; strength: number }>();
-    ranked.forEach(([tid, v], i) => {
-      const p = i / total;
-      const letter = v.n < 3 ? "—" : p < 0.14 ? "A" : p < 0.36 ? "B" : p < 0.68 ? "C" : p < 0.90 ? "D" : "F";
-      out.set(tid, { letter, avgDelta: v.avgDelta, strength: v.strength });
-    });
-    return out;
-  }, [rostersByTeam]);
+  // Draft grades (A–F) — shared projector path (provider-agnostic).
+  const draftGrades = useMemo(
+    () => computeDraftGradesFromRosters(rostersByTeam),
+    [rostersByTeam],
+  );
 
-  const slot = schedule[idx];
-  const done = idx >= schedule.length;
+  const projectedCursor = useMemo(
+    () => computeScheduleCursor(schedule, results),
+    [schedule, results],
+  );
+  const sessionDraftComplete = isDraftSessionComplete({
+    draftCompleteFlag: session.draftComplete,
+    scheduleLength: schedule.length,
+    cursor: projectedCursor,
+  });
+  // Local mock keeps idx-driven completion (unchanged sim behavior); external sources use session.
+  const done = allowInternalSimPicks
+    ? idx >= schedule.length
+    : sessionDraftComplete;
+  const slot = schedule[allowInternalSimPicks ? idx : projectedCursor];
   const awaitingUser = !!slot && !slot.isKeeperSlot && isPickManual(manualTeamIds, slot?.teamId) && !results[slot.pickNumber];
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
@@ -1031,7 +1085,7 @@ function LiveDraftEngine({
   }, [teams, myTeamId, fpUserOwnerPos]);
 
   const fpMock = useFantasyProsMockDraftMonitor({
-    enabled: Boolean(leagueId) && fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
+    enabled: Boolean(leagueId) && fpSessionArmed,
     leagueId,
     season,
     teamCount: teams.length || 12,
@@ -1041,6 +1095,10 @@ function LiveDraftEngine({
     voiceEnabled: fpVoiceEnabled,
     commentaryEnabled: fpCommentaryEnabled,
     armExtension: true,
+    onNormalizedBatch: applyProjectionBatch,
+    onSessionReset: () => {
+      setFpSessionEpoch((n) => n + 1);
+    },
   });
 
   const leagueAdapter = useConnectedLeagueLiveMonitor({
@@ -1049,20 +1107,96 @@ function LiveDraftEngine({
     season,
     draftPace: draftPaceFromTimerMs(paceMs),
     ownerNameByTeamId,
+    onNormalizedBatch: applyProjectionBatch,
   });
 
   const boothDraftId =
-    fpMockActive && !preferLiveDraft && fpMock.draftId
+    fpSessionArmed && fpMock.draftId
       ? fpMock.draftId
       : connectedLeagueLive && leagueId
         ? buildConnectedLeagueDraftId(leagueId, season)
         : draftId;
 
+  /** Source/session identity — changing this clears board/rosters/grades/wrap-up. */
+  const draftSessionIdentity = useMemo(
+    () =>
+      [
+        preferLiveDraft ? "live" : "mock",
+        preferLiveDraft ? liveSource : mockSource,
+        String(leagueId ?? ""),
+        String(season),
+        preferLiveDraft
+          ? leagueId
+            ? buildConnectedLeagueDraftId(leagueId, season)
+            : draftId
+          : mockSource === "fantasypros"
+            ? `fp:${fpSessionEpoch}`
+            : `rfsn:${resetCounter}`,
+        // Local mock board is schedule-owned; ESPN/FP boards are source-owned (do not wipe on schedule hydrate).
+        allowInternalSimPicks ? scheduleSig : "external",
+      ].join("|"),
+    [
+      preferLiveDraft,
+      liveSource,
+      mockSource,
+      leagueId,
+      season,
+      draftId,
+      fpSessionEpoch,
+      resetCounter,
+      allowInternalSimPicks,
+      scheduleSig,
+    ],
+  );
+
+  useEffect(() => {
+    setSession(
+      createDraftSessionState({
+        sessionKey: draftSessionIdentity,
+        draftId: boothDraftId,
+        provider: preferLiveDraft
+          ? "espn-live"
+          : mockSource === "fantasypros"
+            ? "fantasypros-mock"
+            : "rfsn-local-mock",
+        baselineResults: initialResults,
+      }),
+    );
+    setIdx(0);
+    setRunning(false);
+    applyBroadcastHold(INITIAL_BROADCAST_HOLD);
+    setRemainingMs(paceMs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftSessionIdentity]);
+
+  // External sources: merge keeper slots when schedule hydrates without wiping projected picks.
+  useEffect(() => {
+    if (allowInternalSimPicks) return;
+    if (Object.keys(initialResults).length === 0) return;
+    setSession((prev) => {
+      let changed = false;
+      const results = { ...prev.results };
+      for (const [pn, keeper] of Object.entries(initialResults)) {
+        const n = Number(pn);
+        if (results[n]?.name) continue;
+        results[n] = keeper as DraftSessionState["results"][number];
+        changed = true;
+      }
+      return changed ? { ...prev, results } : prev;
+    });
+  }, [allowInternalSimPicks, scheduleSig, initialResults]);
+
+  // External sources: keep idx aligned with projected board cursor for control chrome.
+  useEffect(() => {
+    if (allowInternalSimPicks) return;
+    setIdx(projectedCursor);
+  }, [allowInternalSimPicks, projectedCursor]);
+
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
 
   // Poll live session for Draft Night Show awards after wrap-up (same source as booth).
   const liveSnapQ = (trpc as any).rfsnBroadcast.getLiveSnapshot.useQuery(
-    leagueId && done ? { leagueId, draftId } : skipToken,
+    leagueId && done ? { leagueId, draftId: boothDraftId } : skipToken,
     { refetchInterval: done ? 2000 : false, staleTime: 1000 },
   );
   const livePayload = liveSnapQ.data as RfsnLivePublicPayload | undefined;
@@ -1123,12 +1257,12 @@ function LiveDraftEngine({
       !!cur &&
       !cur.isKeeperSlot;
     if (!counting) return;
-    setResults((prev) => {
-      if (prev[cur.pickNumber]) return prev;
+    setSession((prev) => {
+      if (prev.results[cur.pickNumber]) return prev;
       const taken = new Set<string>();
       const counts: Record<string, number> = {};
-      for (const k of Object.keys(prev)) {
-        const r = prev[Number(k)];
+      for (const k of Object.keys(prev.results)) {
+        const r = prev.results[Number(k)];
         taken.add(keyOf(r));
         const sd = schedule.find((s: any) => s.pickNumber === Number(k));
         if (sd && Number(sd.teamId) === Number(cur.teamId)) counts[r.position] = (counts[r.position] ?? 0) + 1;
@@ -1149,10 +1283,35 @@ function LiveDraftEngine({
         },
       });
       if (!pick) return prev;
-      return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
+      const event = normalizeRfsnLocalMockPick(
+        {
+          overallPick: Number(cur.pickNumber),
+          round: Number(cur.round),
+          roundPick: Number(cur.roundPick ?? cur.pickNumber),
+          teamId: String(cur.teamId),
+          ownerName: String(
+            teams.find((t: any) => Number(t.teamId) === Number(cur.teamId))?.ownerName ?? "",
+          ),
+          playerId: String(pick.id ?? `ai:${norm(pick.name)}`),
+          playerName: String(pick.name),
+          position: String(pick.position ?? "?"),
+          nflTeam: pick.nflTeam ?? null,
+          adp: pick.adp ?? null,
+        },
+        { leagueId: String(leagueId ?? ""), draftId },
+      );
+      return applyNormalizedPickEvent(prev, event, {
+        enrich: {
+          adp: pick.adp ?? null,
+          marketValue: pick.marketValue ?? null,
+          projectedPoints: pick.projectedPoints,
+          nflTeam: pick.nflTeam ?? null,
+          byAI: true,
+        },
+      }).state;
     });
     setIdx((i) => i + 1);
-  }, [remainingMs, allowInternalSimPicks, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
+  }, [remainingMs, allowInternalSimPicks, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool, leagueId, draftId, teams]);
 
   // Reactive broadcast pause — freeze countdown + AI briefly while a moment is on air.
   // After the watchdog, suppressUntilIdle prevents a stuck booth from re-arming the hold.
@@ -1187,7 +1346,34 @@ function LiveDraftEngine({
     if (!allowInternalSimPicks) return;
     const cur = schedule[idx];
     if (!cur) return;
-    setResults((prev) => ({ ...prev, [cur.pickNumber]: { ...p, byUser: true } }));
+    const event = normalizeRfsnLocalMockPick(
+      {
+        overallPick: Number(cur.pickNumber),
+        round: Number(cur.round),
+        roundPick: Number(cur.roundPick ?? cur.pickNumber),
+        teamId: String(cur.teamId),
+        ownerName: String(
+          teams.find((t: any) => Number(t.teamId) === Number(cur.teamId))?.ownerName ?? "",
+        ),
+        playerId: String(p.id ?? `user:${norm(p.name)}`),
+        playerName: String(p.name),
+        position: String(p.position ?? "?"),
+        nflTeam: p.nflTeam ?? null,
+        adp: p.adp ?? null,
+      },
+      { leagueId: String(leagueId ?? ""), draftId },
+    );
+    setSession((prev) =>
+      applyNormalizedPickEvent(prev, event, {
+        enrich: {
+          adp: p.adp ?? null,
+          marketValue: p.marketValue ?? null,
+          projectedPoints: p.projectedPoints,
+          nflTeam: p.nflTeam ?? null,
+          byUser: true,
+        },
+      }).state,
+    );
     setSearchQ("");
     setRunning(true);
     setIdx((i) => i + 1); // advance immediately; the reactive pause holds if a moment fires
@@ -1220,7 +1406,16 @@ function LiveDraftEngine({
     } else if (!replaySameSeed) {
       setDraftSeed(createRandomDraftSeed());
     }
-    setResults(initialResults); setIdx(0); setRunning(false);
+    setSession(
+      createDraftSessionState({
+        sessionKey: `rfsn-reset:${Date.now()}`,
+        draftId,
+        provider: "rfsn-local-mock",
+        baselineResults: initialResults,
+      }),
+    );
+    setIdx(0);
+    setRunning(false);
     applyBroadcastHold(INITIAL_BROADCAST_HOLD); setRemainingMs(paceMs);
     // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
     // they reset only on league/season/schedule change or via "Reset team controls".
@@ -1288,52 +1483,97 @@ function LiveDraftEngine({
     <div
       className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden"
       data-draft-surface={preferLiveDraft ? "live" : "mock"}
-      data-live-draft-source={preferLiveDraft ? liveSource : "fantasypros"}
+      data-live-draft-source={preferLiveDraft ? liveSource : mockSource}
     >
-      {/* Live Draft control center — source, status, start/pause/new (primary ops strip) */}
-      {preferLiveDraft && (
-        <LiveDraftControlPanel
-          status={{
-            active: liveDraftActive,
-            source: liveSource,
-            monitoring: connectedLeagueLive
-              ? !leagueAdapter.lastError
-              : running || idx > 0,
-            boothOnAir: connectedLeagueLive
-              ? leagueAdapter.notifiedCount > 0 || leagueAdapter.lockedCount > 0
-              : running || idx > 0,
-            lockedCount: connectedLeagueLive ? leagueAdapter.lockedCount : Object.keys(results).length,
-            notifiedCount: connectedLeagueLive ? leagueAdapter.notifiedCount : 0,
-            draftComplete: connectedLeagueLive ? leagueAdapter.draftComplete : done,
-            lastError: connectedLeagueLive ? leagueAdapter.lastError : null,
-            lastPollAt: connectedLeagueLive ? leagueAdapter.lastPollAt : null,
-            connectorReady: connectedLeagueLive ? leagueAdapter.extensionPresent : true,
-            draftPaused: connectedLeagueLive ? false : !running && !done && idx > 0,
-          }}
-          onToggleActive={() => setLiveDraftActive((v) => !v)}
-          onSourceChange={(s) => setLiveDraftSource(normalizeLiveDraftSource(s))}
-          sessionActions={
-            liveSource === "rfsn"
-              ? {
-                  canStart: !running && !done && idx === 0,
-                  canResume: !running && !done && idx > 0,
-                  canPause: running,
-                  canReset: idx > 0,
-                  canNewDraft: idx > 0 || done,
-                  pickLabel: `Pick ${Math.min(idx, schedule.length)}/${schedule.length}`,
-                  onStart: () => setRunning(true),
-                  onResume: () => setRunning(true),
-                  onPause: () => setRunning(false),
-                  onReset: () => reset(),
-                  onNewDraft: () => newRandomDraft(),
-                }
-              : null
+      {/* Shared control strip — Live = ESPN League; Mock = RFSN Local / FantasyPros */}
+      <LiveDraftControlPanel
+        experience={preferLiveDraft ? "live" : "mock"}
+        status={{
+          active: preferLiveDraft ? liveDraftActive : liveDraftActive || fpSessionArmed,
+          source: preferLiveDraft ? liveSource : mockSource,
+          monitoring: connectedLeagueLive
+            ? !leagueAdapter.lastError
+            : allowInternalSimPicks
+              ? running || idx > 0
+              : fpSessionArmed,
+          boothOnAir: connectedLeagueLive
+            ? leagueAdapter.notifiedCount > 0 || leagueAdapter.lockedCount > 0
+            : allowInternalSimPicks
+              ? running || idx > 0
+              : fpSessionArmed && (fpMock.notifiedCount > 0 || fpMock.lockedCount > 0),
+          lockedCount: connectedLeagueLive
+            ? leagueAdapter.lockedCount
+            : allowInternalSimPicks
+              ? Object.keys(results).length
+              : fpMock.lockedCount,
+          notifiedCount: connectedLeagueLive
+            ? leagueAdapter.notifiedCount
+            : allowInternalSimPicks
+              ? 0
+              : fpMock.notifiedCount,
+          draftComplete: done,
+          lastError: connectedLeagueLive
+            ? leagueAdapter.lastError
+            : fpSessionArmed
+              ? fpMock.lastError
+              : null,
+          lastPollAt: connectedLeagueLive ? leagueAdapter.lastPollAt : null,
+          connectorReady: connectedLeagueLive
+            ? leagueAdapter.extensionPresent
+            : fpSessionArmed
+              ? fpMock.extensionPresent
+              : true,
+          draftPaused: allowInternalSimPicks ? !running && !done && idx > 0 : false,
+        }}
+        onToggleActive={() => {
+          if (preferLiveDraft) setLiveDraftActive((v) => !v);
+          else if (mockSource === "fantasypros") {
+            if (fpMockActive) {
+              setFpMockActive(false);
+              void postFantasyProsMockDisarm().catch(() => {});
+            } else {
+              setFpMockActive(true);
+              setRunning(false);
+            }
+          } else {
+            setLiveDraftActive((v) => !v);
           }
-        />
-      )}
+        }}
+        onSourceChange={(s: DraftControlSource) => {
+          if (preferLiveDraft) {
+            setLiveDraftSource(normalizeLiveDraftSource(s));
+          } else {
+            const next = normalizeMockDraftSource(s);
+            setMockDraftSource(next);
+            if (next === "fantasypros") {
+              setRunning(false);
+            } else {
+              setFpMockActive(false);
+              void postFantasyProsMockDisarm().catch(() => {});
+            }
+          }
+        }}
+        sessionActions={
+          allowInternalSimPicks
+            ? {
+                canStart: !running && !done && idx === 0,
+                canResume: !running && !done && idx > 0,
+                canPause: running,
+                canReset: idx > 0,
+                canNewDraft: idx > 0 || done,
+                pickLabel: `Pick ${Math.min(idx, schedule.length)}/${schedule.length}`,
+                onStart: () => setRunning(true),
+                onResume: () => setRunning(true),
+                onPause: () => setRunning(false),
+                onReset: () => reset(),
+                onNewDraft: () => newRandomDraft(),
+              }
+            : null
+        }
+      />
 
-      {/* Secondary RFSN sim chrome — pace / seed / control mode (actions live in control panel) */}
-      {preferLiveDraft && liveSource === "rfsn" && (
+      {/* Secondary RFSN Local Mock chrome — pace / seed (actions live in control panel) */}
+      {allowInternalSimPicks && (
       <div className="flex items-center gap-2 mb-3 flex-wrap" data-live-sim-controls>
         <span className="text-[11px] text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
           Seed {formatDraftSeed(draftSeed)}
@@ -1355,7 +1595,7 @@ function LiveDraftEngine({
       </div>
       )}
 
-      {!preferLiveDraft && (
+      {!preferLiveDraft && mockSource === "fantasypros" && (
         <FantasyProsMockControlPanel
           active={fpMockActive}
           status={fpMock}
@@ -1367,7 +1607,6 @@ function LiveDraftEngine({
           commentaryEnabled={fpCommentaryEnabled}
           onStart={() => {
             setFpMockActive(true);
-            setLiveDraftActive(false);
             setRunning(false);
           }}
           onStop={() => {
@@ -1392,7 +1631,7 @@ function LiveDraftEngine({
           onCommentaryChange={setFpCommentaryEnabled}
         />
       )}
-      {preferLiveDraft && !done && (
+      {!done && (
         <RfsnPickClock
           state={clockState}
           round={Number(slot?.round ?? 0)}
@@ -1405,13 +1644,13 @@ function LiveDraftEngine({
           className="mb-3"
         />
       )}
-      {preferLiveDraft && liveDraftActive && (
+      {liveDraftActive && (
         <LiveDraftRecentPicks
           picks={recentPicks}
           currentPickNumber={currentOverallPick}
         />
       )}
-      {preferLiveDraft && done && (
+      {done && (
         <LiveDraftWrapUp
           teams={teams}
           draftGrades={draftGrades}
@@ -1420,7 +1659,11 @@ function LiveDraftEngine({
           className="mb-3"
         />
       )}
-      {preferLiveDraft && done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
+      {done && (
+        <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">
+          ✓ Draft complete — {Object.keys(results).length} picks
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Available pool (sortable) */}
@@ -1516,7 +1759,7 @@ function LiveDraftEngine({
             <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">
               {preferLiveDraft ? "Your Teams" : "League Rosters"}
             </span>
-            {preferLiveDraft && liveSource === "rfsn" && (
+            {allowInternalSimPicks && (
               <>
                 <span className="text-[10px] text-zinc-500">
                   {manualTeamIds.size === 0
@@ -1539,13 +1782,13 @@ function LiveDraftEngine({
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
               const grade = draftGrades.get(tid);
-              const isOnClock = preferLiveDraft && !done && slot && Number(slot.teamId) === tid;
+              const isOnClock = (preferLiveDraft || allowInternalSimPicks) && !done && slot && Number(slot.teamId) === tid;
               const isYou = myTeamId === tid;
-              const isManual = preferLiveDraft && liveSource === "rfsn" && manualTeamIds.has(tid);
+              const isManual = allowInternalSimPicks && manualTeamIds.has(tid);
               return (
                 <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
                   <div className="flex items-center gap-1.5 mb-1">
-                    {preferLiveDraft && liveSource === "rfsn" ? (
+                    {allowInternalSimPicks ? (
                     <input
                       type="checkbox"
                       checked={isManual}
@@ -1596,11 +1839,12 @@ function LiveDraftEngine({
               active={isRfsnWarRoomBroadcastActive({
                 liveDraftActive,
                 preferLiveDraft,
-                fantasyProsSessionActive: fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
+                fantasyProsSessionActive: fpSessionArmed,
+                rfsnLocalMockSessionActive: allowInternalSimPicks && liveDraftActive,
               })}
               sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${fpSessionEpoch}:${connectedLeagueLive ? "live" : fpMockActive ? "fp" : "sim"}`}
               draftPaused={
-                fpMockActive && !preferLiveDraft
+                fpSessionArmed
                   ? !fpVoiceEnabled
                   : !running && !connectedLeagueLive
               }

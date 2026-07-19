@@ -1,7 +1,7 @@
 /**
- * RFSN-013 / RFSN-024 — Live Draft Experience Shell (platform-neutral).
- * Source adapters stay behind this control surface.
- * Operational control center: source, connection, start/pause, new draft, board driver.
+ * Live / Mock draft control strip — source selection + session status.
+ * Provider adapters feed the shared Draft Engine; this panel only chooses
+ * which adapter is armed. Does not implement grading/commentary/booth.
  */
 import { cn } from "@/lib/utils";
 import {
@@ -11,15 +11,23 @@ import {
   type LiveDraftUxStatusInput,
 } from "@/lib/liveDraftUx";
 import {
+  type DraftControlSource,
   type LiveDraftSource,
+  type MockDraftSource,
+  normalizeDraftControlSource,
   normalizeLiveDraftSource,
+  normalizeMockDraftSource,
 } from "@/lib/liveDraftSource";
+import {
+  LIVE_DRAFT_SOURCES,
+  MOCK_DRAFT_SOURCES,
+} from "@shared/draftSource";
 
-export type { LiveDraftSource };
+export type { LiveDraftSource, MockDraftSource, DraftControlSource };
 
 export type LiveDraftControlStatus = {
   active: boolean;
-  source: LiveDraftSource;
+  source: DraftControlSource;
   monitoring: boolean;
   boothOnAir: boolean;
   lockedCount: number;
@@ -28,11 +36,9 @@ export type LiveDraftControlStatus = {
   lastError: string | null;
   lastPollAt: string | null;
   connectorReady: boolean;
-  /** User paused the draft session. */
   draftPaused?: boolean;
 };
 
-/** Built-in RFSN draft session actions (hidden for Connected League). */
 export type LiveDraftSessionActions = {
   canStart: boolean;
   canPause: boolean;
@@ -48,16 +54,19 @@ export type LiveDraftSessionActions = {
 };
 
 type Props = {
+  /** live = real league; mock = RFSN local / FantasyPros / … */
+  experience: "live" | "mock";
   status: LiveDraftControlStatus;
   onToggleActive: () => void;
-  onSourceChange: (source: LiveDraftSource) => void;
+  onSourceChange: (source: DraftControlSource) => void;
   sessionActions?: LiveDraftSessionActions | null;
 };
 
 function toUxInput(status: LiveDraftControlStatus): LiveDraftUxStatusInput {
+  const source = normalizeDraftControlSource(status.source);
   return {
     active: status.active,
-    source: normalizeLiveDraftSource(status.source),
+    source: source === "fantasypros" ? "manual" : source === "rfsn" ? "rfsn" : "espn",
     monitoring: status.monitoring,
     boothOnAir: status.boothOnAir,
     draftComplete: status.draftComplete,
@@ -78,6 +87,7 @@ const PHASE_TONE: Record<string, string> = {
 };
 
 export function LiveDraftControlPanel({
+  experience,
   status,
   onToggleActive,
   onSourceChange,
@@ -86,14 +96,17 @@ export function LiveDraftControlPanel({
   const ux = toUxInput(status);
   const phase = resolveLiveDraftUiPhase(ux);
   const lines = liveDraftStatusLines(ux);
-  const source = normalizeLiveDraftSource(status.source);
+  const source = normalizeDraftControlSource(status.source);
   const isEspn = source === "espn";
+  const isRfsnLocal = source === "rfsn";
+  const catalog = experience === "live" ? LIVE_DRAFT_SOURCES : MOCK_DRAFT_SOURCES;
 
   return (
     <div
       className="mb-3 sticky top-16 z-10 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-3 text-[11px] text-zinc-300 space-y-3 backdrop-blur-md"
       data-live-draft-control
       data-live-draft-ops
+      data-draft-experience={experience}
       data-rfsn-013
       data-rfsn-024
       data-live-phase={phase}
@@ -102,7 +115,7 @@ export function LiveDraftControlPanel({
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <div className="font-black uppercase tracking-wider text-emerald-200 text-xs">
-            Live Draft Control
+            {experience === "live" ? "Live Draft Control" : "Mock Draft Control"}
           </div>
           <span
             className={cn(
@@ -130,39 +143,62 @@ export function LiveDraftControlPanel({
         </button>
       </div>
 
-      {/* Source — always visible so the board driver is chosen before starting */}
       <div className="space-y-1.5" data-live-source-picker>
         <div className="text-[10px] uppercase tracking-wider text-zinc-500">Draft source</div>
         <div className="flex flex-wrap gap-3">
-          <label className="inline-flex items-center gap-1.5 cursor-pointer text-zinc-200">
-            <input
-              type="radio"
-              name="live-draft-source"
-              checked={source === "rfsn"}
-              onChange={() => onSourceChange("rfsn")}
-              className="accent-emerald-400"
-            />
-            RFSN Draft
-          </label>
-          <label className="inline-flex items-center gap-1.5 cursor-pointer text-zinc-200">
-            <input
-              type="radio"
-              name="live-draft-source"
-              checked={source === "espn"}
-              onChange={() => onSourceChange("espn")}
-              className="accent-emerald-400"
-            />
-            Connected League
-          </label>
+          {catalog.map((entry) => {
+            const controlId: DraftControlSource =
+              entry.id === "espn-live"
+                ? "espn"
+                : entry.id === "fantasypros-mock"
+                  ? "fantasypros"
+                  : entry.id === "rfsn-local-mock"
+                    ? "rfsn"
+                    : "espn";
+            const checked =
+              experience === "live"
+                ? normalizeLiveDraftSource(source) === "espn" && entry.id === "espn-live"
+                : normalizeMockDraftSource(source) === controlId ||
+                  (controlId === "rfsn" && source === "rfsn") ||
+                  (controlId === "fantasypros" && source === "fantasypros");
+            return (
+              <label
+                key={entry.id}
+                className={cn(
+                  "inline-flex items-center gap-1.5 text-zinc-200",
+                  entry.available ? "cursor-pointer" : "opacity-40 cursor-not-allowed",
+                )}
+              >
+                <input
+                  type="radio"
+                  name={`draft-source-${experience}`}
+                  checked={Boolean(checked && entry.available)}
+                  disabled={!entry.available}
+                  onChange={() => {
+                    if (!entry.available) return;
+                    if (experience === "live") onSourceChange("espn");
+                    else if (entry.id === "fantasypros-mock") onSourceChange("fantasypros");
+                    else if (entry.id === "rfsn-local-mock") onSourceChange("rfsn");
+                  }}
+                  className="accent-emerald-400"
+                />
+                {entry.label}
+                {!entry.available ? (
+                  <span className="text-[9px] uppercase text-zinc-600">Soon</span>
+                ) : null}
+              </label>
+            );
+          })}
         </div>
         <p className="text-[11px] text-zinc-500" data-live-board-driver>
           {isEspn
-            ? "Board driver: Connected League feed (ESPN). Built-in RFSN pick generation is paused."
-            : "Board driver: Built-in RFSN Draft. Picks are generated here and feed the booth."}
+            ? "Board driver: ESPN League feed → shared Draft Engine."
+            : source === "fantasypros"
+              ? "Board driver: FantasyPros Mock adapter → shared Draft Engine."
+              : "Board driver: RFSN Local Mock adapter → shared Draft Engine."}
         </p>
       </div>
 
-      {/* Connection / session status */}
       <div className="space-y-1" data-live-status-lines>
         {lines.map((line, i) => (
           <div
@@ -180,8 +216,7 @@ export function LiveDraftControlPanel({
         ))}
       </div>
 
-      {/* Primary session actions */}
-      {status.active && !isEspn && sessionActions && (
+      {status.active && isRfsnLocal && sessionActions && (
         <div className="flex flex-wrap items-center gap-2" data-live-session-actions>
           {sessionActions.canStart && (
             <button
@@ -265,9 +300,6 @@ export function LiveDraftControlPanel({
             Picks locked {status.lockedCount}
             {status.notifiedCount > 0 ? ` · covered ${status.notifiedCount}` : ""}
           </span>
-          {isEspn && !status.connectorReady && (
-            <span>League connection limited — browser session may be required</span>
-          )}
         </div>
       )}
 

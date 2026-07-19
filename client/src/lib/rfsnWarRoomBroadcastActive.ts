@@ -8,7 +8,10 @@ import { isFantasyProsSimulationBroadcastActive } from "@/lib/fantasyProsMockSes
  * `liveDraftActive` is sticky (toggle), so ESPN Live polling must also require
  * the Live Draft surface (`preferLiveDraft` from the canonical live route).
  *
- * RFSN-030C: FantasyPros simulation may arm the booth on the Mock surface only.
+ * Booth arms when any active adapter session is feeding the shared Draft Engine:
+ * - Live + ESPN League
+ * - Mock + FantasyPros Mock
+ * - Mock + RFSN Local Mock
  */
 export function isRfsnWarRoomBroadcastActive(args: {
   liveDraftActive: boolean;
@@ -16,12 +19,21 @@ export function isRfsnWarRoomBroadcastActive(args: {
   preferLiveDraft: boolean;
   /** FantasyPros solo mock connector session (Mock surface). */
   fantasyProsSessionActive?: boolean;
+  /** RFSN Local Mock generating picks on the Mock surface. */
+  rfsnLocalMockSessionActive?: boolean;
 }): boolean {
   if (
     isFantasyProsSimulationBroadcastActive({
       fantasyProsSessionActive: Boolean(args.fantasyProsSessionActive),
       preferLiveDraft: args.preferLiveDraft,
     })
+  ) {
+    return true;
+  }
+  if (
+    Boolean(args.rfsnLocalMockSessionActive) &&
+    !args.preferLiveDraft &&
+    args.liveDraftActive
   ) {
     return true;
   }

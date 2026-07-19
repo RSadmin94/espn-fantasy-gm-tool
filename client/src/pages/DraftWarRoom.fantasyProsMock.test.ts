@@ -21,8 +21,10 @@ describe("RFSN-030C DraftWarRoom FantasyPros wiring", () => {
   });
 
   it("disables in-app notify while FantasyPros session is active", () => {
+    // RFSN Local Mock notify is gated by allowInternalSimPicks (Mock + rfsn only).
     expect(warRoom).toMatch(
-      /useRfsnLiveLockedPickNotify\(\{[\s\S]*fpMockActive && !preferLiveDraft/,
+      /useRfsnLiveLockedPickNotify\(\{[\s\S]*enabled:\s*Boolean\(leagueId\)\s*&&\s*allowInternalSimPicks/,
     );
+    expect(warRoom).toContain('allowInternalSimPicks = !preferLiveDraft && mockSource === "rfsn"');
   });
 });
