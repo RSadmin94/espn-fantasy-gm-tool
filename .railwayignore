@@ -1,0 +1,9 @@
+# Keep CLI `railway up` uploads lean — these are local extension artifacts, not the web app.
+GM-War-Room-Extension-*/
+GM-War-Room-Extension-*.zip
+*.zip
+chrome-extension/
+dist/
+node_modules/
+.cursor/
+agent-transcripts/
