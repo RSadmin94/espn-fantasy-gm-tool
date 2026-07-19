@@ -1,8 +1,9 @@
 # RFSN-030B-3 — FantasyPros Multiplayer / Socket Evidence
 
-**Status:** Partial complete — enough to sequence architecture; **one gap remains** (live in-draft pick wire under authenticated MUD)  
+**Status:** Partial — lobby + consumer schemas + transport architecture note captured; **authenticated in-draft wire frames still blocked**  
 **Date:** 2026-07-19  
-**Question:** What is the most reliable FantasyPros mock draft event source?
+**Question:** What is the most reliable FantasyPros mock draft event source?  
+**Transport deep-dive:** `docs/architecture/RFSN-030B-3_Draft_Room_Transport_ng_onSocketEvent.md`
 
 ---
 

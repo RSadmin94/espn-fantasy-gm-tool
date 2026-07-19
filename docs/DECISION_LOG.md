@@ -18,7 +18,7 @@ Product and architecture decisions with dates. Newest first.
 | Solo mock | `vueDraftTarget: "local"`; reload **resets** picks (client memory only) |
 | Public/private MUD join/create | **Requires FantasyPros account** |
 
-**Next:** One authenticated MUD session to capture live-room transport into `ng_onSocketEvent`. Until then keep types provisional; solo path can still plan around Vue `__debugStore.draftState.draftedPlayers`.
+**Next:** One authenticated MUD session to capture live-room transport into `ng_onSocketEvent` (see `RFSN-030B-3_Draft_Room_Transport_ng_onSocketEvent.md`). Until then keep types provisional; solo path can still plan around Vue `__debugStore.draftState.draftedPlayers`. Multiplayer durable path evidenced without auth: `/spaDraft` `checkSync` → `picks[]`.
 
 **Still do not start 030B-1 code/types freeze.**
 
