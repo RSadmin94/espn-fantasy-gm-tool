@@ -4,6 +4,23 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-19 — RFSN-030A FantasyPros Mock Draft Connector Discovery
+
+**Decision:** Close **RFSN-030A** as discovery-only. FantasyPros Mock Draft is **not** an ESPN-style JSON poll target.
+
+**Findings (see `docs/architecture/RFSN-030A_FantasyPros_Mock_Draft_Connector_Discovery.md`):**
+
+| Area | Result |
+| ---- | ------ |
+| Network | `/spaDraft` hydrates room; solo mock picks largely **client Vue**; sockets present but unused in solo mock |
+| DOM | `.vue-draft-room-app` / `.vue-draftroom-player-cell`; `ng_draftPlayer` |
+| Auth | Free mock works signed-out; premium settings locked |
+| Extension | Current ESPN extension **cannot** switch providers without new hosts + content script + adapter |
+
+**Next:** RFSN-030B — define FantasyPros mock adapter contract (map to `notifyLockedPick`); do not overload ESPN live poller.
+
+---
+
 ## 2026-07-18 — RFSN-027C RFSN Navigation Consolidation
 
 **Decision:** Consolidate RFSN primary navigation to **Live · Stories · Recaps**. Do not invent Wire-vs-Stories product differentiation or new content categories.
