@@ -97,8 +97,8 @@ export function RfsnRecaps() {
         <div className="rounded-[15px] border border-red-500/20 bg-red-500/[0.05] px-5 py-10 text-center">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-400" />
           <p className="text-sm font-semibold text-zinc-300">Couldn’t load recaps</p>
-          <Link to={RFSN_ROUTES.wire} className="mt-4 inline-block text-xs font-bold text-lime-400">
-            Open Wire →
+          <Link to={RFSN_ROUTES.stories} className="mt-4 inline-block text-xs font-bold text-lime-400">
+            Open Stories →
           </Link>
         </div>
       ) : weeks.length === 0 ? (
@@ -113,8 +113,8 @@ export function RfsnRecaps() {
             <Link to={RFSN_ROUTES.stories} className="text-xs font-bold text-lime-400 hover:text-lime-300">
               Open Stories →
             </Link>
-            <Link to={RFSN_ROUTES.wire} className="text-xs font-bold text-lime-400 hover:text-lime-300">
-              Open Wire →
+            <Link to={RFSN_ROUTES.live} className="text-xs font-bold text-lime-400 hover:text-lime-300">
+              Open Live →
             </Link>
           </div>
         </div>
@@ -175,10 +175,10 @@ export function RfsnRecaps() {
           )}
 
           <Link
-            to={RFSN_ROUTES.wire}
+            to={RFSN_ROUTES.stories}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
           >
-            Full Wire coverage <ArrowRight className="h-3.5 w-3.5" />
+            More league stories <ArrowRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       )}

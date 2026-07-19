@@ -19,6 +19,8 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(routes).toContain("/home");
     expect(routes).toContain("/rivals/rivalries");
     expect(routes).toContain("/my-team/championship-path");
+    expect(routes).toContain("/rfsn/stories");
+    expect(routes).toContain("/rfsn/live");
     expect(routes).toContain("/rfsn/wire");
     expect(routes).toContain("/draft/live");
     expect(routes).toContain("/draft/war-room");
@@ -115,7 +117,6 @@ describe("v2Routing — locked FFR 2.0", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     const live = [
       ["/rfsn", "RfsnHome"],
-      ["/rfsn/wire", "RfsnWire"],
       ["/rfsn/breaking", "RfsnBreaking"],
       ["/rfsn/stories", "RfsnStories"],
       ["/rfsn/recaps", "RfsnRecaps"],
@@ -128,6 +129,8 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain('path: "/rfsn/news"');
     expect(main).toContain('path: "/rfsn/live"');
     expect(main).toContain("element: <RfsnLive />");
+    expect(main).toContain('path: "/rfsn/wire"');
+    expect(main).toContain("LegacyWireListRedirect");
     expect(main).toContain('path: "/rfsn/wire/article/:articleId"');
     expect(main).toContain('path: "/rfsn/stories/article/:articleId"');
   });

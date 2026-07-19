@@ -41,19 +41,21 @@ describe("rfsnHomeNews", () => {
     expect(getRouteFeatures().some((f) => f.route === "/league-wire")).toBe(false);
   });
 
-  it("redirects /league-wire to canonical RFSN wire in router", () => {
+  it("redirects /league-wire to canonical RFSN Stories in router", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).toContain('path: "/league-wire"');
-    expect(main).toContain('to="/rfsn/wire"');
+    expect(main).toContain("LegacyWireListRedirect");
+    expect(main).toContain("/rfsn/stories");
   });
 
   it("redirects legacy article deep links preserving id", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client", "src", "main.tsx"), "utf-8");
     expect(main).toContain('path: "/league-wire/article/:articleId"');
     expect(main).toContain("LegacyWireArticleRedirect");
-    expect(main).toContain("/rfsn/wire/article/${articleId}");
+    expect(main).toContain("/rfsn/stories/article/${articleId}");
+    expect(main).toContain('searchParams.get("id")');
     expect(RFSN_ROUTES.legacyWireArticle(42)).toBe("/league-wire/article/42");
-    expect(RFSN_ROUTES.newsArticle(42)).toBe("/rfsn/wire/article/42");
+    expect(RFSN_ROUTES.newsArticle(42)).toBe("/rfsn/stories/article/42");
     expect(RFSN_ROUTES.wireArticle(42)).toBe("/rfsn/wire/article/42");
     expect(RFSN_ROUTES.storiesArticle(42)).toBe("/rfsn/stories/article/42");
   });
@@ -129,42 +131,31 @@ describe("rfsnHomeNews", () => {
     expect(rfsnNews).not.toContain("RfsnBroadcastShell");
   });
 
-  it("RFSN internal nav always includes Home and Wire destinations", () => {
+  it("RFSN internal nav is Live · Stories · Recaps (plus Home hub)", () => {
     const nav = fs.readFileSync(
       path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
       "utf-8",
     );
     expect(nav).toContain('label: "Home"');
-    expect(nav).toContain('label: "Wire"');
-    expect(nav).toContain('label: "Breaking"');
+    expect(nav).toContain('label: "Live"');
     expect(nav).toContain('label: "Stories"');
     expect(nav).toContain('label: "Recaps"');
-    expect(nav).toContain('label: "Analysts"');
-    expect(nav).toContain("RFSN_ROUTES.wire");
-    expect(nav).toContain("RFSN_ROUTES.breaking");
+    expect(nav).toContain("RFSN_ROUTES.live");
+    expect(nav).toContain("RFSN_ROUTES.stories");
+    expect(nav).toContain("RFSN_ROUTES.recaps");
+    expect(nav).not.toContain('label: "Wire"');
+    expect(nav).not.toContain('label: "Breaking"');
+    expect(nav).not.toContain('label: "Analysts"');
     expect(nav).not.toContain("/rfsn/weekly");
   });
 
-  it("RFSN internal nav omits Live by default", () => {
+  it("RFSN internal nav always includes Live (RFSN-027C)", () => {
     const nav = fs.readFileSync(
       path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
       "utf-8",
     );
-    expect(nav).toContain("showLive = false");
-    expect(nav).toContain("showLive ? [...BASE_ITEMS, LIVE_ITEM] : BASE_ITEMS");
-  });
-
-  it("RFSN internal nav includes Live only when showLive is true", () => {
-    const nav = fs.readFileSync(
-      path.join(repoRoot, "client", "src", "components", "rfsn", "RfsnDestinationNav.tsx"),
-      "utf-8",
-    );
+    expect(nav).toContain('label: "Live"');
     expect(nav).toContain("RFSN_ROUTES.live");
-    const home = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnHome.tsx"), "utf-8");
-    const news = fs.readFileSync(path.join(repoRoot, "client", "src", "pages", "rfsn", "RfsnNews.tsx"), "utf-8");
-    expect(home).toContain("showLive={showLiveNav}");
-    expect(home).toContain("liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess");
-    expect(news).toContain("showLive={showLiveNav}");
-    expect(news).toContain("liveAccessQ.data?.enabled && liveAccessQ.data?.canAccess");
+    expect(nav).toContain("data-rfsn-027c-nav");
   });
 });

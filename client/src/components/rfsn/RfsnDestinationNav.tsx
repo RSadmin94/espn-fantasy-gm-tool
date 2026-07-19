@@ -12,16 +12,13 @@ export type RfsnDestination =
   | "news"
   | "live";
 
+/** RFSN-027C — primary destinations only (Live · Stories · Recaps). */
 const BASE_ITEMS: { id: RfsnDestination; label: string; href: string }[] = [
   { id: "home", label: "Home", href: RFSN_ROUTES.home },
-  { id: "wire", label: "Wire", href: RFSN_ROUTES.wire },
-  { id: "breaking", label: "Breaking", href: RFSN_ROUTES.breaking },
+  { id: "live", label: "Live", href: RFSN_ROUTES.live },
   { id: "stories", label: "Stories", href: RFSN_ROUTES.stories },
   { id: "recaps", label: "Recaps", href: RFSN_ROUTES.recaps },
-  { id: "analysts", label: "Analysts", href: RFSN_ROUTES.analysts },
 ];
-
-const LIVE_ITEM = { id: "live" as const, label: "Live", href: RFSN_ROUTES.live };
 
 function normalizePath(pathname: string): string {
   if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
@@ -32,24 +29,29 @@ function pathMatches(pathname: string, href: string): boolean {
   const path = normalizePath(pathname);
   const target = normalizePath(href);
   if (path === target) return true;
-  // Legacy news reader is part of Wire/Stories content surface.
-  if ((target === RFSN_ROUTES.wire || target === RFSN_ROUTES.stories) && path.startsWith("/rfsn/news")) {
-    return target === RFSN_ROUTES.wire;
+  // Wire/news deep links redirect to Stories — highlight Stories while resolving.
+  if (
+    target === RFSN_ROUTES.stories &&
+    (path.startsWith("/rfsn/wire") || path.startsWith("/rfsn/news") || path.startsWith("/league-wire"))
+  ) {
+    return true;
   }
   return path.startsWith(`${target}/`);
 }
 
 export function RfsnDestinationNav({
   active,
-  showLive = false,
+  showLive = true,
   className,
 }: {
   active?: RfsnDestination;
+  /** @deprecated Live is always in primary nav (RFSN-027C). Kept for call-site compat. */
   showLive?: boolean;
   className?: string;
 }) {
   const { pathname } = useLocation();
-  const items = showLive ? [...BASE_ITEMS, LIVE_ITEM] : BASE_ITEMS;
+  void showLive;
+  const items = BASE_ITEMS;
 
   return (
     <nav
@@ -58,11 +60,16 @@ export function RfsnDestinationNav({
         className,
       )}
       aria-label="RFSN destinations"
+      data-rfsn-027c-nav
     >
       {items.map((item) => {
         const isActive =
           active != null
-            ? item.id === active || (active === "news" && item.id === "wire")
+            ? item.id === active ||
+              (active === "news" && item.id === "stories") ||
+              (active === "wire" && item.id === "stories") ||
+              (active === "breaking" && item.id === "home") ||
+              (active === "analysts" && item.id === "home")
             : item.id === "home"
               ? normalizePath(pathname) === RFSN_ROUTES.home
               : pathMatches(pathname, item.href);

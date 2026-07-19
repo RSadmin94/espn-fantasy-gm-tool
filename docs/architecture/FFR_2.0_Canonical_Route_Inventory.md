@@ -54,19 +54,20 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 
 | Canonical route | Component | Authority / query | Auth | Gate | Legacy |
 | --- | --- | --- | --- | --- | --- |
-| `/rfsn` | `RfsnHome` | Newsroom feed, featured article | Yes | — | — |
-| `/rfsn/wire` | `RfsnWire` | `LeagueWireNewsroom` | Yes | — | `/rfsn/news` → redirect |
-| `/rfsn/wire/article/:articleId` | `RfsnWire` | Article reader | Yes | — | `/rfsn/news/article/:id` → redirect |
-| `/rfsn/stories` | `RfsnStories` | `LeagueWireNewsroom` (shared feed) | Yes | — | — |
-| `/rfsn/stories/article/:articleId` | `RfsnStories` | Article reader | Yes | — | — |
-| `/rfsn/breaking` | `RfsnBreaking` | Live broadcast + featured articles | Yes | — | — |
-| `/rfsn/recaps` | `RfsnRecaps` | Postgame reports | Yes | — | — |
-| `/rfsn/analysts` | `RfsnAnalysts` | `COMMENTATOR_META` | Yes | — | — |
-| `/rfsn/live` | `RfsnLive` | `rfsnBroadcast`, TTS/audio | Yes | Live access query | — |
-| `/league-wire` | Redirect | — | Yes | — | → `/rfsn/wire` |
+| `/rfsn` | `RfsnHome` | Newsroom feed, featured article | Yes | — | Hub landing |
+| `/rfsn/live` | `RfsnLive` | `rfsnBroadcast`, TTS/audio | Yes | Live access query | Sidebar (RFSN-027C) |
+| `/rfsn/stories` | `RfsnStories` | `LeagueWireNewsroom` (shared feed) | Yes | — | Sidebar; primary storytelling |
+| `/rfsn/stories/article/:articleId` | `RfsnStories` | Article reader | Yes | — | Canonical article URL |
+| `/rfsn/recaps` | `RfsnRecaps` | Postgame reports | Yes | — | Sidebar |
+| `/rfsn/wire` | Redirect → Stories | — | Yes | — | Engine via Stories (RFSN-027C) |
+| `/rfsn/wire/article/:articleId` | Redirect → Stories article | — | Yes | — | `/rfsn/news/article/:id` → Stories |
+| `/rfsn/breaking` | `RfsnBreaking` | Live broadcast + featured articles | Yes | — | Deep link only |
+| `/rfsn/analysts` | `RfsnAnalysts` | `COMMENTATOR_META` | Yes | — | Deep link only |
+| `/league-wire` | Redirect | — | Yes | — | → `/rfsn/stories` |
 | `/draft-commentary` | `DraftCommentary` | Archived commentary | Yes | `/draft-commentary` | Preserved (Draft-tied archive) |
 
-**Wire vs Stories:** Same newsroom authority; honest overlap documented. No separate classification engine.
+**Nav (RFSN-027C):** Live · Stories · Recaps. Wire is an internal feed engine, not a primary destination.
+**Wire vs Stories:** Same newsroom authority; Stories is the user-facing home. No separate classification engine.
 
 ---
 

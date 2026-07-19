@@ -83,8 +83,8 @@ export function RfsnBreaking() {
             stories appear here when coverage is available.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
-            <Link to={RFSN_ROUTES.wire} className="text-xs font-bold text-lime-400 hover:text-lime-300">
-              Open Wire →
+            <Link to={RFSN_ROUTES.stories} className="text-xs font-bold text-lime-400 hover:text-lime-300">
+              Open Stories →
             </Link>
             {showLiveNav ? (
               <Link to={RFSN_ROUTES.live} className="text-xs font-bold text-lime-400 hover:text-lime-300">

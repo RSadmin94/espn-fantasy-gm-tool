@@ -78,20 +78,22 @@ describe("RFSN V2 — Commit 5 route ownership", () => {
   it("hub links into canonical RFSN destinations", () => {
     const home = fs.readFileSync(path.join(repoRoot, "client/src/pages/rfsn/RfsnHome.tsx"), "utf-8");
     expect(home).toContain("data-v2-rfsn-home");
-    expect(home).toContain("RFSN_ROUTES.wire");
     expect(home).toContain("RFSN_ROUTES.stories");
     expect(home).toContain("RFSN_ROUTES.recaps");
     expect(home).toContain("RFSN_ROUTES.analysts");
     expect(home).toContain("RFSN_ROUTES.live");
   });
 
-  it("preserves legacy news and live routes (news redirects to wire)", () => {
+  it("preserves legacy news and live routes (news/wire redirect to stories)", () => {
     const main = fs.readFileSync(path.join(repoRoot, "client/src/main.tsx"), "utf-8");
     for (const route of ["/rfsn", "/rfsn/news", "/rfsn/live", "/draft-commentary", "/draft-war-room"]) {
       expect(main).toContain(`path: "${route}"`);
     }
     expect(main).toContain('path: "/rfsn/news/article/:articleId"');
     expect(main).toContain("LegacyRfsnNewsArticleRedirect");
+    expect(main).toContain("LegacyWireListRedirect");
+    expect(main).toContain('path: "/rfsn/wire"');
+    expect(main).toContain("/rfsn/stories");
     expect(main).toContain('path: "/rfsn/wire/article/:articleId"');
     expect(main).toContain('path: "/rfsn/stories/article/:articleId"');
     expect(main).toContain("element: <RfsnLive />");

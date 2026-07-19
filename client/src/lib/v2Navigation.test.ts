@@ -92,11 +92,9 @@ describe("v2Navigation — locked FFR 2.0", () => {
   it("exposes RFSN destinations in locked order", () => {
     const rfsn = buildV2NavGroups().find((g) => g.id === "rfsn");
     expect(rfsn?.items.map((i) => i.label)).toEqual([
-      "Wire",
-      "Breaking News",
+      "Live",
       "Stories",
       "Recaps",
-      "Analysts",
     ]);
   });
 
@@ -141,6 +139,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
       "/my-team/profile",
       "/my-team/championship-path",
       "/rfsn",
+      "/rfsn/live",
       "/rfsn/wire",
       "/rfsn/breaking",
       "/rfsn/stories",
@@ -242,11 +241,9 @@ describe("v2Navigation — locked FFR 2.0", () => {
   it("points RFSN sidebar items to canonical live routes", () => {
     const rfsn = buildV2NavGroups().find((g) => g.id === "rfsn")!;
     const expected = [
-      ["/rfsn/wire", "rfsn-wire"],
-      ["/rfsn/breaking", "rfsn-breaking"],
+      ["/rfsn/live", "rfsn-live"],
       ["/rfsn/stories", "rfsn-stories"],
       ["/rfsn/recaps", "rfsn-recaps"],
-      ["/rfsn/analysts", "rfsn-analysts"],
     ] as const;
     for (const [route, id] of expected) {
       const dest = rfsn.items.find((i) => i.id === id)!;
@@ -254,6 +251,16 @@ describe("v2Navigation — locked FFR 2.0", () => {
       expect(dest.legacyRoute).toBeUndefined();
       expect(getV2NavHref(dest)).toBe(route);
       expect(isV2RouteActive(route, dest)).toBe(true);
+    }
+    for (const [route, id] of [
+      ["/rfsn/wire", "rfsn-wire"],
+      ["/rfsn/breaking", "rfsn-breaking"],
+      ["/rfsn/analysts", "rfsn-analysts"],
+    ] as const) {
+      const dest = V2_DESTINATIONS.find((d) => d.id === id)!;
+      expect(dest.kind).toBe("live");
+      expect(dest.showInSidebar).toBe(false);
+      expect(getV2NavHref(dest)).toBe(route);
     }
     const hub = V2_DESTINATIONS.find((d) => d.id === "rfsn-hub")!;
     expect(hub.kind).toBe("live");

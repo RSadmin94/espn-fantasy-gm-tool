@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
-import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider, useParams } from "react-router";
+import { createBrowserRouter, Link, Navigate, Outlet, RouterProvider, useParams, useSearchParams } from "react-router";
 import superjson from "superjson";
 import {
   AuthenticateWithRedirectCallback,
@@ -35,7 +35,6 @@ import { OwnerIdentityReview } from "./pages/OwnerIdentityReview";
 import { PlayerDatabase }    from "./pages/PlayerDatabase";
 import { RfsnHome } from "./pages/rfsn/RfsnHome";
 import { RfsnLive } from "./pages/rfsn/RfsnLive";
-import { RfsnWire } from "./pages/rfsn/RfsnWire";
 import { RfsnBreaking } from "./pages/rfsn/RfsnBreaking";
 import { RfsnStories } from "./pages/rfsn/RfsnStories";
 import { RfsnRecaps } from "./pages/rfsn/RfsnRecaps";
@@ -107,16 +106,32 @@ const trpcClient = trpc.createClient({
   ],
 });
 
+/** RFSN-027C — Wire is an internal feed engine; Stories is the user destination. */
+function LegacyWireListRedirect() {
+  const [searchParams] = useSearchParams();
+  const articleId = searchParams.get("id") ?? searchParams.get("articleId");
+  if (articleId) {
+    return <Navigate to={`/rfsn/stories/article/${articleId}`} replace />;
+  }
+  const qs = searchParams.toString();
+  return <Navigate to={qs ? `/rfsn/stories?${qs}` : "/rfsn/stories"} replace />;
+}
+
 function LegacyWireArticleRedirect() {
   const { articleId } = useParams();
-  if (!articleId) return <Navigate to="/rfsn/wire" replace />;
-  return <Navigate to={`/rfsn/wire/article/${articleId}`} replace />;
+  const [searchParams] = useSearchParams();
+  if (!articleId) return <LegacyWireListRedirect />;
+  const qs = searchParams.toString();
+  return (
+    <Navigate
+      to={qs ? `/rfsn/stories/article/${articleId}?${qs}` : `/rfsn/stories/article/${articleId}`}
+      replace
+    />
+  );
 }
 
 function LegacyRfsnNewsArticleRedirect() {
-  const { articleId } = useParams();
-  if (!articleId) return <Navigate to="/rfsn/wire" replace />;
-  return <Navigate to={`/rfsn/wire/article/${articleId}`} replace />;
+  return <LegacyWireArticleRedirect />;
 }
 
 function LoadingSpinner() {
@@ -259,17 +274,19 @@ const router = createBrowserRouter([
           { path: "/player-intelligence",    element: <Navigate to="/player-database" replace /> },
           { path: "/player-database",         element: <PlayerDatabase /> },
           { path: "/rfsn", element: <RfsnHome /> },
-          { path: "/rfsn/wire", element: <RfsnWire /> },
-          { path: "/rfsn/wire/article/:articleId", element: <RfsnWire /> },
-          { path: "/rfsn/breaking", element: <RfsnBreaking /> },
+          { path: "/rfsn/live", element: <RfsnLive /> },
           { path: "/rfsn/stories", element: <RfsnStories /> },
           { path: "/rfsn/stories/article/:articleId", element: <RfsnStories /> },
           { path: "/rfsn/recaps", element: <RfsnRecaps /> },
+          // Breaking / Analysts: deep links only (RFSN-027C)
+          { path: "/rfsn/breaking", element: <RfsnBreaking /> },
           { path: "/rfsn/analysts", element: <RfsnAnalysts /> },
-          { path: "/rfsn/news", element: <Navigate to="/rfsn/wire" replace /> },
+          // Wire → Stories (engine via LeagueWireNewsroom on Stories)
+          { path: "/rfsn/wire", element: <LegacyWireListRedirect /> },
+          { path: "/rfsn/wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
+          { path: "/rfsn/news", element: <LegacyWireListRedirect /> },
           { path: "/rfsn/news/article/:articleId", element: <LegacyRfsnNewsArticleRedirect /> },
-          { path: "/rfsn/live", element: <RfsnLive /> },
-          { path: "/league-wire", element: <Navigate to="/rfsn/wire" replace /> },
+          { path: "/league-wire", element: <LegacyWireListRedirect /> },
           { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
           { path: "/draft", element: <DraftHub /> },
           {

@@ -18,6 +18,7 @@ export const RFSN_ROUTES = {
   home: "/rfsn",
   news: "/rfsn/news",
   live: "/rfsn/live",
+  /** Legacy — redirects to Stories (RFSN-027C). Engine still feeds Stories/Home. */
   wire: "/rfsn/wire",
   breaking: "/rfsn/breaking",
   stories: "/rfsn/stories",
@@ -25,8 +26,8 @@ export const RFSN_ROUTES = {
   analysts: "/rfsn/analysts",
   wireArticle: (id: number | string) => `/rfsn/wire/article/${id}`,
   storiesArticle: (id: number | string) => `/rfsn/stories/article/${id}`,
-  /** Legacy deep-link alias — redirects to canonical wire article route. */
-  newsArticle: (id: number | string) => `/rfsn/wire/article/${id}`,
+  /** Canonical article deep-link — Stories is the storytelling home (RFSN-027C). */
+  newsArticle: (id: number | string) => `/rfsn/stories/article/${id}`,
   legacyWire: "/league-wire",
   legacyWireArticle: (id: number | string) => `/league-wire/article/${id}`,
 } as const;
