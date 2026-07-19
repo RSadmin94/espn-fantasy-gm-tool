@@ -40,7 +40,7 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(hub).toContain("/draft/keepers");
     expect(hub).toContain("/draft/history");
     expect(hub).not.toContain("LiveDraftEngine");
-    expect(hub).toContain("Practice drafts");
+    expect(hub).toContain("external simulated draft");
   });
 
   it("War Room + Live + Mock share one layout instance to preserve live state", () => {

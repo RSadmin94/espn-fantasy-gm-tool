@@ -100,11 +100,13 @@ describe("RFSN V2 — Commit 5 route ownership", () => {
     expect(main).toContain("DraftCommentary");
   });
 
-  it("does not alter broadcast TTS / booth shell usage in Live page", () => {
+  it("Live Draft page mounts ops center; booth audio lives in War Room panel", () => {
     const live = fs.readFileSync(path.join(repoRoot, "client/src/pages/rfsn/RfsnLive.tsx"), "utf-8");
-    expect(live).toContain("useRfsnAudioPlayback");
-    expect(live).toContain("RfsnBroadcastShell");
-    expect(live).toContain("RfsnAudioControls");
+    expect(live).toContain("DraftWarRoom");
+    expect(live).toContain("liveOpsOnly");
+    expect(live).not.toContain("useRfsnAudioPlayback");
+    expect(live).not.toContain("RfsnBroadcastShell");
+    expect(live).not.toContain("RfsnAudioControls");
     // Canonical written pages must not reimplement booth audio
     const wire = fs.readFileSync(path.join(repoRoot, "client/src/pages/rfsn/RfsnWire.tsx"), "utf-8");
     expect(wire).not.toContain("useRfsnAudioPlayback");

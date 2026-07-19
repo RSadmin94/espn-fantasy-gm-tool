@@ -12,7 +12,7 @@ import {
 describe("RFSN-024 liveDraftUx status phases", () => {
   const base = {
     active: true,
-    source: "connected-league" as const,
+    source: "espn" as const,
     monitoring: true,
     boothOnAir: true,
     draftComplete: false,
@@ -29,6 +29,16 @@ describe("RFSN-024 liveDraftUx status phases", () => {
     ]);
   });
 
+  it("waiting — after at least one lock", () => {
+    const s = { ...base, hasLockedPicks: true };
+    expect(resolveLiveDraftUiPhase(s)).toBe("waiting");
+    expect(liveDraftStatusLines(s)[0]).toBe("Connected League");
+  });
+
+  it("rfsn source labels as RFSN Draft", () => {
+    const s = { ...base, source: "rfsn" as const };
+    expect(liveDraftStatusLines(s)[0]).toBe("RFSN Draft");
+  });
   it("waiting — after locks, awaiting next pick", () => {
     const s = { ...base, hasLockedPicks: true };
     expect(resolveLiveDraftUiPhase(s)).toBe("waiting");

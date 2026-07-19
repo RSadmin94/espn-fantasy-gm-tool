@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { useAuth } from "@clerk/react-router";
@@ -34,12 +35,17 @@ import {
 } from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
 import { isConnectedLeagueLiveActive } from "@/lib/liveDraftSurfaceActive";
+import { normalizeLiveDraftSource } from "@/lib/liveDraftSource";
 import { isRfsnWarRoomBroadcastActive } from "@/lib/rfsnWarRoomBroadcastActive";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
   LiveDraftControlPanel,
   type LiveDraftSource,
 } from "@/components/draft/LiveDraftControlPanel";
+import { FantasyProsMockControlPanel } from "@/components/draft/FantasyProsMockControlPanel";
+import { useFantasyProsMockDraftMonitor } from "@/hooks/useFantasyProsMockDraftMonitor";
+import { buildFantasyProsSeatMapping } from "@/lib/fantasyProsSeatMapping";
+import { postFantasyProsMockArm, postFantasyProsMockDisarm } from "@/lib/fantasyProsMockBridge";
 import { LiveDraftRecentPicks } from "@/components/draft/LiveDraftRecentPicks";
 import { DraftNightShow } from "@/components/draft/DraftNightShow";
 import type { DraftNightShowPayload } from "@/lib/draftNightShowTypes";
@@ -803,16 +809,47 @@ function LiveDraftEngine({
   const [searchQ, setSearchQ] = useState("");
   const posDefaultApplied = useRef(false);
   const [liveDraftActive, setLiveDraftActive] = useState(preferLiveDraft);
-  const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("connected-league");
+  const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("rfsn");
+  /** RFSN-030C — FantasyPros solo mock connector (Mock surface only). */
+  const [fpMockActive, setFpMockActive] = useState(false);
+  const [fpUserOwnerPos, setFpUserOwnerPos] = useState(0);
+  const [fpVoiceEnabled, setFpVoiceEnabled] = useState(true);
+  const [fpCommentaryEnabled, setFpCommentaryEnabled] = useState(true);
+  const [fpSessionEpoch, setFpSessionEpoch] = useState(0);
+  const liveSource = normalizeLiveDraftSource(liveDraftSource);
+  /** Built-in RFSN sim may generate picks only on Live + RFSN source. */
+  const allowInternalSimPicks = preferLiveDraft && liveSource === "rfsn";
   const connectedLeagueLive = isConnectedLeagueLiveActive({
     liveDraftActive,
     preferLiveDraft,
-    source: liveDraftSource,
+    source: liveSource,
+    fantasyProsSessionActive: fpMockActive && !preferLiveDraft,
   });
 
   useEffect(() => {
-    if (preferLiveDraft) setLiveDraftActive(true);
+    if (preferLiveDraft) {
+      setLiveDraftActive(true);
+      setFpMockActive(false);
+    } else {
+      // Entering Mock: stop Live Draft sim/clock/ESPN surface ownership.
+      setRunning(false);
+      setLiveDraftActive(false);
+      setFpMockActive(false);
+    }
   }, [preferLiveDraft]);
+
+  // ESPN source must not generate internal simulated picks.
+  useEffect(() => {
+    if (liveSource === "espn") setRunning(false);
+  }, [liveSource]);
+
+  // Leaving Mock surface must tear down FantasyPros connector.
+  useEffect(() => {
+    if (preferLiveDraft && fpMockActive) {
+      setFpMockActive(false);
+      void postFantasyProsMockDisarm().catch(() => {});
+    }
+  }, [preferLiveDraft, fpMockActive]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Pace between AI auto-picks. Default "Broadcast" gives the RFSN booth time to
   // generate + play a line before the next pick; Brisk/Turbo for quick sims.
@@ -949,7 +986,7 @@ function LiveDraftEngine({
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
   useRfsnLiveLockedPickNotify({
-    enabled: Boolean(leagueId) && !connectedLeagueLive,
+    enabled: Boolean(leagueId) && allowInternalSimPicks && !connectedLeagueLive,
     leagueId,
     draftId,
     schedule: schedule.map((s: any) => ({
@@ -978,6 +1015,34 @@ function LiveDraftEngine({
     return m;
   }, [teams]);
 
+  const fpSeatMapping = useMemo(() => {
+    const userTeamId = myTeamId ?? teams[0]?.teamId ?? 1;
+    return buildFantasyProsSeatMapping({
+      teams: teams.map((t: any) => ({
+        teamId: t.teamId,
+        ownerName: t.ownerName,
+        teamName: t.teamName,
+        draftSlot: t.draftSlot ?? t.draftPosition ?? null,
+      })),
+      userOwnerPos: fpUserOwnerPos,
+      userTeamId,
+      teamCount: teams.length || 12,
+    });
+  }, [teams, myTeamId, fpUserOwnerPos]);
+
+  const fpMock = useFantasyProsMockDraftMonitor({
+    enabled: Boolean(leagueId) && fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
+    leagueId,
+    season,
+    teamCount: teams.length || 12,
+    seatNameByPos: fpSeatMapping.seatNameByPos,
+    seatTeamIdByPos: fpSeatMapping.seatTeamIdByPos,
+    draftPace: draftPaceFromTimerMs(paceMs),
+    voiceEnabled: fpVoiceEnabled,
+    commentaryEnabled: fpCommentaryEnabled,
+    armExtension: true,
+  });
+
   const leagueAdapter = useConnectedLeagueLiveMonitor({
     enabled: Boolean(leagueId) && connectedLeagueLive,
     leagueId,
@@ -986,9 +1051,12 @@ function LiveDraftEngine({
     ownerNameByTeamId,
   });
 
-  const boothDraftId = connectedLeagueLive && leagueId
-    ? buildConnectedLeagueDraftId(leagueId, season)
-    : draftId;
+  const boothDraftId =
+    fpMockActive && !preferLiveDraft && fpMock.draftId
+      ? fpMock.draftId
+      : connectedLeagueLive && leagueId
+        ? buildConnectedLeagueDraftId(leagueId, season)
+        : draftId;
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
 
@@ -1014,32 +1082,46 @@ function LiveDraftEngine({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);
 
-  // Keeper slots auto-advance (no clock, no broadcast).
+  // Keeper slots auto-advance (no clock, no broadcast). Live RFSN source only.
   useEffect(() => {
-    if (!running || done || holding) return;
+    if (!allowInternalSimPicks || !running || done || holding) return;
     const cur = schedule[idx];
     if (cur && cur.isKeeperSlot) {
       const t = setTimeout(() => setIdx((i) => i + 1), 50);
       return () => clearTimeout(t);
     }
-  }, [running, done, holding, schedule, idx]);
+  }, [allowInternalSimPicks, running, done, holding, schedule, idx]);
 
   // Countdown tick — only while an AI pick is genuinely on the clock (never for a manual
-  // team, a keeper, or while paused for a broadcast moment).
+  // team, a keeper, or while paused for a broadcast moment). Live RFSN source only.
   useEffect(() => {
     const cur = schedule[idx];
-    const counting = running && !done && !holding && !onClockIsManual && !!cur && !cur.isKeeperSlot;
+    const counting =
+      allowInternalSimPicks &&
+      running &&
+      !done &&
+      !holding &&
+      !onClockIsManual &&
+      !!cur &&
+      !cur.isKeeperSlot;
     if (!counting) return;
     const iv = setInterval(() => setRemainingMs((ms) => Math.max(0, ms - TICK_MS)), TICK_MS);
     return () => clearInterval(iv);
-  }, [running, done, holding, onClockIsManual, schedule, idx]);
+  }, [allowInternalSimPicks, running, done, holding, onClockIsManual, schedule, idx]);
 
   // Fire the AI pick when the countdown hits 0, then advance IMMEDIATELY. The pause is
   // reactive (below), so routine picks incur no post-pick grace.
   useEffect(() => {
     if (remainingMs > 0) return;
     const cur = schedule[idx];
-    const counting = running && !done && !holding && !onClockIsManual && !!cur && !cur.isKeeperSlot;
+    const counting =
+      allowInternalSimPicks &&
+      running &&
+      !done &&
+      !holding &&
+      !onClockIsManual &&
+      !!cur &&
+      !cur.isKeeperSlot;
     if (!counting) return;
     setResults((prev) => {
       if (prev[cur.pickNumber]) return prev;
@@ -1070,7 +1152,7 @@ function LiveDraftEngine({
       return { ...prev, [cur.pickNumber]: { ...pick, byAI: true } };
     });
     setIdx((i) => i + 1);
-  }, [remainingMs, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
+  }, [remainingMs, allowInternalSimPicks, running, done, holding, onClockIsManual, schedule, idx, totalRounds, availablePool]);
 
   // Reactive broadcast pause — freeze countdown + AI briefly while a moment is on air.
   // After the watchdog, suppressUntilIdle prevents a stuck booth from re-arming the hold.
@@ -1102,6 +1184,7 @@ function LiveDraftEngine({
   }, [holding]);
 
   function userDraft(p: any) {
+    if (!allowInternalSimPicks) return;
     const cur = schedule[idx];
     if (!cur) return;
     setResults((prev) => ({ ...prev, [cur.pickNumber]: { ...p, byUser: true } }));
@@ -1202,53 +1285,17 @@ function LiveDraftEngine({
   }, [formatEligiblePool]);
 
   return (
-    <div className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden">
-      {/* Control bar */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {!running && !done && <button onClick={() => setRunning(true)} className="px-4 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-black hover:bg-violet-500/25">{idx === 0 ? "▶ Start Draft" : "▶ Resume"}</button>}
-        {running && <button onClick={() => setRunning(false)} className="px-4 py-1.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black">⏸ Pause</button>}
-        {idx > 0 && (
-          <>
-            <button onClick={() => reset()} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">↺ Reset</button>
-            <button onClick={newRandomDraft} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">New random draft</button>
-            <button onClick={replayCurrentSeed} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">Replay same seed</button>
-          </>
-        )}
-        <span className="text-[11px] text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
-          Seed {formatDraftSeed(draftSeed)}
-        </span>
-        <div className="flex items-center gap-1 ml-1">
-          <span className="text-[10px] uppercase tracking-wider text-zinc-500">Pace</span>
-          {PACE_OPTIONS.map((p) => (
-            <button key={p.key} onClick={() => setPaceMs(p.ms)}
-              className={cn("px-2 py-0.5 rounded text-[11px] font-bold",
-                paceMs === p.ms ? "bg-violet-600/30 text-violet-200" : "text-zinc-500 hover:text-zinc-300 border border-white/[0.06]")}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => setLiveDraftActive((v) => !v)}
-          className={cn(
-            "px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider border",
-            liveDraftActive
-              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
-              : "border-zinc-600 text-zinc-400 hover:text-zinc-200",
-          )}
-          title="Live Draft — real league or manual picks into the RFSN booth"
-        >
-          Live Draft {liveDraftActive ? "ON" : "OFF"}
-        </button>
-        <span className="text-[11px] text-zinc-400 tabular-nums ml-1">Pick {Math.min(idx, schedule.length)}/{schedule.length}</span>
-        <span className="text-[11px] text-zinc-500 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
-      </div>
-
-      {liveDraftActive && (
+    <div
+      className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden"
+      data-draft-surface={preferLiveDraft ? "live" : "mock"}
+      data-live-draft-source={preferLiveDraft ? liveSource : "fantasypros"}
+    >
+      {/* Live Draft control center — source, status, start/pause/new (primary ops strip) */}
+      {preferLiveDraft && (
         <LiveDraftControlPanel
           status={{
             active: liveDraftActive,
-            source: liveDraftSource,
+            source: liveSource,
             monitoring: connectedLeagueLive
               ? !leagueAdapter.lastError
               : running || idx > 0,
@@ -1264,10 +1311,88 @@ function LiveDraftEngine({
             draftPaused: connectedLeagueLive ? false : !running && !done && idx > 0,
           }}
           onToggleActive={() => setLiveDraftActive((v) => !v)}
-          onSourceChange={setLiveDraftSource}
+          onSourceChange={(s) => setLiveDraftSource(normalizeLiveDraftSource(s))}
+          sessionActions={
+            liveSource === "rfsn"
+              ? {
+                  canStart: !running && !done && idx === 0,
+                  canResume: !running && !done && idx > 0,
+                  canPause: running,
+                  canReset: idx > 0,
+                  canNewDraft: idx > 0 || done,
+                  pickLabel: `Pick ${Math.min(idx, schedule.length)}/${schedule.length}`,
+                  onStart: () => setRunning(true),
+                  onResume: () => setRunning(true),
+                  onPause: () => setRunning(false),
+                  onReset: () => reset(),
+                  onNewDraft: () => newRandomDraft(),
+                }
+              : null
+          }
         />
       )}
-      {!done && (
+
+      {/* Secondary RFSN sim chrome — pace / seed / control mode (actions live in control panel) */}
+      {preferLiveDraft && liveSource === "rfsn" && (
+      <div className="flex items-center gap-2 mb-3 flex-wrap" data-live-sim-controls>
+        <span className="text-[11px] text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
+          Seed {formatDraftSeed(draftSeed)}
+        </span>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">Pace</span>
+          {PACE_OPTIONS.map((p) => (
+            <button key={p.key} onClick={() => setPaceMs(p.ms)}
+              className={cn("px-2 py-0.5 rounded text-[11px] font-bold",
+                paceMs === p.ms ? "bg-violet-600/30 text-violet-200" : "text-zinc-500 hover:text-zinc-300 border border-white/[0.06]")}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {idx > 0 && (
+          <button onClick={replayCurrentSeed} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">Replay same seed</button>
+        )}
+        <span className="text-[11px] text-zinc-500 ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
+      </div>
+      )}
+
+      {!preferLiveDraft && (
+        <FantasyProsMockControlPanel
+          active={fpMockActive}
+          status={fpMock}
+          leagueLabel={String(leagueId ?? "League")}
+          season={season}
+          userOwnerPos={fpUserOwnerPos}
+          teamCount={teams.length || 12}
+          voiceEnabled={fpVoiceEnabled}
+          commentaryEnabled={fpCommentaryEnabled}
+          onStart={() => {
+            setFpMockActive(true);
+            setLiveDraftActive(false);
+            setRunning(false);
+          }}
+          onStop={() => {
+            setFpMockActive(false);
+            void postFantasyProsMockDisarm().catch(() => {});
+          }}
+          onNewDraft={() => {
+            setFpSessionEpoch((n) => n + 1);
+            if (leagueId && fpMock.draftId) {
+              void resetSession
+                .mutateAsync({ leagueId: String(leagueId), draftId: fpMock.draftId })
+                .catch(() => {});
+            }
+            void postFantasyProsMockArm({
+              leagueId: String(leagueId ?? ""),
+              season,
+              forceNewSession: true,
+            }).catch(() => {});
+          }}
+          onUserOwnerPosChange={setFpUserOwnerPos}
+          onVoiceChange={setFpVoiceEnabled}
+          onCommentaryChange={setFpCommentaryEnabled}
+        />
+      )}
+      {preferLiveDraft && !done && (
         <RfsnPickClock
           state={clockState}
           round={Number(slot?.round ?? 0)}
@@ -1280,13 +1405,13 @@ function LiveDraftEngine({
           className="mb-3"
         />
       )}
-      {liveDraftActive && (
+      {preferLiveDraft && liveDraftActive && (
         <LiveDraftRecentPicks
           picks={recentPicks}
           currentPickNumber={currentOverallPick}
         />
       )}
-      {done && (
+      {preferLiveDraft && done && (
         <LiveDraftWrapUp
           teams={teams}
           draftGrades={draftGrades}
@@ -1295,7 +1420,7 @@ function LiveDraftEngine({
           className="mb-3"
         />
       )}
-      {done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
+      {preferLiveDraft && done && <div className="rounded-lg border border-violet-500/40 bg-violet-500/5 px-4 py-3 mb-3 text-center text-violet-300 font-black text-sm">✓ Draft complete — {schedule.length} picks</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         {/* Available pool (sortable) */}
@@ -1333,7 +1458,7 @@ function LiveDraftEngine({
                   <button
                     key={keyOf(p)}
                     disabled={!awaitingUser}
-                    onClick={() => awaitingUser && userDraft(p)}
+                    onClick={() => allowInternalSimPicks && awaitingUser && userDraft(p)}
                     className={cn(
                       "w-full flex items-center gap-2 px-3 py-2 text-left",
                       awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
@@ -1368,7 +1493,7 @@ function LiveDraftEngine({
                         </span>
                       </div>
                     </div>
-                    {awaitingUser && (
+                    {allowInternalSimPicks && awaitingUser && (
                       <span className="text-[10px] font-black text-violet-400 shrink-0">DRAFT</span>
                     )}
                   </button>
@@ -1385,35 +1510,42 @@ function LiveDraftEngine({
           )}
         </div>
 
-        {/* Live team rosters + per-team manual control */}
+        {/* Live team rosters + per-team manual control (Live / RFSN source only) */}
         <div>
           <div className="flex items-center gap-2 mb-2 flex-wrap">
-            <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Your Teams</span>
-            <span className="text-[10px] text-zinc-500">
-              {manualTeamIds.size === 0
-                ? "Full AI draft"
-                : manualTeamIds.size >= teams.length
-                  ? "Fully manual"
-                  : `${manualTeamIds.size} manual`}
+            <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">
+              {preferLiveDraft ? "Your Teams" : "League Rosters"}
             </span>
-            <button
-              onClick={resetTeamControls}
-              className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
-            >
-              Reset team controls
-            </button>
+            {preferLiveDraft && liveSource === "rfsn" && (
+              <>
+                <span className="text-[10px] text-zinc-500">
+                  {manualTeamIds.size === 0
+                    ? "Full AI draft"
+                    : manualTeamIds.size >= teams.length
+                      ? "Fully manual"
+                      : `${manualTeamIds.size} manual`}
+                </span>
+                <button
+                  onClick={resetTeamControls}
+                  className="ml-auto text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
+                >
+                  Reset team controls
+                </button>
+              </>
+            )}
           </div>
           <div className="space-y-2 max-h-[min(560px,calc(100dvh-14rem))] overflow-auto pr-1">
             {teams.map((t: any) => {
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
               const grade = draftGrades.get(tid);
-              const isOnClock = !done && slot && Number(slot.teamId) === tid;
+              const isOnClock = preferLiveDraft && !done && slot && Number(slot.teamId) === tid;
               const isYou = myTeamId === tid;
-              const isManual = manualTeamIds.has(tid);
+              const isManual = preferLiveDraft && liveSource === "rfsn" && manualTeamIds.has(tid);
               return (
                 <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
                   <div className="flex items-center gap-1.5 mb-1">
+                    {preferLiveDraft && liveSource === "rfsn" ? (
                     <input
                       type="checkbox"
                       checked={isManual}
@@ -1422,6 +1554,7 @@ function LiveDraftEngine({
                       aria-label={`Manually control ${t.teamName}`}
                       title="Manually control this team"
                     />
+                    ) : null}
                     <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
                     {grade && grade.letter !== "—" && (
                       <span
@@ -1463,9 +1596,14 @@ function LiveDraftEngine({
               active={isRfsnWarRoomBroadcastActive({
                 liveDraftActive,
                 preferLiveDraft,
+                fantasyProsSessionActive: fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
               })}
-              sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${connectedLeagueLive ? "live" : "sim"}`}
-              draftPaused={!running && !connectedLeagueLive}
+              sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${fpSessionEpoch}:${connectedLeagueLive ? "live" : fpMockActive ? "fp" : "sim"}`}
+              draftPaused={
+                fpMockActive && !preferLiveDraft
+                  ? !fpVoiceEnabled
+                  : !running && !connectedLeagueLive
+              }
               onBusyChange={setBroadcastBusy}
             />
           </aside>
@@ -1548,7 +1686,7 @@ function MockDraftBoard({
   season: number;
   preferLiveDraft?: boolean;
 }) {
-  const [view, setView]           = useState<"board" | "team" | "live">(preferLiveDraft ? "live" : "board");
+  const [view, setView]           = useState<"board" | "team" | "live">(preferLiveDraft ? "live" : "live");
   const [selTeam, setSelTeam]     = useState<number | null>(null);
   const [expandPick, setExp]      = useState<number | null>(null);
   // Live simulation state
@@ -1560,7 +1698,13 @@ function MockDraftBoard({
   const SPEED_MS = 500;
 
   useEffect(() => {
-    if (preferLiveDraft) setView("live");
+    // Both surfaces default into the operating workspace (Live engine / FP follow).
+    setView("live");
+    if (!preferLiveDraft && simRef.current) {
+      clearTimeout(simRef.current);
+      simRef.current = null;
+      setSimState("idle");
+    }
   }, [preferLiveDraft]);
 
   // Keeper setup state
@@ -1643,15 +1787,19 @@ function MockDraftBoard({
     <div>
       {/* Controls bar */}
       <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06] flex-wrap">
-        {(["board", "team", "live"] as const).map(v => (
-          <button key={v} onClick={() => { setView(v); if (v === "live") resetSim(); }}
+        {(["live", "board", "team"] as const).map(v => (
+          <button key={v} onClick={() => { setView(v); if (v === "live" && preferLiveDraft) resetSim(); }}
             className={cn("px-3 py-1.5 rounded text-xs font-bold transition-colors",
               view === v ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300")}>
-            {v === "live" ? "⚡ Simulator" : v === "board" ? "Draft Board" : "By Team"}
+            {v === "live"
+              ? (preferLiveDraft ? "Live Draft" : "FantasyPros")
+              : v === "board"
+                ? "Draft Board"
+                : "By Team"}
           </button>
         ))}
 
-        {keepersEnabled && (
+        {preferLiveDraft && keepersEnabled && (
         <button onClick={() => setShowKeeperSetup(s => !s)}
           className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors",
             showKeeperSetup ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-500 hover:text-zinc-300")}>
@@ -1659,7 +1807,8 @@ function MockDraftBoard({
         </button>
         )}
 
-        {/* Your team selector */}
+        {/* Your team selector — Live Draft workspace */}
+        {preferLiveDraft && (
         <div className="flex items-center gap-1.5 ml-auto">
           <span className="text-[11px] text-zinc-600">Your team:</span>
           <select className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
@@ -1668,9 +1817,10 @@ function MockDraftBoard({
             {teams.map((t: any) => <option key={t.teamId} value={t.teamId}>{t.teamName}</option>)}
           </select>
         </div>
+        )}
 
         {view === "team" && (
-          <select className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
+          <select className={cn("text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300", !preferLiveDraft && "ml-auto")}
             value={selTeam ?? ""} onChange={e => setSelTeam(e.target.value ? Number(e.target.value) : null)}>
             <option value="">Select team…</option>
             {teams.map((t: any) => <option key={t.teamId} value={t.teamId}>{t.teamName}</option>)}
@@ -2218,7 +2368,7 @@ function CompressionSection({ compression }: { compression: any[] }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
-const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
+const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean; liveLabel?: string; mockLabel?: string }[] = [
   { id: "dwr-briefing", label: "Briefing" },
   { id: "dwr-keepers", label: "Keepers", keeperOnly: true },
   { id: "dwr-build", label: "Roster Priorities" },
@@ -2227,14 +2377,16 @@ const DWR_NAV_ITEMS: { id: string; label: string; keeperOnly?: boolean }[] = [
   { id: "dwr-value", label: "Value Windows" },
   { id: "dwr-compression", label: "Compression", keeperOnly: true },
   { id: "dwr-trades", label: "Trade Signals" },
-  { id: "dwr-mock", label: "Mock Draft" },
+  { id: "dwr-mock", label: "Draft Board", liveLabel: "Live Draft", mockLabel: "Mock Draft" },
 ];
 
 function DwrSectionNav({
   keepersOn,
+  preferLiveDraft,
   onOpenSection,
 }: {
   keepersOn: boolean;
+  preferLiveDraft: boolean;
   onOpenSection: (sectionId: string) => void;
 }) {
   const items = DWR_NAV_ITEMS.filter((i) => !i.keeperOnly || keepersOn);
@@ -2251,7 +2403,9 @@ function DwrSectionNav({
               onClick={() => openAndScrollTo(onOpenSection, item.id)}
               className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
             >
-              {item.label}
+              {preferLiveDraft
+                ? (item.liveLabel ?? item.label)
+                : (item.mockLabel ?? item.label)}
             </button>
           </li>
         ))}
@@ -2263,10 +2417,14 @@ function DwrSectionNav({
 export function DraftWarRoom({
   scrollToSection,
   preferLiveDraft = false,
+  /** RFSN Live ops center — Live Draft controls first; hide War Room analytics chrome. */
+  liveOpsOnly = false,
 }: {
   scrollToSection?: string;
   preferLiveDraft?: boolean;
+  liveOpsOnly?: boolean;
 } = {}) {
+  const forceLive = preferLiveDraft || liveOpsOnly;
   const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { leagueContextKey } = useLeagueActiveGate();
   const { season } = useLeagueContext();
@@ -2352,6 +2510,90 @@ export function DraftWarRoom({
     { l: "ROUNDS", v: maxRound },
   ];
 
+  const liveOrMockBoard = (
+    <>
+      <p className="mb-3 text-xs text-zinc-500" data-draft-surface-blurb>
+        {forceLive
+          ? "Choose a draft source, start or connect, then run the board. The RFSN booth is one section of this workspace."
+          : "Connect RFSN to an external simulated draft."}
+        {" "}
+        {forceLive ? (
+          <Link to="/draft/mock" className="text-sky-400 underline underline-offset-2 font-semibold">
+            Switch to Mock Draft
+          </Link>
+        ) : (
+          <Link to="/draft/live" className="text-sky-400 underline underline-offset-2 font-semibold">
+            Switch to Live Draft
+          </Link>
+        )}
+      </p>
+      <MockDraftBoard
+        picks={mockDraft ?? []}
+        teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName, ownerName: n.ownerName }))}
+        availablePool={data?.availablePool ?? []}
+        eligiblePool={sharedEligiblePool}
+        positionCaps={data?.positionCaps ?? null}
+        keeperPredictions={keeperPredictions ?? []}
+        rosterNeeds={rosterNeeds ?? []}
+        keeperOverrides={keeperOverrides}
+        keepersEnabled={keepersOn}
+        leagueId={leagueId}
+        draftId={rfsnLiveDraftId}
+        season={season}
+        preferLiveDraft={forceLive}
+        onKeeperOverride={(overrides) => {
+          setKeeperOverrides(overrides);
+        }}
+      />
+    </>
+  );
+
+  /* /rfsn/live — operational control center (no War Room analytics chrome) */
+  if (liveOpsOnly) {
+    return (
+      <DwrExpandContext.Provider value={{ expandToken, openSection }}>
+        <div
+          className="min-h-full text-zinc-100"
+          data-live-draft-ops-page
+          style={{
+            background:
+              "radial-gradient(circle at 85% -10%,rgba(163,230,53,.05),transparent 45%),linear-gradient(180deg,#0c1218,#080b10)",
+          }}
+        >
+          <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-white">Live Draft</h1>
+              <p className="mt-1 text-xs text-zinc-500 max-w-xl">
+                Control center — pick RFSN Draft or Connected League, start or connect, pause/resume,
+                and see what is driving the board. Broadcast booth stays on the board rail.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {headerChips.slice(0, 2).map((s) => (
+                <div
+                  key={s.l}
+                  className="text-center px-3 py-2 rounded-xl bg-black/30 border border-white/[0.07]"
+                >
+                  <div className="text-lg font-black text-white">{s.v}</div>
+                  <div className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{s.l}</div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="p-2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                aria-label="Refresh draft data"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div data-live-draft-ops-board>{liveOrMockBoard}</div>
+        </div>
+      </DwrExpandContext.Provider>
+    );
+  }
+
   return (
     <DwrExpandContext.Provider value={{ expandToken, openSection }}>
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
@@ -2409,9 +2651,22 @@ export function DraftWarRoom({
           </div>
         )}
 
+        {/* Live Draft first when landing from /draft/live */}
+        {forceLive && (
+          <Section
+            id="dwr-mock"
+            title="LIVE DRAFT"
+            icon={Target}
+            badge={totalPicks}
+            defaultOpen={true}
+          >
+            {liveOrMockBoard}
+          </Section>
+        )}
+
         {/* 1. Draft Briefing — scan layer only (RFSN-027A) */}
         <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}
-          accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
+          accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={!forceLive}>
           <ConfidenceDashboard
             data={confidenceDashboard}
             showKeeperInsights={keepersOn}
@@ -2431,7 +2686,7 @@ export function DraftWarRoom({
           <div className="h-px flex-1 bg-white/[0.08]" />
         </div>
 
-        <DwrSectionNav keepersOn={keepersOn} onOpenSection={openSection} />
+        <DwrSectionNav keepersOn={keepersOn} preferLiveDraft={forceLive} onOpenSection={openSection} />
 
         {/* Diagnostics hidden for clean UI */}
 
@@ -2497,33 +2752,18 @@ export function DraftWarRoom({
           <TradedPicksBadge tradedPicks={tradedPicks ?? []} />
         </Section>
 
-        {/* 10. Mock / Live Draft board */}
+        {/* 10. Live / Mock Draft board — only when not already shown first */}
+        {!forceLive && (
         <Section
           id="dwr-mock"
-          title={preferLiveDraft ? "Live Draft" : "Mock Draft Board"}
+          title="MOCK DRAFT"
           icon={Target}
           badge={totalPicks}
           defaultOpen={true}
         >
-          <MockDraftBoard
-            picks={mockDraft ?? []}
-            teams={(rosterNeeds ?? []).map((n: any) => ({ teamId: n.teamId, teamName: n.teamName, ownerName: n.ownerName }))}
-            availablePool={data?.availablePool ?? []}
-            eligiblePool={sharedEligiblePool}
-            positionCaps={data?.positionCaps ?? null}
-            keeperPredictions={keeperPredictions ?? []}
-            rosterNeeds={rosterNeeds ?? []}
-            keeperOverrides={keeperOverrides}
-            keepersEnabled={keepersOn}
-            leagueId={leagueId}
-            draftId={rfsnLiveDraftId}
-            season={season}
-            preferLiveDraft={preferLiveDraft}
-            onKeeperOverride={(overrides) => {
-              setKeeperOverrides(overrides);
-            }}
-          />
+          {liveOrMockBoard}
         </Section>
+        )}
 
       </div>
     </div>

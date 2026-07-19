@@ -15,18 +15,22 @@ export function isLiveDraftSurfaceActive(args: {
 }
 
 /**
- * Connected-league ESPN monitor may run only on the Live Draft surface
- * with Live Draft ON and the Connected League source selected.
+ * ESPN real-draft monitor may run only on the Live Draft surface
+ * with Live Draft ON and the ESPN source selected.
  */
 export function isConnectedLeagueLiveActive(args: {
   liveDraftActive: boolean;
   preferLiveDraft: boolean;
   source: string;
+  /** RFSN-030C — FantasyPros simulation must not arm ESPN. */
+  fantasyProsSessionActive?: boolean;
 }): boolean {
+  if (args.fantasyProsSessionActive) return false;
+  const source = args.source === "espn" || args.source === "connected-league";
   return (
     isLiveDraftSurfaceActive({
       liveDraftActive: args.liveDraftActive,
       preferLiveDraft: args.preferLiveDraft,
-    }) && args.source === "connected-league"
+    }) && source
   );
 }

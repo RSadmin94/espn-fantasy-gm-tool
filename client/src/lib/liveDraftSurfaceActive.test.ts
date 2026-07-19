@@ -24,7 +24,7 @@ describe("isConnectedLeagueLiveActive", () => {
       isConnectedLeagueLiveActive({
         liveDraftActive: true,
         preferLiveDraft: true,
-        source: "connected-league",
+        source: "espn",
       }),
     ).toBe(true);
   });
@@ -34,7 +34,7 @@ describe("isConnectedLeagueLiveActive", () => {
       isConnectedLeagueLiveActive({
         liveDraftActive: true,
         preferLiveDraft: false,
-        source: "connected-league",
+        source: "espn",
       }),
     ).toBe(false);
   });
@@ -44,7 +44,18 @@ describe("isConnectedLeagueLiveActive", () => {
       isConnectedLeagueLiveActive({
         liveDraftActive: true,
         preferLiveDraft: true,
-        source: "manual",
+        source: "rfsn",
+      }),
+    ).toBe(false);
+  });
+
+  it("is false when FantasyPros simulation is active", () => {
+    expect(
+      isConnectedLeagueLiveActive({
+        liveDraftActive: true,
+        preferLiveDraft: true,
+        source: "espn",
+        fantasyProsSessionActive: true,
       }),
     ).toBe(false);
   });

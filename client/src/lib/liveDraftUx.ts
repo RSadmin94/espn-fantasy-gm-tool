@@ -17,7 +17,7 @@ export type LiveDraftUiPhase =
 
 export type LiveDraftUxStatusInput = {
   active: boolean;
-  source: "connected-league" | "manual";
+  source: "rfsn" | "espn" | "connected-league" | "manual";
   monitoring: boolean;
   boothOnAir: boolean;
   draftComplete: boolean;
@@ -29,16 +29,20 @@ export type LiveDraftUxStatusInput = {
   hasLockedPicks?: boolean;
 };
 
+function isEspnSource(source: LiveDraftUxStatusInput["source"]): boolean {
+  return source === "espn" || source === "connected-league";
+}
+
 export function resolveLiveDraftUiPhase(status: LiveDraftUxStatusInput): LiveDraftUiPhase {
   if (!status.active) return "idle";
   if (status.draftComplete) return "complete";
-  if (status.source === "connected-league" && status.lastError) return "reconnecting";
+  if (isEspnSource(status.source) && status.lastError) return "reconnecting";
   if (status.draftPaused) return "paused";
-  if (status.source === "connected-league" && status.monitoring && status.connectorReady) {
+  if (isEspnSource(status.source) && status.monitoring && status.connectorReady) {
     if (status.hasLockedPicks) return "waiting";
     return "connected";
   }
-  if (status.source === "manual" && status.monitoring) {
+  if (!isEspnSource(status.source) && status.monitoring) {
     return status.hasLockedPicks ? "waiting" : "connected";
   }
   if (status.monitoring) return "connected";
@@ -49,6 +53,7 @@ export function resolveLiveDraftUiPhase(status: LiveDraftUxStatusInput): LiveDra
 export function liveDraftStatusLines(status: LiveDraftUxStatusInput): string[] {
   const phase = resolveLiveDraftUiPhase(status);
   const boothLine = status.boothOnAir ? "RFSN Booth Online" : "RFSN Booth Standby";
+  const sourceLabel = isEspnSource(status.source) ? "Connected League" : "RFSN Draft";
 
   switch (phase) {
     case "idle":
@@ -60,18 +65,10 @@ export function liveDraftStatusLines(status: LiveDraftUxStatusInput): string[] {
     case "paused":
       return ["Draft paused — monitoring suspended", boothLine];
     case "waiting":
-      return [
-        status.source === "connected-league" ? "Connected League" : "Manual Draft",
-        "Waiting for next pick",
-        boothLine,
-      ];
+      return [sourceLabel, "Waiting for next pick", boothLine];
     case "connected":
     default:
-      return [
-        status.source === "connected-league" ? "Connected League" : "Manual Draft",
-        "Monitoring Live Draft",
-        boothLine,
-      ];
+      return [sourceLabel, "Monitoring Live Draft", boothLine];
   }
 }
 

@@ -2,33 +2,34 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-describe("RfsnLive draft board layout", () => {
+describe("RfsnLive Live Draft control center", () => {
   const liveSource = readFileSync(
     resolve(process.cwd(), "client/src/pages/rfsn/RfsnLive.tsx"),
     "utf8",
   );
+  const warRoom = readFileSync(
+    resolve(process.cwd(), "client/src/pages/DraftWarRoom.tsx"),
+    "utf8",
+  );
 
-  it("renders RfsnDraftBoard on the standby path", () => {
-    expect(liveSource).toContain("RfsnDraftBoard");
-    expect(liveSource).toContain("RfsnLiveStandby");
-    expect(liveSource).toContain("resolveRfsnLiveDisplaySnapshot");
-    expect(liveSource).toContain("padBoardRows(snapshot.board)");
+  it("mounts DraftWarRoom as Live Draft ops center (not passive broadcast shell)", () => {
+    expect(liveSource).toContain("DraftWarRoom");
+    expect(liveSource).toContain("preferLiveDraft");
+    expect(liveSource).toContain("liveOpsOnly");
+    expect(liveSource).toContain("RfsnMediaShell");
+    expect(liveSource).not.toContain("RfsnBroadcastShell");
+    expect(liveSource).not.toContain("RfsnDraftBoard");
+    expect(liveSource).not.toContain("RfsnLiveStandby");
   });
 
-  it("keeps commentary-active path on RfsnBroadcastShell", () => {
-    expect(liveSource).toContain("RfsnBroadcastShell");
-    expect(liveSource).toContain("commentarySnapshot");
-    expect(liveSource).toContain("shouldRenderLiveCommentary");
+  it("liveOpsOnly hides War Room analytics chrome", () => {
+    expect(warRoom).toContain("data-live-draft-ops-page");
+    expect(warRoom).toContain("if (liveOpsOnly)");
+    expect(warRoom).toContain("preferLiveDraft={forceLive}");
   });
 
-  it("polls a single getLiveSnapshot query", () => {
-    const matches = liveSource.match(/getLiveSnapshot\.useQuery/g) ?? [];
-    expect(matches).toHaveLength(1);
-  });
-
-  it("uses league-context season for draft id", () => {
-    expect(liveSource).toContain("useLeagueContext");
-    expect(liveSource).toContain("buildRfsnLiveDraftId(season)");
-    expect(liveSource).not.toContain("rfsn-live-internal");
+  it("gates access via rfsnBroadcast.getAccess", () => {
+    expect(liveSource).toContain("rfsnBroadcast.getAccess");
+    expect(liveSource).toContain("RfsnLiveDisabled");
   });
 });

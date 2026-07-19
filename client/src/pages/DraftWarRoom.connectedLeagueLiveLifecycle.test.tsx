@@ -63,7 +63,7 @@ function act<T>(fn: () => T): T {
 function MonitorHarness({
   preferLiveDraft,
   liveDraftActiveSticky,
-  source = "connected-league",
+  source = "espn",
   pollMs = 40,
 }: {
   preferLiveDraft: boolean;

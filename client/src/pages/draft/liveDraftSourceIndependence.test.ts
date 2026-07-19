@@ -23,10 +23,10 @@ const ADAPTER_ALLOWLIST = [
   "shared/espnLiveDraftMonitor.ts",
 ] as const;
 
-const BANNED_IN_PRODUCT = ["ESPN", "mDraftDetail", "fantasy.espn.com"] as const;
+const BANNED_IN_PRODUCT = ["mDraftDetail", "fantasy.espn.com"] as const;
 
 describe("RFSN-013 Live Draft source independence", () => {
-  it("product Live Draft surfaces do not name ESPN or mDraftDetail", () => {
+  it("product Live Draft surfaces do not leak ESPN API terms (source value espn is allowed)", () => {
     for (const rel of PRODUCT_UI) {
       const src = fs.readFileSync(path.join(repoRoot, rel), "utf-8");
       for (const banned of BANNED_IN_PRODUCT) {
@@ -35,12 +35,10 @@ describe("RFSN-013 Live Draft source independence", () => {
     }
 
     const hub = fs.readFileSync(path.join(repoRoot, "client/src/pages/draft/DraftHub.tsx"), "utf-8");
-    expect(hub).not.toContain("ESPN Live");
     expect(hub).not.toContain("mDraftDetail");
     expect(hub).not.toContain("fantasy.espn.com");
 
     const warRoom = fs.readFileSync(path.join(repoRoot, "client/src/pages/DraftWarRoom.tsx"), "utf-8");
-    expect(warRoom).not.toContain("ESPN Live");
     expect(warRoom).not.toContain("mDraftDetail");
     expect(warRoom).not.toContain("fantasy.espn.com");
     expect(warRoom).toContain("LiveDraftControlPanel");

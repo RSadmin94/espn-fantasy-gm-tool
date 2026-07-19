@@ -22,8 +22,8 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from "@/components/layout";
 
 const DESTINATIONS = [
-  { label: "Live Draft", href: "/draft/live", hint: "Real drafts → RFSN booth", icon: Radio },
-  { label: "Mock Draft", href: "/draft/mock", hint: "Practice drafts & strategy", icon: Target },
+  { label: "Live Draft", href: "/draft/live", hint: "RFSN draft or connected-league real draft → booth", icon: Radio },
+  { label: "Mock Draft", href: "/draft/mock", hint: "External simulated drafts (FantasyPros)", icon: Target },
   { label: "Keeper Center", href: "/draft/keepers", hint: "Forecast & advisor", icon: Crown },
   { label: "Draft History", href: "/draft/history", hint: "Past boards & picks", icon: ScrollText },
 ] as const;
@@ -159,13 +159,13 @@ export function DraftHub() {
               <h3 className="text-sm font-bold text-foreground">Live Draft</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Real drafts feed the RFSN booth. Source stays behind the scenes.
+              Run the RFSN draft experience or connect to your real league draft.
             </p>
             <Link
               to="/draft/live"
               className="mt-3 inline-flex text-xs font-bold text-lime-400 hover:text-lime-300"
             >
-              Open Live Draft →
+              Switch to Live Draft →
             </Link>
           </IntelPanel>
           <IntelPanel variant="card" className="px-4 py-4">
@@ -174,13 +174,13 @@ export function DraftHub() {
               <h3 className="text-sm font-bold text-foreground">Mock Draft</h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Practice drafts, AI simulation, grading, and strategy testing.
+              Connect RFSN to an external simulated draft (FantasyPros Mock).
             </p>
             <Link
               to="/draft/mock"
               className="mt-3 inline-flex text-xs font-bold text-lime-400 hover:text-lime-300"
             >
-              Open Mock →
+              Switch to Mock Draft →
             </Link>
           </IntelPanel>
         </section>
