@@ -189,6 +189,77 @@
     false,
   );
 
+  // ── RFSN-030C FantasyPros solo mock: FFR page ↔ background ↔ FP tab ────────
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || typeof d.type !== "string") return;
+      if (
+        d.type !== "GMWR_FP_MOCK_ARM" &&
+        d.type !== "GMWR_FP_MOCK_DISARM" &&
+        d.type !== "GMWR_FP_MOCK_PING" &&
+        d.type !== "GMWR_FP_MOCK_GET_STATE"
+      ) {
+        return;
+      }
+      const id = d.id;
+      chrome.runtime.sendMessage(
+        {
+          type: d.type,
+          config: d.config && typeof d.config === "object" ? d.config : undefined,
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage(
+              {
+                type: d.type + "_REPLY",
+                id,
+                ok: false,
+                error: chrome.runtime.lastError.message,
+              },
+              "*",
+            );
+            return;
+          }
+          const r = response || {};
+          window.postMessage({ ...r, type: d.type + "_REPLY", id, ok: Boolean(r.ok !== false) }, "*");
+        },
+      );
+    },
+    false,
+  );
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message || typeof message.type !== "string") return;
+    if (
+      message.type !== "GMWR_FP_MOCK_PICK_BATCH" &&
+      message.type !== "GMWR_FP_MOCK_STATUS" &&
+      message.type !== "GMWR_FP_MOCK_SESSION_RESET"
+    ) {
+      return;
+    }
+    if (message.provider && message.provider !== "fantasypros") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    try {
+      window.postMessage(
+        {
+          ...message,
+          channel: "GMWR_FP_MOCK",
+          source: "gmwarroom-extension",
+        },
+        "*",
+      );
+      sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return true;
+  });
+
   // Relay: full-coverage weekly box-score / player-stats capture for one season.
   // Forwards to background.js (MSG_CAPTURE_WEEKLY_STATS), which fetches the full
   // ESPN box score (mBoxscore+mScoreboard+mMatchupScore) per week and posts the

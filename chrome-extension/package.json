@@ -1,8 +1,9 @@
 {
   "name": "gm-war-room-chrome-extension",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.13.0",
+  "type": "module",
   "scripts": {
-    "build": "node --check background.js && node --check popup.js"
+    "build": "node --check background.js && node --check popup.js && node --check popupFantasyProsState.js"
   }
 }

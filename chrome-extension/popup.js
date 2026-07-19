@@ -1,6 +1,16 @@
 /**
  * Popup: ESPN cookies, 2026 league discovery (background), multi-select sync to War Room.
+ * RFSN-030C: FantasyPros mock simulation arm/disarm via existing bridge messages.
  */
+
+import {
+  MSG_FP_MOCK_GET_STATE,
+  MSG_FP_MOCK_PING,
+  buildFantasyProsArmMessage,
+  buildFantasyProsDisarmMessage,
+  deriveFantasyProsPopupView,
+  renderFantasyProsSectionHtml,
+} from "./popupFantasyProsState.js";
 
 const MSG_DISCOVER_LEAGUES = "GMWR_DISCOVER_LEAGUES_2026";
 const MSG_SYNC_SELECTED_LEAGUES = "GMWR_SYNC_SELECTED_LEAGUES";
@@ -16,6 +26,7 @@ const MSG_ROSTER_FULL = "GMWR_ROSTER_FULL";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
 
 const KNOWN_LEAGUES_KEY = "gmwr_known_leagues";
+const FP_SELECTED_LEAGUE_KEY = "gmwr_fp_selected_league";
 
 function mergeLeagues(a, b) {
   const seen = new Set();
@@ -42,6 +53,26 @@ async function loadStoredLeagues() {
 async function saveStoredLeagues(leagues) {
   try {
     await chrome.storage.local.set({ [KNOWN_LEAGUES_KEY]: mergeLeagues(leagues, []) });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function loadFpSelectedLeagueId() {
+  try {
+    const obj = await chrome.storage.local.get(FP_SELECTED_LEAGUE_KEY);
+    const id = obj && obj[FP_SELECTED_LEAGUE_KEY] != null ? String(obj[FP_SELECTED_LEAGUE_KEY]).trim() : "";
+    return /^\d+$/.test(id) ? id : "";
+  } catch {
+    return "";
+  }
+}
+
+async function saveFpSelectedLeagueId(id) {
+  try {
+    const v = String(id || "").trim();
+    if (/^\d+$/.test(v)) await chrome.storage.local.set({ [FP_SELECTED_LEAGUE_KEY]: v });
+    else await chrome.storage.local.remove(FP_SELECTED_LEAGUE_KEY);
   } catch {
     /* ignore */
   }
@@ -89,7 +120,132 @@ let state = {
   syncBusy: false,
   discoverError: "",
   syncError: "",
+  fpSelectedLeagueId: "",
+  fpBusy: false,
+  fpError: "",
+  fpGetState: /** @type {Record<string, unknown> | null} */ (null),
+  fpPing: /** @type {Record<string, unknown> | null} */ (null),
 };
+
+function fantasyProsLeagueOptions() {
+  const seen = new Set();
+  const out = [];
+  for (const id of state.selectedIds) {
+    if (!/^\d+$/.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    const L = state.leagues.find((x) => x.id === id);
+    out.push({ id, name: L?.name || `League ${id}` });
+  }
+  for (const L of state.leagues) {
+    if (seen.has(L.id)) continue;
+    seen.add(L.id);
+    out.push({ id: L.id, name: L.name });
+  }
+  return out;
+}
+
+function bindFantasyProsHandlers(root) {
+  root.querySelector("#fpDetect")?.addEventListener("click", () => {
+    void refreshFantasyProsState({ forcePing: true });
+  });
+  root.querySelector("#fpStart")?.addEventListener("click", () => {
+    void onFantasyProsStart();
+  });
+  root.querySelector("#fpStop")?.addEventListener("click", () => {
+    void onFantasyProsStop();
+  });
+  root.querySelector("#fpLeague")?.addEventListener("change", (ev) => {
+    const t = ev.target;
+    if (!(t instanceof HTMLSelectElement)) return;
+    state = { ...state, fpSelectedLeagueId: t.value, fpError: "" };
+    void saveFpSelectedLeagueId(t.value);
+    render(root);
+  });
+}
+
+async function refreshFantasyProsState(opts = {}) {
+  const root = document.getElementById("root");
+  const forcePing = Boolean(opts.forcePing);
+  try {
+    const getState = await chrome.runtime.sendMessage({ type: MSG_FP_MOCK_GET_STATE });
+    let ping = state.fpPing;
+    if (forcePing || !ping) {
+      ping = await chrome.runtime.sendMessage({ type: MSG_FP_MOCK_PING });
+    }
+    if (getState && typeof getState === "object") {
+      ping = {
+        ...(ping && typeof ping === "object" ? ping : {}),
+        fantasyProsTabs: getState.fantasyProsTabs ?? ping?.fantasyProsTabs ?? 0,
+        reached: getState.reached ?? ping?.reached ?? 0,
+        armed: getState.armed ?? ping?.armed,
+        ok: true,
+      };
+    }
+    state = {
+      ...state,
+      fpGetState: getState && typeof getState === "object" ? getState : null,
+      fpPing: ping && typeof ping === "object" ? ping : null,
+      fpError:
+        getState?.ok === false ? String(getState.error || "FantasyPros state failed") : state.fpError,
+    };
+  } catch (e) {
+    state = { ...state, fpError: e instanceof Error ? e.message : String(e) };
+  }
+  render(root);
+}
+
+async function onFantasyProsStart() {
+  const root = document.getElementById("root");
+  const leagueId = String(state.fpSelectedLeagueId || "").trim();
+  if (!/^\d+$/.test(leagueId)) {
+    state = { ...state, fpError: "Select an FFR league before starting FantasyPros simulation." };
+    render(root);
+    return;
+  }
+  state = { ...state, fpBusy: true, fpError: "" };
+  render(root);
+  try {
+    await refreshFantasyProsState({ forcePing: true });
+    const reply = await chrome.runtime.sendMessage(buildFantasyProsArmMessage(leagueId));
+    if (!reply?.ok) {
+      state = {
+        ...state,
+        fpBusy: false,
+        fpError: reply?.error || "Failed to start FantasyPros simulation.",
+      };
+      render(root);
+      return;
+    }
+    state = { ...state, fpBusy: false, fpError: "" };
+    await refreshFantasyProsState({ forcePing: true });
+  } catch (e) {
+    state = { ...state, fpBusy: false, fpError: e instanceof Error ? e.message : String(e) };
+    render(root);
+  }
+}
+
+async function onFantasyProsStop() {
+  const root = document.getElementById("root");
+  state = { ...state, fpBusy: true, fpError: "" };
+  render(root);
+  try {
+    const reply = await chrome.runtime.sendMessage(buildFantasyProsDisarmMessage());
+    if (!reply?.ok) {
+      state = {
+        ...state,
+        fpBusy: false,
+        fpError: reply?.error || "Failed to stop FantasyPros simulation.",
+      };
+      render(root);
+      return;
+    }
+    state = { ...state, fpBusy: false, fpError: "" };
+    await refreshFantasyProsState({ forcePing: true });
+  } catch (e) {
+    state = { ...state, fpBusy: false, fpError: e instanceof Error ? e.message : String(e) };
+    render(root);
+  }
+}
 
 function selectedArray() {
   return [...state.selectedIds];
@@ -170,6 +326,14 @@ function render(root) {
     html += `<div class="err">${escapeHtml(syncError)}</div>`;
   }
 
+  const fpView = deriveFantasyProsPopupView(state.fpGetState, state.fpPing, {
+    selectedLeagueId: state.fpSelectedLeagueId,
+    leagueOptions: fantasyProsLeagueOptions(),
+    error: state.fpError,
+    busy: state.fpBusy,
+  });
+  html += renderFantasyProsSectionHtml(fpView);
+
   root.innerHTML = html;
 
   root.querySelector("#refresh")?.addEventListener("click", onRefreshClick);
@@ -179,6 +343,7 @@ function render(root) {
   root.querySelectorAll("button.rm").forEach((b) =>
     b.addEventListener("click", () => onRemoveLeague(b.getAttribute("data-rm"))),
   );
+  bindFantasyProsHandlers(root);
 }
 
 function onRootChange(ev) {
@@ -189,7 +354,14 @@ function onRootChange(ev) {
   const next = new Set(state.selectedIds);
   if (t.checked) next.add(id);
   else next.delete(id);
-  state = { ...state, selectedIds: next };
+  let fpSelectedLeagueId = state.fpSelectedLeagueId;
+  if (!fpSelectedLeagueId && t.checked) fpSelectedLeagueId = id;
+  if (fpSelectedLeagueId && !next.has(fpSelectedLeagueId) && next.size > 0) {
+    fpSelectedLeagueId = [...next][0];
+  }
+  if (fpSelectedLeagueId && !next.has(fpSelectedLeagueId)) fpSelectedLeagueId = "";
+  state = { ...state, selectedIds: next, fpSelectedLeagueId };
+  void saveFpSelectedLeagueId(fpSelectedLeagueId);
   render(document.getElementById("root"));
 }
 
@@ -212,14 +384,18 @@ async function runDiscover() {
     await saveStoredLeagues(merged);
     const sel = new Set(state.selectedIds);
     if (tabId) sel.add(tabId);
+    let fpSelectedLeagueId = state.fpSelectedLeagueId;
+    if (!fpSelectedLeagueId && sel.size > 0) fpSelectedLeagueId = [...sel][0];
     state = {
       ...state,
       discoverBusy: false,
       leagues: merged,
       tabLeagueId: tabId,
       selectedIds: sel,
+      fpSelectedLeagueId,
       discoverError: reply?.ok ? "" : reply?.error || "",
     };
+    await saveFpSelectedLeagueId(fpSelectedLeagueId);
   } catch (e) {
     state = { ...state, discoverBusy: false, discoverError: e instanceof Error ? e.message : String(e) };
   }
@@ -239,7 +415,9 @@ async function onAddLeague() {
   await saveStoredLeagues(merged);
   const sel = new Set(state.selectedIds);
   sel.add(id);
-  state = { ...state, leagues: merged, selectedIds: sel, discoverError: "" };
+  const fpSelectedLeagueId = state.fpSelectedLeagueId || id;
+  state = { ...state, leagues: merged, selectedIds: sel, fpSelectedLeagueId, discoverError: "" };
+  await saveFpSelectedLeagueId(fpSelectedLeagueId);
   render(root);
 }
 
@@ -249,7 +427,10 @@ async function onRemoveLeague(id) {
   await saveStoredLeagues(next);
   const sel = new Set(state.selectedIds);
   sel.delete(id);
-  state = { ...state, leagues: next, selectedIds: sel };
+  let fpSelectedLeagueId = state.fpSelectedLeagueId;
+  if (fpSelectedLeagueId === id) fpSelectedLeagueId = sel.size > 0 ? [...sel][0] : "";
+  state = { ...state, leagues: next, selectedIds: sel, fpSelectedLeagueId };
+  await saveFpSelectedLeagueId(fpSelectedLeagueId);
   render(root);
 }
 
@@ -296,10 +477,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   root.addEventListener("change", onRootChange);
   const { hasSwid, hasS2 } = await getCookiePresence();
   const stored = await loadStoredLeagues();
-  state = { ...state, hasSwid, hasS2, leagues: stored };
+  const fpSelectedLeagueId = await loadFpSelectedLeagueId();
+  state = { ...state, hasSwid, hasS2, leagues: stored, fpSelectedLeagueId };
   render(root);
+  await refreshFantasyProsState({ forcePing: true });
   if (hasSwid && hasS2) {
     await runDiscover();
+    await refreshFantasyProsState({ forcePing: false });
   }
 
   // Power tools (historical import, roster scrape, weekly stats) are gated to the GM War Room owner account.

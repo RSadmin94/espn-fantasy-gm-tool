@@ -92,6 +92,30 @@
         margin: 0 0 8px;
         font-weight: 600;
       }
+      .fp-rule {
+        border: none;
+        border-top: 1px solid #333;
+        margin: 14px 0 12px;
+      }
+      .fp-section select {
+        width: 100%;
+        margin: 0 0 10px;
+        padding: 6px;
+        border-radius: 6px;
+        border: 1px solid #444;
+        background: #1e1e1e;
+        color: #eee;
+        box-sizing: border-box;
+      }
+      .fp-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .fp-section strong {
+        color: #e8e8e8;
+        font-weight: 600;
+      }
       pre#histOut {
         white-space: pre-wrap;
         word-break: break-word;
@@ -146,6 +170,6 @@
     <pre id="wsOut"></pre>
     </div>
 
-        <script src="popup.js"></script>
+        <script type="module" src="popup.js"></script>
   </body>
 </html>

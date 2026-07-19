@@ -474,6 +474,119 @@ const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
 
+/** RFSN-030C — FantasyPros solo mock connector (extension relay). */
+const MSG_FP_MOCK_ARM = "GMWR_FP_MOCK_ARM";
+const MSG_FP_MOCK_DISARM = "GMWR_FP_MOCK_DISARM";
+const MSG_FP_MOCK_PICK_BATCH = "GMWR_FP_MOCK_PICK_BATCH";
+const MSG_FP_MOCK_STATUS = "GMWR_FP_MOCK_STATUS";
+const MSG_FP_MOCK_SESSION_RESET = "GMWR_FP_MOCK_SESSION_RESET";
+const MSG_FP_MOCK_PING = "GMWR_FP_MOCK_PING";
+const MSG_FP_MOCK_GET_STATE = "GMWR_FP_MOCK_GET_STATE";
+const FP_MOCK_FFR_ORIGINS = [
+  "https://fantasyfootballrivals.com",
+  "https://www.fantasyfootballrivals.com",
+  "https://gmwarroom.online",
+  "http://localhost",
+  "http://127.0.0.1",
+];
+/** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, picksEmitted: number, picksObserved: number, armedAt: string|null, sessionId: string|null }} */
+let fpMockConnectorState = {
+  armed: false,
+  config: null,
+  lastStatus: null,
+  lastPickAt: null,
+  /** True PICK_BATCH pick count this session (not STATUS inflation). */
+  picksEmitted: 0,
+  /** Alias of picksEmitted for older popup readers. */
+  picksObserved: 0,
+  armedAt: null,
+  sessionId: null,
+};
+
+/** Drop stale in-memory session after SW sleep / long idle (does not persist to disk). */
+const FP_MOCK_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+
+function isFfrTabUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  if (FP_MOCK_FFR_ORIGINS.some((origin) => url.startsWith(origin))) return true;
+  // Preview / env subdomains: https://sprint-8-preview.fantasyfootballrivals.com/...
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    return (
+      u.hostname === "fantasyfootballrivals.com" ||
+      u.hostname.endsWith(".fantasyfootballrivals.com")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function newFpMockSessionId() {
+  return `fp-sess-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function expireFpMockSessionIfStale(now = Date.now()) {
+  if (!fpMockConnectorState.armedAt && fpMockConnectorState.picksEmitted === 0) return;
+  const anchor = fpMockConnectorState.lastPickAt || fpMockConnectorState.armedAt;
+  if (!anchor) return;
+  const t = Date.parse(anchor);
+  if (!Number.isFinite(t)) return;
+  if (now - t <= FP_MOCK_SESSION_TTL_MS) return;
+  fpMockConnectorState = {
+    armed: false,
+    config: null,
+    lastStatus: { status: "session_expired", reason: "ttl" },
+    lastPickAt: null,
+    picksEmitted: 0,
+    picksObserved: 0,
+    armedAt: null,
+    sessionId: null,
+  };
+}
+
+function setFpMockEmittedCount(n) {
+  const v = Math.max(0, Math.floor(Number(n)) || 0);
+  fpMockConnectorState.picksEmitted = v;
+  fpMockConnectorState.picksObserved = v;
+}
+
+function isFantasyProsTabUrl(url) {
+  return typeof url === "string" && url.startsWith("https://draftwizard.fantasypros.com/");
+}
+
+async function broadcastToFfrTabs(message) {
+  const tabs = await chrome.tabs.query({});
+  let tabCount = 0;
+  let reached = 0;
+  for (const tab of tabs) {
+    if (!tab.id || !isFfrTabUrl(tab.url || "")) continue;
+    tabCount += 1;
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+      reached += 1;
+    } catch {
+      /* tab may not have content script */
+    }
+  }
+  return { tabCount, reached };
+}
+
+async function broadcastToFantasyProsTabs(message) {
+  const tabs = await chrome.tabs.query({ url: "https://draftwizard.fantasypros.com/*" });
+  let reached = 0;
+  for (const tab of tabs) {
+    if (!tab.id) continue;
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+      reached += 1;
+    } catch {
+      /* ignore */
+    }
+  }
+  return { tabCount: tabs.length, reached };
+}
+
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
   if (parsed.result?.data?.json !== undefined) return parsed.result.data.json;
@@ -2340,6 +2453,183 @@ async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoom
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const t = message?.type;
+
+  // ── RFSN-030C FantasyPros solo mock relay ─────────────────────────────────
+  if (t === MSG_FP_MOCK_ARM) {
+    (async () => {
+      expireFpMockSessionIfStale();
+      fpMockConnectorState = {
+        armed: true,
+        config: message?.config && typeof message.config === "object" ? message.config : {},
+        lastStatus: { status: "arming" },
+        lastPickAt: null,
+        picksEmitted: 0,
+        picksObserved: 0,
+        armedAt: new Date().toISOString(),
+        sessionId: newFpMockSessionId(),
+      };
+      const r = await broadcastToFantasyProsTabs({
+        type: MSG_FP_MOCK_ARM,
+        config: fpMockConnectorState.config,
+      });
+      await broadcastToFfrTabs({
+        type: MSG_FP_MOCK_STATUS,
+        provider: "fantasypros",
+        status: r.reached > 0 ? "armed" : "waiting_for_fantasypros_tab",
+        fantasyProsTabs: r.tabCount,
+        reached: r.reached,
+        sessionId: fpMockConnectorState.sessionId,
+      });
+      sendResponse({ ok: true, sessionId: fpMockConnectorState.sessionId, ...r });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_DISARM) {
+    (async () => {
+      fpMockConnectorState = {
+        armed: false,
+        config: null,
+        lastStatus: { status: "disarmed" },
+        lastPickAt: null,
+        picksEmitted: 0,
+        picksObserved: 0,
+        armedAt: null,
+        sessionId: null,
+      };
+      await broadcastToFantasyProsTabs({ type: MSG_FP_MOCK_DISARM });
+      await broadcastToFfrTabs({
+        type: MSG_FP_MOCK_STATUS,
+        provider: "fantasypros",
+        status: "disarmed",
+      });
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_PING) {
+    (async () => {
+      expireFpMockSessionIfStale();
+      const r = await broadcastToFantasyProsTabs({ type: MSG_FP_MOCK_PING });
+      sendResponse({
+        ok: true,
+        extensionPresent: true,
+        fantasyProsTabs: r.tabCount,
+        reached: r.reached,
+        armed: fpMockConnectorState.armed,
+        sessionId: fpMockConnectorState.sessionId,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_GET_STATE) {
+    (async () => {
+      expireFpMockSessionIfStale();
+      const tabs = await chrome.tabs.query({ url: "https://draftwizard.fantasypros.com/*" });
+      const ffrTabs = (await chrome.tabs.query({})).filter((tab) => isFfrTabUrl(tab.url || ""));
+      sendResponse({
+        ok: true,
+        armed: fpMockConnectorState.armed,
+        config: fpMockConnectorState.config,
+        lastStatus: fpMockConnectorState.lastStatus,
+        lastPickAt: fpMockConnectorState.lastPickAt,
+        picksEmitted: fpMockConnectorState.picksEmitted,
+        picksObserved: fpMockConnectorState.picksEmitted,
+        fantasyProsTabs: tabs.length,
+        reached: tabs.length,
+        ffrTabs: ffrTabs.length,
+        sessionId: fpMockConnectorState.sessionId,
+        armedAt: fpMockConnectorState.armedAt,
+      });
+    })().catch((e) => {
+      sendResponse({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+        armed: fpMockConnectorState.armed,
+        config: fpMockConnectorState.config,
+        lastStatus: fpMockConnectorState.lastStatus,
+        lastPickAt: fpMockConnectorState.lastPickAt,
+        picksEmitted: fpMockConnectorState.picksEmitted,
+        picksObserved: fpMockConnectorState.picksEmitted,
+        fantasyProsTabs: 0,
+        reached: 0,
+        ffrTabs: 0,
+        sessionId: fpMockConnectorState.sessionId,
+        armedAt: fpMockConnectorState.armedAt,
+      });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_PICK_BATCH) {
+    if (message?.provider && message.provider !== "fantasypros") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    expireFpMockSessionIfStale();
+    if (!fpMockConnectorState.armed) {
+      sendResponse({ ok: false, error: "not_armed" });
+      return true;
+    }
+    fpMockConnectorState.lastPickAt = new Date().toISOString();
+    const batchLen = Array.isArray(message?.picks) ? message.picks.length : 0;
+    if (batchLen > 0) {
+      setFpMockEmittedCount(fpMockConnectorState.picksEmitted + batchLen);
+    }
+    (async () => {
+      const ffr = await broadcastToFfrTabs({
+        ...message,
+        type: MSG_FP_MOCK_PICK_BATCH,
+        provider: "fantasypros",
+        relayedAt: fpMockConnectorState.lastPickAt,
+        sessionId: fpMockConnectorState.sessionId,
+      });
+      sendResponse({
+        ok: true,
+        ffrTabs: ffr.tabCount,
+        ffrReached: ffr.reached,
+        picksEmitted: fpMockConnectorState.picksEmitted,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_STATUS || t === MSG_FP_MOCK_SESSION_RESET) {
+    if (message?.provider && message.provider !== "fantasypros") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    expireFpMockSessionIfStale();
+    fpMockConnectorState.lastStatus = message;
+    // Never adopt observer picksObserved into the session counter — that field used to
+    // inflate every poll. Prefer explicit picksEmitted from diagnostics when present.
+    if (fpMockConnectorState.armed) {
+      const diagEmitted = Number(message?.diagnostics?.picksEmitted);
+      if (Number.isFinite(diagEmitted) && diagEmitted >= fpMockConnectorState.picksEmitted) {
+        setFpMockEmittedCount(diagEmitted);
+      }
+    }
+    if (t === MSG_FP_MOCK_SESSION_RESET && fpMockConnectorState.config) {
+      setFpMockEmittedCount(0);
+    }
+    (async () => {
+      await broadcastToFfrTabs(message);
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
 
   if (t === MSG_PAGE_ESPN_FETCH) {
     (async () => {
