@@ -74,6 +74,7 @@ export class DraftBoardMonitor {
       duplicatesSuppressed: this.duplicatesSuppressedTotal,
       keeperCount: s?.picks.filter((p) => p.isKeeper).length ?? 0,
       tradedPickCount: s?.picks.filter((p) => p.isTradedPick).length ?? 0,
+      userTeam: s?.userTeamNote ?? "—",
       lastSuccessfulReadAt: this.lastSuccessfulReadAt,
       parseError: this.lastError,
       status: this.lastError ? "ERROR" : s?.status ?? "LOADING",

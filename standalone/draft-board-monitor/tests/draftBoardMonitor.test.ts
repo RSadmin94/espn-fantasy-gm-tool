@@ -386,3 +386,126 @@ describe("ESPN DOM pick history selection", () => {
     expect(result.snapshot!.teamCount).toBeGreaterThanOrEqual(1);
   });
 });
+
+function espnGridDoc(rosterOptions?: { label: string; selected?: boolean }[]): Document {
+  const roster = rosterOptions
+    ? `<select class="roster-team">${rosterOptions
+        .map((o) => `<option${o.selected ? " selected" : ""}>${o.label}</option>`)
+        .join("")}</select>`
+    : "";
+  const row = (pick: string, name: string, team: string, pos: string, fantasy: string) =>
+    `<div role="row">
+       <div role="gridcell"><div class="public_fixedDataTableCell_cellContent">${pick}</div></div>
+       <div role="gridcell"><div class="public_fixedDataTableCell_cellContent"><div class="player-column">
+         <span class="playerinfo__playername">${name}</span>
+         <span class="playerinfo__playerteam">${team}</span>
+         <span class="positionPill">${pos}</span></div></div></div>
+       <div role="gridcell"><div class="public_fixedDataTableCell_cellContent">${fantasy}</div></div>
+     </div>`;
+  const dom = new JSDOM(
+    `<!DOCTYPE html><html><body>${roster}
+      <div class="pick-history"><div class="pick-history-tables">
+        <div class="pick-history-table"><div class="caption">Round 1</div>
+          ${row("1", "Bijan Robinson", "ATL", "RB", "Atlanta Legends")}
+          ${row("2", "CeeDee Lamb", "DAL", "WR", "Gridiron Kings")}
+        </div>
+      </div></div></body></html>`,
+    { url: "https://fantasy.espn.com/football/draft?leagueId=1&seasonId=2026" },
+  );
+  return dom.window.document;
+}
+
+describe("user-team detection (isolated, exact-match only)", () => {
+  it("tints the team on exactly one exact normalized match", () => {
+    const r = observeEspnFromDocument(espnGridDoc([{ label: "Atlanta Legends", selected: true }, { label: "Gridiron Kings" }]));
+    const user = r.snapshot!.teams.filter((t) => t.isUserTeam);
+    expect(user.length).toBe(1);
+    expect(user[0]!.teamName).toBe("Atlanta Legends");
+    expect(r.snapshot!.userTeamNote).toMatch(/auto/i);
+  });
+
+  it("does NOT fuzzy-match a substring (Atlanta ≠ Atlanta Legends)", () => {
+    const r = observeEspnFromDocument(espnGridDoc([{ label: "Atlanta", selected: true }, { label: "Gridiron Kings" }]));
+    expect(r.snapshot!.teams.some((t) => t.isUserTeam)).toBe(false);
+    expect(r.snapshot!.userTeamNote).toMatch(/no highlight/i);
+  });
+
+  it("no highlight when the selected name matches nothing", () => {
+    const r = observeEspnFromDocument(espnGridDoc([{ label: "Nonexistent FC", selected: true }, { label: "Gridiron Kings" }]));
+    expect(r.snapshot!.teams.some((t) => t.isUserTeam)).toBe(false);
+    expect(r.snapshot!.userTeamNote).toMatch(/0 matches/);
+  });
+
+  it("no team selector present → no highlight, discovery intact", () => {
+    const r = observeEspnFromDocument(espnGridDoc());
+    expect(r.snapshot!.teams.some((t) => t.isUserTeam)).toBe(false);
+    expect(r.snapshot!.teamCount).toBe(2);
+    expect(r.snapshot!.picks.length).toBe(2);
+  });
+});
+
+describe("active-pick highlight (never illuminate the wrong team)", () => {
+  it("renders NO on-clock team cell; surfaces pick position in header only", async () => {
+    const { renderBoard } = await import("../src/draft-monitor/board/renderBoard");
+    const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="m"></div></body></html>`);
+    const doc = dom.window.document;
+    const mount = doc.getElementById("m")!;
+    const snapshot: NormalizedDraftSnapshot = {
+      source: "espn",
+      status: "ACTIVE",
+      teamCount: 3,
+      teams: [
+        { teamId: "a", teamName: "A", draftSlot: 1 },
+        { teamId: "b", teamName: "B", draftSlot: 2 },
+        { teamId: "c", teamName: "C", draftSlot: 3 },
+      ],
+      picks: [
+        { eventKey: "espn:o:1", source: "espn", round: 1, pickInRound: 1, overallPick: 1,
+          currentTeamId: "a", currentTeamName: "A", playerName: "P1",
+          isKeeper: false, isTradedPick: false, isLiveSelection: true, keeperStatusKnown: false },
+      ],
+      currentOverallPick: 2,
+      lastUpdatedAt: new Date().toISOString(),
+      draftFingerprint: "fp:test",
+    };
+    const diags = {
+      version: "test", source: "espn" as const, draftIdOrFingerprint: "fp:test",
+      teamCount: 3, sourcePickCount: 1, normalizedPickCount: 1, duplicatesSuppressed: 0,
+      keeperCount: 0, tradedPickCount: 0, userTeam: "—", lastSuccessfulReadAt: null,
+      parseError: null, status: "ACTIVE" as const,
+    };
+    renderBoard({ document: doc, mount }, snapshot, diags);
+    // No cell is illuminated as on-the-clock (ownership of upcoming pick unknown).
+    expect(mount.querySelector(".on-clock")).toBeNull();
+    // Position is surfaced without naming a team.
+    const chip = mount.querySelector(".dbm-onclock");
+    expect(chip).not.toBeNull();
+    expect(chip!.textContent).toMatch(/Pick #2/);
+    expect(chip!.textContent).not.toMatch(/\bA\b|\bB\b|\bC\b/);
+  });
+
+  it("completed draft surfaces no on-clock position", async () => {
+    const { renderBoard } = await import("../src/draft-monitor/board/renderBoard");
+    const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="m"></div></body></html>`);
+    const doc = dom.window.document;
+    const mount = doc.getElementById("m")!;
+    const snapshot: NormalizedDraftSnapshot = {
+      source: "espn", status: "COMPLETE", teamCount: 1,
+      teams: [{ teamId: "a", teamName: "A", draftSlot: 1 }],
+      picks: [{ eventKey: "e", source: "espn", round: 1, pickInRound: 1, overallPick: 1,
+        currentTeamId: "a", currentTeamName: "A", playerName: "P1",
+        isKeeper: false, isTradedPick: false, isLiveSelection: true, keeperStatusKnown: false }],
+      currentOverallPick: undefined,
+      lastUpdatedAt: new Date().toISOString(), draftFingerprint: "fp:done",
+    };
+    const diags = {
+      version: "test", source: "espn" as const, draftIdOrFingerprint: "fp:done",
+      teamCount: 1, sourcePickCount: 1, normalizedPickCount: 1, duplicatesSuppressed: 0,
+      keeperCount: 0, tradedPickCount: 0, userTeam: "—", lastSuccessfulReadAt: null,
+      parseError: null, status: "COMPLETE" as const,
+    };
+    renderBoard({ document: doc, mount }, snapshot, diags);
+    expect(mount.querySelector(".dbm-onclock")).toBeNull();
+    expect(mount.querySelector(".on-clock")).toBeNull();
+  });
+});

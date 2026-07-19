@@ -522,6 +522,27 @@ export function observeEspnFromDocument(
     });
   }
 
+  // Best-effort user-team detection (ISOLATED: a failure here must never
+  // affect team discovery, picks, ownership, rendering, polling, or rebuild).
+  // Match rule: EXACTLY ONE exact normalized match tints a team. Zero or
+  // multiple matches → no highlight. No fuzzy/substring matching.
+  let userTeamNote = "off (auto): no team selector found";
+  try {
+    const userName = detectEspnUserTeamName(doc);
+    if (userName) {
+      const un = norm(userName);
+      const matches = teams.filter((t) => norm(t.teamName) === un);
+      if (matches.length === 1) {
+        matches[0]!.isUserTeam = true;
+        userTeamNote = `auto: "${matches[0]!.teamName}" (roster selector)`;
+      } else {
+        userTeamNote = `auto: no highlight (${matches.length} matches for "${userName}")`;
+      }
+    }
+  } catch (e) {
+    userTeamNote = `auto: detection error (ignored)`;
+  }
+
   const fingerprint = buildEspnFingerprint({
     leagueId,
     seasonId,
@@ -637,6 +658,7 @@ export function observeEspnFromDocument(
             ? Math.max(...picks.map((p) => p.overallPick ?? 0)) + 1
             : 1,
       userTeamId: userTeam?.teamId,
+      userTeamNote,
       lastUpdatedAt: nowIso,
       draftFingerprint: fingerprint,
     },
@@ -675,6 +697,26 @@ export function annotateTradesFromSnakeMismatch(
       p.originalDraftSlot = slot;
     }
   }
+}
+
+function detectEspnUserTeamName(doc: Document): string | null {
+  // ESPN draft roster viewer: a <select> of fantasy teams whose current
+  // selection defaults to the viewer's own team. Skip the rounds dropdown
+  // (options look like "Round N" / "All Rounds").
+  for (const sel of Array.from(doc.querySelectorAll("select"))) {
+    const s = sel as HTMLSelectElement;
+    const opts = Array.from(s.options || []);
+    if (opts.length < 2) continue;
+    if (opts.some((o) => /^round\s*\d+$|all rounds/i.test((o.textContent || "").trim()))) continue;
+    const selected =
+      (s.selectedOptions && s.selectedOptions[0]) ||
+      opts.find((o) => o.selected) ||
+      opts[s.selectedIndex] ||
+      null;
+    const name = (selected?.textContent || "").replace(/\s+/g, " ").trim();
+    if (name && name.length > 2 && !/^(select|choose|view)/i.test(name)) return name;
+  }
+  return null;
 }
 
 function detectEspnTeamsFromPage(doc: Document): NormalizedDraftTeam[] {

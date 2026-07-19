@@ -63,9 +63,15 @@ export function renderBoard(
   if (snapshot?.teamCount) meta.appendChild(textSpan(target.document, `${snapshot.teamCount} teams`));
   if (snapshot?.roundCount) meta.appendChild(textSpan(target.document, `${snapshot.roundCount} rounds`));
   if (snapshot?.currentOverallPick != null && status === "ACTIVE") {
-    meta.appendChild(textSpan(target.document, `Overall ${snapshot.currentOverallPick}`));
+    const onClock = el(target.document, "span", "dbm-onclock");
+    onClock.textContent = `On the clock · Pick #${snapshot.currentOverallPick}`;
+    meta.appendChild(onClock);
   }
   header.appendChild(meta);
+
+  const spacer = el(target.document, "div", "dbm-spacer");
+  header.appendChild(spacer);
+  header.appendChild(buildControls(target.document, root));
   root.appendChild(header);
 
   if (diagnostics.parseError) {
@@ -83,9 +89,17 @@ export function renderBoard(
   const rounds = resolveRounds(snapshot);
   const grouped = groupPicksByRoundAndTeam(snapshot.picks);
 
+  // ON-THE-CLOCK: the ESPN pick-history snapshot exposes only COMPLETED picks,
+  // so upcoming-pick *current ownership* is unknown (a traded upcoming pick
+  // would be mis-attributed by snake math). We therefore do NOT highlight a
+  // team cell for the upcoming pick — that could illuminate the wrong team.
+  // The next-pick *position* is surfaced in the header instead (no team named).
+  // Accurate team highlighting would require reading ESPN's explicit
+  // "ON THE CLOCK: PICK N — Team" label (a future evidence-based enhancement).
+
   const wrap = el(target.document, "div", "dbm-board-wrap");
   const board = el(target.document, "div", "dbm-board");
-  board.style.gridTemplateColumns = `64px repeat(${Math.max(teams.length, 1)}, minmax(140px, 200px))`;
+  board.style.gridTemplateColumns = `64px repeat(${Math.max(teams.length, 1)}, minmax(var(--dbm-cell-w), 240px))`;
 
   board.appendChild(cell(target.document, "dbm-corner", "Rd \\ Tm"));
   for (const t of teams) {
@@ -103,6 +117,11 @@ export function renderBoard(
       s.textContent = `Slot ${t.draftSlot}`;
       head.appendChild(s);
     }
+    if (t.isUserTeam) {
+      const badge2 = el(target.document, "div", "dbm-myteam-badge");
+      badge2.textContent = "My Team";
+      head.appendChild(badge2);
+    }
     board.appendChild(head);
   }
 
@@ -112,7 +131,9 @@ export function renderBoard(
     const byTeam = grouped.get(round) || new Map();
     for (const t of teams) {
       const picks = byTeam.get(t.teamId) || [];
-      const c = el(target.document, "div", picks.length ? "dbm-cell" : "dbm-cell empty");
+      let cls = picks.length ? "dbm-cell" : "dbm-cell empty";
+      if (t.isUserTeam) cls += " user-col";
+      const c = el(target.document, "div", cls);
       for (const p of picks) {
         c.appendChild(renderCard(target.document, p));
       }
@@ -135,13 +156,63 @@ function resolveRounds(snapshot: NormalizedDraftSnapshot): number[] {
   const count = snapshot.roundCount && snapshot.roundCount > 0
     ? snapshot.roundCount
     : Math.max(maxFromPicks, 1);
-  // If no picks and no roundCount, show a single empty round row for structure
-  const n = snapshot.picks.length === 0 && !snapshot.roundCount ? 1 : count;
-  return Array.from({ length: n }, (_, i) => i + 1);
+  const nn = snapshot.picks.length === 0 && !snapshot.roundCount ? 1 : count;
+  return Array.from({ length: nn }, (_, i) => i + 1);
+}
+
+function buildControls(doc: Document, root: HTMLElement): HTMLElement {
+  const wrap = el(doc, "div", "dbm-controls");
+  // Position legend
+  const legend = el(doc, "div", "dbm-legend");
+  const positions: [string, string][] = [
+    ["QB", "--pos-QB"], ["RB", "--pos-RB"], ["WR", "--pos-WR"],
+    ["TE", "--pos-TE"], ["K", "--pos-K"], ["DEF", "--pos-DST"], ["DP", "--pos-DP"],
+  ];
+  for (const [lbl, varName] of positions) {
+    const lg = el(doc, "span", "lg");
+    const sw = el(doc, "span", "sw");
+    sw.style.background = `var(${varName})`;
+    lg.appendChild(sw);
+    lg.appendChild(doc.createTextNode(lbl));
+    legend.appendChild(lg);
+  }
+  wrap.appendChild(legend);
+  // Zoom
+  const zoom = el(doc, "div", "dbm-zoom");
+  const cur = Number(root.getAttribute("data-dbm-zoom") || "2");
+  const label = el(doc, "span", "dbm-zoom-label");
+  const setZoom = (z: number) => {
+    // Default safely (2 = M) when z is NaN/invalid; clamp to 1..4.
+    const clamped = Number.isFinite(z) ? Math.max(1, Math.min(4, Math.round(z))) : 2;
+    root.setAttribute("data-dbm-zoom", String(clamped));
+    label.textContent = `${["S", "M", "L", "XL"][clamped - 1]}`;
+  };
+  const minus = el(doc, "button", "");
+  minus.textContent = "\u2212";
+  minus.setAttribute("title", "Zoom out");
+  minus.addEventListener("click", () =>
+    setZoom(Number(root.getAttribute("data-dbm-zoom") || "2") - 1),
+  );
+  const plus = el(doc, "button", "");
+  plus.textContent = "+";
+  plus.setAttribute("title", "Zoom in");
+  plus.addEventListener("click", () =>
+    setZoom(Number(root.getAttribute("data-dbm-zoom") || "2") + 1),
+  );
+  const zlabel = el(doc, "span", "dbm-zoom-label");
+  zlabel.textContent = "Zoom";
+  zoom.appendChild(zlabel);
+  zoom.appendChild(minus);
+  zoom.appendChild(label);
+  zoom.appendChild(plus);
+  setZoom(cur);
+  wrap.appendChild(zoom);
+  return wrap;
 }
 
 function renderCard(doc: Document, p: import("../normalize/draftTypes").NormalizedDraftPick): HTMLElement {
-  const card = el(doc, "div", `dbm-card${p.isKeeper ? " keeper" : ""}${p.isTradedPick ? " trade" : ""}`);
+  const posClass = p.position ? ` pos-${p.position.replace(/[^A-Z]/gi, "").toUpperCase()}` : "";
+  const card = el(doc, "div", `dbm-card${posClass}${p.isKeeper ? " keeper" : ""}${p.isTradedPick ? " trade" : ""}`);
   const row = el(doc, "div", "dbm-card-row");
   if (p.headshotUrl) {
     const img = doc.createElement("img");
@@ -164,7 +235,14 @@ function renderCard(doc: Document, p: import("../normalize/draftTypes").Normaliz
   body.appendChild(top);
 
   const sub = el(doc, "div", "dbm-sub");
-  sub.textContent = [p.nflTeam, p.position].filter(Boolean).join(" · ");
+  if (p.position) {
+    const pos = el(doc, "span", "pos");
+    pos.textContent = p.position;
+    sub.appendChild(pos);
+  }
+  if (p.nflTeam) {
+    sub.appendChild(doc.createTextNode(p.position ? ` · ${p.nflTeam}` : p.nflTeam));
+  }
   body.appendChild(sub);
   row.appendChild(body);
   card.appendChild(row);
@@ -200,6 +278,7 @@ function renderDiagnostics(doc: Document, d: MonitorDiagnostics): HTMLElement {
     ["Duplicates suppressed", String(d.duplicatesSuppressed)],
     ["Keepers", String(d.keeperCount)],
     ["Traded picks", String(d.tradedPickCount)],
+    ["My team", d.userTeam],
     ["Last successful read", d.lastSuccessfulReadAt || "—"],
     ["Parse error", d.parseError || "—"],
   ];

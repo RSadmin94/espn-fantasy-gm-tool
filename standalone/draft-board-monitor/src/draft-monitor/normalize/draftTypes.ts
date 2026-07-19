@@ -62,6 +62,8 @@ export type NormalizedDraftSnapshot = {
   currentOverallPick?: number;
   onTheClockTeamId?: string;
   userTeamId?: string;
+  /** Human-readable note on how (if at all) the user's team was detected. */
+  userTeamNote?: string;
   lastUpdatedAt: string;
   /** Conservative fingerprint when formal draftId is missing */
   draftFingerprint: string;
@@ -77,12 +79,13 @@ export type MonitorDiagnostics = {
   duplicatesSuppressed: number;
   keeperCount: number;
   tradedPickCount: number;
+  userTeam: string;
   lastSuccessfulReadAt: string | null;
   parseError: string | null;
   status: DraftStatus | "ERROR" | "LOADING";
 };
 
-export const MONITOR_VERSION = "1.2.1-standalone";
+export const MONITOR_VERSION = "1.3.1-standalone";
 
 export function emptySnapshot(
   source: DraftSource,
