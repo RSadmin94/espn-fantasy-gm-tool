@@ -121,6 +121,7 @@ interface SleeperNflState {
 }
 
 interface SleeperPlayer {
+  player_id?: string;
   full_name?: string;
   first_name?: string;
   last_name?: string;
@@ -128,6 +129,8 @@ interface SleeperPlayer {
   team?: string;
   injury_status?: string;
   status?: string;
+  /** ESPN global player id when Sleeper has a crosswalk. */
+  espn_id?: string | number | null;
 }
 
 interface SleeperDraft {

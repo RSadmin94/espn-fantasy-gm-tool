@@ -49,6 +49,10 @@ import {
   loadDurableEspnOffenseAdpForSeasons,
   saveDurableEspnOffenseAdp,
 } from "./espnOffenseAdpDurableStore";
+import {
+  getSleeperHeadshotCoverage,
+  syncSleeperPlayerHeadshotIds,
+} from "./services/sleeperPlayerHeadshotSync";
 
 /** SQL guard: open-draft selections only (DraftTruth `draftedForAnalytics` or legacy isKeeper=0). */
 function sqlOpenDraftAnalyticsPick(): ReturnType<typeof sql> {
@@ -525,6 +529,7 @@ export const playerStatsRouter = router({
             position:        gmPlayerRegistry.position,
             currentNflTeam:  gmPlayerRegistry.currentNflTeam,
             espnPlayerId:    gmPlayerRegistry.espnPlayerId,
+            sleeperPlayerId: gmPlayerRegistry.sleeperPlayerId,
             firstSeasonSeen: gmPlayerRegistry.firstSeasonSeen,
             lastSeasonSeen:  gmPlayerRegistry.lastSeasonSeen,
             isActive:        gmPlayerRegistry.isActive,
@@ -620,6 +625,7 @@ export const playerStatsRouter = router({
           isActive:        Boolean(r.isActive),
           needsReview:     Boolean(r.needsReview),
           espnPlayerId:    r.espnPlayerId    ?? null,
+          sleeperPlayerId: r.sleeperPlayerId ?? null,
           currentNflTeam:  r.currentNflTeam  ?? null,
           firstSeasonSeen: r.firstSeasonSeen ?? null,
           lastSeasonSeen:  r.lastSeasonSeen  ?? null,
@@ -912,6 +918,25 @@ export const playerStatsRouter = router({
 
       return { ok: true as const, updated };
     }),
+
+  /**
+   * Pull Sleeper NFL player catalog and write sleeperPlayerId onto matched
+   * gm_player_registry rows (via Sleeper espn_id ↔ registry espnPlayerId).
+   * Enables Sleeper CDN headshots as fallback when ESPN images fail/missing.
+   */
+  syncSleeperHeadshots: publicProcedure
+    .input(z.object({ dryRun: z.boolean().optional() }).optional())
+    .mutation(async ({ input }) => {
+      const sync = await syncSleeperPlayerHeadshotIds({
+        dryRun: Boolean(input?.dryRun),
+      });
+      const coverage = await getSleeperHeadshotCoverage();
+      return { ...sync, coverage };
+    }),
+
+  getSleeperHeadshotCoverage: publicProcedure.query(async () => {
+    return getSleeperHeadshotCoverage();
+  }),
 });
 
 export type PlayerStatsRouter = typeof playerStatsRouter;

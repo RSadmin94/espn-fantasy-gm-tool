@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { PlayerProfilePanel } from "@/pages/PlayerIntelligence";
 import { cn } from "@/lib/utils";
+import { resolvePlayerHeadshotUrl } from "@shared/playerHeadshot";
 import {
   Search, ChevronDown, ChevronUp, ChevronsUpDown,
   RefreshCw, Sparkles, TrendingUp, TrendingDown, AlertTriangle, Zap,
@@ -40,13 +41,32 @@ function dynastyValue(p: any): number {
   return Math.min(99, base + variance + recency);
 }
 
-// ── Headshot ─────────────────────────────────────────────────────────────────
-function Headshot({ espnId, name, pos }: { espnId: string | null; name: string; pos: string }) {
-  const [failed, setFailed] = useState(false);
+// ── Headshot (ESPN CDN → Sleeper CDN → initials) ─────────────────────────────
+function Headshot({
+  espnId,
+  sleeperId,
+  name,
+  pos,
+}: {
+  espnId: string | null;
+  sleeperId?: string | null;
+  name: string;
+  pos: string;
+}) {
+  const candidates = useMemo(() => {
+    const list: string[] = [];
+    const espn = resolvePlayerHeadshotUrl({ espnPlayerId: espnId, sleeperPlayerId: null });
+    const sleeper = resolvePlayerHeadshotUrl({ espnPlayerId: null, sleeperPlayerId: sleeperId });
+    if (espn) list.push(espn);
+    if (sleeper) list.push(sleeper);
+    return list;
+  }, [espnId, sleeperId]);
+  const [idx, setIdx] = useState(0);
   const cfg = POS_CFG[pos] ?? POS_CFG.K;
   const initials = name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+  const src = candidates[idx] ?? null;
 
-  if (!espnId || failed) {
+  if (!src) {
     return (
       <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border-2 border-zinc-700", cfg.text, "bg-zinc-800/80")}>
         {initials}
@@ -56,12 +76,13 @@ function Headshot({ espnId, name, pos }: { espnId: string | null; name: string; 
   return (
     <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-zinc-800 border-2 border-zinc-700/60">
       <img
-        src={`https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/${espnId}.png&w=80&h=58&cb=1`}
+        key={src}
+        src={src}
         alt={name}
         loading="lazy"
         decoding="async"
         className="w-full h-full object-cover object-top scale-110"
-        onError={() => setFailed(true)}
+        onError={() => setIdx((i) => i + 1)}
       />
     </div>
   );
@@ -144,6 +165,16 @@ export function PlayerDatabase() {
     sortBy:   sortOpt === "Avg Pick Order" ? "avgPick" : undefined,
     sortDir:  sortOpt === "Avg Pick Order" ? sortDir : undefined,
   }, { keepPreviousData: true });
+
+  const sleeperCoverageQ = _trpc.playerStats.getSleeperHeadshotCoverage.useQuery(undefined, {
+    staleTime: 60_000,
+  });
+  const syncSleeperMut = _trpc.playerStats.syncSleeperHeadshots.useMutation({
+    onSuccess: () => {
+      void refetch();
+      void sleeperCoverageQ.refetch();
+    },
+  });
 
   const raw: any[] = data?.players ?? [];
   const total      = data?.total ?? 0;
@@ -242,6 +273,31 @@ export function PlayerDatabase() {
               {i > 0 && <span className="ml-1.5 text-[9px] text-zinc-600 normal-case tracking-normal">Soon</span>}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => syncSleeperMut.mutate({})}
+            disabled={syncSleeperMut.isPending}
+            className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-lime-300 hover:border-lime-500/40 disabled:opacity-50"
+            title="Match Sleeper NFL player IDs onto the registry for CDN headshots"
+          >
+            {syncSleeperMut.isPending ? "Syncing Sleeper…" : "Sync Sleeper Headshots"}
+          </button>
+          {sleeperCoverageQ.data && (
+            <span className="text-[10px] text-zinc-600 tabular-nums" title="withBoth / withEspnId">
+              Sleeper {sleeperCoverageQ.data.withBoth}/{sleeperCoverageQ.data.withEspnId}
+              {sleeperCoverageQ.data.coveragePercent != null
+                ? ` (${sleeperCoverageQ.data.coveragePercent}%)`
+                : ""}
+            </span>
+          )}
+          {syncSleeperMut.data && (
+            <span className="text-[10px] text-lime-500/80 tabular-nums">
+              Wrote {syncSleeperMut.data.sleeperIdsWritten}; already {syncSleeperMut.data.alreadyMatched}
+              {syncSleeperMut.data.coveragePercent != null
+                ? `; cover ${syncSleeperMut.data.coveragePercent}%`
+                : ""}
+            </span>
+          )}
           <button onClick={() => refetch()} className="ml-auto text-zinc-600 hover:text-zinc-300 p-1.5 transition-colors">
             <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin text-lime-400")} />
           </button>
@@ -378,7 +434,12 @@ export function PlayerDatabase() {
 
                   {/* Player */}
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <Headshot espnId={p.espnPlayerId} name={p.fullName} pos={p.position} />
+                    <Headshot
+                      espnId={p.espnPlayerId}
+                      sleeperId={p.sleeperPlayerId}
+                      name={p.fullName}
+                      pos={p.position}
+                    />
                     <div className="min-w-0">
                       <div className="font-bold text-zinc-100 text-base leading-tight truncate group-hover:text-white">{p.fullName}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
