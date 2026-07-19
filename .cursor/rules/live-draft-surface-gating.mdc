@@ -1,0 +1,31 @@
+---
+description: Live Draft services must gate on Live surface, not sticky toggle alone (RFSN-030)
+globs: client/src/pages/DraftWarRoom.tsx,client/src/hooks/useEspnLiveDraftMonitor.ts,client/src/hooks/useRfsn*.ts,client/src/components/rfsn/**/*,client/src/lib/liveDraft*.ts,client/src/lib/rfsnWarRoom*.ts
+alwaysApply: false
+---
+
+# Live Draft surface gating (RFSN-030)
+
+`DraftWarRoom` stays mounted across `/draft/live` ↔ `/draft/mock`.
+`liveDraftActive` is **sticky** (toggle ON survives Mock navigation).
+
+## Rule
+
+Any Live Draft service (broadcast snapshot poller, ESPN/connected-league monitor, clock engines, booth audio, live sockets) must be gated by **`isLiveDraftSurfaceActive`** (or equivalent: `liveDraftActive && preferLiveDraft`), **never** by `liveDraftActive` alone.
+
+```ts
+// ❌ Wrong — leaks onto Mock when toggle stays ON
+enabled = liveDraftActive
+
+// ✅ Correct
+enabled = isLiveDraftSurfaceActive({ liveDraftActive, preferLiveDraft })
+// connected-league also requires source === "connected-league"
+```
+
+Helpers: `client/src/lib/liveDraftSurfaceActive.ts`
+- `isLiveDraftSurfaceActive`
+- `isConnectedLeagueLiveActive`
+
+## Monitor effects
+
+Do not put unstable callback/mutation object identity (`notifyMut`, etc.) in poll-loop `useEffect` deps. Hold them in a ref so lifecycle inputs (`enabled`/`canRun`, `draftId`, `pollMs`, …) control start/stop — not render identity churn.

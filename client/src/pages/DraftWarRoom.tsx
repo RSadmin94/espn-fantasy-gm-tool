@@ -33,6 +33,7 @@ import {
   formatLiveDraftValueVsMarket,
 } from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
+import { isConnectedLeagueLiveActive } from "@/lib/liveDraftSurfaceActive";
 import { isRfsnWarRoomBroadcastActive } from "@/lib/rfsnWarRoomBroadcastActive";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
@@ -803,7 +804,11 @@ function LiveDraftEngine({
   const posDefaultApplied = useRef(false);
   const [liveDraftActive, setLiveDraftActive] = useState(preferLiveDraft);
   const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("connected-league");
-  const connectedLeagueLive = liveDraftActive && liveDraftSource === "connected-league";
+  const connectedLeagueLive = isConnectedLeagueLiveActive({
+    liveDraftActive,
+    preferLiveDraft,
+    source: liveDraftSource,
+  });
 
   useEffect(() => {
     if (preferLiveDraft) setLiveDraftActive(true);

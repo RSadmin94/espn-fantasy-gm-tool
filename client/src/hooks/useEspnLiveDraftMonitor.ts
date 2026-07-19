@@ -53,6 +53,11 @@ export function useEspnLiveDraftMonitor({
     staleTime: 60_000,
   });
   const notifyMut = _trpc.rfsnBroadcast.notifyLockedPick.useMutation();
+  // Mutation object identity churn must not restart the poll loop (RFSN-030 storm).
+  const notifyMutRef = useRef(notifyMut);
+  useEffect(() => {
+    notifyMutRef.current = notifyMut;
+  }, [notifyMut]);
 
   const draftId = buildEspnLiveDraftId(String(leagueId ?? ""), season);
   const canRun = Boolean(
@@ -90,7 +95,11 @@ export function useEspnLiveDraftMonitor({
 
   useEffect(() => {
     if (!canRun || !leagueId) {
-      setStatus((s) => ({ ...s, active: false, extensionPresent: isGmWarRoomExtensionPresent() }));
+      setStatus((s) => {
+        const extensionPresent = isGmWarRoomExtensionPresent();
+        if (!s.active && s.extensionPresent === extensionPresent) return s;
+        return { ...s, active: false, extensionPresent };
+      });
       return;
     }
 
@@ -150,7 +159,7 @@ export function useEspnLiveDraftMonitor({
             snap.picks.length > 0 &&
             pick.overallPick === Math.max(...snap.picks.map((p) => p.overallPick));
 
-          void notifyMut
+          void notifyMutRef.current
             .mutateAsync({
               leagueId,
               draftId,
@@ -214,7 +223,8 @@ export function useEspnLiveDraftMonitor({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [canRun, draftId, draftPace, leagueId, notifyMut, ownerNameByTeamId, pollMs, season]);
+    // notifyMut intentionally omitted — use notifyMutRef (identity churn caused poll storms).
+  }, [canRun, draftId, draftPace, leagueId, ownerNameByTeamId, pollMs, season]);
 
   return status;
 }

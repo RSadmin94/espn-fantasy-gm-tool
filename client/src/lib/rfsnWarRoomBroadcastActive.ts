@@ -1,3 +1,5 @@
+import { isLiveDraftSurfaceActive } from "@/lib/liveDraftSurfaceActive";
+
 /**
  * War Room booth snapshot poller gate.
  *
@@ -10,5 +12,5 @@ export function isRfsnWarRoomBroadcastActive(args: {
   /** True only on the Live Draft surface (`preferLiveDraft` / `/draft/live`). */
   preferLiveDraft: boolean;
 }): boolean {
-  return Boolean(args.liveDraftActive && args.preferLiveDraft);
+  return isLiveDraftSurfaceActive(args);
 }
