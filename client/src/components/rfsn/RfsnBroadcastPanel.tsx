@@ -27,6 +27,11 @@ import {
   type RfsnLivePublicPayload,
 } from "@/lib/rfsnLiveState";
 import { warRoomAudioSessionKey } from "@/lib/rfsnWarRoomAudioSession";
+import { COMMENTATOR_META } from "@/lib/rfsnPresentation";
+import {
+  liveDraftAudioStateLabel,
+  liveDraftBoothPresenceLine,
+} from "@/lib/liveDraftUx";
 import { cn } from "@/lib/utils";
 
 const PANEL_POLL_MS = 2000;
@@ -81,6 +86,17 @@ export function RfsnBroadcastPanel({
   const sequence = buildBoothCommentarySequence(boothSnapshot);
   const isMobile = layout === "mobile";
   const audioIsSpeaking = audio.state === "playing" && Boolean(booth.activeCommentator);
+  const analystName = booth.activeCommentator
+    ? COMMENTATOR_META[booth.activeCommentator].displayName
+    : null;
+  const boothPresence = liveDraftBoothPresenceLine({
+    speaking: audioIsSpeaking,
+    analystName,
+  });
+  const audioLabel = liveDraftAudioStateLabel({
+    speaking: audioIsSpeaking,
+    audioState: audio.state,
+  });
   const [commentaryLog, setCommentaryLog] = useState<RfsnCommentaryLogEntry[]>([]);
   const seenLogIdsRef = useRef<Set<string>>(new Set());
   const logResetAtRef = useRef<number>(Date.now());
@@ -144,13 +160,45 @@ export function RfsnBroadcastPanel({
       )}
       data-rfsn-warroom-broadcast
     >
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-2 flex-wrap">
         <span className="text-[11px] font-black uppercase tracking-wider text-[#a3e635]">
           RFSN Booth
         </span>
         <span className="text-[11px] uppercase tracking-wider text-[#8b97a8]">
           {payload ? liveSessionStatusLabel(payload.sessionState) : "Standing by"}
         </span>
+      </div>
+
+      <div
+        className="mb-3 rounded-md border border-white/[0.06] bg-black/35 px-2.5 py-2"
+        data-rfsn-booth-status
+        data-rfsn-024
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span
+            className={cn(
+              "text-[11px] font-semibold",
+              audioIsSpeaking ? "text-[#a3e635]" : "text-zinc-300",
+            )}
+            data-booth-presence
+          >
+            {boothPresence}
+          </span>
+          <span
+            className={cn(
+              "text-[10px] font-black uppercase tracking-wider",
+              audioIsSpeaking ? "text-[#a3e635]" : "text-zinc-500",
+            )}
+            data-booth-audio-state
+          >
+            {audioLabel}
+          </span>
+        </div>
+        {!audioIsSpeaking && (
+          <p className="mt-1 text-[10px] text-zinc-500">
+            Silence is editorial — coverage fires on significant moments.
+          </p>
+        )}
       </div>
 
       {ttsAvailable && (

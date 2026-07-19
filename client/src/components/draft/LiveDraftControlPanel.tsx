@@ -1,8 +1,14 @@
 /**
- * RFSN-013 — Live Draft Experience Shell (platform-neutral).
+ * RFSN-013 / RFSN-024 — Live Draft Experience Shell (platform-neutral).
  * Source adapters stay behind this control surface; do not name providers here.
  */
 import { cn } from "@/lib/utils";
+import {
+  liveDraftPhaseBadgeLabel,
+  liveDraftStatusLines,
+  resolveLiveDraftUiPhase,
+  type LiveDraftUxStatusInput,
+} from "@/lib/liveDraftUx";
 
 export type LiveDraftSource = "connected-league" | "manual";
 
@@ -17,6 +23,8 @@ export type LiveDraftControlStatus = {
   lastError: string | null;
   lastPollAt: string | null;
   connectorReady: boolean;
+  /** User paused the draft session. */
+  draftPaused?: boolean;
 };
 
 type Props = {
@@ -25,24 +33,57 @@ type Props = {
   onSourceChange: (source: LiveDraftSource) => void;
 };
 
+function toUxInput(status: LiveDraftControlStatus): LiveDraftUxStatusInput {
+  return {
+    active: status.active,
+    source: status.source,
+    monitoring: status.monitoring,
+    boothOnAir: status.boothOnAir,
+    draftComplete: status.draftComplete,
+    lastError: status.lastError,
+    connectorReady: status.connectorReady,
+    draftPaused: status.draftPaused,
+    hasLockedPicks: status.lockedCount > 0,
+  };
+}
+
+const PHASE_TONE: Record<string, string> = {
+  idle: "text-zinc-400",
+  connected: "text-emerald-300",
+  waiting: "text-sky-300",
+  paused: "text-amber-300",
+  reconnecting: "text-amber-200",
+  complete: "text-emerald-200",
+};
+
 export function LiveDraftControlPanel({ status, onToggleActive, onSourceChange }: Props) {
-  const statusLabel = !status.active
-    ? "Idle"
-    : status.draftComplete
-      ? "Draft complete"
-      : status.monitoring
-        ? "Monitoring"
-        : "Standby";
+  const ux = toUxInput(status);
+  const phase = resolveLiveDraftUiPhase(ux);
+  const lines = liveDraftStatusLines(ux);
 
   return (
     <div
-      className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-[11px] text-zinc-300 space-y-2"
+      className="mb-3 sticky top-16 z-10 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2.5 text-[11px] text-zinc-300 space-y-2 backdrop-blur-md"
       data-live-draft-control
       data-rfsn-013
+      data-rfsn-024
+      data-live-phase={phase}
     >
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="font-black uppercase tracking-wider text-emerald-200 text-xs">
-          Live Draft
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="font-black uppercase tracking-wider text-emerald-200 text-xs">
+            Live Draft
+          </div>
+          <span
+            className={cn(
+              "text-[10px] font-black uppercase tracking-wider",
+              PHASE_TONE[phase] ?? "text-zinc-400",
+            )}
+            data-live-phase-badge
+          >
+            {status.active && (phase === "connected" || phase === "waiting") ? "● " : ""}
+            {liveDraftPhaseBadgeLabel(phase)}
+          </span>
         </div>
         <button
           type="button"
@@ -60,6 +101,23 @@ export function LiveDraftControlPanel({ status, onToggleActive, onSourceChange }
 
       {status.active && (
         <>
+          <div className="space-y-1" data-live-status-lines>
+            {lines.map((line, i) => (
+              <div
+                key={`${i}:${line}`}
+                className={cn(
+                  i === 0
+                    ? "text-sm font-bold text-zinc-100"
+                    : i === 1
+                      ? "text-xs text-zinc-300"
+                      : "text-[11px] text-zinc-500",
+                )}
+              >
+                {line}
+              </div>
+            ))}
+          </div>
+
           <div className="space-y-1">
             <div className="text-[10px] uppercase tracking-wider text-zinc-500">Source</div>
             <div className="flex flex-wrap gap-3">
@@ -86,23 +144,14 @@ export function LiveDraftControlPanel({ status, onToggleActive, onSourceChange }
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Status </span>
-              <span className={status.monitoring ? "text-emerald-300" : "text-zinc-400"}>
-                {status.monitoring ? "● " : ""}
-                {statusLabel}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500">Booth </span>
-              <span className={status.boothOnAir ? "text-red-300 font-bold" : "text-zinc-500"}>
-                {status.boothOnAir ? "ON AIR" : "Standby"}
-              </span>
-            </div>
-            <div className="text-zinc-500 tabular-nums">
-              locked {status.lockedCount} · notified {status.notifiedCount}
-            </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-500 tabular-nums">
+            <span>
+              Picks locked {status.lockedCount}
+              {status.notifiedCount > 0 ? ` · covered ${status.notifiedCount}` : ""}
+            </span>
+            {status.source === "connected-league" && status.lastPollAt ? (
+              <span>Updated {new Date(status.lastPollAt).toLocaleTimeString()}</span>
+            ) : null}
           </div>
 
           {status.source === "connected-league" && (
@@ -110,9 +159,6 @@ export function LiveDraftControlPanel({ status, onToggleActive, onSourceChange }
               {status.connectorReady
                 ? "League connection ready"
                 : "League connection limited — browser session may be required"}
-              {status.lastPollAt
-                ? ` · updated ${new Date(status.lastPollAt).toLocaleTimeString()}`
-                : ""}
             </div>
           )}
           {status.source === "connected-league" ? (
@@ -124,7 +170,11 @@ export function LiveDraftControlPanel({ status, onToggleActive, onSourceChange }
               Manual picks feed the booth for this session.
             </div>
           )}
-          {status.lastError && <div className="text-amber-300">{status.lastError}</div>}
+          {status.lastError && (
+            <div className="text-amber-300" data-live-draft-error>
+              {status.lastError}
+            </div>
+          )}
         </>
       )}
     </div>

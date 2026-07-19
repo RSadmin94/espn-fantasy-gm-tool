@@ -154,15 +154,16 @@ export function RfsnBroadcastShell({
           {isMobile && (
             <div
               className={cn(
-                "fixed inset-x-0 z-40 px-2 pointer-events-none",
-                mobileSheetOpen ? "bottom-[4.5rem]" : "bottom-9",
+                // Reach viewport bottom; pad above ticker (h-9) + safe area — RFSN-024
+                "fixed inset-x-0 bottom-0 z-40 px-2 pointer-events-none",
+                "pb-[calc(2.25rem+env(safe-area-inset-bottom,0px))]",
               )}
             >
               <div
                 className={cn(
                   "pointer-events-auto mx-auto max-w-lg",
                   mobileSheetOpen &&
-                    "mb-2 flex max-h-[34vh] flex-col gap-2 overflow-y-auto rounded-t-xl border border-b-0 border-white/10 bg-[#050508]/97 p-2 pt-3 shadow-2xl backdrop-blur-md",
+                    "mb-2 flex max-h-[min(42vh,calc(100dvh-8rem))] flex-col gap-2 overflow-y-auto rounded-t-xl border border-b-0 border-white/10 bg-[#050508]/97 p-2 pt-3 shadow-2xl backdrop-blur-md",
                 )}
               >
                 {mobileSheetOpen && (
