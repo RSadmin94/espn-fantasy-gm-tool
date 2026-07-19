@@ -474,6 +474,65 @@ const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
 
+/** RFSN-030C — FantasyPros solo mock connector (extension relay). */
+const MSG_FP_MOCK_ARM = "GMWR_FP_MOCK_ARM";
+const MSG_FP_MOCK_DISARM = "GMWR_FP_MOCK_DISARM";
+const MSG_FP_MOCK_PICK_BATCH = "GMWR_FP_MOCK_PICK_BATCH";
+const MSG_FP_MOCK_STATUS = "GMWR_FP_MOCK_STATUS";
+const MSG_FP_MOCK_SESSION_RESET = "GMWR_FP_MOCK_SESSION_RESET";
+const MSG_FP_MOCK_PING = "GMWR_FP_MOCK_PING";
+const MSG_FP_MOCK_GET_STATE = "GMWR_FP_MOCK_GET_STATE";
+const FP_MOCK_FFR_ORIGINS = [
+  "https://fantasyfootballrivals.com",
+  "https://www.fantasyfootballrivals.com",
+  "https://gmwarroom.online",
+  "http://localhost",
+  "http://127.0.0.1",
+];
+/** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null }} */
+let fpMockConnectorState = {
+  armed: false,
+  config: null,
+  lastStatus: null,
+  lastPickAt: null,
+};
+
+function isFfrTabUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  return FP_MOCK_FFR_ORIGINS.some((origin) => url.startsWith(origin));
+}
+
+function isFantasyProsTabUrl(url) {
+  return typeof url === "string" && url.startsWith("https://draftwizard.fantasypros.com/");
+}
+
+async function broadcastToFfrTabs(message) {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (!tab.id || !isFfrTabUrl(tab.url || "")) continue;
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+    } catch {
+      /* tab may not have content script */
+    }
+  }
+}
+
+async function broadcastToFantasyProsTabs(message) {
+  const tabs = await chrome.tabs.query({ url: "https://draftwizard.fantasypros.com/*" });
+  let reached = 0;
+  for (const tab of tabs) {
+    if (!tab.id) continue;
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+      reached += 1;
+    } catch {
+      /* ignore */
+    }
+  }
+  return { tabCount: tabs.length, reached };
+}
+
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
   if (parsed.result?.data?.json !== undefined) return parsed.result.data.json;
@@ -2340,6 +2399,123 @@ async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoom
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const t = message?.type;
+
+  // ── RFSN-030C FantasyPros solo mock relay ─────────────────────────────────
+  if (t === MSG_FP_MOCK_ARM) {
+    (async () => {
+      fpMockConnectorState = {
+        armed: true,
+        config: message?.config && typeof message.config === "object" ? message.config : {},
+        lastStatus: { status: "arming" },
+        lastPickAt: null,
+      };
+      const r = await broadcastToFantasyProsTabs({
+        type: MSG_FP_MOCK_ARM,
+        config: fpMockConnectorState.config,
+      });
+      await broadcastToFfrTabs({
+        type: MSG_FP_MOCK_STATUS,
+        provider: "fantasypros",
+        status: r.reached > 0 ? "armed" : "waiting_for_fantasypros_tab",
+        fantasyProsTabs: r.tabCount,
+        reached: r.reached,
+      });
+      sendResponse({ ok: true, ...r });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_DISARM) {
+    (async () => {
+      fpMockConnectorState = {
+        armed: false,
+        config: null,
+        lastStatus: { status: "disarmed" },
+        lastPickAt: fpMockConnectorState.lastPickAt,
+      };
+      await broadcastToFantasyProsTabs({ type: MSG_FP_MOCK_DISARM });
+      await broadcastToFfrTabs({
+        type: MSG_FP_MOCK_STATUS,
+        provider: "fantasypros",
+        status: "disarmed",
+      });
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_PING) {
+    (async () => {
+      const r = await broadcastToFantasyProsTabs({ type: MSG_FP_MOCK_PING });
+      sendResponse({
+        ok: true,
+        extensionPresent: true,
+        fantasyProsTabs: r.tabCount,
+        reached: r.reached,
+        armed: fpMockConnectorState.armed,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_GET_STATE) {
+    sendResponse({
+      ok: true,
+      armed: fpMockConnectorState.armed,
+      config: fpMockConnectorState.config,
+      lastStatus: fpMockConnectorState.lastStatus,
+      lastPickAt: fpMockConnectorState.lastPickAt,
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_PICK_BATCH) {
+    if (message?.provider && message.provider !== "fantasypros") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    if (!fpMockConnectorState.armed) {
+      sendResponse({ ok: false, error: "not_armed" });
+      return true;
+    }
+    fpMockConnectorState.lastPickAt = new Date().toISOString();
+    (async () => {
+      await broadcastToFfrTabs({
+        ...message,
+        type: MSG_FP_MOCK_PICK_BATCH,
+        provider: "fantasypros",
+        relayedAt: fpMockConnectorState.lastPickAt,
+      });
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_FP_MOCK_STATUS || t === MSG_FP_MOCK_SESSION_RESET) {
+    if (message?.provider && message.provider !== "fantasypros") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    fpMockConnectorState.lastStatus = message;
+    if (t === MSG_FP_MOCK_SESSION_RESET && fpMockConnectorState.config) {
+      // Keep armed; FFR clears dedupe / resets RFSN session.
+    }
+    (async () => {
+      await broadcastToFfrTabs(message);
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
 
   if (t === MSG_PAGE_ESPN_FETCH) {
     (async () => {

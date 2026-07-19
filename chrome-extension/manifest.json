@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "GM War Room — ESPN",
-  "version": "1.9.0",
-  "description": "Connect ESPN Fantasy credentials to GM War Room using your logged-in session.",
+  "name": "GM War Room — ESPN + FantasyPros",
+  "version": "1.10.0",
+  "description": "Connect ESPN Fantasy credentials and FantasyPros solo mock draft picks to Fantasy Football Rivals / GM War Room.",
   "permissions": ["cookies", "tabs", "scripting", "storage", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
     "https://fantasy.espn.com/*",
     "https://lm-api-reads.fantasy.espn.com/*",
     "https://www.espn.com/*",
     "https://*.espn.com/*",
+    "https://draftwizard.fantasypros.com/*",
     "https://fantasyfootballrivals.com/*",
     "https://www.fantasyfootballrivals.com/*",
     "https://gmwarroom.online/*",
@@ -26,6 +27,17 @@
       ],
       "js": ["gmwarroom-bridge.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://draftwizard.fantasypros.com/*"],
+      "js": ["providers/fantasypros/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["providers/fantasypros/page-observer.js"],
+      "matches": ["https://draftwizard.fantasypros.com/*"]
     }
   ],
   "action": {
