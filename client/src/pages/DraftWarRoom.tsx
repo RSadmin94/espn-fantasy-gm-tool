@@ -182,10 +182,14 @@ function ConfidenceDashboard({
   data,
   showKeeperInsights = true,
   onOpenSection,
+  positionRunAlerts = [],
+  scarcityAlerts = [],
 }: {
   data: any;
   showKeeperInsights?: boolean;
   onOpenSection?: (sectionId: string) => void;
+  positionRunAlerts?: any[];
+  scarcityAlerts?: any[];
 }) {
   if (!data) return null;
 
@@ -195,6 +199,27 @@ function ConfidenceDashboard({
   const leastOwner = briefingFirstName(data.leastPredictable?.ownerName);
   const reachOwner = briefingFirstName(data.biggestReach?.ownerName);
   const keeperPlayer = data.bestKeeperValue?.player;
+
+  // Preserve Decision Memo interest as Briefing scan synthesis (RFSN-027A) — not a second detail home.
+  const decisionLines: string[] = [];
+  if (holePos && data.biggestRosterHole?.urgency) {
+    decisionLines.push(
+      `Lock ${holePos} early — ${String(data.biggestRosterHole.urgency).toLowerCase()} hole${holeOwner ? ` on ${holeOwner}'s board` : ""}.`,
+    );
+  } else if (!holePos) {
+    decisionLines.push("Roster outlook is balanced — take best available and bank value.");
+  }
+  const run = positionRunAlerts[0];
+  if (run) {
+    const who = (run.affectedOwners || []).slice(0, 2).join(" & ");
+    decisionLines.push(
+      `Pre-empt the ${run.position} run${who ? ` — ${who} circling` : ""} (Round ${run.expectedRound ?? run.roundWindow ?? "?"}).`,
+    );
+  }
+  const sc = scarcityAlerts[0];
+  if (sc?.position) {
+    decisionLines.push(`Value window on ${sc.position} thinning — don't wait a full round.`);
+  }
 
   const cardsAll = [
     {
@@ -232,7 +257,7 @@ function ConfidenceDashboard({
       signal: data.biggestRosterHole?.teamName ?? "League-wide",
       hint: data.biggestRosterHole?.reason ?? "",
       sectionId: "dwr-build",
-      cta: "View Build Targets",
+      cta: "View Roster Priorities",
       color: "border-amber-500/25 bg-amber-500/5",
       iconColor: "text-amber-400",
     },
@@ -276,6 +301,22 @@ function ConfidenceDashboard({
       <p className="text-[11px] text-zinc-500 px-0.5">
         Analyst briefing — tap a card for the full intelligence read below.
       </p>
+      {decisionLines.length > 0 && (
+        <div
+          className="rounded-xl border border-lime-500/20 bg-lime-500/5 px-3.5 py-3 space-y-2"
+          data-briefing-decision-memo
+        >
+          <div className="text-[10px] font-black uppercase tracking-wider text-lime-400">
+            Tonight&apos;s read
+          </div>
+          {decisionLines.slice(0, 3).map((line) => (
+            <div key={line} className="flex items-start gap-2.5">
+              <span className="mt-1.5 shrink-0 rounded-full bg-lime-400/80" style={{ width: 7, height: 7 }} />
+              <span className="text-[13px] leading-snug text-zinc-200">{line}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div
         className={cn(
           "grid grid-cols-2 md:grid-cols-3 gap-2",
@@ -476,10 +517,11 @@ const CAPITAL_CFG = {
 function ownerArchetype(m: any): { label: string; cls: string } {
   const pred = Number(m?.predictabilityScore ?? 0);
   const surp = Number(m?.surpriseProbability ?? 0);
-  if (surp >= 55) return { label: "Panic Pivot", cls: "text-violet-300 border-violet-500/30 bg-violet-500/10" };
-  if (pred >= 72) return { label: "By-the-Book", cls: "text-violet-300 border-violet-500/30 bg-violet-500/10" };
-  if (pred >= 55) return { label: "Steady Hand", cls: "text-violet-300 border-violet-500/30 bg-violet-500/10" };
-  return { label: "Wildcard", cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" };
+  // Desk thresholds (higher interest differentiation) — kept as DNA home language.
+  if (surp >= 72) return { label: "Panic Pivot", cls: "text-orange-300 border-orange-500/35 bg-orange-500/10" };
+  if (pred >= 68 && surp < 38) return { label: "By the Book", cls: "text-lime-300 border-lime-500/35 bg-lime-500/10" };
+  if (pred < 46 || surp >= 58) return { label: "Wildcard", cls: "text-amber-300 border-amber-500/35 bg-amber-500/10" };
+  return { label: "Steady Hand", cls: "text-violet-300 border-violet-500/30 bg-violet-500/10" };
 }
 
 /** Primary archetype language; predictability stays visible (not hover-only). */
@@ -494,9 +536,75 @@ function draftBehaviorLabel(m: any): string {
 function ShockMeterSection({ meters }: { meters: any[] }) {
   const [sel, setSel] = useState<number | null>(null);
   const sorted = useMemo(() => [...meters].sort((a, b) => b.surpriseProbability - a.surpriseProbability), [meters]);
+  const threats = sorted.slice(0, 3);
+  const topThreat = threats[0] ?? null;
 
   return (
     <div>
+      {/* Preserve Rival Threat + Historical Read interest inside DNA home (RFSN-027A) */}
+      {topThreat && (
+        <div className="px-4 pt-4 space-y-3" data-dna-threat-lead>
+          <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+            <div className="text-[10px] font-black uppercase tracking-wider text-amber-300/90 mb-2">
+              Historical Read
+            </div>
+            <p className="text-[15px] leading-snug text-zinc-100">
+              &ldquo;{topThreat.ownerName} reads as a{" "}
+              <span className="font-bold text-amber-200">{ownerArchetype(topThreat).label}</span>
+              {" "}— most likely to attack{" "}
+              <span className="font-bold text-amber-200">{topThreat.mostLikelyPosition}</span>
+              {" "}when the board breaks.&rdquo;
+            </p>
+            {(topThreat.evidence || []).slice(0, 2).map((e: string, i: number) => (
+              <div key={i} className="flex items-start gap-2 mt-2">
+                <span className="text-zinc-600 shrink-0">→</span>
+                <span className="text-[13px] text-zinc-500">{e}</span>
+              </div>
+            ))}
+            <div className="mt-3 text-[12px] font-bold uppercase tracking-wider text-lime-400">
+              Receipt confidence: {Number(topThreat.predictabilityScore || 0) >= 60 ? "High" : "Moderate"}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-zinc-500 mb-2">
+              Rival Threat Window
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {threats.map((t) => {
+                const hot = Number(t.surpriseProbability || 0) >= 60;
+                return (
+                  <button
+                    key={t.teamId}
+                    type="button"
+                    onClick={() => setSel(sel === t.teamId ? null : t.teamId)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg border p-2.5 text-left transition-all",
+                      sel === t.teamId
+                        ? "border-violet-500/40 bg-violet-500/10"
+                        : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-600",
+                    )}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-bold text-zinc-100 truncate">{t.ownerName}</div>
+                      <div className="text-[12px] text-zinc-500 truncate">
+                        {t.teamName} · {t.mostLikelyPosition} threat
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className={cn("text-[20px] font-black leading-none", hot ? "text-violet-300" : "text-zinc-200")}>
+                        {Math.round(Number(t.surpriseProbability || 0))}%
+                      </div>
+                      <div className="text-[9px] uppercase tracking-wider text-zinc-600 mt-1">surprise</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 p-4">
         {sorted.map(m => {
           const arc = ownerArchetype(m);
@@ -1907,65 +2015,7 @@ function MockDraftBoard({
 }
 
 
-const GRADE_COLOR: Record<string, string> = {
-  A: "text-lime-400 bg-lime-500/10 border-lime-500/40",
-  B: "text-violet-400 bg-violet-500/10 border-violet-500/40",
-  C: "text-amber-400 bg-amber-500/10 border-amber-500/40",
-  D: "text-orange-400 bg-orange-500/10 border-orange-500/40",
-  F: "text-red-400 bg-red-500/10 border-red-500/40",
-};
-
-function DraftEnvironmentSection({ env, showKeeperDistortion = true }: { env: any; showKeeperDistortion?: boolean }) {
-  if (!env) return <div className="px-5 py-6 text-zinc-600 text-sm">No environment data.</div>;
-
-  const envCardsAll = [
-    { icon: TrendingUp,    label: "Strongest Position", val: env.strongestPosition?.position ?? "—", sub: env.strongestPosition?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
-    // Weakest Position removed (RFSN-019) — Duplicate Data of Roster Priority / Build Targets
-    { icon: Flame,         label: "Biggest Run Risk",   val: env.biggestRunRisk?.position ?? "—",     sub: env.biggestRunRisk?.reason,    color: "text-amber-400",   border: "border-amber-500/25 bg-amber-500/5" },
-    { icon: Target,        label: "Best Value Pocket",  val: env.biggestValuePocket?.position ?? "—", sub: env.biggestValuePocket?.reason, color: "text-violet-400",    border: "border-violet-500/25 bg-violet-500/5" },
-    { icon: Lock,          label: "Keeper Distortion",  val: env.mostDistortedByKeepers?.position ?? "—", sub: env.mostDistortedByKeepers?.reason, color: "text-violet-400", border: "border-violet-500/25 bg-violet-500/5" },
-  ];
-  const envCards = showKeeperDistortion
-    ? envCardsAll
-    : envCardsAll.filter((c) => c.label !== "Keeper Distortion");
-
-  return (
-    <div className="p-4 space-y-4">
-      {/* Stat cards row */}
-      <div className={cn("grid grid-cols-2 sm:grid-cols-3 gap-2", envCards.length >= 4 ? "lg:grid-cols-4" : "lg:grid-cols-3")}>
-        {envCards.map((c, i) => {
-          const Icon = c.icon;
-          return (
-            <div key={i} className={cn("rounded-xl border p-3 space-y-1", c.border)}>
-              <div className="flex items-center gap-1.5">
-                <Icon className={cn("h-3 w-3 shrink-0", c.color)} />
-                <span className={cn("text-[10px] font-black uppercase tracking-wider", c.color)}>{c.label}</span>
-              </div>
-              <div className={cn("text-2xl font-black", c.color)}>{c.val}</div>
-              <p className="text-[10px] text-zinc-600 leading-relaxed line-clamp-2">{c.sub}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* League depth grade table */}
-      {env.leagueDepthGrade && (
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-zinc-500 mb-2">League Depth Grades</p>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(env.leagueDepthGrade).map(([pos, grade]) => (
-              <div key={pos} className={cn("rounded-lg border px-3 py-2 flex items-center gap-2", GRADE_COLOR[grade as string] ?? "text-zinc-400 bg-zinc-800 border-zinc-700")}>
-                <PosPill pos={pos} />
-                <span className="text-sm font-black">{grade as string}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10px] text-zinc-600 mt-2">Grade = elite supply vs. league-wide starters needed. A = deep, F = barren.</p>
-        </div>
-      )}
-    </div>
-  );
-}
+// DraftEnvironmentSection removed (RFSN-027A) — value/run timing lives in dwr-value / dwr-runs
 
 // ── Run Alerts Section (Phase 1.75) ──────────────────────────────────────────
 
@@ -2269,7 +2319,7 @@ export function DraftWarRoom({
   );
 
   const { keeperPredictions, rosterNeeds, tradedPicks, shockMeters, confidenceDashboard,
-          keeperCompression, scarcityAlerts, positionRunAlerts, pressureByRound, draftEnvironment,
+          keeperCompression, scarcityAlerts, positionRunAlerts,
           mockDraft, availablePool, eligiblePool, teamCount, totalPicks, draftBoardSummary, leagueCapabilities } = data;
   const sharedEligiblePool = Array.isArray(eligiblePool) && eligiblePool.length > 0
     ? eligiblePool
@@ -2349,15 +2399,29 @@ export function DraftWarRoom({
           </div>
         )}
 
-        {/* Editorial intelligence desk — mockup layout, real data */}
-        <DraftWarRoomDesk data={data} sectionNav={<DwrSectionNav keepersOn={keepersOn} onOpenSection={openSection} />} />
+        {/* 1. Draft Briefing — scan layer only (RFSN-027A) */}
+        <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}
+          accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
+          <ConfidenceDashboard
+            data={confidenceDashboard}
+            showKeeperInsights={keepersOn}
+            onOpenSection={handleOpenSection}
+            positionRunAlerts={positionRunAlerts ?? []}
+            scarcityAlerts={scarcityAlerts ?? []}
+          />
+        </Section>
 
-        {/* Detailed analytics divider */}
+        {/* Prep desk — Command Board / Upcoming / Reality Mode (no duplicate intel) */}
+        <DraftWarRoomDesk data={data} />
+
+        {/* Detailed analytics divider + section nav */}
         <div className="flex items-center gap-3 pt-1">
           <div className="h-px flex-1 bg-white/[0.08]" />
           <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-zinc-600">Detailed Analytics</span>
           <div className="h-px flex-1 bg-white/[0.08]" />
         </div>
+
+        <DwrSectionNav keepersOn={keepersOn} onOpenSection={openSection} />
 
         {/* Diagnostics hidden for clean UI */}
 
@@ -2384,16 +2448,6 @@ export function DraftWarRoom({
           )}
         </div>
 
-        {/* 1. Draft Briefing — scan layer */}
-        <Section id="dwr-briefing" title="Draft Briefing" icon={ShieldCheck}
-          accent="border-amber-500/20 bg-white/[0.03]" defaultOpen={true}>
-          <ConfidenceDashboard
-            data={confidenceDashboard}
-            showKeeperInsights={keepersOn}
-            onOpenSection={handleOpenSection}
-          />
-        </Section>
-
         {/* 2. Keeper Predictions */}
         {keepersOn && (
         <Section id="dwr-keepers" title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
@@ -2401,25 +2455,22 @@ export function DraftWarRoom({
         </Section>
         )}
 
-        {/* 3. Roster Priorities (was Build Targets) */}
+        {/* 3. Roster Priorities */}
         <Section id="dwr-build" title="Roster Priorities" icon={BarChart2} badge={rosterNeeds?.length}>
           <RosterNeedsSection needs={rosterNeeds ?? []} />
         </Section>
 
-        {/* 4. Draft Shock Meter */}
+        {/* 4. Owner DNA */}
         <Section id="dwr-dna" title="Owner DNA Map" icon={Activity} badge={shockMeters?.length}>
           <ShockMeterSection meters={shockMeters ?? []} />
         </Section>
 
-        {/* 5. Draft Environment Dashboard — PHASE 1.75 */}
-        {/* League Context removed; format shown in header chips */}
-
-        {/* 6. Position Run Alerts — PHASE 1.75 */}
+        {/* 5. Position Run Windows — position timing home */}
         <Section id="dwr-runs" title="Position Run Windows" icon={Flame} badge={positionRunAlerts?.length ?? 0}>
           <RunAlertsSection alerts={positionRunAlerts ?? []} />
         </Section>
 
-        {/* 7. Scarcity Detection — PHASE 1.75 */}
+        {/* 6. Value Windows — position timing home */}
         <Section id="dwr-value" title="Value Windows" icon={Wind} badge={scarcityAlerts?.length ?? 0}>
           <ScarcitySection alerts={scarcityAlerts ?? []} />
         </Section>
