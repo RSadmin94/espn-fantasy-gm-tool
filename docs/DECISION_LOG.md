@@ -4,6 +4,26 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-19 — RFSN-030B-3 first; hold 030B-1 type freeze
+
+**Decision:** Run **030B-3** evidence capture **before** **030B-1**. Do not freeze `LockedPickInput` until FantasyPros upstream event source is confirmed. Downstream shape is obvious; upstream `?` is not.
+
+**030B-3 status:** Partial — lobby + draft-room consumer schemas captured; **live MUD pick wire blocked by auth**. Authority: `docs/architecture/RFSN-030B-3_FantasyPros_Multiplayer_Socket_Evidence.md`.
+
+| Source | Result |
+| ------ | ------ |
+| Lobby Socket.IO (`draftlobby.fantasypros.com`) | Seats / availability / `statusUpdate` only — **not** pick events |
+| Draft-room `ng_onSocketEvent` | Handles `syncEvent` (`pickLog` + `teamIds`), `draftEvent`, `startEvent`, `predraftEvent`, … |
+| MUD path (`mudId`) | `checkSync` → `/spaDraft` + clock-scheduled refresh (hybrid durability) |
+| Solo mock | `vueDraftTarget: "local"`; reload **resets** picks (client memory only) |
+| Public/private MUD join/create | **Requires FantasyPros account** |
+
+**Next:** One authenticated MUD session to capture live-room transport into `ng_onSocketEvent`. Until then keep types provisional; solo path can still plan around Vue `__debugStore.draftState.draftedPlayers`.
+
+**Still do not start 030B-1 code/types freeze.**
+
+---
+
 ## 2026-07-19 — RFSN-030A closed; RFSN-030B opened as planning
 
 **Decision:** Merge **RFSN-030A** discovery into recovery and **close** the ticket. Open **RFSN-030B** as implementation **planning only** — do not start broad connector coding until the split below is sequenced, and do not commit multiplayer architecture until socket evidence exists.
@@ -19,17 +39,17 @@ Product and architecture decisions with dates. Newest first.
 
 **Hard constraint from discovery:** Do **not** reuse the ESPN `mDraftDetail` poller against FantasyPros.
 
-**030B planning split (do not collapse into one unchecked build):**
+**030B planning split (evidence-first order):**
 
 | Slice | Goal | Code now? |
 | ----- | ---- | --------- |
-| **030B-1** | Provider adapter contract — ESPN / FP / future → `LockedPickInput` → `notifyLockedPick` | Spec / types only when started |
-| **030B-2** | FantasyPros observer prototype — content script on `draftwizard.fantasypros.com`, solo mock Vue/DOM, emit locked picks | After 030B-1 |
-| **030B-3** | Multiplayer / socket investigation — durable events? draftId / pick / player / team / time | Evidence before architecture choice |
+| **030B-3** | Multiplayer / socket evidence — strongest upstream event source | **Next / in progress** |
+| **030B-1** | Provider adapter contract → `LockedPickInput` | **After 030B-3** (types not frozen early) |
+| **030B-2** | FantasyPros observer prototype (solo / then MUD) | After contract shaped by evidence |
 
 **Product ownership:** FantasyPros Mock stays under **Draft → Mock Draft**, not RFSN Live Draft (RFSN-028).
 
-**Risks:** Vue internals may change (isolate adapter; prefer semantic hooks). Multiplayer source is **unknown** until 030B-3.
+**Risks:** Vue internals may change (isolate adapter; prefer semantic hooks). Multiplayer **live pick wire** still needs authenticated capture.
 
 ---
 

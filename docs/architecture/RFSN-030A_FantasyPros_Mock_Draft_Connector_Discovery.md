@@ -2,7 +2,7 @@
 
 **Status:** Complete — merged to `fix/rfsn-production-recovery` (`52df22f` / `a9aa407`)  
 **Date:** 2026-07-19  
-**Follow-on:** RFSN-030B (planning only: adapter contract → solo observer → socket evidence). Do not reuse ESPN poller.
+**Follow-on:** RFSN-030B (planning only; **030B-3 evidence before 030B-1 freeze**). Do not reuse ESPN poller. See `RFSN-030B-3_FantasyPros_Multiplayer_Socket_Evidence.md`.
 
 ---
 
