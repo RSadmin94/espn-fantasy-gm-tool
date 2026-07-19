@@ -32,6 +32,7 @@ describe("RfsnBroadcastPanel replay reset wiring", () => {
     expect(panel).toMatch(/active\s*=\s*false/);
     expect(panel).toContain("snapshotEnabled");
     expect(panel).not.toContain("refetchIntervalInBackground");
-    expect(warRoom).toContain("active={liveDraftActive}");
+    expect(warRoom).toContain("isRfsnWarRoomBroadcastActive");
+    expect(warRoom).toContain("preferLiveDraft");
   });
 });

@@ -33,6 +33,7 @@ import {
   formatLiveDraftValueVsMarket,
 } from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
+import { isRfsnWarRoomBroadcastActive } from "@/lib/rfsnWarRoomBroadcastActive";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
 import {
   LiveDraftControlPanel,
@@ -1454,7 +1455,10 @@ function LiveDraftEngine({
             <RfsnBroadcastPanel
               leagueId={leagueId}
               draftId={boothDraftId}
-              active={liveDraftActive}
+              active={isRfsnWarRoomBroadcastActive({
+                liveDraftActive,
+                preferLiveDraft,
+              })}
               sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${connectedLeagueLive ? "live" : "sim"}`}
               draftPaused={!running && !connectedLeagueLive}
               onBusyChange={setBroadcastBusy}
