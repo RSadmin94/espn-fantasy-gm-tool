@@ -1,6 +1,7 @@
 /**
- * Canonical `/rfsn/wire` — League Wire / newsroom chronological coverage.
- * Mounts the existing RFSN newsroom (same implementation as `/rfsn/news`).
+ * Legacy `/rfsn/wire` page — RFSN-027C redirects this route to Stories.
+ * Kept so the newsroom mount pattern remains available for reference/tests.
+ * The Wire feed engine (`LeagueWireNewsroom` / leagueNewsroom) still powers Stories + Home.
  */
 import { useMemo } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";

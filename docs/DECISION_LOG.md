@@ -4,7 +4,27 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
-## 2026-07-18 — RFSN-027 UX Consolidation Execution (no new audit)
+## 2026-07-18 — RFSN-027C RFSN Navigation Consolidation
+
+**Decision:** Consolidate RFSN primary navigation to **Live · Stories · Recaps**. Do not invent Wire-vs-Stories product differentiation or new content categories.
+
+**Before:** Wire, Breaking, Stories, Recaps, Analysts as competing sidebar choices.  
+**After:** Sidebar shows Live, Stories, Recaps under RFSN. Hub (`/rfsn`) remains the landing; Breaking/Analysts stay as deep-link pages; Wire redirects to Stories (engine preserved via `LeagueWireNewsroom`).
+
+**Ownership:**
+
+| Content | Home |
+| ------- | ---- |
+| Live commentary | RFSN Live |
+| Historical narratives | RFSN Stories |
+| Draft/game summaries | RFSN Recaps |
+| Raw feed | Internal engine only |
+| Rivalry profiles | Rivals |
+| Owner analysis | My GM / Owner Dossier |
+
+**Non-goals:** Backend changes; new routes; splitting engines; content redesign.
+
+---
 
 **Decision:** Next product work is **implementation against existing audits**, not another IA/UX discovery pass. Discovery cost was already paid (RFSN-019, RFSN-023, prior RFSN surface / Draft nav discussions).
 
@@ -17,7 +37,7 @@ Product and architecture decisions with dates. Newest first.
 | ----- | ----- | ------ |
 | **RFSN-027A** | War Room remaining consolidation | RFSN-019 follow-through |
 | **RFSN-027B** | My GM / Owner Dossier final polish | RFSN-023 follow-through |
-| **RFSN-027C** | RFSN surface cleanup (broadcast / stories / moments / recaps) | Prior RFSN hierarchy |
+| **RFSN-027C** | RFSN navigation consolidation (Live · Stories · Recaps) | Too many competing RFSN destinations |
 | **RFSN-027D** | Draft navigation terminology (Live vs Mock vs War Room vs History) | Known mental model |
 
 **027A ownership (Briefing = scan only):**
@@ -32,7 +52,7 @@ Product and architecture decisions with dates. Newest first.
 
 **027B lens distinction:** My GM = identity / improve (no scouting language). Owner Dossier = beat this manager (keep scouting).
 
-**027C hierarchy:** Live Broadcast → League Stories → Rivalry Moments → Draft Recaps. Avoid duplicate stats / owner reports / history.
+**027C hierarchy (nav consolidation — corrected):** One RFSN entry with **Live · Stories · Recaps**. Wire / Breaking / Analysts / Hub are not competing primary destinations. Wire remains the internal feed engine powering Stories/Home. No new content categories or routes.
 
 **027D mental model:** Live Draft (real) · Mock Draft (practice) · War Room (strategy) · Draft History (past). No “Live” on mock/sim surfaces.
 

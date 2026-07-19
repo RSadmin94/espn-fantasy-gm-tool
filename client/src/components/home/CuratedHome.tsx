@@ -35,7 +35,7 @@ const JUMP_LINKS: { label: string; href: string; hint: string }[] = [
   { label: "My Team", href: "/my-team/roster", hint: "Roster" },
   { label: "Matchup", href: "/my-team/matchup", hint: "This week" },
   { label: "Rivalries", href: "/rivals/rivalries", hint: "Rivals" },
-  { label: "RFSN", href: "/rfsn/wire", hint: "Wire" },
+  { label: "RFSN", href: "/rfsn", hint: "Stories" },
   { label: "Live Draft", href: "/draft/live", hint: "Draft" },
   { label: "Standings", href: "/league/standings", hint: "League" },
 ];

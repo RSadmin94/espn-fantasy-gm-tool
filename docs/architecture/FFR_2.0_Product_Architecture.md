@@ -56,11 +56,11 @@ Utility (header, not sidebar): Settings, Connected Leagues, Sync Data, League Se
 
 ### RFSN
 
-- Wire
-- Breaking News
+- Live
 - Stories
 - Recaps
-- Analysts
+
+*(Wire / Breaking / Analysts are not primary nav — RFSN-027C. Hub lands at `/rfsn`.)*
 
 ### DRAFT
 

@@ -132,10 +132,10 @@ export function RfsnHome() {
                   </p>
                 </div>
                 <Link
-                  to={RFSN_ROUTES.wire}
+                  to={RFSN_ROUTES.stories}
                   className="inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
                 >
-                  Open Wire <ArrowRight className="h-3.5 w-3.5" />
+                  Open Stories <ArrowRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
             )}
@@ -220,16 +220,16 @@ export function RfsnHome() {
                 </p>
               )}
               <Link
-                to={RFSN_ROUTES.wire}
+                to={RFSN_ROUTES.recaps}
                 className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-lime-400 hover:text-lime-300"
               >
-                Open Wire <ArrowRight className="h-3.5 w-3.5" />
+                Open Recaps <ArrowRight className="h-3.5 w-3.5" />
               </Link>
               <Link
-                to={RFSN_ROUTES.recaps}
+                to={RFSN_ROUTES.stories}
                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-300"
               >
-                Weekly recaps <ArrowRight className="h-3.5 w-3.5" />
+                League stories <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </section>
 
@@ -290,8 +290,8 @@ export function RfsnHome() {
                 </>
               ) : (
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Written Wire, Stories, and Recaps are available now. Live booth access appears when
-                  draft broadcast is enabled for this league.
+                  Stories and Recaps are available now. Live booth access appears when draft broadcast
+                  is enabled for this league.
                 </p>
               )}
               <Link

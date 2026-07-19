@@ -238,7 +238,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     showInSidebar: true,
   },
 
-  // ── RFSN ──────────────────────────────────────────────────────────────
+  // ── RFSN (027C: Live · Stories · Recaps — Wire/Breaking/Analysts not primary nav) ──
   {
     id: "rfsn-hub",
     label: "RFSN",
@@ -250,21 +250,11 @@ export const V2_DESTINATIONS: V2Destination[] = [
     showInSidebar: false,
   },
   {
-    id: "rfsn-wire",
-    label: "Wire",
+    id: "rfsn-live",
+    label: "Live",
     navCategory: "rfsn",
-    route: "/rfsn/wire",
-    icon: Newspaper,
-    requiredPlan: "free",
-    kind: "live",
-    showInSidebar: true,
-  },
-  {
-    id: "rfsn-breaking",
-    label: "Breaking News",
-    navCategory: "rfsn",
-    route: "/rfsn/breaking",
-    icon: Zap,
+    route: "/rfsn/live",
+    icon: Radio,
     requiredPlan: "free",
     kind: "live",
     showInSidebar: true,
@@ -289,6 +279,27 @@ export const V2_DESTINATIONS: V2Destination[] = [
     kind: "live",
     showInSidebar: true,
   },
+  // Kept for deep links / redirects — not sidebar destinations (RFSN-027C)
+  {
+    id: "rfsn-wire",
+    label: "Wire",
+    navCategory: "rfsn",
+    route: "/rfsn/wire",
+    icon: Newspaper,
+    requiredPlan: "free",
+    kind: "live",
+    showInSidebar: false,
+  },
+  {
+    id: "rfsn-breaking",
+    label: "Breaking News",
+    navCategory: "rfsn",
+    route: "/rfsn/breaking",
+    icon: Zap,
+    requiredPlan: "free",
+    kind: "live",
+    showInSidebar: false,
+  },
   {
     id: "rfsn-analysts",
     label: "Analysts",
@@ -297,7 +308,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
     icon: Mic2,
     requiredPlan: "free",
     kind: "live",
-    showInSidebar: true,
+    showInSidebar: false,
   },
 
   // ── Draft ─────────────────────────────────────────────────────────────

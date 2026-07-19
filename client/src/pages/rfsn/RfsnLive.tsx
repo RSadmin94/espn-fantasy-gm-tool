@@ -42,7 +42,7 @@ function RfsnLiveDisabled() {
         <Radio className="mx-auto h-10 w-10 text-[#8b97a8] mb-4" />
         <h2 className="text-lg font-bold text-[#f3f8ff]">RFSN Live is not enabled</h2>
         <p className="mt-2 text-sm text-[#8b97a8]">
-          Live draft broadcast is disabled in this environment. RFSN Home and News remain available.
+          Live draft broadcast is disabled in this environment. RFSN Stories and Recaps remain available.
         </p>
         <Link
           to={RFSN_ROUTES.home}
