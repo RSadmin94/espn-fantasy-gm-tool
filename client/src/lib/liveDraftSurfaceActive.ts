@@ -22,7 +22,10 @@ export function isConnectedLeagueLiveActive(args: {
   liveDraftActive: boolean;
   preferLiveDraft: boolean;
   source: string;
+  /** RFSN-030C — FantasyPros simulation must not arm ESPN. */
+  fantasyProsSessionActive?: boolean;
 }): boolean {
+  if (args.fantasyProsSessionActive) return false;
   return (
     isLiveDraftSurfaceActive({
       liveDraftActive: args.liveDraftActive,

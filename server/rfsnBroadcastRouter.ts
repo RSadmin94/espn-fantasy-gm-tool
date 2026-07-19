@@ -100,6 +100,13 @@ export const rfsnBroadcastRouter = router({
         teamCount: z.number().int().min(2).max(32).optional(),
         /** Test-only — forces deterministic provider (no API calls). */
         useDeterministicProvider: z.boolean().optional(),
+        /** RFSN-030C optional provider metadata (ignored by moment builder). */
+        provider: z.string().max(32).optional(),
+        providerPlayerId: z.string().max(64).optional(),
+        providerDraftId: z.string().max(96).optional(),
+        source: z.string().max(32).optional(),
+        observedAt: z.string().max(40).optional(),
+        identityConfidence: z.string().max(32).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

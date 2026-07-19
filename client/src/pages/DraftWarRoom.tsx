@@ -40,6 +40,10 @@ import {
   LiveDraftControlPanel,
   type LiveDraftSource,
 } from "@/components/draft/LiveDraftControlPanel";
+import { FantasyProsMockControlPanel } from "@/components/draft/FantasyProsMockControlPanel";
+import { useFantasyProsMockDraftMonitor } from "@/hooks/useFantasyProsMockDraftMonitor";
+import { buildFantasyProsSeatMapping } from "@/lib/fantasyProsSeatMapping";
+import { postFantasyProsMockArm, postFantasyProsMockDisarm } from "@/lib/fantasyProsMockBridge";
 import { LiveDraftRecentPicks } from "@/components/draft/LiveDraftRecentPicks";
 import { DraftNightShow } from "@/components/draft/DraftNightShow";
 import type { DraftNightShowPayload } from "@/lib/draftNightShowTypes";
@@ -804,15 +808,33 @@ function LiveDraftEngine({
   const posDefaultApplied = useRef(false);
   const [liveDraftActive, setLiveDraftActive] = useState(preferLiveDraft);
   const [liveDraftSource, setLiveDraftSource] = useState<LiveDraftSource>("connected-league");
+  /** RFSN-030C — FantasyPros solo mock connector (Mock surface only). */
+  const [fpMockActive, setFpMockActive] = useState(false);
+  const [fpUserOwnerPos, setFpUserOwnerPos] = useState(0);
+  const [fpVoiceEnabled, setFpVoiceEnabled] = useState(true);
+  const [fpCommentaryEnabled, setFpCommentaryEnabled] = useState(true);
+  const [fpSessionEpoch, setFpSessionEpoch] = useState(0);
   const connectedLeagueLive = isConnectedLeagueLiveActive({
     liveDraftActive,
     preferLiveDraft,
     source: liveDraftSource,
+    fantasyProsSessionActive: fpMockActive && !preferLiveDraft,
   });
 
   useEffect(() => {
-    if (preferLiveDraft) setLiveDraftActive(true);
+    if (preferLiveDraft) {
+      setLiveDraftActive(true);
+      setFpMockActive(false);
+    }
   }, [preferLiveDraft]);
+
+  // Leaving Mock surface must tear down FantasyPros connector.
+  useEffect(() => {
+    if (preferLiveDraft && fpMockActive) {
+      setFpMockActive(false);
+      void postFantasyProsMockDisarm().catch(() => {});
+    }
+  }, [preferLiveDraft, fpMockActive]);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Pace between AI auto-picks. Default "Broadcast" gives the RFSN booth time to
   // generate + play a line before the next pick; Brisk/Turbo for quick sims.
@@ -949,7 +971,7 @@ function LiveDraftEngine({
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
   useRfsnLiveLockedPickNotify({
-    enabled: Boolean(leagueId) && !connectedLeagueLive,
+    enabled: Boolean(leagueId) && !connectedLeagueLive && !(fpMockActive && !preferLiveDraft),
     leagueId,
     draftId,
     schedule: schedule.map((s: any) => ({
@@ -978,6 +1000,34 @@ function LiveDraftEngine({
     return m;
   }, [teams]);
 
+  const fpSeatMapping = useMemo(() => {
+    const userTeamId = myTeamId ?? teams[0]?.teamId ?? 1;
+    return buildFantasyProsSeatMapping({
+      teams: teams.map((t: any) => ({
+        teamId: t.teamId,
+        ownerName: t.ownerName,
+        teamName: t.teamName,
+        draftSlot: t.draftSlot ?? t.draftPosition ?? null,
+      })),
+      userOwnerPos: fpUserOwnerPos,
+      userTeamId,
+      teamCount: teams.length || 12,
+    });
+  }, [teams, myTeamId, fpUserOwnerPos]);
+
+  const fpMock = useFantasyProsMockDraftMonitor({
+    enabled: Boolean(leagueId) && fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
+    leagueId,
+    season,
+    teamCount: teams.length || 12,
+    seatNameByPos: fpSeatMapping.seatNameByPos,
+    seatTeamIdByPos: fpSeatMapping.seatTeamIdByPos,
+    draftPace: draftPaceFromTimerMs(paceMs),
+    voiceEnabled: fpVoiceEnabled,
+    commentaryEnabled: fpCommentaryEnabled,
+    armExtension: true,
+  });
+
   const leagueAdapter = useConnectedLeagueLiveMonitor({
     enabled: Boolean(leagueId) && connectedLeagueLive,
     leagueId,
@@ -986,9 +1036,12 @@ function LiveDraftEngine({
     ownerNameByTeamId,
   });
 
-  const boothDraftId = connectedLeagueLive && leagueId
-    ? buildConnectedLeagueDraftId(leagueId, season)
-    : draftId;
+  const boothDraftId =
+    fpMockActive && !preferLiveDraft && fpMock.draftId
+      ? fpMock.draftId
+      : connectedLeagueLive && leagueId
+        ? buildConnectedLeagueDraftId(leagueId, season)
+        : draftId;
 
   const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
 
@@ -1267,6 +1320,43 @@ function LiveDraftEngine({
           onSourceChange={setLiveDraftSource}
         />
       )}
+
+      {!preferLiveDraft && (
+        <FantasyProsMockControlPanel
+          active={fpMockActive}
+          status={fpMock}
+          leagueLabel={String(leagueId ?? "League")}
+          season={season}
+          userOwnerPos={fpUserOwnerPos}
+          teamCount={teams.length || 12}
+          voiceEnabled={fpVoiceEnabled}
+          commentaryEnabled={fpCommentaryEnabled}
+          onStart={() => {
+            setFpMockActive(true);
+            setLiveDraftActive(false);
+          }}
+          onStop={() => {
+            setFpMockActive(false);
+            void postFantasyProsMockDisarm().catch(() => {});
+          }}
+          onNewDraft={() => {
+            setFpSessionEpoch((n) => n + 1);
+            if (leagueId && fpMock.draftId) {
+              void resetSession
+                .mutateAsync({ leagueId: String(leagueId), draftId: fpMock.draftId })
+                .catch(() => {});
+            }
+            void postFantasyProsMockArm({
+              leagueId: String(leagueId ?? ""),
+              season,
+              forceNewSession: true,
+            }).catch(() => {});
+          }}
+          onUserOwnerPosChange={setFpUserOwnerPos}
+          onVoiceChange={setFpVoiceEnabled}
+          onCommentaryChange={setFpCommentaryEnabled}
+        />
+      )}
       {!done && (
         <RfsnPickClock
           state={clockState}
@@ -1463,9 +1553,14 @@ function LiveDraftEngine({
               active={isRfsnWarRoomBroadcastActive({
                 liveDraftActive,
                 preferLiveDraft,
+                fantasyProsSessionActive: fpMockActive && !preferLiveDraft && fpCommentaryEnabled,
               })}
-              sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${connectedLeagueLive ? "live" : "sim"}`}
-              draftPaused={!running && !connectedLeagueLive}
+              sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${fpSessionEpoch}:${connectedLeagueLive ? "live" : fpMockActive ? "fp" : "sim"}`}
+              draftPaused={
+                fpMockActive && !preferLiveDraft
+                  ? !fpVoiceEnabled
+                  : !running && !connectedLeagueLive
+              }
               onBusyChange={setBroadcastBusy}
             />
           </aside>
