@@ -42,6 +42,8 @@ export type NormalizedDraftPick = {
   isLiveSelection: boolean;
   /** Proven keeper when source exposes it; false = not keeper; undefined = unknown */
   keeperStatusKnown: boolean;
+  /** Player headshot image URL when the source page provides one (e.g. ESPN CDN). */
+  headshotUrl?: string;
   sourceSequence?: number;
   sourceTimestamp?: string;
 };
@@ -80,7 +82,7 @@ export type MonitorDiagnostics = {
   status: DraftStatus | "ERROR" | "LOADING";
 };
 
-export const MONITOR_VERSION = "1.0.0-standalone";
+export const MONITOR_VERSION = "1.2.0-standalone";
 
 export function emptySnapshot(
   source: DraftSource,

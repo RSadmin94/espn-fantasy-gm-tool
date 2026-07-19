@@ -21,6 +21,8 @@ import { resolveCurrentOwner } from "../normalize/pickOwnership";
 
 export type EspnDomPickRecord = {
   playerName: string;
+  playerId?: string;
+  headshotUrl?: string;
   nflTeam?: string;
   position?: string;
   round: number;
@@ -70,6 +72,14 @@ export function scorePickHistoryColumn(el: Element): number {
 
 /** Find Pick History among .draft-columns children (or fallback containers). */
 export function findEspnPickHistoryRoot(doc: Document): Element | null {
+  // Live-DOM proven (2026-07-19 samples, leagues 1691310982 & 149274835):
+  // the Pick History tab panel is DIV.pick-history, containing one
+  // .pick-history-table per round rendered as a FixedDataTable grid.
+  const direct =
+    doc.querySelector(".pick-history") ||
+    doc.querySelector("[class*='pick-history']");
+  if (direct) return direct;
+
   const columnsRoot =
     doc.querySelector(".draft-columns") ||
     doc.querySelector("[class*='draft-columns']") ||
@@ -266,6 +276,116 @@ export function extractEspnPickRecords(root: Element): EspnDomPickRecord[] {
   return records;
 }
 
+/**
+ * Structured extractor for ESPN's real Pick History markup
+ * (live-DOM proven 2026-07-19): .pick-history > .pick-history-tables >
+ * .pick-history-table (one per round, .caption = "Round N") containing a
+ * FixedDataTable grid — rows are [role="row"], cells [role="gridcell"] with
+ * .public_fixedDataTableCell_cellContent. Data rows carry .player-column with
+ * .playerinfo__playername / .playerinfo__playerteam / .positionPill; the
+ * fantasy TEAM cell is plain cellContent text.
+ * Returns [] when the structured markup is absent (caller falls back to the
+ * legacy leaf-text extractor).
+ */
+export function extractEspnGridRecords(root: Element): EspnDomPickRecord[] {
+  const matched = [
+    ...root.querySelectorAll(".pick-history-table, [class*='pick-history-table']"),
+  ];
+  // Drop container matches (e.g. the plural ".pick-history-tables" wrapper)
+  // that contain other matched tables — keep leaf round-tables only.
+  const tables = matched.filter((t) => !matched.some((o) => o !== t && t.contains(o)));
+  if (tables.length === 0) return [];
+  const records: EspnDomPickRecord[] = [];
+  const seen = new Set<string>();
+  let seq = 0;
+
+  for (const table of Array.from(tables)) {
+    const captionText = (
+      table.querySelector(".caption, [class*='caption']")?.textContent || ""
+    ).trim();
+    const roundM = captionText.match(/round\s*(\d+)/i);
+    if (!roundM) continue;
+    const round = Math.max(1, Math.floor(Number(roundM[1])));
+
+    const rows = table.querySelectorAll("[role='row']");
+    for (const row of Array.from(rows)) {
+      const playerCol = row.querySelector(".player-column, [class*='player-column']");
+      if (!playerCol) continue; // header row / spacer
+
+      const playerName = (
+        playerCol.querySelector(".playerinfo__playername")?.textContent || ""
+      ).replace(/\s+/g, " ").trim();
+      if (!playerName) continue;
+
+      const nflTeamRaw = (
+        playerCol.querySelector(".playerinfo__playerteam")?.textContent || ""
+      ).trim().toUpperCase();
+      const posRaw = (
+        playerCol.querySelector(".positionPill, [class*='positionPill'], .playerinfo__playerpos")
+          ?.textContent || ""
+      ).trim();
+
+      // ESPN headshot + player id straight from the row's own image
+      // (…/headshots/nfl/players/full/{id}.png behind the combiner).
+      let headshotUrl: string | undefined;
+      let espnPlayerId: string | undefined;
+      for (const img of Array.from(playerCol.querySelectorAll("img"))) {
+        const src = img.getAttribute("src") || "";
+        const m = src.match(/headshots\/nfl\/players\/full\/(\d+)\.png/i);
+        if (m) {
+          espnPlayerId = m[1];
+          headshotUrl = src;
+          break;
+        }
+      }
+
+      // Cells: ESPN's PICK column is the OVERALL pick number (continues
+      // across rounds — live-DOM proven: Round 2 starts at 15). Fantasy team
+      // = first non-numeric cellContent outside .player-column.
+      let overallPick: number | undefined;
+      let fantasyTeamName = "";
+      const cells = row.querySelectorAll(".public_fixedDataTableCell_cellContent");
+      for (const cell of Array.from(cells)) {
+        if (playerCol.contains(cell) || cell.contains(playerCol)) continue;
+        const t = (cell.textContent || "").replace(/\s+/g, " ").trim();
+        if (!t) continue;
+        if (/^\d{1,3}$/.test(t)) {
+          if (overallPick == null) overallPick = Math.floor(Number(t));
+          continue;
+        }
+        if (/^[\d.,-]+$/.test(t)) continue; // points columns
+        if (!fantasyTeamName) fantasyTeamName = t;
+      }
+      if (!fantasyTeamName) fantasyTeamName = "Unknown Team";
+
+      const rowText = (row.textContent || "").replace(/\s+/g, " ").trim();
+      const keeperStatusKnown = /keeper/i.test(rowText);
+      const isKeeper = keeperStatusKnown && /\bkeeper\b/i.test(rowText);
+
+      const dedupe = `${round}|${overallPick ?? ""}|${playerName}|${fantasyTeamName}`;
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+
+      records.push({
+        playerName,
+        playerId: espnPlayerId,
+        headshotUrl,
+        nflTeam: /^[A-Z]{2,4}$/.test(nflTeamRaw) ? nflTeamRaw : undefined,
+        position: posRaw ? normalizeEspnPos(posRaw) : undefined,
+        round,
+        pickInRound: undefined, // derived later from overall + team count
+        overallPick,
+        fantasyTeamName,
+        isKeeper,
+        keeperStatusKnown,
+        rawText: rowText.slice(0, 160),
+        sourceSequence: seq++,
+      });
+    }
+  }
+  return records;
+}
+
 export function buildEspnFingerprint(args: {
   leagueId?: string | null;
   seasonId?: string | null;
@@ -340,24 +460,57 @@ export function observeEspnFromDocument(
     return { ok: false, error: "ESPN Pick History not found", pickHistoryFound: false };
   }
 
-  const records = extractEspnPickRecords(pickRoot);
-  const teamNames = unique(
-    records.map((r) => r.fantasyTeamName).filter((n) => n && n !== "Unknown Team"),
-  );
-  let teams: NormalizedDraftTeam[] = teamNames.map((name, i) => ({
-    teamId: `espn-team:${slug(name)}`,
-    teamName: name,
-    draftSlot: i + 1,
-  }));
+  // Structured FixedDataTable grid first (live-DOM proven); legacy leaf parse as fallback.
+  const gridRecords = extractEspnGridRecords(pickRoot);
+  const usingGrid = gridRecords.length > 0;
+  const records = usingGrid ? gridRecords : extractEspnPickRecords(pickRoot);
 
-  // Prefer page team list order when available
-  const pageTeams = detectEspnTeamsFromPage(doc);
+  let teams: NormalizedDraftTeam[];
+  if (usingGrid) {
+    // Round 1 pick order IS the draft slot order — authoritative team list.
+    const r1 = records
+      .filter((r) => r.round === 1 && r.fantasyTeamName !== "Unknown Team")
+      .sort((a, b) => (a.overallPick ?? 999) - (b.overallPick ?? 999));
+    const ordered = unique(r1.map((r) => r.fantasyTeamName));
+    // Include any teams that only appear in later rounds (traded away R1 pick).
+    for (const n of unique(records.map((r) => r.fantasyTeamName))) {
+      if (n !== "Unknown Team" && !ordered.some((o) => norm(o) === norm(n))) ordered.push(n);
+    }
+    teams = ordered.map((name, i) => ({
+      teamId: `espn-team:${slug(name)}`,
+      teamName: name,
+      draftSlot: i + 1,
+    }));
+    // ESPN's PICK column is overall; derive pick-in-round now that team count is known.
+    const n = teams.length;
+    if (n > 0) {
+      for (const rec of records) {
+        if (rec.pickInRound == null && rec.overallPick != null) {
+          rec.pickInRound = rec.overallPick - (rec.round - 1) * n;
+          if (rec.pickInRound < 1 || rec.pickInRound > n) rec.pickInRound = undefined;
+        }
+      }
+    }
+  } else {
+    const teamNames = unique(
+      records.map((r) => r.fantasyTeamName).filter((n) => n && n !== "Unknown Team"),
+    );
+    teams = teamNames.map((name, i) => ({
+      teamId: `espn-team:${slug(name)}`,
+      teamName: name,
+      draftSlot: i + 1,
+    }));
+  }
+
+  // Prefer page team list order only on the legacy path (page detection is
+  // heuristic and produced garbage names on the live DOM; grid teams win).
+  const pageTeams = usingGrid ? [] : detectEspnTeamsFromPage(doc);
   if (pageTeams.length >= teams.length && pageTeams.length > 0) {
     teams = pageTeams;
   } else if (pageTeams.length > 0) {
     // Merge names
     const byNorm = new Map(pageTeams.map((t) => [norm(t.teamName), t]));
-    teams = teamNames.map((name, i) => {
+    teams = teams.map(({ teamName: name }, i) => {
       const hit = byNorm.get(norm(name));
       return (
         hit || {
@@ -420,6 +573,8 @@ export function observeEspnFromDocument(
       currentTeamId: owner.currentTeamId,
       currentTeamName: owner.currentTeamName,
       playerName: rec.playerName,
+      playerId: rec.playerId,
+      headshotUrl: rec.headshotUrl,
       nflTeam: rec.nflTeam,
       position: rec.position,
       isKeeper: rec.isKeeper,
@@ -431,9 +586,15 @@ export function observeEspnFromDocument(
     });
   }
 
-  // Detect traded picks: same round with team owning pickInRound that doesn't match snake slot
-  // Only when we have draftSlot and pickInRound — and team order equals draft order.
-  annotateTradesFromSnakeMismatch(picks, teams);
+  // Detect traded picks: same round with team owning pickInRound that doesn't match snake slot.
+  // MIRROR DOCTRINE: this is an INFERENCE, not evidence. On the proven grid path we
+  // observed (live 2026-07-19) that ESPN round 1 can legitimately contain the same
+  // team twice (traded/keeper slots), which breaks slot inference and mislabels
+  // dozens of picks. So: never infer trades from the grid — placement is already by
+  // current owner, and trade badges wait for explicit source evidence (M2).
+  if (!usingGrid) {
+    annotateTradesFromSnakeMismatch(picks, teams);
+  }
 
   const bodyText = pageText(doc);
   let status: DraftStatus = "UNKNOWN";

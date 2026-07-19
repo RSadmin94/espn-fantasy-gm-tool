@@ -112,6 +112,16 @@ function resolveRounds(snapshot: NormalizedDraftSnapshot): number[] {
 
 function renderCard(doc: Document, p: import("../normalize/draftTypes").NormalizedDraftPick): HTMLElement {
   const card = el(doc, "div", `dbm-card${p.isKeeper ? " keeper" : ""}${p.isTradedPick ? " trade" : ""}`);
+  const row = el(doc, "div", "dbm-card-row");
+  if (p.headshotUrl) {
+    const img = doc.createElement("img");
+    img.className = "dbm-headshot";
+    img.src = p.headshotUrl;
+    img.alt = "";
+    img.loading = "lazy";
+    row.appendChild(img);
+  }
+  const body = el(doc, "div", "dbm-card-body");
   const top = el(doc, "div", "dbm-card-top");
   if (p.overallPick != null) {
     const o = el(doc, "span", "dbm-overall");
@@ -121,11 +131,13 @@ function renderCard(doc: Document, p: import("../normalize/draftTypes").Normaliz
   const name = el(doc, "span", "dbm-player");
   name.textContent = p.playerName;
   top.appendChild(name);
-  card.appendChild(top);
+  body.appendChild(top);
 
   const sub = el(doc, "div", "dbm-sub");
   sub.textContent = [p.nflTeam, p.position].filter(Boolean).join(" · ");
-  card.appendChild(sub);
+  body.appendChild(sub);
+  row.appendChild(body);
+  card.appendChild(row);
 
   if (p.isKeeper || p.isTradedPick) {
     const tags = el(doc, "div", "dbm-tags");

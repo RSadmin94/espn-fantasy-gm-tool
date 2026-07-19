@@ -109,7 +109,7 @@ export class MonitorController {
         const popup = this.win.open(
           "",
           "rfsn-draft-board-monitor",
-          "width=1280,height=800,menubar=no,toolbar=no,location=no,status=no",
+          "width=1720,height=920,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes",
         );
         if (popup && popup.document) {
           this.displayWin = popup;
