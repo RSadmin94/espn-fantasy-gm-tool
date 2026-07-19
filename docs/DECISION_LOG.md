@@ -6,11 +6,11 @@ Product and architecture decisions with dates. Newest first.
 
 ## 2026-07-19 — RFSN-031 Durable offense ADP (last-good)
 
-**Decision:** Persist last-good ESPN **offense** ADP in `fantasy_data_cache` (`espn:offense-adp:{season}`) write-through from `getEspnPlayerInfoMap`, obeying `shouldPersistEspnOffenseCache`. On cold memory / empty ESPN offense feed, seed and serve durable last-good instead of a synthetic-~170 offense board (Nick Bellore-on-top). Bounded retries (3) before fallback. No pool-ordering or UI changes.
+**Decision:** Persist last-good ESPN **offense** ADP in `fantasy_data_cache` (`espn:offense-adp:{season}`) write-through from `getEspnPlayerInfoMap`, obeying `shouldPersistEspnOffenseCache`. On cold memory / empty or **undrafted-sentinel** ESPN offense feeds (ADP ≈ 170 with zero early-round elites), seed and serve durable last-good — or **null ADPs** — instead of ranking Chase/Allen/etc. by sentinel ~170. Soft-include uses `adp: null`. UI: **ADP unavailable** + no vs-market when missing. Bounded retries (3). No grading/commentary/extension changes.
 
-**Does not:** ship static ADP, special-case Bellore, or weaken the empty/DP-only cache guard.
+**Does not:** ship static ADP, special-case Bellore, or persist empty/sentinel feeds.
 
-**Branch:** `fix/rfsn-031-durable-offense-adp`
+**Branch:** `fix/rfsn-031-durable-offense-adp` (`8404fac`)
 
 ---
 
