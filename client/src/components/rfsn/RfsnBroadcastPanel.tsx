@@ -39,6 +39,11 @@ const PANEL_POLL_MS = 2000;
 export type RfsnBroadcastPanelProps = {
   leagueId?: string | null;
   draftId: string;
+  /**
+   * When false, skip getLiveSnapshot polling (Mock Draft / Live Draft off).
+   * Required so the shared War Room mount cannot leak polls after leaving Live Draft.
+   */
+  active?: boolean;
   /** Bumps when the draft resets or league/schedule identity changes — clears stale replay clips. */
   sessionResetKey?: string | number;
   /** War Room Pause — stops analyst speech and booth equalizer immediately. */
@@ -52,6 +57,7 @@ export type RfsnBroadcastPanelProps = {
 export function RfsnBroadcastPanel({
   leagueId,
   draftId,
+  active = false,
   sessionResetKey,
   draftPaused = false,
   layout = "desktop",
@@ -63,10 +69,14 @@ export function RfsnBroadcastPanel({
   const accessQ = _trpc.rfsnBroadcast.getAccess.useQuery(undefined, { staleTime: 60_000 });
   const ttsAvailable = Boolean(accessQ.data?.ttsEnabled);
   const enabled = Boolean(accessQ.data?.canAccess);
+  const snapshotEnabled = Boolean(active && leagueId && enabled);
 
   const snapshotQ = _trpc.rfsnBroadcast.getLiveSnapshot.useQuery(
-    leagueId && enabled ? { leagueId, draftId } : skipToken,
-    { refetchInterval: PANEL_POLL_MS, refetchIntervalInBackground: true },
+    snapshotEnabled ? { leagueId: leagueId as string, draftId } : skipToken,
+    {
+      enabled: snapshotEnabled,
+      refetchInterval: snapshotEnabled ? PANEL_POLL_MS : false,
+    },
   );
 
   const payload = snapshotQ.data as RfsnLivePublicPayload | undefined;

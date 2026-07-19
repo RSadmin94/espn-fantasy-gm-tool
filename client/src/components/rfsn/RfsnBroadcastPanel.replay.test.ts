@@ -24,7 +24,14 @@ describe("RfsnBroadcastPanel replay reset wiring", () => {
   });
 
   it("passes a composite session reset key from Live Draft reset and schedule identity", () => {
-    expect(warRoom).toContain("sessionResetKey={`${draftId}:${scheduleSig}:${resetCounter}`}");
+    expect(warRoom).toContain("sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}");
     expect(warRoom).toContain("setResetCounter((n) => n + 1)");
+  });
+
+  it("gates booth snapshot polling on Live Draft active", () => {
+    expect(panel).toMatch(/active\s*=\s*false/);
+    expect(panel).toContain("snapshotEnabled");
+    expect(panel).not.toContain("refetchIntervalInBackground");
+    expect(warRoom).toContain("active={liveDraftActive}");
   });
 });

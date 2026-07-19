@@ -1454,6 +1454,7 @@ function LiveDraftEngine({
             <RfsnBroadcastPanel
               leagueId={leagueId}
               draftId={boothDraftId}
+              active={liveDraftActive}
               sessionResetKey={`${boothDraftId}:${scheduleSig}:${resetCounter}:${connectedLeagueLive ? "live" : "sim"}`}
               draftPaused={!running && !connectedLeagueLive}
               onBusyChange={setBroadcastBusy}

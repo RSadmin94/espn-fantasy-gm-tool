@@ -235,7 +235,7 @@ async function runOnce(run: number): Promise<RunResult> {
   document.body.appendChild(container);
   const root = createRoot(container);
   const render = () => act(() => root.render(createElement(RfsnBroadcastPanel, {
-    leagueId: "L-" + run, draftId: "D-" + run,
+    leagueId: "L-" + run, draftId: "D-" + run, active: true,
   } as any)));
 
   try {
