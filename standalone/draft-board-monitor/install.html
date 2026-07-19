@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Draft Board Monitor — Install</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; background: #0f1419; color: #e8eef5; line-height: 1.45; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; }
+    .sub { color: #8b9aab; margin-bottom: 28px; }
+    ol { padding-left: 1.2rem; }
+    li { margin: 10px 0; }
+    code, pre { background: #1a222c; border: 1px solid #2a3544; border-radius: 6px; }
+    code { padding: 2px 6px; font-size: 13px; }
+    pre { padding: 12px; overflow: auto; font-size: 12px; }
+    .warn { border: 1px solid #854d0e; background: #422006; color: #fde68a; padding: 12px 14px; border-radius: 6px; margin: 16px 0; }
+    .ok { border: 1px solid #166534; background: #052e16; color: #bbf7d0; padding: 12px 14px; border-radius: 6px; margin: 16px 0; }
+    a { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Draft Board Monitor</h1>
+    <p class="sub">Standalone dual-source board for FantasyPros Mock and ESPN Draft Room. Does not connect to Fantasy Football Rivals.</p>
+
+    <div class="ok">
+      Build first: <code>node standalone/draft-board-monitor/scripts/build.mjs</code>
+      then open this page from the repo (or serve the <code>standalone/draft-board-monitor</code> folder).
+    </div>
+
+    <h2>Install / launch</h2>
+    <ol>
+      <li>Run the build script so <code>dist/console-paste.js</code> exists.</li>
+      <li>Open your live draft tab:
+        <ul>
+          <li>FantasyPros: Mock Draft Simulator → Live</li>
+          <li>ESPN: existing authenticated draft room (do not open a second draft)</li>
+        </ul>
+      </li>
+      <li>Open DevTools → Console on that draft tab.</li>
+      <li>Paste the contents of <code>dist/console-paste.js</code> and press Enter.</li>
+      <li>Allow the popup if prompted — the board opens in a blank same-origin window.</li>
+    </ol>
+
+    <div class="warn">
+      ESPN: the monitor only reads the page DOM (Pick History). It never opens another ESPN draft connection, never clicks draft controls, and never talks to the Rivals backend.
+    </div>
+
+    <h2>Bookmarklet (optional)</h2>
+    <p>
+      Large bundles often exceed bookmarklet size limits. Prefer console paste.
+      If you still want a bookmark, drag a link that loads a tiny loader you host, or paste from
+      <code>dist/bookmarklet.txt</code> after build (may be truncated).
+    </p>
+
+    <h2>Manual validation</h2>
+    <p>See <code>MANUAL_VALIDATION.md</code> in this folder. Do not mark PASS until both FantasyPros and ESPN live rooms are exercised.</p>
+  </main>
+</body>
+</html>

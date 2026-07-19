@@ -19,6 +19,11 @@ export default defineConfig({
       "server/**/*.spec.ts",
       "client/src/**/*.test.ts",
       "client/src/**/*.test.tsx",
+      "shared/**/*.test.ts",
+      "standalone/**/*.test.ts",
+      "chrome-extension/**/*.test.js",
+      "GM-War-Room-Extension-v1.10.0/**/*.test.js",
+      "GM-War-Room-Extension-v1.11.0/**/*.test.js",
     ],
     environmentMatchGlobs: [
       ["client/src/**/*.test.tsx", "jsdom"],
