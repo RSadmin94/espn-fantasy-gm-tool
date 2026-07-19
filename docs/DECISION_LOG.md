@@ -4,6 +4,35 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-19 — RFSN-030A closed; RFSN-030B opened as planning
+
+**Decision:** Merge **RFSN-030A** discovery into recovery and **close** the ticket. Open **RFSN-030B** as implementation **planning only** — do not start broad connector coding until the split below is sequenced, and do not commit multiplayer architecture until socket evidence exists.
+
+**030A closed:**
+
+| Field | Value |
+| ----- | ----- |
+| Status | Complete |
+| Merge | `52df22f` on `fix/rfsn-production-recovery` |
+| Doc commit | `a9aa407` |
+| Authority | `docs/architecture/RFSN-030A_FantasyPros_Mock_Draft_Connector_Discovery.md` |
+
+**Hard constraint from discovery:** Do **not** reuse the ESPN `mDraftDetail` poller against FantasyPros.
+
+**030B planning split (do not collapse into one unchecked build):**
+
+| Slice | Goal | Code now? |
+| ----- | ---- | --------- |
+| **030B-1** | Provider adapter contract — ESPN / FP / future → `LockedPickInput` → `notifyLockedPick` | Spec / types only when started |
+| **030B-2** | FantasyPros observer prototype — content script on `draftwizard.fantasypros.com`, solo mock Vue/DOM, emit locked picks | After 030B-1 |
+| **030B-3** | Multiplayer / socket investigation — durable events? draftId / pick / player / team / time | Evidence before architecture choice |
+
+**Product ownership:** FantasyPros Mock stays under **Draft → Mock Draft**, not RFSN Live Draft (RFSN-028).
+
+**Risks:** Vue internals may change (isolate adapter; prefer semantic hooks). Multiplayer source is **unknown** until 030B-3.
+
+---
+
 ## 2026-07-19 — RFSN-030A FantasyPros Mock Draft Connector Discovery
 
 **Decision:** Close **RFSN-030A** as discovery-only. FantasyPros Mock Draft is **not** an ESPN-style JSON poll target.

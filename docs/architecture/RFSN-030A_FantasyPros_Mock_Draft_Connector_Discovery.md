@@ -1,8 +1,8 @@
 # RFSN-030A — FantasyPros Mock Draft Connector Discovery
 
-**Status:** Discovery complete (no implementation)  
+**Status:** Complete — merged to `fix/rfsn-production-recovery` (`52df22f` / `a9aa407`)  
 **Date:** 2026-07-19  
-**Branch context:** Inspect only — FantasyPros Draft Wizard mock room vs current ESPN Live Draft connector.
+**Follow-on:** RFSN-030B (planning only: adapter contract → solo observer → socket evidence). Do not reuse ESPN poller.
 
 ---
 
