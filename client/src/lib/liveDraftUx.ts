@@ -92,17 +92,14 @@ export function liveDraftPhaseBadgeLabel(phase: LiveDraftUiPhase): string {
   }
 }
 
-/** ADP for display — never promote rank as a fake ADP. */
+/** ADP for display — never promote rank or undrafted-sentinel as a fake ADP. */
 export function formatLiveDraftPoolAdp(adp: unknown): { label: string; isReal: boolean } {
   if (isLiveDraftRealAdp(adp)) {
     const n = Number(adp);
     const label = Number.isInteger(n) ? String(n) : n.toFixed(1);
     return { label: `ADP ${label}`, isReal: true };
   }
-  if (adp != null && Number.isFinite(Number(adp)) && Number(adp) >= LIVE_DRAFT_SYNTHETIC_ADP_FLOOR) {
-    return { label: "ADP —", isReal: false };
-  }
-  return { label: "ADP —", isReal: false };
+  return { label: "ADP unavailable", isReal: false };
 }
 
 export function formatLiveDraftMarketValue(marketValue: unknown): string {

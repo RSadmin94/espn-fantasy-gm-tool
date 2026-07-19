@@ -60,8 +60,9 @@ describe("RFSN-024 liveDraftUx status phases", () => {
 describe("RFSN-024 liveDraftUx pool display", () => {
   it("formats real ADP and never promotes null as elite", () => {
     expect(formatLiveDraftPoolAdp(23)).toEqual({ label: "ADP 23", isReal: true });
-    expect(formatLiveDraftPoolAdp(null)).toEqual({ label: "ADP —", isReal: false });
-    expect(formatLiveDraftPoolAdp(250).isReal).toBe(false);
+    expect(formatLiveDraftPoolAdp(null)).toEqual({ label: "ADP unavailable", isReal: false });
+    expect(formatLiveDraftPoolAdp(250)).toEqual({ label: "ADP unavailable", isReal: false });
+    expect(formatLiveDraftPoolAdp(170)).toEqual({ label: "ADP 170", isReal: true }); // numeric 170 still "real" until server nulls sentinel feeds
   });
 
   it("formats market value and value-vs-market from existing fields", () => {

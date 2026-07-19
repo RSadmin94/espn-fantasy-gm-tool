@@ -89,9 +89,54 @@ export function espnOffenseSeasonsToTry(calendarYear: number): number[] {
   return [calendarYear, calendarYear - 1];
 }
 
-/** Empty offense feeds must never enter the long-lived process cache (DP-only lock-in). */
-export function shouldPersistEspnOffenseCache(playerCount: number): boolean {
-  return Number.isFinite(playerCount) && playerCount > 0;
+/** Empty / undrafted-sentinel offense feeds must never enter the long-lived cache.
+ * ESPN often returns a full player list with averageDraftPosition ≈ 169–171 (undrafted
+ * sentinel for a ~14-team league) when PPR ranks are missing — that must not persist. */
+export const ESPN_OFFENSE_ELITE_ADP_CEILING = 40;
+export const ESPN_OFFENSE_MIN_ELITE_COUNT = 10;
+
+export function countEspnOffenseEliteAdp(
+  map: ReadonlyMap<string, { adp: number | null }>,
+): number {
+  let n = 0;
+  for (const info of map.values()) {
+    const a = info.adp;
+    if (typeof a === "number" && Number.isFinite(a) && a > 0 && a <= ESPN_OFFENSE_ELITE_ADP_CEILING) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/**
+ * Persist only when the feed contains real early-round ADP (elites present).
+ * A non-empty map of ~170 undrafted sentinels is NOT healthy.
+ */
+export function shouldPersistEspnOffenseCache(
+  mapOrCount: ReadonlyMap<string, { adp: number | null }> | number,
+): boolean {
+  if (typeof mapOrCount === "number") {
+    // Legacy count-only callers: empty never persists. Non-empty count alone is
+    // insufficient to prove health — require a Map at write sites.
+    return false;
+  }
+  if (!mapOrCount || mapOrCount.size === 0) return false;
+  const elites = countEspnOffenseEliteAdp(mapOrCount);
+  if (elites >= ESPN_OFFENSE_MIN_ELITE_COUNT) return true;
+  // Small / partial maps (unit tests, early season): one elite is enough signal.
+  if (mapOrCount.size < 50 && elites >= 1) return true;
+  return false;
+}
+
+/** Strip ADP from an unhealthy feed while keeping projection / percentStarted for pool membership. */
+export function nullEspnOffenseAdps(
+  map: ReadonlyMap<string, EspnPlayerInfo>,
+): Map<string, EspnPlayerInfo> {
+  const out = new Map<string, EspnPlayerInfo>();
+  for (const [id, info] of map) {
+    out.set(id, { ...info, adp: null });
+  }
+  return out;
 }
 
 /** True when serving last-good / empty because live offense ADP is unavailable. */
@@ -238,7 +283,7 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
   let durableSeason = calendarYear;
   if (!_espnInfoCache || _espnInfoCache.size === 0) {
     const durableHit = await loadDurableEspnOffenseAdpForSeasons(yearsToTry);
-    if (durableHit) {
+    if (durableHit && shouldPersistEspnOffenseCache(durableHit.map)) {
       durableSeed = durableHit.map as Map<string, EspnPlayerInfo>;
       durableSeason = durableHit.season;
     }
@@ -263,11 +308,11 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
     if (parsed) cache.set(id, parsed);
   }
 
-  if (!shouldPersistEspnOffenseCache(cache.size)) {
+  if (!shouldPersistEspnOffenseCache(cache)) {
     // 1) Keep in-process last-good (TTL expired but map still present).
-    if (_espnInfoCache && _espnInfoCache.size > 0) {
+    if (_espnInfoCache && shouldPersistEspnOffenseCache(_espnInfoCache)) {
       console.warn(
-        `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — retaining prior non-empty cache (${_espnInfoCache.size})`,
+        `[ESPN INFO] Offense feed unhealthy for years ${yearsToTry.join("/")} (elites=${countEspnOffenseEliteAdp(cache)}/${cache.size}) — retaining prior healthy cache (${_espnInfoCache.size})`,
       );
       _espnInfoCacheTime = now;
       _espnOffenseAdpSource = "memory";
@@ -275,9 +320,9 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
       return _espnInfoCache;
     }
     // 2) Serve durable last-good (survives deploy / cold start).
-    if (durableSeed && durableSeed.size > 0) {
+    if (durableSeed && shouldPersistEspnOffenseCache(durableSeed)) {
       console.warn(
-        `[ESPN INFO] Offense feed empty — serving durable last-good (${durableSeed.size}, season ${durableSeason})`,
+        `[ESPN INFO] Offense feed unhealthy — serving durable last-good (${durableSeed.size}, season ${durableSeason})`,
       );
       _espnInfoCache = durableSeed;
       _espnInfoCacheTime = now;
@@ -287,10 +332,10 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
       return durableSeed;
     }
     const lateDurable = await loadDurableEspnOffenseAdpForSeasons(yearsToTry);
-    if (lateDurable && lateDurable.map.size > 0) {
+    if (lateDurable && shouldPersistEspnOffenseCache(lateDurable.map)) {
       const map = lateDurable.map as Map<string, EspnPlayerInfo>;
       console.warn(
-        `[ESPN INFO] Offense feed empty — serving durable last-good (${map.size}, season ${lateDurable.season})`,
+        `[ESPN INFO] Offense feed unhealthy — serving durable last-good (${map.size}, season ${lateDurable.season})`,
       );
       _espnInfoCache = map;
       _espnInfoCacheTime = now;
@@ -299,12 +344,16 @@ async function loadEspnPlayerInfo(): Promise<Map<string, EspnPlayerInfo>> {
       _espnOffenseAdpDegraded = true;
       return map;
     }
+    // 3) No healthy ADP available — keep pool membership (projections) but null ADPs
+    //    so the board never ranks Chase/Allen/etc. by undrafted-sentinel ~170.
+    const stripped = cache.size > 0 ? nullEspnOffenseAdps(cache) : cache;
     console.warn(
-      `[ESPN INFO] Offense feed empty for years ${yearsToTry.join("/")} — no durable last-good (degraded)`,
+      `[ESPN INFO] Offense feed unhealthy for years ${yearsToTry.join("/")} — no durable last-good (degraded, adp nulled)`,
     );
     _espnOffenseAdpSource = "empty";
     _espnOffenseAdpDegraded = true;
-    return cache;
+    // Do not TTL-cache stripped maps as "healthy."
+    return stripped;
   }
 
   _espnInfoCache = cache;

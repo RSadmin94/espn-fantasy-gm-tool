@@ -44,10 +44,24 @@ describe("ESPN offense feed — season fallback + cache safety", () => {
     expect(espnOffenseSeasonsToTry(2025)).toEqual([2025, 2024]);
   });
 
-  it("A/B: empty offense is not persisted; non-empty is", () => {
+  it("A/B: empty or sentinel-only offense is not persisted; healthy elites are", () => {
     expect(shouldPersistEspnOffenseCache(0)).toBe(false);
-    expect(shouldPersistEspnOffenseCache(new Map().size)).toBe(false);
-    expect(shouldPersistEspnOffenseCache(1025)).toBe(true);
+    expect(shouldPersistEspnOffenseCache(new Map())).toBe(false);
+    expect(shouldPersistEspnOffenseCache(1025)).toBe(false); // count-only is insufficient
+    const sentinel = new Map(
+      Array.from({ length: 200 }, (_, i) => [
+        String(i),
+        { adp: 170, projection: null, percentStarted: null },
+      ]),
+    );
+    expect(shouldPersistEspnOffenseCache(sentinel)).toBe(false);
+    const healthy = new Map(
+      Array.from({ length: 200 }, (_, i) => [
+        String(i),
+        { adp: i < 20 ? 1 + i : 80 + i, projection: null, percentStarted: null },
+      ]),
+    );
+    expect(shouldPersistEspnOffenseCache(healthy)).toBe(true);
   });
 
   it("A: empty offense result is not written into the process cache", async () => {
@@ -237,12 +251,15 @@ describe("Skill-starvation soft-include", () => {
       ],
       new Set(),
     );
-    expect(Math.min(...rogueSoft.map((p) => p.adp))).toBeGreaterThanOrEqual(FALLBACK_ADP_FLOOR);
+    expect(Math.min(...rogueSoft.map((p) => (p.adp == null ? Infinity : p.adp)))).toBe(
+      Infinity,
+    );
+    expect(rogueSoft.every((p) => p.adp == null)).toBe(true);
 
     const wronglyMerged = [...healthy, ...rogueSoft];
     for (let i = 0; i < 100; i++) {
       const skillBelowFloor = wronglyMerged.filter(
-        (p) => p.position !== "DP" && p.adp < FALLBACK_ADP_FLOOR,
+        (p) => p.position !== "DP" && p.adp != null && p.adp < FALLBACK_ADP_FLOOR,
       );
       if (skillBelowFloor.length === 0) break;
       const chosen = selectAiPick({
@@ -262,14 +279,13 @@ describe("Skill-starvation soft-include", () => {
     }
   });
 
-  it("K: fallback ADP is espnId-stable and cannot place a fringe player at 1.01", () => {
+  it("K: soft-include ADP is null (never invents ~170); espnId list stays stable", () => {
     const a = fallbackAdpForEspnPlayerId("4429795");
     const b = fallbackAdpForEspnPlayerId("4429795");
     expect(a).toBe(b);
     expect(a).toBeGreaterThanOrEqual(FALLBACK_ADP_FLOOR);
     expect(a).toBeLessThanOrEqual(FALLBACK_ADP_CEILING);
 
-    // Registry walk order must not change ADP for the same espnId.
     const regA = [
       { fullName: "B Player", position: "RB", espnPlayerId: "500" },
       { fullName: "A Player", position: "WR", espnPlayerId: "100" },
@@ -277,16 +293,15 @@ describe("Skill-starvation soft-include", () => {
     const regB = [...regA].reverse();
     const softA = buildSkillStarvationSoftIncludes(regA, new Set());
     const softB = buildSkillStarvationSoftIncludes(regB, new Set());
-    const adpByIdA = Object.fromEntries(softA.map((p) => [p.espnId, p.adp]));
-    const adpByIdB = Object.fromEntries(softB.map((p) => [p.espnId, p.adp]));
-    expect(adpByIdA).toEqual(adpByIdB);
-    expect(Math.min(...softA.map((p) => p.adp))).toBeGreaterThan(60);
+    expect(softA.every((p) => p.adp == null)).toBe(true);
+    expect(softB.every((p) => p.adp == null)).toBe(true);
+    expect(softA.map((p) => p.espnId).sort()).toEqual(softB.map((p) => p.espnId).sort());
 
     expect(fallbackAdpForEspnPlayerId("")).toBeGreaterThanOrEqual(FALLBACK_ADP_FLOOR);
     expect(fallbackAdpForEspnPlayerId("not-a-number")).toBeGreaterThanOrEqual(FALLBACK_ADP_FLOOR);
   });
 
-  it("gate-3: soft-include list order is espnId-sorted; ADP ignores SQL/registry shuffle", () => {
+  it("gate-3: soft-include list order is espnId-sorted; ADP is null", () => {
     const shuffled = [
       { fullName: "Zed", position: "QB", espnPlayerId: "300" },
       { fullName: "Ann", position: "RB", espnPlayerId: "100" },
@@ -294,11 +309,7 @@ describe("Skill-starvation soft-include", () => {
     ];
     const soft = buildSkillStarvationSoftIncludes(shuffled, new Set());
     expect(soft.map((p) => p.espnId)).toEqual(["100", "200", "300"]);
-    expect(soft.map((p) => p.adp)).toEqual([
-      fallbackAdpForEspnPlayerId("100"),
-      fallbackAdpForEspnPlayerId("200"),
-      fallbackAdpForEspnPlayerId("300"),
-    ]);
+    expect(soft.map((p) => p.adp)).toEqual([null, null, null]);
   });
 
   it("empty merged pool (both feeds unavailable) also activates soft-include", () => {

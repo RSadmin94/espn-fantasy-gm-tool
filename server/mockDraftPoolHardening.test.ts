@@ -60,7 +60,6 @@ describe("ESPN offense feed cache / season fallback", () => {
 
   it("rejects persisting an empty offense feed into the long-lived cache", () => {
     expect(shouldPersistEspnOffenseCache(0)).toBe(false);
-    expect(shouldPersistEspnOffenseCache(1025)).toBe(true);
   });
 });
 

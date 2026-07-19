@@ -114,7 +114,7 @@ export type SoftIncludePlayer = {
   position: string;
   espnId: string;
   playerId: number;
-  adp: number;
+  adp: number | null;
   projection: number | null;
 };
 
@@ -145,7 +145,8 @@ export function buildSkillStarvationSoftIncludes(
       position: normalizeDraftPos(rawPos),
       espnId,
       playerId,
-      adp: fallbackAdpForEspnPlayerId(espnId),
+      // Missing ADP stays null — never invent ~170 / soft-include numeric ranks.
+      adp: null,
       projection: null,
     });
   }
