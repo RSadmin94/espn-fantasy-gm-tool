@@ -18,7 +18,7 @@ export function ownerProfilesLensCopy(mode: OwnerProfilesMode) {
   if (mode === "self") {
     return {
       navGm: "GM Identity",
-      navBuilding: "Draft DNA",
+      navBuilding: "Your Draft Pattern",
       navTrading: "Trading",
       navMatchups: "Rivalry History",
       navRivalries: "Your Rivalries",
@@ -30,34 +30,55 @@ export function ownerProfilesLensCopy(mode: OwnerProfilesMode) {
       sectionRivalries: "Your Rivalries",
       sectionHighlights: "Your Legacy",
       dnaEyebrow: "Your GM Style",
-      draftDnaEyebrow: "Draft DNA",
+      draftDnaEyebrow: "Your Draft Tendencies",
       topRivalLabel: "Top rivalry",
       toughestLabel: "Toughest H2H",
       openRivalriesCta: "Open rivalry",
       compareLabel: "Compare with another owner",
+      opponentColumn: "Rival",
+      tendenciesByRoundTitle: "Draft pattern by round",
+      earlyTendenciesTitle: "Early-round pattern (rounds 1–3)",
+      draftInsightsTitle: "Draft pattern notes",
+      positionShareTitle: "Position share",
+      keeperTitle: "Keeper profile",
+      matchupEmpty: "No game rows on file for this matchup.",
+      rivalriesEmpty: "Not enough history for your rivalries yet.",
+      tradeHistoryEmpty: "No completed trade history for you yet.",
+      matchupIntelCaption: "Records from completed league matchups.",
       defaultSubtitle:
-        "Who you are as a fantasy GM — identity, draft DNA, legacy, and rivalries.",
+        "Who you are as a fantasy GM — identity, draft pattern, legacy, and rivalries.",
     } as const;
   }
   return {
-    navGm: "GM Profile",
+    navGm: "Opponent Scout Report",
     navBuilding: "Team Building",
     navTrading: "Trading",
     navMatchups: "Matchups",
     navRivalries: "Rivalries",
-    navHighlights: "Highlights",
-    sectionGm: "GM Profile",
+    navHighlights: "Their Legacy",
+    sectionGm: "Opponent Scout Report",
     sectionBuilding: "Team Building Philosophy",
     sectionTrading: "Trading Profile",
     sectionMatchups: "Matchup Intelligence",
     sectionRivalries: "Rivalries",
-    sectionHighlights: "Career Highlights",
+    sectionHighlights: "Their Legacy",
     dnaEyebrow: "Owner DNA",
     draftDnaEyebrow: "Draft DNA",
     topRivalLabel: "Top rival",
     toughestLabel: "Biggest threat",
     openRivalriesCta: "Open Rivalries",
     compareLabel: "Compare with another owner",
+    opponentColumn: "Opponent",
+    tendenciesByRoundTitle: "Draft tendencies by round",
+    earlyTendenciesTitle: "Early round tendencies (rounds 1–3)",
+    draftInsightsTitle: "Draft DNA insights",
+    positionShareTitle: "Position share (draft DNA)",
+    keeperTitle: "Keeper intelligence",
+    matchupEmpty: "No game rows on file for this opponent.",
+    rivalriesEmpty: "Not enough H2H history to scout rivalries yet.",
+    tradeHistoryEmpty: "No completed trade history for this owner.",
+    matchupIntelCaption:
+      "Intel uses matchup pipeline records — same evidence as Rivalry Center when available.",
     defaultSubtitle: "Canonical manager dossier — scout career, tendencies, and rivalry history.",
   } as const;
 }
@@ -68,6 +89,7 @@ export function matchupTagLabel(tag: string, mode: OwnerProfilesMode): string {
   if (tag === "Nemesis") return "Primary Rival";
   if (tag === "Prey") return "Favorable Matchup";
   if (tag === "Bully") return "Difficult Matchup";
+  if (tag === "Punching Bag") return "Comfort Matchup";
   return tag;
 }
 

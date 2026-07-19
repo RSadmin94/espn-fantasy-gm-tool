@@ -146,8 +146,8 @@ function tradeOpponentName(trade: {
   sideB: { ownerName?: string; teamId?: number };
 }, ownerSide: "A" | "B"): string {
   return ownerSide === "A"
-    ? String(trade.sideB.ownerName ?? "Opponent")
-    : String(trade.sideA.ownerName ?? "Opponent");
+    ? String(trade.sideB.ownerName ?? "Trade partner")
+    : String(trade.sideA.ownerName ?? "Trade partner");
 }
 
 function tradeResultClasses(result: string): string {
@@ -161,12 +161,15 @@ function OwnerTradeHistoryCard({
   leagueContextKey,
   leagueKeyReady,
   dossierActiveSeason,
+  mode = "scout",
 }: {
   profileLookupKey: string;
   leagueContextKey: string;
   leagueKeyReady: boolean;
   dossierActiveSeason: number;
+  mode?: OwnerProfilesMode;
 }) {
+  const lens = ownerProfilesLensCopy(mode);
   const tradeQ = (trpc as any).completedTradeIntel.ownerTradeHistory.useQuery(
     withLeagueSalt(
       {
@@ -201,7 +204,7 @@ function OwnerTradeHistoryCard({
         <EmptyState
           panelVariant="warm"
           className="p-6"
-          title="No completed trade history for this owner."
+          title={lens.tradeHistoryEmpty}
           description="Completed trades become part of your permanent league history. They will appear here after league sync."
         />
       ) : (
@@ -327,6 +330,11 @@ const TAG_STYLES: Record<string, string> = {
   "Favorable":    "border-violet-700 bg-violet-900/30 text-violet-300",
   "Difficult":    "border-orange-700 bg-orange-900/30 text-orange-300",
   "Normal":       "border-border bg-muted/30 text-muted-foreground",
+  // Self-lens remapped labels (style keyed by display when needed)
+  "Primary Rival": "border-red-700 bg-red-900/30 text-red-300",
+  "Comfort Matchup": "border-lime-700 bg-lime-900/30 text-lime-300",
+  "Favorable Matchup": "border-violet-700 bg-violet-900/30 text-violet-300",
+  "Difficult Matchup": "border-orange-700 bg-orange-900/30 text-orange-300",
 };
 
 const POS_TEXT: Record<string, string> = {
@@ -1364,7 +1372,7 @@ function ProfilePanel({
       )}
       {draftUnlocked && (
         <div className="space-y-4">
-          <ProfileShellCard title="Draft tendencies by round">
+          <ProfileShellCard title={lens.tendenciesByRoundTitle}>
             {draftSeasonsCovered.length > 0 && (
               <p className="mb-3 text-[11px] text-zinc-500">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>
             )}
@@ -1468,7 +1476,7 @@ function ProfilePanel({
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <ProfileShellCard title="Early round tendencies (rounds 1–3)">
+            <ProfileShellCard title={lens.earlyTendenciesTitle}>
               {earlySorted.length > 0 ? (
                 <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-10">
                   <div className="relative h-44 w-44 shrink-0">
@@ -1505,16 +1513,16 @@ function ProfilePanel({
             </ProfileShellCard>
 
             <div className="flex flex-col gap-3">
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">Draft DNA insights</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{lens.draftInsightsTitle}</h3>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-3 sm:flex sm:gap-3">
                 <div className="mx-auto mb-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 sm:mx-0 sm:mb-0">
                   <Crosshair className="h-5 w-5 text-amber-300" aria-hidden />
                 </div>
                 <div className="min-w-0 text-center sm:text-left">
-                  <p className="text-sm font-semibold text-amber-200">Position share (draft DNA)</p>
+                  <p className="text-sm font-semibold text-amber-200">{lens.positionShareTitle}</p>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-400">
                     {topSharePos
-                      ? `${String(topSharePos[0]).toUpperCase()} has the largest recorded share at ${pct(num(topSharePos[1]))} of picks (draft DNA posShare).`
+                      ? `${String(topSharePos[0]).toUpperCase()} has the largest recorded share at ${pct(num(topSharePos[1]))} of picks.`
                       : "No position share values on file for this profile."}
                   </p>
                 </div>
@@ -1570,7 +1578,7 @@ function ProfilePanel({
           {gated ? (
             <ScoutingLock title="Keeper DNA" blurb="Keeper rate, average keeper round, and protected positions." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
           ) : (
-            <ProfileShellCard title="Keeper intelligence">
+            <ProfileShellCard title={lens.keeperTitle}>
               <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                 <div>
                   <StatRow label="Keeper / retained slots" value={num(keeper.totalKeepers)} />
@@ -1631,6 +1639,7 @@ function ProfilePanel({
             leagueContextKey={leagueContextKey}
             leagueKeyReady={leagueKeyReady}
             dossierActiveSeason={dossierActiveSeason}
+            mode={mode}
           />
         </IntelPanel>
       ) : (
@@ -1642,7 +1651,7 @@ function ProfilePanel({
         <IntelPanel id="dossier-matchups" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
           <DossierSectionHeader icon={<Swords className="h-4 w-4" />} title={lens.sectionMatchups} accent="#c4b5fd" />
             <p className="mb-3 text-[11px] text-zinc-500">
-            Intel uses matchup pipeline with cache fallback; dossier uses completed gmMatchups (RS + playoffs).
+            {lens.matchupIntelCaption}
           </p>
           {intel.length === 0 ? (
           <div className="py-4 text-center text-sm text-muted-foreground">
@@ -1656,7 +1665,7 @@ function ProfilePanel({
               <thead>
                 <tr className="text-muted-foreground border-b border-border text-xs">
                   <th className="w-8 py-1.5 pr-1" aria-hidden />
-                  <th className="text-left py-1.5 pr-3">Opponent</th>
+                  <th className="text-left py-1.5 pr-3">{lens.opponentColumn}</th>
                   <th className="text-right pr-3">Games</th>
                   <th className="text-right pr-3">W–L–T</th>
                   <th className="text-right pr-3">Win %</th>
@@ -1718,7 +1727,7 @@ function ProfilePanel({
                               Last 5 meetings
                             </p>
                             {games.length === 0 ? (
-                              <p className="text-xs text-muted-foreground">No game rows on file for this opponent.</p>
+                              <p className="text-xs text-muted-foreground">{lens.matchupEmpty}</p>
                             ) : (
                               <div className="overflow-x-auto rounded border border-border/40">
                                 <table className="w-full text-xs">
@@ -1812,7 +1821,7 @@ function ProfilePanel({
                 </>
               ) : (
                 <p className="mt-2 text-sm text-zinc-500">
-                  Your league hasn&apos;t built enough history for Rivalries yet.
+                  {lens.rivalriesEmpty}
                 </p>
               )}
             </div>

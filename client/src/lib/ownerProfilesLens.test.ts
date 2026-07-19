@@ -7,22 +7,43 @@ import {
   ownerProfilesLensCopy,
 } from "@/lib/ownerProfilesLens";
 
-describe("RFSN-023 ownerProfilesLens", () => {
+describe("RFSN-023 / RFSN-027B ownerProfilesLens", () => {
   it("separates self vs scout copy", () => {
     const self = ownerProfilesLensCopy("self");
     const scout = ownerProfilesLensCopy("scout");
     expect(self.sectionGm).toBe("GM Identity");
     expect(self.sectionRivalries).toBe("Your Rivalries");
     expect(self.sectionHighlights).toBe("Your Legacy");
-    expect(scout.sectionGm).toBe("GM Profile");
+    expect(self.sectionBuilding).toBe("Your Draft Pattern");
+    expect(scout.sectionGm).toBe("Opponent Scout Report");
     expect(scout.sectionMatchups).toBe("Matchup Intelligence");
+    expect(scout.sectionHighlights).toBe("Their Legacy");
     expect(scout.toughestLabel).toBe("Biggest threat");
     expect(self.toughestLabel).not.toBe("Biggest threat");
   });
 
-  it("remaps Nemesis only in self mode", () => {
+  it("self draft labels do not share a single Draft DNA home", () => {
+    const self = ownerProfilesLensCopy("self");
+    expect(self.navBuilding).toBe("Your Draft Pattern");
+    expect(self.draftDnaEyebrow).toBe("Your Draft Tendencies");
+    expect(self.draftDnaEyebrow).not.toBe(self.navBuilding);
+    expect(self.tendenciesByRoundTitle).toContain("pattern");
+    expect(self.opponentColumn).toBe("Rival");
+  });
+
+  it("scout keeps scouting / exploit framing", () => {
+    const scout = ownerProfilesLensCopy("scout");
+    expect(scout.sectionGm).toContain("Scout");
+    expect(scout.tendenciesByRoundTitle).toContain("tendencies");
+    expect(scout.opponentColumn).toBe("Opponent");
+    expect(scout.rivalriesEmpty).toMatch(/scout rivalries/i);
+  });
+
+  it("remaps exploit tags only in self mode", () => {
     expect(matchupTagLabel("Nemesis", "self")).toBe("Primary Rival");
     expect(matchupTagLabel("Nemesis", "scout")).toBe("Nemesis");
+    expect(matchupTagLabel("Punching Bag", "self")).toBe("Comfort Matchup");
+    expect(matchupTagLabel("Punching Bag", "scout")).toBe("Punching Bag");
     expect(matchupTagLabel("Rival", "self")).toBe("Rival");
   });
 

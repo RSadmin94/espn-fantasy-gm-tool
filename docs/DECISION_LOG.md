@@ -94,6 +94,8 @@ Live Draft
 
 Defer Option 2 (storytelling layer) and further Live Draft UI polish until real-draft proof or wrap-up expansion earns the next sprint.
 
+**RFSN-027B (in progress on feature branch):** My GM / Owner Dossier language ownership — same engine; self = reflection; scout = attack framing. No new analytics.
+
 ---
 
 ## 2026-06-25 — V1 commercial simplification: Free + Rivals only

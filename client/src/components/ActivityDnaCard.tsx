@@ -67,7 +67,7 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
           <Activity className="h-4 w-4 text-lime-400/80" aria-hidden />
           Activity DNA
         </div>
-        <p className="text-[13px] text-muted-foreground">Not enough league history to profile this owner yet.</p>
+        <p className="text-[13px] text-muted-foreground">Not enough league history yet.</p>
       </div>
     );
   }
