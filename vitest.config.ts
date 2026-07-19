@@ -19,6 +19,7 @@ export default defineConfig({
       "server/**/*.spec.ts",
       "client/src/**/*.test.ts",
       "client/src/**/*.test.tsx",
+      "shared/**/*.test.ts",
     ],
     environmentMatchGlobs: [
       ["client/src/**/*.test.tsx", "jsdom"],
