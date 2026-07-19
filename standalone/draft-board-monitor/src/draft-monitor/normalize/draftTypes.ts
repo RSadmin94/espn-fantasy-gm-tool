@@ -82,7 +82,7 @@ export type MonitorDiagnostics = {
   status: DraftStatus | "ERROR" | "LOADING";
 };
 
-export const MONITOR_VERSION = "1.2.0-standalone";
+export const MONITOR_VERSION = "1.2.1-standalone";
 
 export function emptySnapshot(
   source: DraftSource,

@@ -22,8 +22,33 @@ export function renderBoard(
 ): void {
   ensureStyles(target.document);
   const root = target.mount;
+
+  // Skip full rebuild when nothing meaningful changed — the poll ticks every
+  // few seconds and a rebuild resets scroll position. Only refresh the
+  // "last read" clock in that case.
+  const lastPick = snapshot?.picks[snapshot.picks.length - 1];
+  const sig = [
+    snapshot?.draftFingerprint ?? "",
+    snapshot?.picks.length ?? 0,
+    lastPick?.eventKey ?? "",
+    diagnostics.status,
+    diagnostics.parseError ?? "",
+    diagnostics.duplicatesSuppressed,
+  ].join("~");
+  if (root.getAttribute("data-dbm-sig") === sig) {
+    const clock = root.querySelector("#dbm-last-read");
+    if (clock) clock.textContent = diagnostics.lastSuccessfulReadAt || "—";
+    return;
+  }
+
+  // Preserve scroll position across rebuilds.
+  const prevWrap = root.querySelector<HTMLElement>(".dbm-board-wrap");
+  const keepX = prevWrap?.scrollLeft ?? 0;
+  const keepY = prevWrap?.scrollTop ?? 0;
+
   root.className = "dbm-root";
   root.innerHTML = "";
+  root.setAttribute("data-dbm-sig", sig);
 
   const header = el(target.document, "div", "dbm-header");
   const title = el(target.document, "h1", "dbm-title");
@@ -97,6 +122,11 @@ export function renderBoard(
 
   wrap.appendChild(board);
   root.appendChild(wrap);
+  // Restore scroll position captured before this rebuild.
+  if (keepX || keepY) {
+    wrap.scrollLeft = keepX;
+    wrap.scrollTop = keepY;
+  }
   root.appendChild(renderDiagnostics(target.document, diagnostics));
 }
 
@@ -175,7 +205,9 @@ function renderDiagnostics(doc: Document, d: MonitorDiagnostics): HTMLElement {
   ];
   for (const [k, v] of rows) {
     const item = el(doc, "div", "");
-    item.innerHTML = `<strong>${escapeHtml(k)}:</strong> ${escapeHtml(v)}`;
+    const idAttr = k === "Last successful read" ? ' id="dbm-last-read-wrap"' : "";
+    const valId = k === "Last successful read" ? ' id="dbm-last-read"' : "";
+    item.innerHTML = `<strong${idAttr}>${escapeHtml(k)}:</strong> <span${valId}>${escapeHtml(v)}</span>`;
     box.appendChild(item);
   }
   return box;
