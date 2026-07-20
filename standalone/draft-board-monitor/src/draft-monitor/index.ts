@@ -8,3 +8,4 @@ export * from "./board/DraftBoardMonitor";
 export * from "./board/renderBoard";
 export * from "./runtime/detectSource";
 export * from "./runtime/monitorController";
+export * from "./runtime/espnBookmarkletPublisher";

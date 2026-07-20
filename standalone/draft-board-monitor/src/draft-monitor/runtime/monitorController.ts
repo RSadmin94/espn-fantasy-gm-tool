@@ -2,19 +2,26 @@ import { observeEspn } from "../adapters/espnAdapter";
 import { observeFantasyPros } from "../adapters/fantasyProsAdapter";
 import { DraftBoardMonitor } from "../board/DraftBoardMonitor";
 import { detectSource } from "./detectSource";
+import { EspnBookmarkletPublisher } from "./espnBookmarkletPublisher";
 
 export type MonitorControllerOptions = {
   window?: Window;
   pollMs?: number;
   /** Prefer popup display window (same-origin blank). Falls back to in-page panel. */
   preferPopup?: boolean;
+  /**
+   * Optional ESPN → Rivals publisher (Phase 1: page-local postMessage only).
+   * When omitted, a default publisher is created for ESPN pages.
+   */
+  espnPublisher?: EspnBookmarkletPublisher | null;
 };
 
 const DEFAULT_POLL_MS = 1000;
 
 /**
  * Standalone runtime: detect source → full backfill → poll → shared board.
- * No Rivals network calls.
+ * ESPN publisher emits page-local postMessage only (no Rivals network in Phase 1).
+ * Mirror paint/renderBoard path is unchanged.
  */
 export class MonitorController {
   private win: Window;
@@ -26,11 +33,22 @@ export class MonitorController {
   private displayDoc: Document | null = null;
   private displayWin: Window | null = null;
   private stopped = false;
+  private espnPublisher: EspnBookmarkletPublisher | null;
 
   constructor(opts: MonitorControllerOptions = {}) {
     this.win = opts.window ?? window;
     this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
     this.preferPopup = opts.preferPopup !== false;
+    this.espnPublisher =
+      opts.espnPublisher === null
+        ? null
+        : opts.espnPublisher ??
+          new EspnBookmarkletPublisher({ window: this.win });
+  }
+
+  /** Phase 1/2 — expose publisher for ARM tests and extension handshake. */
+  getEspnPublisher(): EspnBookmarkletPublisher | null {
+    return this.espnPublisher;
   }
 
   start(): { ok: boolean; error?: string } {
@@ -52,6 +70,10 @@ export class MonitorController {
       mount,
       document: this.displayDoc || this.win.document,
     });
+
+    if (detected.source === "espn") {
+      this.espnPublisher?.attachInboundListener();
+    }
 
     this.tick();
     this.timer = setInterval(() => this.tick(), this.pollMs);
@@ -84,6 +106,8 @@ export class MonitorController {
     this.timer = null;
     this.observer?.disconnect();
     this.observer = null;
+    this.espnPublisher?.detachInboundListener();
+    this.espnPublisher?.disarm();
   }
 
   private tick(): void {
@@ -94,7 +118,9 @@ export class MonitorController {
       return;
     }
     if (detected.source === "espn") {
+      // Mirror first (unchanged), then optional publish delta beside tick.
       this.monitor.applyAdapterResult(observeEspn(this.win));
+      this.espnPublisher?.onSnapshot(this.monitor.getSnapshot());
       return;
     }
     this.monitor.applyAdapterResult({
