@@ -164,6 +164,9 @@ export type LiveDraftRecentPick = {
   teamName: string;
   playerName: string;
   position: string;
+  /** Presentation-only identity fields for headshots (from locked results). */
+  playerId?: string | null;
+  nflTeam?: string | null;
   isLast: boolean;
   hasReaction?: boolean;
 };
@@ -175,7 +178,17 @@ export function buildLiveDraftRecentPicks(args: {
     teamId?: number;
     ownerName?: string;
   }>;
-  results: Record<number, { name?: string; position?: string; isKeeper?: boolean } | undefined>;
+  results: Record<
+    number,
+    | {
+        name?: string;
+        position?: string;
+        isKeeper?: boolean;
+        id?: string | number | null;
+        nflTeam?: string | null;
+      }
+    | undefined
+  >;
   teams: ReadonlyArray<{ teamId?: number; teamName?: string; ownerName?: string }>;
   limit?: number;
   reactionPickNumbers?: ReadonlySet<number>;
@@ -196,6 +209,11 @@ export function buildLiveDraftRecentPicks(args: {
       teamName: String(team?.teamName ?? "—").trim() || "—",
       playerName: String(res.name).trim(),
       position: String(res.position ?? "?").toUpperCase(),
+      playerId: res.id != null && String(res.id).trim() ? String(res.id).trim() : null,
+      nflTeam:
+        res.nflTeam != null && String(res.nflTeam).trim()
+          ? String(res.nflTeam).trim()
+          : null,
       isLast: false,
       hasReaction: args.reactionPickNumbers?.has(slot.pickNumber) ?? false,
     });

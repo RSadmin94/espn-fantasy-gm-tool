@@ -4,6 +4,7 @@
  */
 import { cn } from "@/lib/utils";
 import type { LiveDraftRecentPick } from "@/lib/liveDraftUx";
+import { PlayerHeadshot } from "@/components/draft/PlayerHeadshot";
 
 const POS_TONE: Record<string, string> = {
   QB: "text-red-300",
@@ -66,6 +67,15 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
                 {p.round}.{String(p.pickNumber).padStart(2, "0")}
               </span>
               <span className="text-zinc-400 truncate max-w-[5.5rem] shrink-0">{p.ownerName}</span>
+              <PlayerHeadshot
+                size="xs"
+                player={{
+                  id: p.playerId,
+                  name: p.playerName,
+                  position: p.position,
+                  nflTeam: p.nflTeam,
+                }}
+              />
               <span className="text-zinc-200 font-semibold truncate flex-1">{p.playerName}</span>
               <span
                 className={cn(

@@ -33,10 +33,31 @@ export function espnPlayerHeadshotUrl(
 export function resolvePlayerHeadshotUrl(args: {
   espnPlayerId?: string | null;
   sleeperPlayerId?: string | null;
+  size?: "thumb" | "full";
 }): string | null {
+  const size = args.size ?? "thumb";
+  if (size === "full") {
+    return (
+      espnPlayerHeadshotUrl(args.espnPlayerId, { w: 200, h: 145 }) ||
+      sleeperPlayerHeadshotUrl(args.sleeperPlayerId, { size: "full" }) ||
+      null
+    );
+  }
   return (
     espnPlayerHeadshotUrl(args.espnPlayerId) ||
     sleeperPlayerHeadshotUrl(args.sleeperPlayerId) ||
     null
   );
+}
+
+/** Extract numeric ESPN id from raw ids (`123`, `espn:123`). */
+export function extractEspnPlayerId(
+  raw: string | number | null | undefined,
+): string | null {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return s;
+  const m = /^espn:(\d+)$/i.exec(s);
+  return m?.[1] ?? null;
 }

@@ -69,6 +69,7 @@ import { useEspnBookmarkletDraftMonitor } from "@/hooks/useEspnBookmarkletDraftM
 import { buildFantasyProsSeatMapping } from "@/lib/fantasyProsSeatMapping";
 import { postFantasyProsMockArm, postFantasyProsMockDisarm } from "@/lib/fantasyProsMockBridge";
 import { LiveDraftRecentPicks } from "@/components/draft/LiveDraftRecentPicks";
+import { PlayerHeadshot } from "@/components/draft/PlayerHeadshot";
 import { DraftNightShow } from "@/components/draft/DraftNightShow";
 import type { DraftNightShowPayload } from "@/lib/draftNightShowTypes";
 import type { RfsnLivePublicPayload } from "@/lib/rfsnLiveState";
@@ -1782,6 +1783,15 @@ function LiveDraftEngine({
                       awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
                     )}
                   >
+                    <PlayerHeadshot
+                      size="sm"
+                      player={{
+                        espnId: p.espnId,
+                        id: p.id,
+                        name: p.name,
+                        position: p.position,
+                      }}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <PosPill pos={String(p.position ?? "?").toUpperCase()} />
@@ -1891,10 +1901,22 @@ function LiveDraftEngine({
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {roster.map((r: any) => (
-                      <span key={r.pickNumber} className={cn("text-[10px] px-1.5 py-0.5 rounded border truncate max-w-[120px]",
+                      <span key={r.pickNumber} className={cn("inline-flex items-center gap-1 text-[10px] pl-0.5 pr-1.5 py-0.5 rounded border max-w-[140px]",
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
-                        <span className="text-zinc-500">{r.position}</span> {String(r.name ?? "—").split(" ").slice(-1)[0]}
+                        <PlayerHeadshot
+                          size="xs"
+                          player={{
+                            id: r.id,
+                            name: r.name,
+                            position: r.position,
+                            nflTeam: r.nflTeam,
+                          }}
+                        />
+                        <span className="truncate">
+                          <span className="text-zinc-500">{r.position}</span>{" "}
+                          {String(r.name ?? "—").split(" ").slice(-1)[0]}
+                        </span>
                       </span>
                     ))}
                     {roster.length === 0 && <span className="text-[10px] text-zinc-600">—</span>}

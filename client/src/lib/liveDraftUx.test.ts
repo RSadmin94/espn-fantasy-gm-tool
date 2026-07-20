@@ -114,8 +114,8 @@ describe("RFSN-024 liveDraftUx recent picks + booth", () => {
         { pickNumber: 3, round: 1, teamId: 1, ownerName: "A" },
       ],
       results: {
-        1: { name: "Josh Allen", position: "QB" },
-        2: { name: "Lamar Jackson", position: "QB" },
+        1: { id: "espn:3918298", name: "Josh Allen", position: "QB", nflTeam: "BUF" },
+        2: { id: "espn:3916387", name: "Lamar Jackson", position: "QB", nflTeam: "BAL" },
       },
       teams: [
         { teamId: 1, teamName: "Aces", ownerName: "Alex" },
@@ -124,7 +124,10 @@ describe("RFSN-024 liveDraftUx recent picks + booth", () => {
     });
     expect(recent[0]?.playerName).toBe("Lamar Jackson");
     expect(recent[0]?.isLast).toBe(true);
+    expect(recent[0]?.playerId).toBe("espn:3916387");
+    expect(recent[0]?.nflTeam).toBe("BAL");
     expect(recent[1]?.playerName).toBe("Josh Allen");
+    expect(recent[1]?.playerId).toBe("espn:3918298");
   });
 
   it("booth silence is monitoring, not failure", () => {
