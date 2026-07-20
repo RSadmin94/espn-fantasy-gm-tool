@@ -49,12 +49,12 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
           Waiting for live draft activity
         </p>
       ) : (
-        <ul className="space-y-1 max-h-36 overflow-y-auto pr-1">
+        <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
           {picks.map((p) => (
             <li
               key={p.pickNumber}
               className={cn(
-                "flex items-center gap-2 rounded px-1.5 py-1 text-[11px]",
+                "flex items-center gap-2.5 rounded px-1.5 py-1.5 text-[11px] min-h-[72px]",
                 p.isLast
                   ? "bg-emerald-500/10 border border-emerald-500/30"
                   : "border border-transparent",

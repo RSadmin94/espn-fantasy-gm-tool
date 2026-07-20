@@ -409,7 +409,7 @@ export function PlayerDatabase() {
               return (
                 <div key={p.id}
                   className={cn(
-                    "grid items-center px-4 py-3 transition-colors cursor-pointer group",
+                    "grid items-center px-4 py-4 transition-colors cursor-pointer group min-h-[100px]",
                     "hover:bg-zinc-800/40 border-l-2",
                     i % 2 === 0 ? "bg-zinc-900/10" : "bg-transparent",
                     isHigh ? "border-l-lime-500/60" : "border-l-zinc-800"
@@ -424,7 +424,7 @@ export function PlayerDatabase() {
                   <div className="text-zinc-600 text-xs tabular-nums font-mono">{page * PAGE_SIZE + i + 1}</div>
 
                   {/* Player */}
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <Headshot
                       espnId={p.espnPlayerId}
                       sleeperId={p.sleeperPlayerId}

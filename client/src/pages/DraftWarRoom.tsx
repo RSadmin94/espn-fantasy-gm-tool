@@ -1779,7 +1779,7 @@ function LiveDraftEngine({
                     disabled={!awaitingUser}
                     onClick={() => allowInternalSimPicks && awaitingUser && userDraft(p)}
                     className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-left",
+                      "w-full flex items-center gap-3 px-3 py-2.5 text-left min-h-[74px]",
                       awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
                     )}
                   >
@@ -1899,9 +1899,9 @@ function LiveDraftEngine({
                     {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
                     <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">{roster.length}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {roster.map((r: any) => (
-                      <span key={r.pickNumber} className={cn("inline-flex items-center gap-1 text-[10px] pl-0.5 pr-1.5 py-0.5 rounded border max-w-[140px]",
+                      <span key={r.pickNumber} className={cn("inline-flex items-center gap-1.5 text-[10px] pl-0.5 pr-1.5 py-1 rounded border max-w-[180px] min-h-[52px]",
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
                         <PlayerHeadshot
@@ -2397,10 +2397,10 @@ function MockDraftBoard({
                         expandPick === p.pickNumber && "ring-1 ring-violet-500/40"
                       )}>
                       {!p.isKeeperSlot && p.player ? (
-                        <div className="mb-1.5">
+                        <div className="mb-2">
                           <PlayerHeadshot
                             variant="hdCompact"
-                            className="w-full h-9"
+                            className="w-full h-12"
                             player={{
                               espnId: p.espnId ?? poolMeta?.espnId,
                               id: poolMeta?.id,

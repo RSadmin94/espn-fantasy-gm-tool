@@ -39,12 +39,12 @@ const CIRCLE_SIZE: Record<CircleSize, string> = {
 
 /** Sleeper full cutout + helmet background (rectangular). */
 const HD_SIZE = {
-  /** List rows, recent picks, pool */
-  hd: "w-14 h-10 text-[9px]",
+  /** List rows, recent picks, pool — matches Board Mirror ~88×66 */
+  hd: "w-[88px] h-[66px] text-[11px]",
   /** Draft board grid cells, tight roster chips */
-  hdCompact: "w-10 h-7 text-[8px]",
+  hdCompact: "w-16 h-12 text-[9px]",
   /** Player Database rows */
-  hdLg: "w-16 h-12 text-[10px]",
+  hdLg: "w-[110px] h-[84px] text-[12px]",
 } as const;
 
 function initialsFromName(name: string): string {
@@ -144,7 +144,7 @@ export function PlayerHeadshot({
         alt=""
         loading="lazy"
         decoding="async"
-        className="w-full h-full object-cover object-top"
+        className="w-full h-full object-cover object-[center_18%]"
         onError={() => setIdx((i) => i + 1)}
       />
     </div>
