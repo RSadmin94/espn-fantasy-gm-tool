@@ -44,6 +44,9 @@
   function withProtocolVersion(fields) {
     return { protocolVersion: ESPN_BM_PROTOCOL_VERSION, ...fields };
   }
+  function shouldRepostArmOnPageStatus(status) {
+    return String(status ?? "") === "ready";
+  }
   function validateArmConfig(raw) {
     if (!raw || typeof raw !== "object") return null;
     const c = (
@@ -288,6 +291,7 @@
   (function espnLiveBookmarkletContent() {
     "use strict";
     let armedSessionNonce = null;
+    let lastArmConfig = null;
     function postToPage(payload) {
       window.postMessage(
         Object.assign(
@@ -303,10 +307,59 @@
     }
     function applyArmConfig(config) {
       armedSessionNonce = config.sessionNonce;
+      lastArmConfig = config;
       postToPage({ type: "ARM", config });
       postToPage({ type: MSG_ESPN_BM_ARM, config });
     }
+    function repostArmToPage(reason) {
+      if (lastArmConfig) {
+        pathLog("content_repost_ARM", {
+          reason: reason || "cached",
+          sessionNonce: lastArmConfig.sessionNonce,
+          via: "lastArmConfig"
+        });
+        applyArmConfig(lastArmConfig);
+        return;
+      }
+      try {
+        chrome.runtime.sendMessage({ type: MSG_ESPN_BM_GET_STATE }, function(state) {
+          if (chrome.runtime.lastError) return;
+          if (!state || !state.armed || !state.config) return;
+          const config = validateArmConfig(state.config);
+          if (!config) return;
+          pathLog("content_repost_ARM", {
+            reason: reason || "get_state",
+            sessionNonce: config.sessionNonce,
+            via: "GET_STATE"
+          });
+          applyArmConfig(config);
+        });
+      } catch (_) {
+      }
+    }
+    function hopFields(message) {
+      const picks = message && Array.isArray(message.picks) ? message.picks : null;
+      return {
+        hop: "content",
+        type: message && message.type,
+        sessionNonce: message && message.sessionNonce != null ? String(message.sessionNonce) : null,
+        draftId: message && message.draftId != null ? String(message.draftId) : null,
+        protocolVersion: message && message.protocolVersion,
+        revision: message && message.revision,
+        batchSize: picks ? picks.length : null,
+        armedSessionNonce
+      };
+    }
+    function pathLog(event, extra) {
+      try {
+        console.info("[espn-bm-path]", event, extra || {});
+      } catch (_) {
+      }
+    }
     function relayToBackground(message) {
+      if (message && message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        pathLog("content_relay_PICK_BATCH", hopFields(message));
+      }
       try {
         const p = chrome.runtime.sendMessage(message);
         if (p && typeof p.catch === "function") p.catch(function() {
@@ -328,13 +381,42 @@
       if (ev.source !== window) return;
       if (ev.origin !== window.location.origin) return;
       const d = ev.data;
+      if (d && d.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        pathLog("content_recv_PICK_BATCH", hopFields(d));
+      }
       const result = validatePageOutboundMessage(d, {
         requireSessionNonce: armedSessionNonce
       });
-      if (!result.ok || !result.message) return;
+      if (!result.ok || !result.message) {
+        if (d && d.type === "GMWR_ESPN_BM_PICK_BATCH") {
+          pathLog("content_drop_PICK_BATCH", {
+            ...hopFields(d),
+            reject: "validatePageOutboundMessage",
+            error: result.error || "no_message"
+          });
+        }
+        return;
+      }
       if (result.message.type === "GMWR_ESPN_BM_PICK_BATCH") {
-        if (!armedSessionNonce) return;
-        if (result.message.sessionNonce !== armedSessionNonce) return;
+        if (!armedSessionNonce) {
+          pathLog("content_drop_PICK_BATCH", {
+            ...hopFields(result.message),
+            reject: "!armedSessionNonce",
+            line: "content.js:!armedSessionNonce"
+          });
+          return;
+        }
+        if (result.message.sessionNonce !== armedSessionNonce) {
+          pathLog("content_drop_PICK_BATCH", {
+            ...hopFields(result.message),
+            reject: "sessionNonce !== armedSessionNonce",
+            line: "content.js:session_nonce_mismatch"
+          });
+          return;
+        }
+      }
+      if (result.message.type === "GMWR_ESPN_BM_STATUS" && shouldRepostArmOnPageStatus(result.message.status)) {
+        repostArmToPage("page_status_ready");
       }
       relayToBackground(result.message);
     });
@@ -352,6 +434,7 @@
       }
       if (message.type === MSG_ESPN_BM_DISARM) {
         armedSessionNonce = null;
+        lastArmConfig = null;
         postToPage({ type: "DISARM" });
         postToPage({ type: MSG_ESPN_BM_DISARM });
         sendResponse({ ok: true });

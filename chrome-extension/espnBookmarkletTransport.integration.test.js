@@ -41,11 +41,13 @@ function createTransportBus() {
       armed = true;
       sessionNonce = config.sessionNonce;
       espnPageInbox.push({ type: "ARM", config });
+      espnPageInbox.push({ type: MSG_ESPN_BM_ARM, config });
+      // Content reached ≠ publisher.arm() — wait for Board Mirror confirmation.
       rivalsInbox.push(
         stamp({
           type: MSG_ESPN_BM_STATUS,
           provider: "espn-live",
-          status: "armed",
+          status: "waiting_for_espn_mirror",
           sessionNonce,
         }),
       );
@@ -123,21 +125,25 @@ describe("ESPN BM transport integration (simulated)", () => {
 
     const arm = bus.rivalsCommand({
       type: MSG_ESPN_BM_ARM,
+      protocolVersion: 1,
       provider: "espn-live",
       config: { leagueId: "424242", season: 2026, sessionNonce: "nonce-xyz" },
     });
     expect(arm.ok).toBe(true);
     expect(bus.espnPageInbox.some((m) => m.type === "ARM")).toBe(true);
-    expect(bus.rivalsInbox.some((m) => m.type === MSG_ESPN_BM_STATUS && m.status === "armed")).toBe(
-      true,
-    );
+    expect(
+      bus.rivalsInbox.some(
+        (m) => m.type === MSG_ESPN_BM_STATUS && m.status === "waiting_for_espn_mirror",
+      ),
+    ).toBe(true);
 
-    const ping = bus.rivalsCommand({ type: MSG_ESPN_BM_PING, provider: "espn-live" });
+    const ping = bus.rivalsCommand({ type: MSG_ESPN_BM_PING, protocolVersion: 1, provider: "espn-live" });
     expect(ping.ok).toBe(true);
     expect(bus.espnPageInbox.some((m) => m.type === "PING")).toBe(true);
 
     const pong = bus.contentFromPage({
       type: MSG_ESPN_BM_PONG,
+      protocolVersion: 1,
       channel: ESPN_BM_PAGE_CHANNEL,
       source: ESPN_BM_PAGE_SOURCE,
       provider: "espn-live",
@@ -156,6 +162,7 @@ describe("ESPN BM transport integration (simulated)", () => {
 
     const status = bus.contentFromPage({
       type: MSG_ESPN_BM_STATUS,
+      protocolVersion: 1,
       channel: ESPN_BM_PAGE_CHANNEL,
       source: ESPN_BM_PAGE_SOURCE,
       provider: "espn-live",
@@ -169,6 +176,8 @@ describe("ESPN BM transport integration (simulated)", () => {
 
     const batch = bus.contentFromPage({
       type: MSG_ESPN_BM_PICK_BATCH,
+      protocolVersion: 1,
+      revision: 1,
       channel: ESPN_BM_PAGE_CHANNEL,
       source: ESPN_BM_PAGE_SOURCE,
       provider: "espn-live",
@@ -217,6 +226,7 @@ describe("ESPN BM transport integration (simulated)", () => {
 
     const reset = bus.contentFromPage({
       type: MSG_ESPN_BM_SESSION_RESET,
+      protocolVersion: 1,
       channel: ESPN_BM_PAGE_CHANNEL,
       source: ESPN_BM_PAGE_SOURCE,
       provider: "espn-live",
@@ -226,12 +236,18 @@ describe("ESPN BM transport integration (simulated)", () => {
     });
     expect(reset.ok).toBe(true);
 
-    const disarm = bus.rivalsCommand({ type: MSG_ESPN_BM_DISARM, provider: "espn-live" });
+    const disarm = bus.rivalsCommand({
+      type: MSG_ESPN_BM_DISARM,
+      protocolVersion: 1,
+      provider: "espn-live",
+    });
     expect(disarm.ok).toBe(true);
     expect(bus.armed).toBe(false);
 
     const afterDisarm = bus.contentFromPage({
       type: MSG_ESPN_BM_PICK_BATCH,
+      protocolVersion: 1,
+      revision: 2,
       channel: ESPN_BM_PAGE_CHANNEL,
       source: ESPN_BM_PAGE_SOURCE,
       provider: "espn-live",

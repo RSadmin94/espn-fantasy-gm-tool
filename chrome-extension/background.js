@@ -2742,11 +2742,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         type: MSG_ESPN_BM_ARM,
         config: nextConfig,
       });
+      // Content reached ≠ publisher.arm(). Keep Waiting until Board Mirror STATUS armed/monitoring.
       await broadcastToFfrTabs({
         type: MSG_ESPN_BM_STATUS,
         protocolVersion: 1,
         provider: "espn-live",
-        status: r.reached > 0 ? "armed" : "waiting_for_espn_tab",
+        status: r.reached > 0 ? "waiting_for_espn_mirror" : "waiting_for_espn_tab",
         espnTabs: r.tabCount,
         reached: r.reached,
         sessionNonce,
@@ -2859,16 +2860,57 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (t === MSG_ESPN_BM_PICK_BATCH) {
+    const espnBmPathHop = {
+      hop: "background",
+      type: t,
+      sessionNonce: message?.sessionNonce != null ? String(message.sessionNonce) : null,
+      draftId: message?.draftId != null ? String(message.draftId) : null,
+      protocolVersion: message?.protocolVersion,
+      revision: message?.revision,
+      batchSize: Array.isArray(message?.picks) ? message.picks.length : null,
+      bgArmed: espnBmConnectorState.armed,
+      bgSessionNonce: espnBmConnectorState.sessionNonce,
+    };
+    try {
+      console.info("[espn-bm-path]", "background_recv_PICK_BATCH", espnBmPathHop);
+    } catch (_) {
+      /* ignore */
+    }
     if (message?.provider && message.provider !== "espn-live") {
+      try {
+        console.info("[espn-bm-path]", "background_drop_PICK_BATCH", {
+          ...espnBmPathHop,
+          reject: "unsupported_provider",
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({ ok: false, error: "unsupported_provider" });
       return true;
     }
     if (Math.floor(Number(message?.protocolVersion)) !== 1) {
+      try {
+        console.info("[espn-bm-path]", "background_drop_PICK_BATCH", {
+          ...espnBmPathHop,
+          reject: "unsupported_protocol_version",
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({ ok: false, error: "unsupported_protocol_version" });
       return true;
     }
     expireEspnBmSessionIfStale();
     if (!espnBmConnectorState.armed) {
+      try {
+        console.info("[espn-bm-path]", "background_drop_PICK_BATCH", {
+          ...espnBmPathHop,
+          reject: "!espnBmConnectorState.armed",
+          line: "background.js:!armed",
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({ ok: false, error: "not_armed" });
       return true;
     }
@@ -2877,6 +2919,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       message?.sessionNonce &&
       String(message.sessionNonce) !== espnBmConnectorState.sessionNonce
     ) {
+      try {
+        console.info("[espn-bm-path]", "background_drop_PICK_BATCH", {
+          ...espnBmPathHop,
+          reject: "session_nonce_mismatch",
+          line: "background.js:session_nonce_mismatch",
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({ ok: false, error: "session_nonce_mismatch" });
       return true;
     }
@@ -2890,6 +2941,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         relayedAt: espnBmConnectorState.lastPickAt,
         sessionNonce: espnBmConnectorState.sessionNonce,
       });
+      try {
+        console.info("[espn-bm-path]", "background_relay_PICK_BATCH", {
+          ...espnBmPathHop,
+          ffrTabs: ffr.tabCount,
+          ffrReached: ffr.reached,
+          batchesRelayed: espnBmConnectorState.batchesRelayed,
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({
         ok: true,
         ffrTabs: ffr.tabCount,
@@ -2897,6 +2958,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         batchesRelayed: espnBmConnectorState.batchesRelayed,
       });
     })().catch((e) => {
+      try {
+        console.info("[espn-bm-path]", "background_drop_PICK_BATCH", {
+          ...espnBmPathHop,
+          reject: "broadcast_failed",
+          error: e instanceof Error ? e.message : String(e),
+        });
+      } catch (_) {
+        /* ignore */
+      }
       sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
     });
     return true;

@@ -527,7 +527,21 @@ export class EspnBookmarkletPublisher {
    * Completion always rides on a PICK_BATCH (delta, baseline, or empty once).
    */
   onSnapshot(snapshot: NormalizedDraftSnapshot | null): void {
-    if (!this.armed || !this.armConfig) return;
+    if (!this.armed || !this.armConfig) {
+      try {
+        console.info("[espn-bm-path]", "mirror_skip_onSnapshot", {
+          hop: "board-mirror",
+          reject: "!armed || !armConfig",
+          line: "espnBookmarkletPublisher.ts:onSnapshot",
+          armed: this.armed,
+          hasArmConfig: Boolean(this.armConfig),
+          pickCount: snapshot?.picks?.length ?? null,
+        });
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     if (!snapshot || snapshot.source !== "espn") return;
 
     const { leagueId, season, sessionNonce } = this.armConfig;
@@ -740,6 +754,20 @@ export class EspnBookmarkletPublisher {
       picks: args.picks,
       diagnostics,
     };
+    try {
+      console.info("[espn-bm-path]", "mirror_emit_PICK_BATCH", {
+        hop: "board-mirror",
+        sessionNonce: message.sessionNonce,
+        draftId: message.draftId,
+        protocolVersion: message.protocolVersion,
+        revision: message.revision,
+        batchSize: message.picks.length,
+        baselineOnly: message.baselineOnly,
+        liveNotify: message.liveNotify,
+      });
+    } catch {
+      /* ignore */
+    }
     this.recentBatches.push(message);
     if (this.recentBatches.length > EspnBookmarkletPublisher.RECENT_BATCH_LIMIT) {
       this.recentBatches.splice(

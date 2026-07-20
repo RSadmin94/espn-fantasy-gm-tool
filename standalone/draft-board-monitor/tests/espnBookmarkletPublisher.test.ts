@@ -134,6 +134,134 @@ describe("EspnBookmarkletPublisher", () => {
     expect(pub.isArmed).toBe(false);
   });
 
+  it("inbound content ARM populates armConfig and enables PICK_BATCH", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const listeners: Array<(ev: MessageEvent) => void> = [];
+    const fakeWin = {
+      location: { origin: "https://fantasy.espn.com" },
+      postMessage() {},
+      addEventListener(_t: string, fn: (ev: MessageEvent) => void) {
+        listeners.push(fn);
+      },
+      removeEventListener() {},
+    } as unknown as Window;
+    const pub = new EspnBookmarkletPublisher({
+      emit: (m) => out.push(m),
+      window: fakeWin,
+    });
+    pub.attachInboundListener();
+    expect(pub.isArmed).toBe(false);
+
+    listeners[0]!({
+      source: fakeWin,
+      data: {
+        channel: "GMWR_ESPN_BM_PAGE",
+        type: "GMWR_ESPN_BM_ARM",
+        protocolVersion: 1,
+        config: { leagueId: "424242", season: 2026, sessionNonce: "nonce-handoff" },
+      },
+    } as MessageEvent);
+
+    expect(pub.isArmed).toBe(true);
+    expect(pub.state.sessionNonce).toBe("nonce-handoff");
+    expect(out.some((m) => m.type === "GMWR_ESPN_BM_STATUS" && m.status === "armed")).toBe(
+      true,
+    );
+
+    const boardPicks = [
+      pick({
+        eventKey: "h1",
+        overallPick: 1,
+        round: 1,
+        pickInRound: 1,
+        playerName: "A",
+        playerId: "1",
+        currentTeamId: "1",
+        currentTeamName: "A",
+      }),
+    ];
+    pub.onSnapshot(snapshot(boardPicks));
+    expect(batches(out).length).toBeGreaterThanOrEqual(1);
+    expect(batches(out)[0]!.sessionNonce).toBe("nonce-handoff");
+  });
+
+  it("rejects invalid inbound ARM (bad leagueId) and stays unarmed", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const listeners: Array<(ev: MessageEvent) => void> = [];
+    const fakeWin = {
+      location: { origin: "https://fantasy.espn.com" },
+      postMessage() {},
+      addEventListener(_t: string, fn: (ev: MessageEvent) => void) {
+        listeners.push(fn);
+      },
+      removeEventListener() {},
+    } as unknown as Window;
+    const pub = new EspnBookmarkletPublisher({
+      emit: (m) => out.push(m),
+      window: fakeWin,
+    });
+    pub.attachInboundListener();
+    listeners[0]!({
+      source: fakeWin,
+      data: {
+        channel: "GMWR_ESPN_BM_PAGE",
+        type: "ARM",
+        config: { leagueId: "not-digits", season: 2026, sessionNonce: "n1" },
+      },
+    } as MessageEvent);
+    expect(pub.isArmed).toBe(false);
+    expect(out.some((m) => m.type === "GMWR_ESPN_BM_STATUS" && m.status === "error")).toBe(
+      true,
+    );
+    pub.onSnapshot(
+      snapshot([
+        pick({
+          eventKey: "x",
+          overallPick: 1,
+          round: 1,
+          pickInRound: 1,
+          playerName: "A",
+          playerId: "1",
+          currentTeamId: "1",
+          currentTeamName: "A",
+        }),
+      ]),
+    );
+    expect(batches(out)).toHaveLength(0);
+  });
+
+  it("reconnect DISARM then ARM re-arms publisher and emits a fresh baseline", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    const boardPicks = [
+      pick({
+        eventKey: "r1",
+        overallPick: 1,
+        round: 1,
+        pickInRound: 1,
+        playerName: "A",
+        playerId: "1",
+        currentTeamId: "1",
+        currentTeamName: "A",
+      }),
+    ];
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "nonce-1" });
+    pub.onSnapshot(snapshot(boardPicks));
+    expect(batches(out)).toHaveLength(1);
+
+    pub.disarm();
+    expect(pub.isArmed).toBe(false);
+    pub.onSnapshot(snapshot(boardPicks));
+    expect(batches(out)).toHaveLength(1);
+
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "nonce-2" });
+    pub.onSnapshot(snapshot(boardPicks));
+    const b = batches(out);
+    expect(b).toHaveLength(2);
+    expect(b[1]!.sessionNonce).toBe("nonce-2");
+    expect(b[1]!.revision).toBe(1);
+  });
+
   it("emits full baseline projection batch with liveNotify=false", () => {
     const out: EspnBmOutboundMessage[] = [];
     const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });

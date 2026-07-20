@@ -886,6 +886,13 @@ function LiveDraftEngine({
   }, []);
 
   const applyProjectionBatch = useCallback((batch: NormalizedPickBatch) => {
+    console.info("[espn-bm-path]", "DraftWarRoom_applyNormalizedPickBatch", {
+      hop: "applyNormalizedPickBatch",
+      draftId: batch.draftId,
+      batchSize: batch.picks.length,
+      draftComplete: batch.draftComplete,
+      provider: batch.provider,
+    });
     setSession((prev) => applyNormalizedPickBatch(prev, batch, enrichFromPool).state);
   }, [enrichFromPool]);
 

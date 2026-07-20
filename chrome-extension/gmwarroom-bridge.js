@@ -332,11 +332,48 @@
     ) {
       return;
     }
+    const espnBmPathHop = {
+      hop: "bridge",
+      type: message.type,
+      sessionNonce: message.sessionNonce != null ? String(message.sessionNonce) : null,
+      draftId: message.draftId != null ? String(message.draftId) : null,
+      protocolVersion: message.protocolVersion,
+      revision: message.revision,
+      batchSize: Array.isArray(message.picks) ? message.picks.length : null,
+    };
+    if (message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+      try {
+        console.info("[espn-bm-path]", "bridge_recv_PICK_BATCH", espnBmPathHop);
+      } catch (_) {
+        /* ignore */
+      }
+    }
     if (message.provider && message.provider !== "espn-live") {
+      if (message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        try {
+          console.info("[espn-bm-path]", "bridge_drop_PICK_BATCH", {
+            ...espnBmPathHop,
+            reject: "unsupported_provider",
+          });
+        } catch (_) {
+          /* ignore */
+        }
+      }
       sendResponse({ ok: false, error: "unsupported_provider" });
       return true;
     }
     if (Math.floor(Number(message.protocolVersion)) !== 1) {
+      if (message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        try {
+          console.info("[espn-bm-path]", "bridge_drop_PICK_BATCH", {
+            ...espnBmPathHop,
+            reject: "unsupported_protocol_version",
+            line: "gmwarroom-bridge.js:protocolVersion",
+          });
+        } catch (_) {
+          /* ignore */
+        }
+      }
       sendResponse({ ok: false, error: "unsupported_protocol_version" });
       return true;
     }
@@ -354,8 +391,26 @@
         },
         "*",
       );
+      if (message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        try {
+          console.info("[espn-bm-path]", "bridge_post_PICK_BATCH", espnBmPathHop);
+        } catch (_) {
+          /* ignore */
+        }
+      }
       sendResponse({ ok: true });
     } catch (e) {
+      if (message.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        try {
+          console.info("[espn-bm-path]", "bridge_drop_PICK_BATCH", {
+            ...espnBmPathHop,
+            reject: "postMessage_failed",
+            error: e instanceof Error ? e.message : String(e),
+          });
+        } catch (_) {
+          /* ignore */
+        }
+      }
       sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
     return true;

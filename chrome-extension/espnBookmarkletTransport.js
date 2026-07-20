@@ -92,6 +92,16 @@ export function withProtocolVersion(fields) {
   return { protocolVersion: ESPN_BM_PROTOCOL_VERSION, ...fields };
 }
 
+/**
+ * Board Mirror emits STATUS "ready" when its inbound listener attaches.
+ * Content must re-post a cached/background ARM then — Rivals often ARMs before
+ * the bookmarklet listener exists, so the first postMessage is discarded.
+ * @param {unknown} status
+ */
+export function shouldRepostArmOnPageStatus(status) {
+  return String(status ?? "") === "ready";
+}
+
 export function validateArmConfig(raw) {
   if (!raw || typeof raw !== "object") return null;
   const c = /** @type {Record<string, unknown>} */ (raw);

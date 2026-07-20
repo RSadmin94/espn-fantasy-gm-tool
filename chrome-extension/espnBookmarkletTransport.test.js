@@ -13,6 +13,7 @@ import {
   isEspnLiveDraftId,
   shouldBridgeAcceptEspnBmCommand,
   shouldBridgeForwardEspnBm,
+  shouldRepostArmOnPageStatus,
   validateArmConfig,
   validatePageOutboundMessage,
   validateReplayRequest,
@@ -230,5 +231,13 @@ describe("FantasyPros regression (namespace)", () => {
     expect(validatePageOutboundMessage(fpBatch).ok).toBe(false);
     expect(shouldBridgeForwardEspnBm(fpBatch)).toBe(false);
     expect(shouldBridgeAcceptEspnBmCommand({ type: "GMWR_FP_MOCK_ARM" })).toBe(false);
+  });
+});
+
+describe("ARM ready handoff helper", () => {
+  it("shouldRepostArmOnPageStatus is true only for ready", () => {
+    expect(shouldRepostArmOnPageStatus("ready")).toBe(true);
+    expect(shouldRepostArmOnPageStatus("armed")).toBe(false);
+    expect(shouldRepostArmOnPageStatus("monitoring")).toBe(false);
   });
 });

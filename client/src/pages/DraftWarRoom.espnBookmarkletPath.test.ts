@@ -73,6 +73,10 @@ describe("DraftWarRoom ESPN bookmarklet path wiring", () => {
     expect(warRoom).toContain("armExtension: true");
     expect(hook).toContain("postEspnBookmarkletArm");
     expect(hook).toContain("GMWR_ESPN_BM_PICK_BATCH");
+    expect(hook).toContain("isEspnMirrorPublisherHandshake");
+    expect(hook).not.toMatch(
+      /parsed\.status === "ready"[\s\S]{0,80}mirrorHandshake/,
+    );
   });
 
   it("wires PICK_BATCH into applyNormalizedPickBatch via onNormalizedBatch", () => {

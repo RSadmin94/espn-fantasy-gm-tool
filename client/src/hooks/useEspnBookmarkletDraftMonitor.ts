@@ -18,6 +18,7 @@ import {
   planEspnBookmarkletBatchIngest,
   type EspnBmIngestState,
 } from "@/lib/espnBookmarkletIngest";
+import { isEspnMirrorPublisherHandshake } from "@/lib/espnBookmarkletLivePath";
 import {
   buildEspnLiveDraftId,
   toNotifyLockedPickRequest,
@@ -229,31 +230,87 @@ export function useEspnBookmarkletDraftMonitor({
 
     const onMessage = (ev: MessageEvent) => {
       if (ev.source !== window) return;
+      const raw = ev.data as Record<string, unknown> | null;
+      if (raw && raw.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        console.info("[espn-bm-path]", "warroom_recv_PICK_BATCH", {
+          hop: "warroom",
+          sessionNonce: raw.sessionNonce != null ? String(raw.sessionNonce) : null,
+          draftId: raw.draftId != null ? String(raw.draftId) : null,
+          protocolVersion: raw.protocolVersion,
+          revision: raw.revision,
+          batchSize: Array.isArray(raw.picks) ? raw.picks.length : null,
+          expectedNonce: sessionNonceRef.current,
+        });
+      }
       const parsed = parseEspnBookmarkletBridgeMessage(ev.data);
-      if (!parsed) return;
+      if (!parsed) {
+        if (raw && raw.type === "GMWR_ESPN_BM_PICK_BATCH") {
+          const draftId = String(raw.draftId ?? "").trim();
+          const leagueIdRaw = String(raw.leagueId ?? "").trim();
+          const season = Math.floor(Number(raw.season));
+          const sessionNonce = String(raw.sessionNonce ?? "").trim();
+          const revision = Math.floor(Number(raw.revision));
+          let reject = "parseEspnBookmarkletBridgeMessage:null";
+          if (!/^espn-live-\d+-\d{4}$/.test(draftId) || draftId.endsWith("-na")) {
+            reject = "invalid_draft_id";
+          } else if (!/^\d+$/.test(leagueIdRaw)) {
+            reject = "invalid_league_id";
+          } else if (!Number.isFinite(season) || season < 2000 || season > 2100) {
+            reject = "invalid_season";
+          } else if (!sessionNonce || sessionNonce.length > 128) {
+            reject = "invalid_session_nonce";
+          } else if (!Number.isFinite(revision) || revision < 1) {
+            reject = "invalid_revision";
+          } else if (!Array.isArray(raw.picks) || raw.picks.length > 256) {
+            reject = "picks_invalid_or_too_many";
+          } else if (raw.picks.length === 0 && !raw.draftComplete) {
+            reject = "empty_non_complete_batch";
+          } else {
+            reject = "no_valid_picks_or_source";
+          }
+          console.info("[espn-bm-path]", "warroom_drop_PICK_BATCH", {
+            hop: "warroom",
+            reject,
+            line: "parseEspnBookmarkletBridgeMessage",
+            sessionNonce: sessionNonce || null,
+            draftId: draftId || null,
+            protocolVersion: raw.protocolVersion,
+            revision: raw.revision,
+            batchSize: Array.isArray(raw.picks) ? raw.picks.length : null,
+          });
+        }
+        return;
+      }
 
       if (parsed.type === "GMWR_ESPN_BM_STATUS") {
-        const handshook =
-          parsed.status === "monitoring" ||
-          parsed.status === "armed" ||
-          parsed.status === "complete" ||
-          parsed.status === "ready";
+        const publisherConfirmed = isEspnMirrorPublisherHandshake({
+          status: parsed.status,
+          sessionNonce: parsed.sessionNonce,
+          leagueId: parsed.leagueId,
+          draftId: parsed.draftId,
+        });
         setStatus((s) => ({
           ...s,
           extensionPresent: true,
-          transportActive: s.transportActive || handshook,
-          mirrorHandshake: s.mirrorHandshake || handshook,
-          connectorStatus: handshook
+          transportActive: s.transportActive || publisherConfirmed,
+          mirrorHandshake: s.mirrorHandshake || publisherConfirmed,
+          connectorStatus: publisherConfirmed
             ? parsed.status === "complete"
               ? "complete"
               : "monitoring"
-            : parsed.status || s.connectorStatus,
+            : parsed.status === "ready" ||
+                parsed.status === "waiting_for_espn_mirror" ||
+                parsed.status === "waiting_for_espn_tab"
+              ? parsed.status === "ready"
+                ? "waiting_for_espn_mirror"
+                : parsed.status
+              : parsed.status || s.connectorStatus,
           draftComplete: parsed.draftComplete ?? s.draftComplete,
           lastError:
             parsed.reason &&
-            !handshook
+            !publisherConfirmed
               ? String(parsed.reason)
-              : handshook
+              : publisherConfirmed
                 ? null
                 : s.lastError,
           espnTabs: parsed.espnTabs ?? s.espnTabs,
@@ -263,6 +320,7 @@ export function useEspnBookmarkletDraftMonitor({
             parsed.revision != null && Number.isFinite(Number(parsed.revision))
               ? Math.max(s.lastRevision ?? 0, Math.floor(Number(parsed.revision)))
               : s.lastRevision,
+          sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
         }));
         return;
       }
@@ -298,6 +356,15 @@ export function useEspnBookmarkletDraftMonitor({
       }
 
       if (parsed.type === "GMWR_ESPN_BM_PICK_BATCH") {
+        console.info("[espn-bm-path]", "warroom_parsed_PICK_BATCH", {
+          hop: "warroom",
+          sessionNonce: parsed.sessionNonce,
+          draftId: parsed.draftId,
+          protocolVersion: parsed.protocolVersion,
+          revision: parsed.revision,
+          batchSize: parsed.picks.length,
+          expectedNonce: sessionNonceRef.current,
+        });
         void ingestBatch(parsed, String(leagueId), season, draftPace);
       }
     };
@@ -310,6 +377,16 @@ export function useEspnBookmarkletDraftMonitor({
     ) {
       const expectedNonce = sessionNonceRef.current;
       if (!expectedNonce) {
+        console.info("[espn-bm-path]", "warroom_drop_PICK_BATCH", {
+          hop: "ingest",
+          reject: "session_not_armed",
+          line: "useEspnBookmarkletDraftMonitor.ts:!expectedNonce",
+          sessionNonce: batch.sessionNonce,
+          draftId: batch.draftId,
+          protocolVersion: batch.protocolVersion,
+          revision: batch.revision,
+          batchSize: batch.picks.length,
+        });
         setStatus((s) => ({
           ...s,
           lastError: "session_not_armed",
@@ -327,6 +404,19 @@ export function useEspnBookmarkletDraftMonitor({
       ingestRef.current = plan.next;
 
       if (!plan.ok) {
+        console.info("[espn-bm-path]", "warroom_drop_PICK_BATCH", {
+          hop: "ingest",
+          reject: plan.error,
+          line: "planEspnBookmarkletBatchIngest",
+          sessionNonce: batch.sessionNonce,
+          draftId: batch.draftId,
+          protocolVersion: batch.protocolVersion,
+          revision: batch.revision,
+          batchSize: batch.picks.length,
+          expectedNonce,
+          expectedLeagueId: lid,
+          expectedSeason: seas,
+        });
         if (import.meta.env.DEV) {
           console.debug("[espn-bm] ingest rejected", plan.error, {
             draftId: batch.draftId,
@@ -358,7 +448,25 @@ export function useEspnBookmarkletDraftMonitor({
       }));
 
       if (plan.projectionBatch) {
+        console.info("[espn-bm-path]", "warroom_applyNormalizedPickBatch", {
+          hop: "apply",
+          sessionNonce: batch.sessionNonce,
+          draftId: batch.draftId,
+          protocolVersion: batch.protocolVersion,
+          revision: batch.revision,
+          batchSize: batch.picks.length,
+          projectionSize: plan.projectionBatch.picks.length,
+        });
         onNormalizedBatchRef.current?.(plan.projectionBatch);
+      } else {
+        console.info("[espn-bm-path]", "warroom_skip_apply_null_projection", {
+          hop: "apply",
+          sessionNonce: batch.sessionNonce,
+          draftId: batch.draftId,
+          protocolVersion: batch.protocolVersion,
+          revision: batch.revision,
+          batchSize: batch.picks.length,
+        });
       }
 
       const teams = Math.max(1, teamCountRef.current || batch.teamCount || 12);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isEspnMirrorPublisherHandshake,
   shouldEnableLegacyEspnLeagueFetch,
   shouldPreferEspnBookmarkletStatus,
 } from "./espnBookmarkletLivePath";
@@ -54,5 +55,50 @@ describe("espnBookmarkletLivePath", () => {
         bookmarkletConnectorStatus: "extension_missing",
       }),
     ).toBe(false);
+  });
+
+  it("STATUS ready alone is not publisher handshake (Waiting, not Connected)", () => {
+    expect(
+      isEspnMirrorPublisherHandshake({
+        status: "ready",
+        sessionNonce: null,
+        leagueId: null,
+        draftId: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("background waiting_for_espn_mirror / tab-reach armed without identity is not Connected", () => {
+    expect(
+      isEspnMirrorPublisherHandshake({
+        status: "waiting_for_espn_mirror",
+        sessionNonce: "n1",
+      }),
+    ).toBe(false);
+    expect(
+      isEspnMirrorPublisherHandshake({
+        status: "armed",
+        sessionNonce: "n1",
+        // no leagueId / draftId — extension tab-reach signal
+      }),
+    ).toBe(false);
+  });
+
+  it("publisher STATUS armed with league identity is Connected confirmation", () => {
+    expect(
+      isEspnMirrorPublisherHandshake({
+        status: "armed",
+        sessionNonce: "n1",
+        leagueId: "457622",
+        draftId: "espn-live-457622-2026",
+      }),
+    ).toBe(true);
+    expect(
+      isEspnMirrorPublisherHandshake({
+        status: "monitoring",
+        sessionNonce: "n1",
+        leagueId: "457622",
+      }),
+    ).toBe(true);
   });
 });
