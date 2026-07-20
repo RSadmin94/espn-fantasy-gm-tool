@@ -20,6 +20,12 @@ await esbuild.build({
   minify: false,
   sourcemap: true,
   logLevel: "info",
+  alias: {
+    "@shared": path.resolve(root, "..", "..", "shared"),
+  },
+  loader: {
+    ".json": "json",
+  },
 });
 
 const code = fs.readFileSync(outfile, "utf8");

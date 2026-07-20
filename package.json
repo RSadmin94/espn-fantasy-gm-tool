@@ -27,6 +27,7 @@
     "player:fetch": "tsx scripts/fetchEspnWeeklyPlayerStats.ts",
     "player:ingest": "tsx scripts/runIngestionPipeline.ts --all",
     "player:validate": "tsx scripts/validatePlayerStatsIngestion.ts",
+    "player:identity-lookup": "tsx scripts/generateSleeperPlayerLookup.mts",
     "format": "prettier --write .",
     "test": "vitest run",
     "stripe:setup-rivals-pro": "tsx scripts/setup-stripe-rivals-pro.ts",

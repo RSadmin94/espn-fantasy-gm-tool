@@ -1,0 +1,16 @@
+{
+  "builtAt": "2026-07-20T04:56:28.094Z",
+  "artifactVersion": 1,
+  "source": "sleeper:v1/players/nfl",
+  "sourcePlayerCount": 12200,
+  "includedPlayerCount": 2585,
+  "contentHash": "fnv1a-f5acd0e0",
+  "artifactBytes": 108785,
+  "artifactSha256": "a989424611599776601d39e21a3307f96315a0f4c391e6ddf76622ffcc26cc71",
+  "catalogSha256": "1e0457604cab548fa492a976feaefd20dcae44d46466de7a9796c5dc5c3393fc",
+  "catalogBytes": 14607971,
+  "catalogLoadedFrom": "C:\\Users\\RODERICK\\Projects\\espn-fantasy-gm-tool-rfsn-recovery\\shared\\data\\.sleeperNflCatalog.cache.json",
+  "maxArtifactBytes": 120000,
+  "withinBudget": true,
+  "outPath": "shared/data/sleeperPlayerLookup.compact.json"
+}

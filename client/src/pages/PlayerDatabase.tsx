@@ -2,7 +2,11 @@ import { useState, useCallback, useRef, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { PlayerProfilePanel } from "@/pages/PlayerIntelligence";
 import { cn } from "@/lib/utils";
-import { resolvePlayerHeadshotUrl } from "@shared/playerHeadshot";
+import {
+  resolvePlayerIdentityDefault,
+  getPlayerIdentityArtifact,
+} from "@shared/playerIdentityLookup";
+import { sleeperPlayerHeadshotUrl } from "@shared/playerHeadshot";
 import {
   Search, ChevronDown, ChevronUp, ChevronsUpDown,
   RefreshCw, Sparkles, TrendingUp, TrendingDown, AlertTriangle, Zap,
@@ -41,26 +45,36 @@ function dynastyValue(p: any): number {
   return Math.min(99, base + variance + recency);
 }
 
-// ── Headshot (ESPN CDN → Sleeper CDN → initials) ─────────────────────────────
+// ── Headshot via shared identity resolver (ESPN → Sleeper → initials) ────────
 function Headshot({
   espnId,
   sleeperId,
   name,
   pos,
+  nflTeam,
 }: {
   espnId: string | null;
   sleeperId?: string | null;
   name: string;
   pos: string;
+  nflTeam?: string | null;
 }) {
   const candidates = useMemo(() => {
+    const resolved = resolvePlayerIdentityDefault({
+      espnPlayerId: espnId,
+      sleeperPlayerId: sleeperId,
+      playerName: name,
+      position: pos,
+      nflTeam,
+    });
     const list: string[] = [];
-    const espn = resolvePlayerHeadshotUrl({ espnPlayerId: espnId, sleeperPlayerId: null });
-    const sleeper = resolvePlayerHeadshotUrl({ espnPlayerId: null, sleeperPlayerId: sleeperId });
-    if (espn) list.push(espn);
-    if (sleeper) list.push(sleeper);
+    if (resolved.headshotUrl) list.push(resolved.headshotUrl);
+    const sleeperUrl = sleeperPlayerHeadshotUrl(
+      resolved.sleeperPlayerId ?? sleeperId,
+    );
+    if (sleeperUrl && sleeperUrl !== resolved.headshotUrl) list.push(sleeperUrl);
     return list;
-  }, [espnId, sleeperId]);
+  }, [espnId, sleeperId, name, pos, nflTeam]);
   const [idx, setIdx] = useState(0);
   const cfg = POS_CFG[pos] ?? POS_CFG.K;
   const initials = name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
@@ -290,6 +304,13 @@ export function PlayerDatabase() {
                 : ""}
             </span>
           )}
+          <span
+            className="text-[10px] text-zinc-600 tabular-nums"
+            title="Shared compact identity lookup (bundled; not a live Sleeper fetch)"
+          >
+            Identity v{getPlayerIdentityArtifact().v} · {getPlayerIdentityArtifact().includedPlayerCount} ·{" "}
+            {getPlayerIdentityArtifact().contentHash}
+          </span>
           {syncSleeperMut.data && (
             <span className="text-[10px] text-lime-500/80 tabular-nums">
               Wrote {syncSleeperMut.data.sleeperIdsWritten}; already {syncSleeperMut.data.alreadyMatched}
@@ -439,6 +460,7 @@ export function PlayerDatabase() {
                       sleeperId={p.sleeperPlayerId}
                       name={p.fullName}
                       pos={p.position}
+                      nflTeam={p.currentNflTeam}
                     />
                     <div className="min-w-0">
                       <div className="font-bold text-zinc-100 text-base leading-tight truncate group-hover:text-white">{p.fullName}</div>

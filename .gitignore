@@ -137,3 +137,7 @@ client/public/dev-shadow/
 # Founder QA authentication artifacts — never commit (sign-in tickets / minting)
 scripts/_founder_signin_url.txt
 scripts/_mint_founder_signin.mts
+
+# Full Sleeper catalog cache (generator only; not shipped)
+shared/data/.sleeperNflCatalog.cache.json
+

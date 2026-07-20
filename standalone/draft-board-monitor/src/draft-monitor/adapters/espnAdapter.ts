@@ -18,6 +18,8 @@ import {
 } from "../normalize/draftTypes";
 import { buildEventKey } from "../normalize/eventKey";
 import { resolveCurrentOwner } from "../normalize/pickOwnership";
+import { resolvePlayerIdentityDefault } from "@shared/playerIdentityLookup";
+import { sleeperPlayerHeadshotUrl } from "@shared/playerHeadshot";
 
 export type EspnDomPickRecord = {
   playerName: string;
@@ -34,6 +36,28 @@ export type EspnDomPickRecord = {
   rawText: string;
   sourceSequence: number;
 };
+
+/** Shared identity enrich — same resolver as Rivals Player Database. */
+export function enrichEspnPickIdentity(args: {
+  playerName: string;
+  playerId?: string;
+  headshotUrl?: string;
+  nflTeam?: string;
+  position?: string;
+}): { playerId?: string; headshotUrl?: string } {
+  const resolved = resolvePlayerIdentityDefault({
+    espnPlayerId: args.playerId,
+    playerName: args.playerName,
+    nflTeam: args.nflTeam,
+    position: args.position,
+  });
+  // Prefer Sleeper CDN when identity resolves; fall back to scraped ESPN URL.
+  const sleeperUrl = sleeperPlayerHeadshotUrl(resolved.sleeperPlayerId);
+  return {
+    playerId: args.playerId || resolved.espnPlayerId || undefined,
+    headshotUrl: sleeperUrl || args.headshotUrl || resolved.headshotUrl || undefined,
+  };
+}
 
 export type EspnReadResult = {
   ok: boolean;
@@ -584,6 +608,14 @@ export function observeEspnFromDocument(
       playerName: rec.playerName,
     });
 
+    const identity = enrichEspnPickIdentity({
+      playerName: rec.playerName,
+      playerId: rec.playerId,
+      headshotUrl: rec.headshotUrl,
+      nflTeam: rec.nflTeam,
+      position: rec.position,
+    });
+
     picks.push({
       eventKey,
       source: "espn",
@@ -594,8 +626,8 @@ export function observeEspnFromDocument(
       currentTeamId: owner.currentTeamId,
       currentTeamName: owner.currentTeamName,
       playerName: rec.playerName,
-      playerId: rec.playerId,
-      headshotUrl: rec.headshotUrl,
+      playerId: identity.playerId,
+      headshotUrl: identity.headshotUrl,
       nflTeam: rec.nflTeam,
       position: rec.position,
       isKeeper: rec.isKeeper,

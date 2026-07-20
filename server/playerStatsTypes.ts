@@ -22,18 +22,9 @@ export function isValidPosition(p: string): p is PlayerPosition {
   return (VALID_POSITIONS as readonly string[]).includes(p);
 }
 
-// ── 2. Name normalizer (used for fuzzy matching) ──────────────────────────────
+// ── 2. Name normalizer (canonical shared identity) ────────────────────────────
 
-export function normalizePlayerName(raw: string): string {
-  return raw
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")   // strip accents
-    .replace(/[^a-z0-9 ]/g, " ")       // non-alphanum → space
-    .replace(/\bjr\.?\b|\bsr\.?\b|\bii+\b/g, "") // strip Jr/Sr/II
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export { normalizePlayerName } from "../shared/playerIdentity";
 
 // ── 3. Player identity confidence tiers ──────────────────────────────────────
 // Enforced during ingestion — never stored as magic numbers in DB comments.
