@@ -51,8 +51,13 @@ export function renderBoard(
   root.setAttribute("data-dbm-sig", sig);
 
   const header = el(target.document, "div", "dbm-header");
+  const logo = target.document.createElement("img");
+  logo.className = "dbm-logo";
+  logo.src = "https://fantasyfootballrivals.com/logo.png";
+  logo.alt = "Fantasy Football Rivals";
+  header.appendChild(logo);
   const title = el(target.document, "h1", "dbm-title");
-  title.textContent = "Draft Board Monitor";
+  title.textContent = "ESPN Draft — Live Board";
   header.appendChild(title);
 
   const meta = el(target.document, "div", "dbm-meta");
