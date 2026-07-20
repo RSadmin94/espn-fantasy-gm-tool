@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { observeFantasyProsFromStore } from "../src/draft-monitor/adapters/fantasyProsAdapter";
 import {
   annotateTradesFromSnakeMismatch,
+  enrichEspnPickIdentity,
   extractEspnPickRecords,
   findEspnPickHistoryRoot,
   observeEspnFromDocument,
@@ -507,5 +508,84 @@ describe("active-pick highlight (never illuminate the wrong team)", () => {
     renderBoard({ document: doc, mount }, snapshot, diags);
     expect(mount.querySelector(".dbm-onclock")).toBeNull();
     expect(mount.querySelector(".on-clock")).toBeNull();
+  });
+});
+
+describe("enrichEspnPickIdentity headshot candidates", () => {
+  it("orders Sleeper full before scraped ESPN and ESPN full", () => {
+    const scraped =
+      "https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/3139477.png";
+    const out = enrichEspnPickIdentity({
+      playerName: "Patrick Mahomes",
+      playerId: "3139477",
+      headshotUrl: scraped,
+      position: "QB",
+      nflTeam: "KC",
+    });
+    expect(out.headshotCandidates?.length).toBeGreaterThanOrEqual(1);
+    expect(out.headshotCandidates![0]).toContain("sleepercdn.com");
+    expect(out.headshotCandidates![0]).toContain("/players/");
+    expect(out.headshotUrl).toBe(out.headshotCandidates![0]);
+  });
+
+  it("no match yields empty candidates", () => {
+    const out = enrichEspnPickIdentity({
+      playerName: "Definitely Not A Real Nfl Player Zzz 99999",
+      position: "QB",
+    });
+    expect(out.headshotCandidates ?? []).toEqual([]);
+    expect(out.headshotUrl).toBeUndefined();
+  });
+});
+
+describe("renderBoard headshot fallback", () => {
+  it("renders initials when no headshot candidates", async () => {
+    const { renderBoard } = await import("../src/draft-monitor/board/renderBoard");
+    const dom = new JSDOM(`<!DOCTYPE html><html><body><div id="m"></div></body></html>`);
+    const doc = dom.window.document;
+    const mount = doc.getElementById("m")!;
+    const snapshot: NormalizedDraftSnapshot = {
+      source: "espn",
+      status: "ACTIVE",
+      teamCount: 1,
+      teams: [{ teamId: "a", teamName: "A", draftSlot: 1 }],
+      picks: [
+        {
+          eventKey: "e",
+          source: "espn",
+          round: 1,
+          pickInRound: 1,
+          overallPick: 1,
+          currentTeamId: "a",
+          currentTeamName: "A",
+          playerName: "Josh Allen",
+          isKeeper: false,
+          isTradedPick: false,
+          isLiveSelection: true,
+          keeperStatusKnown: false,
+        },
+      ],
+      lastUpdatedAt: new Date().toISOString(),
+      draftFingerprint: "fp:hs",
+    };
+    const diags = {
+      version: "test",
+      source: "espn" as const,
+      draftIdOrFingerprint: "fp:hs",
+      teamCount: 1,
+      sourcePickCount: 1,
+      normalizedPickCount: 1,
+      duplicatesSuppressed: 0,
+      keeperCount: 0,
+      tradedPickCount: 0,
+      userTeam: "—",
+      lastSuccessfulReadAt: null,
+      parseError: null,
+      status: "ACTIVE" as const,
+    };
+    renderBoard({ document: doc, mount }, snapshot, diags);
+    const fb = mount.querySelector(".dbm-headshot-fallback");
+    expect(fb).not.toBeNull();
+    expect(fb!.textContent).toBe("JA");
   });
 });

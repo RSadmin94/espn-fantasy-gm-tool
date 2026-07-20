@@ -68,7 +68,7 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
               </span>
               <span className="text-zinc-400 truncate max-w-[5.5rem] shrink-0">{p.ownerName}</span>
               <PlayerHeadshot
-                size="xs"
+                variant="hd"
                 player={{
                   id: p.playerId,
                   name: p.playerName,

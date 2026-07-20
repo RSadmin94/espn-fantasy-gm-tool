@@ -214,14 +214,13 @@ function renderCard(doc: Document, p: import("../normalize/draftTypes").Normaliz
   const posClass = p.position ? ` pos-${p.position.replace(/[^A-Z]/gi, "").toUpperCase()}` : "";
   const card = el(doc, "div", `dbm-card${posClass}${p.isKeeper ? " keeper" : ""}${p.isTradedPick ? " trade" : ""}`);
   const row = el(doc, "div", "dbm-card-row");
-  if (p.headshotUrl) {
-    const img = doc.createElement("img");
-    img.className = "dbm-headshot";
-    img.src = p.headshotUrl;
-    img.alt = "";
-    img.loading = "lazy";
-    row.appendChild(img);
-  }
+  const candidates =
+    p.headshotCandidates?.length
+      ? p.headshotCandidates
+      : p.headshotUrl
+        ? [p.headshotUrl]
+        : [];
+  row.appendChild(renderHeadshotSlot(doc, p.playerName, candidates));
   const body = el(doc, "div", "dbm-card-body");
   const top = el(doc, "div", "dbm-card-top");
   if (p.overallPick != null) {
@@ -264,6 +263,49 @@ function renderCard(doc: Document, p: import("../normalize/draftTypes").Normaliz
     card.appendChild(tags);
   }
   return card;
+}
+
+function renderHeadshotSlot(
+  doc: Document,
+  playerName: string,
+  candidates: string[],
+): HTMLElement {
+  const slot = el(doc, "div", "dbm-headshot-slot");
+  if (candidates.length === 0) {
+    slot.appendChild(renderHeadshotFallback(doc, playerName));
+    return slot;
+  }
+  const img = doc.createElement("img");
+  img.className = "dbm-headshot";
+  img.alt = "";
+  img.loading = "lazy";
+  let idx = 0;
+  const advance = () => {
+    idx += 1;
+    if (idx < candidates.length) {
+      img.src = candidates[idx]!;
+    } else {
+      img.replaceWith(renderHeadshotFallback(doc, playerName));
+    }
+  };
+  img.onerror = advance;
+  img.src = candidates[0]!;
+  slot.appendChild(img);
+  return slot;
+}
+
+function renderHeadshotFallback(doc: Document, playerName: string): HTMLElement {
+  const initials = playerName
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "?";
+  const fb = el(doc, "div", "dbm-headshot-fallback");
+  fb.textContent = initials;
+  fb.title = playerName;
+  return fb;
 }
 
 function renderDiagnostics(doc: Document, d: MonitorDiagnostics): HTMLElement {

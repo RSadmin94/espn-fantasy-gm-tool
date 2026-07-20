@@ -1784,7 +1784,7 @@ function LiveDraftEngine({
                     )}
                   >
                     <PlayerHeadshot
-                      size="sm"
+                      variant="hd"
                       player={{
                         espnId: p.espnId,
                         id: p.id,
@@ -1905,7 +1905,7 @@ function LiveDraftEngine({
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
                         <PlayerHeadshot
-                          size="xs"
+                          variant="hdCompact"
                           player={{
                             id: r.id,
                             name: r.name,
@@ -2385,6 +2385,7 @@ function MockDraftBoard({
                 {rPicks.map((p: any) => {
                   // Real ADP for this player (carried on the pick, fallback to the board)
                   const adp = p.adp ?? availablePool.find(ap => ap.name === p.player)?.adp;
+                  const poolMeta = availablePool.find((ap: any) => ap.name === p.player);
                   return (
                     <button key={p.pickNumber}
                       onClick={() => setExp(expandPick === p.pickNumber ? null : p.pickNumber)}
@@ -2395,6 +2396,21 @@ function MockDraftBoard({
                         yourTeamId && Number(p.teamId) === yourTeamId && "border border-violet-500/30 bg-violet-500/5",
                         expandPick === p.pickNumber && "ring-1 ring-violet-500/40"
                       )}>
+                      {!p.isKeeperSlot && p.player ? (
+                        <div className="mb-1.5">
+                          <PlayerHeadshot
+                            variant="hdCompact"
+                            className="w-full h-9"
+                            player={{
+                              espnId: p.espnId ?? poolMeta?.espnId,
+                              id: poolMeta?.id,
+                              name: p.player,
+                              position: p.position,
+                              nflTeam: poolMeta?.nflTeam,
+                            }}
+                          />
+                        </div>
+                      ) : null}
                       <div className="flex items-center gap-1 mb-1 flex-wrap">
                         <span className="text-[10px] text-zinc-600 font-mono">{p.pickNumber}</span>
                         <PosPill pos={p.position} />

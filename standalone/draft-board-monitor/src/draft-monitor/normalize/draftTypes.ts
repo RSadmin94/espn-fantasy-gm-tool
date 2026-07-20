@@ -44,6 +44,8 @@ export type NormalizedDraftPick = {
   keeperStatusKnown: boolean;
   /** Player headshot image URL when the source page provides one (e.g. ESPN CDN). */
   headshotUrl?: string;
+  /** Ordered presentation candidates (Sleeper full → scraped ESPN → ESPN full). */
+  headshotCandidates?: string[];
   sourceSequence?: number;
   sourceTimestamp?: string;
 };

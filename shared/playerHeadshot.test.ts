@@ -93,4 +93,37 @@ describe("getPlayerHeadshotUrl", () => {
       }),
     ).toEqual([]);
   });
+
+  it("Sleeper-first full prefers sleeper CDN over ESPN", () => {
+    const list = getPlayerHeadshotCandidates(
+      {
+        espnId: "3139477",
+        name: "Patrick Mahomes",
+        position: "QB",
+        nflTeam: "KC",
+      },
+      "full",
+      { prefer: "sleeper" },
+    );
+    expect(list.length).toBeGreaterThanOrEqual(1);
+    expect(list[0]).toContain("sleepercdn.com");
+    expect(list[0]).toContain("/players/");
+    expect(list[0]).not.toContain("/thumb/");
+    if (list.length > 1) {
+      expect(list[1]).toContain("espncdn.com");
+    }
+  });
+
+  it("Sleeper-first full with no match yields empty (initials)", () => {
+    expect(
+      getPlayerHeadshotCandidates(
+        {
+          name: "Definitely Not A Real Nfl Player Zzz 99999",
+          position: "QB",
+        },
+        "full",
+        { prefer: "sleeper" },
+      ),
+    ).toEqual([]);
+  });
 });

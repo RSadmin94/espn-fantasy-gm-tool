@@ -1,5 +1,5 @@
 /**
- * Draft War Room headshot — ESPN-first, Sleeper fallback, initials if neither.
+ * Draft War Room headshot — circle thumbs (ESPN-first) or HD tiles (Sleeper-first full).
  * Presentation only; does not touch ingest/notify/identity cascade.
  */
 import { useEffect, useMemo, useState } from "react";
@@ -29,13 +29,23 @@ export type PlayerHeadshotPlayer = {
   nflTeam?: string | null;
 };
 
-type SizePreset = "xs" | "sm" | "md";
+type CircleSize = "xs" | "sm" | "md";
 
-const SIZE_CLASS: Record<SizePreset, string> = {
+const CIRCLE_SIZE: Record<CircleSize, string> = {
   xs: "w-5 h-5 text-[8px]",
   sm: "w-7 h-7 text-[9px]",
   md: "w-9 h-9 text-[10px]",
 };
+
+/** Sleeper full cutout + helmet background (rectangular). */
+const HD_SIZE = {
+  /** List rows, recent picks, pool */
+  hd: "w-14 h-10 text-[9px]",
+  /** Draft board grid cells, tight roster chips */
+  hdCompact: "w-10 h-7 text-[8px]",
+  /** Player Database rows */
+  hdLg: "w-16 h-12 text-[10px]",
+} as const;
 
 function initialsFromName(name: string): string {
   return (
@@ -51,19 +61,30 @@ function initialsFromName(name: string): string {
 
 type Props = {
   player: PlayerHeadshotPlayer;
-  /** Visual box size for list/cell contexts (always uses CDN thumb URLs). */
-  size?: SizePreset;
+  /** circle = ESPN-first thumb (default); hd* = Sleeper-first full rectangular tile */
+  variant?: "circle" | "hd" | "hdCompact" | "hdLg";
+  /** circle variant box size */
+  size?: CircleSize;
   className?: string;
 };
 
-export function PlayerHeadshot({ player, size = "sm", className }: Props) {
+export function PlayerHeadshot({
+  player,
+  variant = "circle",
+  size = "sm",
+  className,
+}: Props) {
   const name = String(player.playerName ?? player.name ?? "").trim() || "?";
   const pos = String(player.position ?? "?").toUpperCase();
+  const isHd = variant !== "circle";
   const candidates = useMemo(
-    () => getPlayerHeadshotCandidates(player, "thumb"),
-    // Intentionally key on identity fields only
+    () =>
+      isHd
+        ? getPlayerHeadshotCandidates(player, "full", { prefer: "sleeper" })
+        : getPlayerHeadshotCandidates(player, "thumb"),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
+      variant,
       player.espnPlayerId,
       player.espnId,
       player.playerId,
@@ -81,20 +102,23 @@ export function PlayerHeadshot({ player, size = "sm", className }: Props) {
   }, [candidates]);
 
   const src = candidates[idx] ?? null;
-  const box = SIZE_CLASS[size];
   const tone = POS_TONE[pos] ?? "text-zinc-400";
+  const box = isHd ? HD_SIZE[variant] : CIRCLE_SIZE[size];
+  const shape = isHd ? "rounded-md" : "rounded-full";
 
-  if (!src) {
+  if (!src || idx >= candidates.length) {
     return (
       <div
         className={cn(
-          "rounded-full flex items-center justify-center font-bold shrink-0 border border-zinc-700 bg-zinc-800/80",
+          "flex items-center justify-center font-bold shrink-0 border border-zinc-700 bg-zinc-800/80",
+          shape,
           box,
           tone,
           className,
         )}
         aria-hidden
         data-player-headshot="initials"
+        data-player-headshot-variant={variant}
         title={name}
       >
         {initialsFromName(name)}
@@ -105,11 +129,13 @@ export function PlayerHeadshot({ player, size = "sm", className }: Props) {
   return (
     <div
       className={cn(
-        "rounded-full overflow-hidden shrink-0 bg-zinc-800 border border-zinc-700/60",
+        "overflow-hidden shrink-0 bg-zinc-800 border border-zinc-700/60",
+        shape,
         box,
         className,
       )}
       data-player-headshot="img"
+      data-player-headshot-variant={variant}
       title={name}
     >
       <img

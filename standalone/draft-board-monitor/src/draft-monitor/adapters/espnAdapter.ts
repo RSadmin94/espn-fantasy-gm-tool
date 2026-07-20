@@ -19,7 +19,7 @@ import {
 import { buildEventKey } from "../normalize/eventKey";
 import { resolveCurrentOwner } from "../normalize/pickOwnership";
 import { resolvePlayerIdentityDefault } from "@shared/playerIdentityLookup";
-import { sleeperPlayerHeadshotUrl } from "@shared/playerHeadshot";
+import { espnPlayerHeadshotUrl, sleeperPlayerHeadshotUrl } from "@shared/playerHeadshot";
 
 export type EspnDomPickRecord = {
   playerName: string;
@@ -44,18 +44,29 @@ export function enrichEspnPickIdentity(args: {
   headshotUrl?: string;
   nflTeam?: string;
   position?: string;
-}): { playerId?: string; headshotUrl?: string } {
+}): { playerId?: string; headshotUrl?: string; headshotCandidates?: string[] } {
   const resolved = resolvePlayerIdentityDefault({
     espnPlayerId: args.playerId,
     playerName: args.playerName,
     nflTeam: args.nflTeam,
     position: args.position,
   });
-  // Prefer Sleeper CDN when identity resolves; fall back to scraped ESPN URL.
-  const sleeperUrl = sleeperPlayerHeadshotUrl(resolved.sleeperPlayerId);
+  const espnId = args.playerId || resolved.espnPlayerId || undefined;
+  const candidates: string[] = [];
+  const sleeperFull = sleeperPlayerHeadshotUrl(resolved.sleeperPlayerId, { size: "full" });
+  if (sleeperFull) candidates.push(sleeperFull);
+  if (args.headshotUrl && !candidates.includes(args.headshotUrl)) {
+    candidates.push(args.headshotUrl);
+  }
+  const espnFull = espnPlayerHeadshotUrl(espnId, { w: 200, h: 145 });
+  if (espnFull && !candidates.includes(espnFull)) candidates.push(espnFull);
+  if (candidates.length === 0 && resolved.headshotUrl) {
+    candidates.push(resolved.headshotUrl);
+  }
   return {
-    playerId: args.playerId || resolved.espnPlayerId || undefined,
-    headshotUrl: sleeperUrl || args.headshotUrl || resolved.headshotUrl || undefined,
+    playerId: espnId,
+    headshotUrl: candidates[0],
+    headshotCandidates: candidates,
   };
 }
 
@@ -628,6 +639,7 @@ export function observeEspnFromDocument(
       playerName: rec.playerName,
       playerId: identity.playerId,
       headshotUrl: identity.headshotUrl,
+      headshotCandidates: identity.headshotCandidates,
       nflTeam: rec.nflTeam,
       position: rec.position,
       isKeeper: rec.isKeeper,

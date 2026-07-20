@@ -3,10 +3,9 @@ import { trpc } from "@/lib/trpc";
 import { PlayerProfilePanel } from "@/pages/PlayerIntelligence";
 import { cn } from "@/lib/utils";
 import {
-  resolvePlayerIdentityDefault,
   getPlayerIdentityArtifact,
 } from "@shared/playerIdentityLookup";
-import { sleeperPlayerHeadshotUrl } from "@shared/playerHeadshot";
+import { PlayerHeadshot } from "@/components/draft/PlayerHeadshot";
 import {
   Search, ChevronDown, ChevronUp, ChevronsUpDown,
   RefreshCw, Sparkles, TrendingUp, TrendingDown, AlertTriangle, Zap,
@@ -45,7 +44,7 @@ function dynastyValue(p: any): number {
   return Math.min(99, base + variance + recency);
 }
 
-// ── Headshot via shared identity resolver (ESPN → Sleeper → initials) ────────
+// ── Headshot via shared PlayerHeadshot (Sleeper-first HD full) ───────────────
 function Headshot({
   espnId,
   sleeperId,
@@ -59,46 +58,17 @@ function Headshot({
   pos: string;
   nflTeam?: string | null;
 }) {
-  const candidates = useMemo(() => {
-    const resolved = resolvePlayerIdentityDefault({
-      espnPlayerId: espnId,
-      sleeperPlayerId: sleeperId,
-      playerName: name,
-      position: pos,
-      nflTeam,
-    });
-    const list: string[] = [];
-    if (resolved.headshotUrl) list.push(resolved.headshotUrl);
-    const sleeperUrl = sleeperPlayerHeadshotUrl(
-      resolved.sleeperPlayerId ?? sleeperId,
-    );
-    if (sleeperUrl && sleeperUrl !== resolved.headshotUrl) list.push(sleeperUrl);
-    return list;
-  }, [espnId, sleeperId, name, pos, nflTeam]);
-  const [idx, setIdx] = useState(0);
-  const cfg = POS_CFG[pos] ?? POS_CFG.K;
-  const initials = name.split(" ").filter(Boolean).map(w => w[0]).join("").slice(0, 2).toUpperCase();
-  const src = candidates[idx] ?? null;
-
-  if (!src) {
-    return (
-      <div className={cn("w-12 h-12 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border-2 border-zinc-700", cfg.text, "bg-zinc-800/80")}>
-        {initials}
-      </div>
-    );
-  }
   return (
-    <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 bg-zinc-800 border-2 border-zinc-700/60">
-      <img
-        key={src}
-        src={src}
-        alt={name}
-        loading="lazy"
-        decoding="async"
-        className="w-full h-full object-cover object-top scale-110"
-        onError={() => setIdx((i) => i + 1)}
-      />
-    </div>
+    <PlayerHeadshot
+      variant="hdLg"
+      player={{
+        espnPlayerId: espnId,
+        sleeperPlayerId: sleeperId,
+        name,
+        position: pos,
+        nflTeam,
+      }}
+    />
   );
 }
 

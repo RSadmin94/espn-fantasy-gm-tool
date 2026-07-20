@@ -162,9 +162,21 @@ export const BOARD_STYLES = `
 .dbm-card.keeper { box-shadow: inset 3px 0 0 var(--dbm-keeper); }
 .dbm-card.trade { box-shadow: inset 3px 0 0 var(--dbm-trade); }
 .dbm-card-row { display: flex; gap: 7px; align-items: flex-start; }
+.dbm-headshot-slot {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 40px;
+}
 .dbm-headshot {
-  width: 38px; height: 28px; border-radius: 3px; object-fit: cover;
-  background: #0c1015; flex: 0 0 auto; margin-top: 1px;
+  width: 52px; height: 40px; border-radius: 5px; object-fit: cover;
+  object-position: top center;
+  background: #0c1015; display: block;
+}
+.dbm-headshot-fallback {
+  width: 52px; height: 40px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.04em;
+  color: #94a3b8; background: #0c1015; border: 1px solid #1e293b;
 }
 .dbm-card-body { min-width: 0; flex: 1 1 auto; }
 .dbm-card-top { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }

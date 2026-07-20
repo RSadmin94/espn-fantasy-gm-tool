@@ -10,9 +10,48 @@ import {
   type PlayerIdentityResult,
 } from "./playerIdentity";
 import {
+  espnPlayerHeadshotUrl,
   extractEspnPlayerId,
   resolvePlayerHeadshotUrl,
+  sleeperPlayerHeadshotUrl,
 } from "./playerHeadshot";
+
+export type PlayerHeadshotCandidateOpts = {
+  /** thumb defaults ESPN-first; full HD tiles use Sleeper-first when prefer=sleeper. */
+  prefer?: "espn" | "sleeper";
+};
+
+type PlayerHeadshotInput = Parameters<typeof getPlayerHeadshotUrl>[0];
+
+function resolveHeadshotIdentity(player: PlayerHeadshotInput) {
+  const espnPlayerId =
+    extractEspnPlayerId(player.espnPlayerId) ||
+    extractEspnPlayerId(player.espnId) ||
+    extractEspnPlayerId(player.playerId) ||
+    extractEspnPlayerId(player.id);
+  const sleeperPlayerId =
+    player.sleeperPlayerId != null && String(player.sleeperPlayerId).trim()
+      ? String(player.sleeperPlayerId).trim()
+      : null;
+  const playerName = player.playerName ?? player.name ?? null;
+
+  const resolved = resolvePlayerIdentityDefault({
+    espnPlayerId,
+    sleeperPlayerId,
+    playerName,
+    position: player.position ?? null,
+    nflTeam: player.nflTeam ?? null,
+  });
+
+  return {
+    espnResolved: resolved.espnPlayerId ?? espnPlayerId,
+    sleeperResolved: resolved.sleeperPlayerId ?? sleeperPlayerId,
+  };
+}
+
+function pushUnique(list: string[], url: string | null | undefined): void {
+  if (url && !list.includes(url)) list.push(url);
+}
 import artifactJson from "./data/sleeperPlayerLookup.compact.json";
 
 const artifact = artifactJson as CompactPlayerLookupArtifact;
@@ -82,43 +121,32 @@ export function getPlayerHeadshotUrl(
 }
 
 /**
- * Ordered CDN candidates for img onError fallback (ESPN-first, then Sleeper).
+ * Ordered CDN candidates for img onError fallback.
+ * Default thumb: ESPN-first, then Sleeper thumb.
+ * Full + prefer sleeper: Sleeper full (helmet background), then ESPN full.
  * Empty array → render initials placeholder.
  */
 export function getPlayerHeadshotCandidates(
-  player: Parameters<typeof getPlayerHeadshotUrl>[0],
+  player: PlayerHeadshotInput,
   size: "thumb" | "full" = "thumb",
+  opts?: PlayerHeadshotCandidateOpts,
 ): string[] {
-  const espnPlayerId =
-    extractEspnPlayerId(player.espnPlayerId) ||
-    extractEspnPlayerId(player.espnId) ||
-    extractEspnPlayerId(player.playerId) ||
-    extractEspnPlayerId(player.id);
-  const sleeperPlayerId =
-    player.sleeperPlayerId != null && String(player.sleeperPlayerId).trim()
-      ? String(player.sleeperPlayerId).trim()
-      : null;
-  const playerName = player.playerName ?? player.name ?? null;
+  const { espnResolved, sleeperResolved } = resolveHeadshotIdentity(player);
+  const prefer = opts?.prefer ?? "espn";
+  const list: string[] = [];
 
-  const resolved = resolvePlayerIdentityDefault({
-    espnPlayerId,
-    sleeperPlayerId,
-    playerName,
-    position: player.position ?? null,
-    nflTeam: player.nflTeam ?? null,
-  });
-
-  const espnResolved = resolved.espnPlayerId ?? espnPlayerId;
-  const sleeperResolved = resolved.sleeperPlayerId ?? sleeperPlayerId;
+  if (prefer === "sleeper" && size === "full") {
+    pushUnique(list, sleeperPlayerHeadshotUrl(sleeperResolved, { size: "full" }));
+    pushUnique(list, espnPlayerHeadshotUrl(espnResolved, { w: 200, h: 145 }));
+    return list;
+  }
 
   const primary = resolvePlayerHeadshotUrl({
     espnPlayerId: espnResolved,
     sleeperPlayerId: sleeperResolved,
     size,
   });
-  const list: string[] = [];
   if (primary) list.push(primary);
-  // Explicit Sleeper fallback if primary was ESPN (so onError can advance).
   const sleeperOnly = resolvePlayerHeadshotUrl({
     espnPlayerId: null,
     sleeperPlayerId: sleeperResolved,
