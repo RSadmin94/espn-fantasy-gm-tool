@@ -61,6 +61,7 @@ import {
 } from "@/components/draft/LiveDraftControlPanel";
 import { FantasyProsMockControlPanel } from "@/components/draft/FantasyProsMockControlPanel";
 import { useFantasyProsMockDraftMonitor } from "@/hooks/useFantasyProsMockDraftMonitor";
+import { useEspnBookmarkletDraftMonitor } from "@/hooks/useEspnBookmarkletDraftMonitor";
 import { buildFantasyProsSeatMapping } from "@/lib/fantasyProsSeatMapping";
 import { postFantasyProsMockArm, postFantasyProsMockDisarm } from "@/lib/fantasyProsMockBridge";
 import { LiveDraftRecentPicks } from "@/components/draft/LiveDraftRecentPicks";
@@ -1101,14 +1102,46 @@ function LiveDraftEngine({
     },
   });
 
-  const leagueAdapter = useConnectedLeagueLiveMonitor({
+  /** Bookmarklet-primary ESPN live ingest (Phase 3). */
+  const espnBookmarklet = useEspnBookmarkletDraftMonitor({
     enabled: Boolean(leagueId) && connectedLeagueLive,
+    leagueId,
+    season,
+    teamCount: teams.length || 12,
+    draftPace: draftPaceFromTimerMs(paceMs),
+    armExtension: true,
+    onNormalizedBatch: applyProjectionBatch,
+  });
+
+  /**
+   * Connected-league cookie/API fallback — never sustained dual ingest with bookmarklet transport.
+   * Disabled while bookmarklet transport owns the session.
+   */
+  const leagueAdapter = useConnectedLeagueLiveMonitor({
+    enabled:
+      Boolean(leagueId) && connectedLeagueLive && !espnBookmarklet.transportActive,
     leagueId,
     season,
     draftPace: draftPaceFromTimerMs(paceMs),
     ownerNameByTeamId,
     onNormalizedBatch: applyProjectionBatch,
   });
+
+  const espnLiveStatus = espnBookmarklet.transportActive
+    ? {
+        lastError: espnBookmarklet.lastError,
+        notifiedCount: espnBookmarklet.notifiedCount,
+        lockedCount: espnBookmarklet.lockedCount,
+        extensionPresent: espnBookmarklet.extensionPresent,
+        lastPollAt: espnBookmarklet.lastPollAt,
+      }
+    : {
+        lastError: leagueAdapter.lastError,
+        notifiedCount: leagueAdapter.notifiedCount,
+        lockedCount: leagueAdapter.lockedCount,
+        extensionPresent: leagueAdapter.extensionPresent,
+        lastPollAt: leagueAdapter.lastPollAt,
+      };
 
   const boothDraftId =
     fpSessionArmed && fpMock.draftId
@@ -1492,34 +1525,34 @@ function LiveDraftEngine({
           active: preferLiveDraft ? liveDraftActive : liveDraftActive || fpSessionArmed,
           source: preferLiveDraft ? liveSource : mockSource,
           monitoring: connectedLeagueLive
-            ? !leagueAdapter.lastError
+            ? !espnLiveStatus.lastError
             : allowInternalSimPicks
               ? running || idx > 0
               : fpSessionArmed,
           boothOnAir: connectedLeagueLive
-            ? leagueAdapter.notifiedCount > 0 || leagueAdapter.lockedCount > 0
+            ? espnLiveStatus.notifiedCount > 0 || espnLiveStatus.lockedCount > 0
             : allowInternalSimPicks
               ? running || idx > 0
               : fpSessionArmed && (fpMock.notifiedCount > 0 || fpMock.lockedCount > 0),
           lockedCount: connectedLeagueLive
-            ? leagueAdapter.lockedCount
+            ? espnLiveStatus.lockedCount
             : allowInternalSimPicks
               ? Object.keys(results).length
               : fpMock.lockedCount,
           notifiedCount: connectedLeagueLive
-            ? leagueAdapter.notifiedCount
+            ? espnLiveStatus.notifiedCount
             : allowInternalSimPicks
               ? 0
               : fpMock.notifiedCount,
           draftComplete: done,
           lastError: connectedLeagueLive
-            ? leagueAdapter.lastError
+            ? espnLiveStatus.lastError
             : fpSessionArmed
               ? fpMock.lastError
               : null,
-          lastPollAt: connectedLeagueLive ? leagueAdapter.lastPollAt : null,
+          lastPollAt: connectedLeagueLive ? espnLiveStatus.lastPollAt : null,
           connectorReady: connectedLeagueLive
-            ? leagueAdapter.extensionPresent
+            ? espnLiveStatus.extensionPresent
             : fpSessionArmed
               ? fpMock.extensionPresent
               : true,
