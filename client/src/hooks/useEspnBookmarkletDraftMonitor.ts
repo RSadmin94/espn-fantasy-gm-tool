@@ -1,6 +1,6 @@
 /**
  * Phase 3 — ESPN bookmarklet transport → applyNormalizedPickBatch + notifyLockedPick.
- * Bookmarklet-primary ingest; mDraftDetail remains fallback when transport is inactive.
+ * Bookmarklet-primary ingest; legacy league-fetch remains fallback only when extension is missing.
  */
 import { useEffect, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
@@ -26,8 +26,13 @@ import {
 
 export type EspnBookmarkletMonitorStatus = {
   active: boolean;
-  /** True when bookmarklet transport owns ingest (disable mDraftDetail fallback). */
+  /**
+   * True when bookmarklet transport owns ingest (disable legacy league-fetch fallback).
+   * Set as soon as ARM succeeds — waiting for ESPN tab/bookmarklet is still owned.
+   */
   transportActive: boolean;
+  /** True after STATUS/PICK_BATCH/PONG handshake from the ESPN Mirror publisher. */
+  mirrorHandshake: boolean;
   extensionPresent: boolean;
   connectorStatus: string;
   lastError: string | null;
@@ -37,6 +42,8 @@ export type EspnBookmarkletMonitorStatus = {
   draftComplete: boolean;
   lastPollAt: string | null;
   sessionNonce: string | null;
+  /** Last accepted PICK_BATCH revision (transport). */
+  lastRevision: number | null;
   espnTabs: number | null;
   diagnostics: Record<string, unknown> | null;
 };
@@ -55,6 +62,7 @@ type Args = {
 const INITIAL = (draftId: string): EspnBookmarkletMonitorStatus => ({
   active: false,
   transportActive: false,
+  mirrorHandshake: false,
   extensionPresent: false,
   connectorStatus: "idle",
   lastError: null,
@@ -64,6 +72,7 @@ const INITIAL = (draftId: string): EspnBookmarkletMonitorStatus => ({
   draftComplete: false,
   lastPollAt: null,
   sessionNonce: null,
+  lastRevision: null,
   espnTabs: null,
   diagnostics: null,
 });
@@ -163,27 +172,28 @@ export function useEspnBookmarkletDraftMonitor({
       if (cancelled) return;
       if (arm.sessionNonce) sessionNonceRef.current = arm.sessionNonce;
       const reached = arm.reached ?? 0;
-      const transportActive = Boolean(arm.ok && reached > 0);
+      // Own ingest as soon as ARM succeeds so legacy league-fetch polling never runs.
+      const transportActive = Boolean(arm.ok);
+      const mirrorHandshake = false;
       setStatus({
         active: true,
         transportActive,
+        mirrorHandshake,
         extensionPresent: true,
-        connectorStatus: transportActive
-          ? "monitoring"
-          : arm.ok
-            ? "waiting_for_espn_tab"
-            : "arm_failed",
-        lastError: arm.error
-          ? String(arm.error)
-          : transportActive
-            ? null
-            : "Open the ESPN draft room and run the bookmarklet.",
+        connectorStatus: !arm.ok
+          ? "arm_failed"
+          : reached > 0
+            ? "waiting_for_espn_mirror"
+            : "waiting_for_espn_tab",
+        // Waiting for Mirror is not a reconnect error — keep lastError clean.
+        lastError: arm.error ? String(arm.error) : null,
         draftId,
         lockedCount: 0,
         notifiedCount: 0,
         draftComplete: false,
         lastPollAt: null,
         sessionNonce: sessionNonceRef.current,
+        lastRevision: null,
         espnTabs: arm.espnTabs ?? null,
         diagnostics: null,
       });
@@ -223,28 +233,36 @@ export function useEspnBookmarkletDraftMonitor({
       if (!parsed) return;
 
       if (parsed.type === "GMWR_ESPN_BM_STATUS") {
+        const handshook =
+          parsed.status === "monitoring" ||
+          parsed.status === "armed" ||
+          parsed.status === "complete" ||
+          parsed.status === "ready";
         setStatus((s) => ({
           ...s,
           extensionPresent: true,
-          transportActive:
-            s.transportActive ||
-            parsed.status === "monitoring" ||
-            parsed.status === "armed" ||
-            parsed.status === "complete",
-          connectorStatus: parsed.status || s.connectorStatus,
+          transportActive: s.transportActive || handshook,
+          mirrorHandshake: s.mirrorHandshake || handshook,
+          connectorStatus: handshook
+            ? parsed.status === "complete"
+              ? "complete"
+              : "monitoring"
+            : parsed.status || s.connectorStatus,
           draftComplete: parsed.draftComplete ?? s.draftComplete,
           lastError:
             parsed.reason &&
-            parsed.status !== "monitoring" &&
-            parsed.status !== "armed" &&
-            parsed.status !== "complete"
+            !handshook
               ? String(parsed.reason)
-              : parsed.status === "monitoring" || parsed.status === "complete"
+              : handshook
                 ? null
                 : s.lastError,
           espnTabs: parsed.espnTabs ?? s.espnTabs,
           diagnostics: parsed.diagnostics ?? s.diagnostics,
           lastPollAt: new Date().toISOString(),
+          lastRevision:
+            parsed.revision != null && Number.isFinite(Number(parsed.revision))
+              ? Math.max(s.lastRevision ?? 0, Math.floor(Number(parsed.revision)))
+              : s.lastRevision,
         }));
         return;
       }
@@ -253,7 +271,8 @@ export function useEspnBookmarkletDraftMonitor({
         setStatus((s) => ({
           ...s,
           extensionPresent: true,
-          transportActive: s.transportActive || parsed.armed,
+          transportActive: s.transportActive || Boolean(parsed.armed),
+          mirrorHandshake: s.mirrorHandshake || Boolean(parsed.armed),
           connectorStatus: parsed.armed ? "monitoring" : s.connectorStatus,
           sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
         }));
@@ -329,11 +348,13 @@ export function useEspnBookmarkletDraftMonitor({
       setStatus((s) => ({
         ...s,
         transportActive: true,
+        mirrorHandshake: true,
         active: true,
         extensionPresent: true,
         connectorStatus: "monitoring",
         lastError: null,
         lastPollAt: new Date().toISOString(),
+        lastRevision: ingestRef.current.lastAcceptedRevision || s.lastRevision,
       }));
 
       if (plan.projectionBatch) {
@@ -375,6 +396,7 @@ export function useEspnBookmarkletDraftMonitor({
       setStatus((s) => ({
         ...s,
         transportActive: true,
+        mirrorHandshake: true,
         active: true,
         draftId: batch.draftId,
         lockedCount: Math.max(
@@ -386,6 +408,7 @@ export function useEspnBookmarkletDraftMonitor({
         draftComplete:
           batch.draftComplete || ingestRef.current.draftCompleteApplied,
         lastPollAt: new Date().toISOString(),
+        lastRevision: ingestRef.current.lastAcceptedRevision || batch.revision,
         diagnostics: batch.diagnostics ?? s.diagnostics,
         lastError: null,
         connectorStatus: "monitoring",

@@ -46,6 +46,10 @@ import {
   formatLiveDraftValueVsMarket,
 } from "@/lib/liveDraftUx";
 import { RfsnBroadcastPanel } from "@/components/rfsn/RfsnBroadcastPanel";
+import {
+  shouldEnableLegacyEspnLeagueFetch,
+  shouldPreferEspnBookmarkletStatus,
+} from "@/lib/espnBookmarkletLivePath";
 import { isConnectedLeagueLiveActive } from "@/lib/liveDraftSurfaceActive";
 import { isRfsnWarRoomBroadcastActive } from "@/lib/rfsnWarRoomBroadcastActive";
 import { LiveDraftWrapUp } from "@/components/draft/LiveDraftWrapUp";
@@ -1114,12 +1118,15 @@ function LiveDraftEngine({
   });
 
   /**
-   * Connected-league cookie/API fallback — never sustained dual ingest with bookmarklet transport.
-   * Disabled while bookmarklet transport owns the session.
+   * Connected-league cookie/API fallback — only when the extension is missing.
+   * Bookmarklet-primary path must never dual-poll legacy league fetch (shows "League fetch failed").
    */
+  const legacyLeagueFetchEnabled = shouldEnableLegacyEspnLeagueFetch({
+    connectedLeagueLive,
+    bookmarkletConnectorStatus: espnBookmarklet.connectorStatus,
+  });
   const leagueAdapter = useConnectedLeagueLiveMonitor({
-    enabled:
-      Boolean(leagueId) && connectedLeagueLive && !espnBookmarklet.transportActive,
+    enabled: Boolean(leagueId) && legacyLeagueFetchEnabled,
     leagueId,
     season,
     draftPace: draftPaceFromTimerMs(paceMs),
@@ -1127,13 +1134,23 @@ function LiveDraftEngine({
     onNormalizedBatch: applyProjectionBatch,
   });
 
-  const espnLiveStatus = espnBookmarklet.transportActive
+  const preferBookmarkletStatus = shouldPreferEspnBookmarkletStatus({
+    connectedLeagueLive,
+    bookmarkletTransportActive: espnBookmarklet.transportActive,
+    bookmarkletConnectorStatus: espnBookmarklet.connectorStatus,
+  });
+  const espnLiveStatus = preferBookmarkletStatus
     ? {
         lastError: espnBookmarklet.lastError,
         notifiedCount: espnBookmarklet.notifiedCount,
         lockedCount: espnBookmarklet.lockedCount,
         extensionPresent: espnBookmarklet.extensionPresent,
         lastPollAt: espnBookmarklet.lastPollAt,
+        transportActive: espnBookmarklet.transportActive,
+        mirrorHandshake: espnBookmarklet.mirrorHandshake,
+        connectorStatus: espnBookmarklet.connectorStatus,
+        lastRevision: espnBookmarklet.lastRevision,
+        sessionNonce: espnBookmarklet.sessionNonce,
       }
     : {
         lastError: leagueAdapter.lastError,
@@ -1141,6 +1158,11 @@ function LiveDraftEngine({
         lockedCount: leagueAdapter.lockedCount,
         extensionPresent: leagueAdapter.extensionPresent,
         lastPollAt: leagueAdapter.lastPollAt,
+        transportActive: false,
+        mirrorHandshake: false,
+        connectorStatus: leagueAdapter.active ? "monitoring" : "idle",
+        lastRevision: null as number | null,
+        sessionNonce: null as string | null,
       };
 
   const boothDraftId =
@@ -1525,7 +1547,9 @@ function LiveDraftEngine({
           active: preferLiveDraft ? liveDraftActive : liveDraftActive || fpSessionArmed,
           source: preferLiveDraft ? liveSource : mockSource,
           monitoring: connectedLeagueLive
-            ? !espnLiveStatus.lastError
+            ? preferBookmarkletStatus
+              ? espnLiveStatus.transportActive && !espnLiveStatus.lastError
+              : !espnLiveStatus.lastError
             : allowInternalSimPicks
               ? running || idx > 0
               : fpSessionArmed,
@@ -1552,11 +1576,22 @@ function LiveDraftEngine({
               : null,
           lastPollAt: connectedLeagueLive ? espnLiveStatus.lastPollAt : null,
           connectorReady: connectedLeagueLive
-            ? espnLiveStatus.extensionPresent
+            ? preferBookmarkletStatus
+              ? Boolean(espnLiveStatus.mirrorHandshake)
+              : espnLiveStatus.extensionPresent
             : fpSessionArmed
               ? fpMock.extensionPresent
               : true,
           draftPaused: allowInternalSimPicks ? !running && !done && idx > 0 : false,
+          transportKind: connectedLeagueLive && preferBookmarkletStatus ? "espn-mirror" : null,
+          lastRevision:
+            connectedLeagueLive && preferBookmarkletStatus
+              ? espnLiveStatus.lastRevision
+              : null,
+          connectorStatus:
+            connectedLeagueLive && preferBookmarkletStatus
+              ? espnLiveStatus.connectorStatus
+              : null,
         }}
         onToggleActive={() => {
           if (preferLiveDraft) setLiveDraftActive((v) => !v);

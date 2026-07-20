@@ -37,6 +37,10 @@ export type LiveDraftControlStatus = {
   lastPollAt: string | null;
   connectorReady: boolean;
   draftPaused?: boolean;
+  /** When set, reconnect/status copy follows ESPN Mirror transport — not league-fetch. */
+  transportKind?: "espn-mirror" | null;
+  lastRevision?: number | null;
+  connectorStatus?: string | null;
 };
 
 export type LiveDraftSessionActions = {
@@ -74,6 +78,9 @@ function toUxInput(status: LiveDraftControlStatus): LiveDraftUxStatusInput {
     connectorReady: status.connectorReady,
     draftPaused: status.draftPaused,
     hasLockedPicks: status.lockedCount > 0,
+    transportKind: status.transportKind ?? null,
+    lastRevision: status.lastRevision ?? null,
+    lockedCount: status.lockedCount,
   };
 }
 
@@ -192,7 +199,9 @@ export function LiveDraftControlPanel({
         </div>
         <p className="text-[11px] text-zinc-500" data-live-board-driver>
           {isEspn
-            ? "Board driver: ESPN League feed → shared Draft Engine."
+            ? status.transportKind === "espn-mirror"
+              ? "Board driver: ESPN Mirror (bookmarklet) → extension transport → shared Draft Engine."
+              : "Board driver: ESPN League feed → shared Draft Engine."
             : source === "fantasypros"
               ? "Board driver: FantasyPros Mock adapter → shared Draft Engine."
               : "Board driver: RFSN Local Mock adapter → shared Draft Engine."}
@@ -283,8 +292,15 @@ export function LiveDraftControlPanel({
                 ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
                 : "bg-amber-500/10 border-amber-500/30 text-amber-200",
             )}
+            data-live-espn-connect-badge
           >
-            {status.connectorReady ? "Connected to league draft" : "Waiting for league connection"}
+            {status.transportKind === "espn-mirror"
+              ? status.connectorReady
+                ? "Connected to ESPN Mirror"
+                : "Waiting for ESPN Mirror"
+              : status.connectorReady
+                ? "Connected to league draft"
+                : "Waiting for league connection"}
           </span>
           {status.lastPollAt ? (
             <span className="text-zinc-500 tabular-nums">
@@ -299,6 +315,9 @@ export function LiveDraftControlPanel({
           <span>
             Picks locked {status.lockedCount}
             {status.notifiedCount > 0 ? ` · covered ${status.notifiedCount}` : ""}
+            {status.transportKind === "espn-mirror" && status.lastRevision != null
+              ? ` · rev ${status.lastRevision}`
+              : ""}
           </span>
         </div>
       )}

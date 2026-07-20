@@ -57,12 +57,35 @@ describe("RFSN-024 liveDraftUx status phases", () => {
     expect(liveDraftStatusLines(s)[0]).toBe("Reconnecting to league feed");
   });
 
-  it("does not expose ESPN terminology in status lines", () => {
+  it("espn-mirror waiting is Waiting for ESPN Mirror (not reconnecting)", () => {
+    const s = {
+      ...base,
+      connectorReady: false,
+      transportKind: "espn-mirror" as const,
+      lastError: null,
+    };
+    expect(resolveLiveDraftUiPhase(s)).toBe("waiting");
+    expect(liveDraftStatusLines(s)[0]).toBe("Waiting for ESPN Mirror");
+  });
+
+  it("espn-mirror connected labels Connected to ESPN Mirror", () => {
+    const s = {
+      ...base,
+      transportKind: "espn-mirror" as const,
+      connectorReady: true,
+      lockedCount: 2,
+      lastRevision: 4,
+    };
+    expect(liveDraftStatusLines(s)[0]).toBe("Connected to ESPN Mirror");
+    expect(liveDraftStatusLines(s).join(" ")).toMatch(/Picks 2 · rev 4/);
+  });
+
+  it("does not expose mDraftDetail jargon in status lines", () => {
     const lines = liveDraftStatusLines({
       ...base,
       lastError: "auth",
     }).join(" ");
-    expect(lines).not.toMatch(/ESPN|mDraftDetail|fantasy\.espn/i);
+    expect(lines).not.toMatch(/mDraftDetail|fantasy\.espn/i);
     expect(lines).toMatch(/league feed/i);
   });
 });
