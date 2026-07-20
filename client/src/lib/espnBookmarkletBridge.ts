@@ -7,6 +7,12 @@ import type { NormalizedPickBatch, NormalizedPickEvent } from "@shared/draftSour
 
 export const ESPN_BM_BRIDGE_CHANNEL = "GMWR_ESPN_BM";
 export const ESPN_BM_EXTENSION_SOURCE = "gmwarroom-extension";
+/** Must match extension espnBookmarkletTransport ESPN_BM_PROTOCOL_VERSION. */
+export const ESPN_BM_PROTOCOL_VERSION = 1 as const;
+
+function protocolVersionOk(raw: unknown): boolean {
+  return Math.floor(Number(raw)) === ESPN_BM_PROTOCOL_VERSION;
+}
 
 export type EspnBmBridgePick = {
   eventKey: string;
@@ -27,6 +33,8 @@ export type EspnBmBridgePick = {
 
 export type EspnBmBridgePickBatch = {
   type: "GMWR_ESPN_BM_PICK_BATCH";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision: number;
   provider: "espn-live";
   draftType: "live";
   draftId: string;
@@ -44,6 +52,8 @@ export type EspnBmBridgePickBatch = {
 
 export type EspnBmBridgeStatus = {
   type: "GMWR_ESPN_BM_STATUS";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision?: number;
   provider: "espn-live";
   status: string;
   reason?: string | null;
@@ -60,6 +70,8 @@ export type EspnBmBridgeStatus = {
 
 export type EspnBmBridgePong = {
   type: "GMWR_ESPN_BM_PONG";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision?: number;
   provider: "espn-live";
   armed: boolean;
   draftId?: string | null;
@@ -70,6 +82,7 @@ export type EspnBmBridgePong = {
 
 export type EspnBmBridgeSessionReset = {
   type: "GMWR_ESPN_BM_SESSION_RESET";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
   provider: "espn-live";
   draftId: string | null;
   leagueId?: string | null;
@@ -142,10 +155,16 @@ export function parseEspnBookmarkletBridgeMessage(
     }
   }
   if (d.provider != null && d.provider !== "espn-live") return null;
+  if (!protocolVersionOk(d.protocolVersion)) return null;
 
   if (type === "GMWR_ESPN_BM_STATUS") {
     return {
       type: "GMWR_ESPN_BM_STATUS",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+      revision:
+        d.revision != null && Number.isFinite(Number(d.revision))
+          ? Math.max(0, Math.floor(Number(d.revision)))
+          : undefined,
       provider: "espn-live",
       status: String(d.status ?? "unknown"),
       reason: d.reason != null ? String(d.reason) : null,
@@ -164,6 +183,11 @@ export function parseEspnBookmarkletBridgeMessage(
   if (type === "GMWR_ESPN_BM_PONG") {
     return {
       type: "GMWR_ESPN_BM_PONG",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+      revision:
+        d.revision != null && Number.isFinite(Number(d.revision))
+          ? Math.max(0, Math.floor(Number(d.revision)))
+          : undefined,
       provider: "espn-live",
       armed: Boolean(d.armed),
       draftId: d.draftId != null ? String(d.draftId) : null,
@@ -176,6 +200,7 @@ export function parseEspnBookmarkletBridgeMessage(
   if (type === "GMWR_ESPN_BM_SESSION_RESET") {
     return {
       type: "GMWR_ESPN_BM_SESSION_RESET",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
       provider: "espn-live",
       draftId: d.draftId != null ? String(d.draftId) : null,
       leagueId: d.leagueId != null ? String(d.leagueId) : null,
@@ -193,6 +218,8 @@ export function parseEspnBookmarkletBridgeMessage(
   if (!/^\d+$/.test(leagueId)) return null;
   if (!Number.isFinite(season) || season < 2000 || season > 2100) return null;
   if (!sessionNonce || sessionNonce.length > 128) return null;
+  const revision = Math.floor(Number(d.revision));
+  if (!Number.isFinite(revision) || revision < 1) return null;
   if (!Array.isArray(d.picks) || d.picks.length > 256) return null;
   if (d.picks.length === 0 && !d.draftComplete) return null;
 
@@ -205,6 +232,8 @@ export function parseEspnBookmarkletBridgeMessage(
 
   return {
     type: "GMWR_ESPN_BM_PICK_BATCH",
+    protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+    revision,
     provider: "espn-live",
     draftType: "live",
     draftId: draftId.slice(0, 128),
@@ -316,6 +345,7 @@ export function postEspnBookmarkletArm(config: {
     window.postMessage(
       {
         type: "GMWR_ESPN_BM_ARM",
+        protocolVersion: ESPN_BM_PROTOCOL_VERSION,
         id,
         provider: "espn-live",
         config,
@@ -340,7 +370,10 @@ export function postEspnBookmarkletDisarm(): Promise<{ ok: boolean; error?: stri
       resolve({ ok: Boolean(d.ok), error: d.error ? String(d.error) : undefined });
     };
     window.addEventListener("message", onReply);
-    window.postMessage({ type: "GMWR_ESPN_BM_DISARM", id, provider: "espn-live" }, "*");
+    window.postMessage(
+      { type: "GMWR_ESPN_BM_DISARM", protocolVersion: ESPN_BM_PROTOCOL_VERSION, id, provider: "espn-live" },
+      "*",
+    );
     setTimeout(() => {
       window.removeEventListener("message", onReply);
       resolve({ ok: false, error: "extension_timeout" });
@@ -373,11 +406,61 @@ export function postEspnBookmarkletPing(): Promise<{
       });
     };
     window.addEventListener("message", onReply);
-    window.postMessage({ type: "GMWR_ESPN_BM_PING", id, provider: "espn-live" }, "*");
+    window.postMessage(
+      { type: "GMWR_ESPN_BM_PING", protocolVersion: ESPN_BM_PROTOCOL_VERSION, id, provider: "espn-live" },
+      "*",
+    );
     setTimeout(() => {
       window.removeEventListener("message", onReply);
       resolve({ ok: false, error: "extension_timeout" });
     }, 5000);
+  });
+}
+
+/**
+ * Phase 4 — request idempotent board reconciliation after reconnect.
+ * Bookmarklet retains boardPicks and emits a PICK_BATCH filtered by afterOverallPick.
+ */
+export function postEspnBookmarkletReplayRequest(args: {
+  draftId: string;
+  sessionNonce: string;
+  afterOverallPick: number;
+  requestId?: string;
+}): Promise<{ ok: boolean; reached?: number; error?: string }> {
+  return new Promise((resolve) => {
+    const id = `espn-bm-replay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const requestId =
+      args.requestId?.trim() ||
+      `replay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const onReply = (ev: MessageEvent) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_ESPN_BM_REPLAY_REQUEST_REPLY" || d.id !== id) return;
+      window.removeEventListener("message", onReply);
+      resolve({
+        ok: Boolean(d.ok),
+        reached: d.reached != null ? Number(d.reached) : undefined,
+        error: d.error ? String(d.error) : undefined,
+      });
+    };
+    window.addEventListener("message", onReply);
+    window.postMessage(
+      {
+        type: "GMWR_ESPN_BM_REPLAY_REQUEST",
+        protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+        id,
+        provider: "espn-live",
+        draftId: args.draftId,
+        sessionNonce: args.sessionNonce,
+        afterOverallPick: Math.max(0, Math.floor(args.afterOverallPick)),
+        requestId,
+      },
+      "*",
+    );
+    setTimeout(() => {
+      window.removeEventListener("message", onReply);
+      resolve({ ok: false, error: "extension_timeout" });
+    }, 8000);
   });
 }
 

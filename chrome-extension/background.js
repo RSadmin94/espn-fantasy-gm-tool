@@ -596,6 +596,7 @@ const MSG_ESPN_BM_SESSION_RESET = "GMWR_ESPN_BM_SESSION_RESET";
 const MSG_ESPN_BM_PING = "GMWR_ESPN_BM_PING";
 const MSG_ESPN_BM_PONG = "GMWR_ESPN_BM_PONG";
 const MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
+const MSG_ESPN_BM_REPLAY_REQUEST = "GMWR_ESPN_BM_REPLAY_REQUEST";
 
 /** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, batchesRelayed: number, armedAt: string|null, sessionNonce: string|null }} */
 let espnBmConnectorState = {
@@ -655,6 +656,23 @@ async function broadcastToEspnFantasyTabs(message) {
   }
   return { tabCount, reached };
 }
+
+/**
+ * Phase 4 — when an ESPN tab finishes loading and the connector is armed,
+ * re-push ARM so a refreshed content script can accept PICK_BATCH again.
+ * Event-driven (tabs.onUpdated); not a poll loop.
+ */
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete") return;
+  if (!espnBmConnectorState.armed || !espnBmConnectorState.config) return;
+  if (!tab?.url || !isEspnFantasyTabUrl(tab.url)) return;
+  void chrome.tabs
+    .sendMessage(tabId, {
+      type: MSG_ESPN_BM_ARM,
+      config: espnBmConnectorState.config,
+    })
+    .catch(() => {});
+});
 
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
@@ -2726,6 +2744,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       });
       await broadcastToFfrTabs({
         type: MSG_ESPN_BM_STATUS,
+        protocolVersion: 1,
         provider: "espn-live",
         status: r.reached > 0 ? "armed" : "waiting_for_espn_tab",
         espnTabs: r.tabCount,
@@ -2753,6 +2772,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       await broadcastToEspnFantasyTabs({ type: MSG_ESPN_BM_DISARM });
       await broadcastToFfrTabs({
         type: MSG_ESPN_BM_STATUS,
+        protocolVersion: 1,
         provider: "espn-live",
         status: "disarmed",
       });
@@ -2806,9 +2826,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (t === MSG_ESPN_BM_REPLAY_REQUEST) {
+    (async () => {
+      expireEspnBmSessionIfStale();
+      if (!espnBmConnectorState.armed || !espnBmConnectorState.config) {
+        sendResponse({ ok: false, error: "not_armed" });
+        return;
+      }
+      const sessionNonce = espnBmConnectorState.sessionNonce;
+      if (
+        message?.sessionNonce &&
+        sessionNonce &&
+        String(message.sessionNonce) !== sessionNonce
+      ) {
+        sendResponse({ ok: false, error: "session_nonce_mismatch" });
+        return;
+      }
+      const payload = {
+        type: MSG_ESPN_BM_REPLAY_REQUEST,
+        draftId: message?.draftId,
+        sessionNonce: sessionNonce,
+        afterOverallPick: message?.afterOverallPick,
+        requestId: message?.requestId,
+        provider: "espn-live",
+      };
+      const r = await broadcastToEspnFantasyTabs(payload);
+      sendResponse({ ok: true, ...r });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
   if (t === MSG_ESPN_BM_PICK_BATCH) {
     if (message?.provider && message.provider !== "espn-live") {
       sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    if (Math.floor(Number(message?.protocolVersion)) !== 1) {
+      sendResponse({ ok: false, error: "unsupported_protocol_version" });
       return true;
     }
     expireEspnBmSessionIfStale();
@@ -2849,6 +2905,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (t === MSG_ESPN_BM_STATUS || t === MSG_ESPN_BM_SESSION_RESET || t === MSG_ESPN_BM_PONG) {
     if (message?.provider && message.provider !== "espn-live") {
       sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    if (Math.floor(Number(message?.protocolVersion)) !== 1) {
+      sendResponse({ ok: false, error: "unsupported_protocol_version" });
       return true;
     }
     expireEspnBmSessionIfStale();

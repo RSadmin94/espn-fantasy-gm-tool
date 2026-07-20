@@ -10,6 +10,7 @@ import {
   parseEspnBookmarkletBridgeMessage,
   postEspnBookmarkletArm,
   postEspnBookmarkletDisarm,
+  postEspnBookmarkletReplayRequest,
   type EspnBmBridgePickBatch,
 } from "@/lib/espnBookmarkletBridge";
 import {
@@ -186,6 +187,15 @@ export function useEspnBookmarkletDraftMonitor({
         espnTabs: arm.espnTabs ?? null,
         diagnostics: null,
       });
+
+      // Phase 4 — after reconnect ARM, request idempotent board reconciliation.
+      if (arm.ok && sessionNonceRef.current) {
+        void postEspnBookmarkletReplayRequest({
+          draftId,
+          sessionNonce: sessionNonceRef.current,
+          afterOverallPick: ingestRef.current.maxOverallSeen,
+        }).catch(() => {});
+      }
     })().catch((err) => {
       if (cancelled) return;
       setStatus({

@@ -11,12 +11,17 @@ import {
 
 export function espnBmBatchFingerprint(batch: EspnBmBridgePickBatch): string {
   const keys = batch.picks.map((p) => p.eventKey).sort();
+  const replayId =
+    batch.diagnostics && typeof batch.diagnostics.replayRequestId === "string"
+      ? batch.diagnostics.replayRequestId
+      : "";
   return [
     batch.draftId,
     batch.sessionNonce,
     batch.baselineOnly ? "b1" : "b0",
     batch.liveNotify ? "n1" : "n0",
     batch.draftComplete ? "c1" : "c0",
+    replayId ? `r:${replayId}` : "r0",
     keys.join(","),
   ].join("|");
 }
@@ -26,6 +31,8 @@ export type EspnBmIngestState = {
   seenBatchFingerprints: ReadonlySet<string>;
   maxOverallSeen: number;
   draftCompleteApplied: boolean;
+  /** Last accepted transport revision for the active sessionNonce. */
+  lastAcceptedRevision: number;
 };
 
 export type EspnBmIngestPlan = {
@@ -42,7 +49,8 @@ export type EspnBmIngestPlan = {
     | "league_mismatch"
     | "season_mismatch"
     | "duplicate_batch"
-    | "out_of_order_replay";
+    | "out_of_order_replay"
+    | "regressive_revision";
   next: EspnBmIngestState;
 };
 
@@ -64,10 +72,22 @@ export function planEspnBookmarkletBatchIngest(args: {
     seenBatchFingerprints: new Set(state.seenBatchFingerprints),
     maxOverallSeen: state.maxOverallSeen,
     draftCompleteApplied: state.draftCompleteApplied,
+    lastAcceptedRevision: state.lastAcceptedRevision,
   };
 
   if (batch.sessionNonce !== expectedSessionNonce) {
     return { ok: false, error: "wrong_session_nonce", next: nextBase };
+  }
+
+  const revision = Math.floor(Number(batch.revision));
+  if (!Number.isFinite(revision) || revision < 1) {
+    return { ok: false, error: "regressive_revision", next: nextBase };
+  }
+  if (revision < nextBase.lastAcceptedRevision) {
+    return { ok: false, error: "regressive_revision", next: nextBase };
+  }
+  if (revision === nextBase.lastAcceptedRevision && nextBase.lastAcceptedRevision > 0) {
+    return { ok: false, error: "duplicate_batch", next: nextBase };
   }
 
   const converted = espnBmBatchToNormalized(batch, {
@@ -128,6 +148,7 @@ export function planEspnBookmarkletBatchIngest(args: {
   if (normalized.draftComplete) {
     nextBase.draftCompleteApplied = true;
   }
+  nextBase.lastAcceptedRevision = revision;
   nextBase.alreadyNotified = notified;
 
   const projectionBatch: NormalizedPickBatch | null =
@@ -147,5 +168,6 @@ export function createEspnBmIngestState(): EspnBmIngestState {
     seenBatchFingerprints: new Set(),
     maxOverallSeen: 0,
     draftCompleteApplied: false,
+    lastAcceptedRevision: 0,
   };
 }

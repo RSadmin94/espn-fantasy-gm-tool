@@ -634,6 +634,217 @@ describe("EspnBookmarkletPublisher", () => {
   });
 });
 
+describe("Phase 4 refresh recovery (replay)", () => {
+  const board = [
+    pick({
+      eventKey: "1",
+      overallPick: 1,
+      round: 1,
+      pickInRound: 1,
+      playerName: "A",
+      playerId: "1",
+      currentTeamId: "1",
+      currentTeamName: "A",
+    }),
+    pick({
+      eventKey: "2",
+      overallPick: 2,
+      round: 1,
+      pickInRound: 2,
+      playerName: "B",
+      playerId: "2",
+      currentTeamId: "2",
+      currentTeamName: "B",
+    }),
+    pick({
+      eventKey: "3",
+      overallPick: 3,
+      round: 1,
+      pickInRound: 3,
+      playerName: "C",
+      playerId: "3",
+      currentTeamId: "3",
+      currentTeamName: "C",
+    }),
+  ];
+
+  it("retains board across DISARM and replays full baseline after reconnect ARM", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot(board));
+    expect(batches(out)).toHaveLength(1);
+    pub.disarm();
+    expect(pub.state.boardPickCount).toBe(3);
+
+    out.length = 0;
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n2" });
+    const r = pub.handleReplayRequest({
+      draftId: "espn-live-424242-2026",
+      sessionNonce: "n2",
+      afterOverallPick: 0,
+      requestId: "req-full",
+    });
+    expect(r.ok).toBe(true);
+    expect(r.emitted).toBe(3);
+    const b = batches(out);
+    expect(b).toHaveLength(1);
+    expect(b[0]!.baselineOnly).toBe(true);
+    expect(b[0]!.liveNotify).toBe(false);
+    expect(b[0]!.sessionNonce).toBe("n2");
+    expect(b[0]!.diagnostics.replay).toBe(true);
+    expect(b[0]!.diagnostics.replayRequestId).toBe("req-full");
+    expect(b[0]!.picks.map((p) => p.overallPick)).toEqual([1, 2, 3]);
+  });
+
+  it("replays only picks after afterOverallPick as liveNotify during live draft", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot(board.slice(0, 1)));
+    pub.onSnapshot(snapshot(board.slice(0, 2)));
+    pub.onSnapshot(snapshot(board));
+    out.length = 0;
+    const r = pub.handleReplayRequest({
+      draftId: "espn-live-424242-2026",
+      sessionNonce: "n1",
+      afterOverallPick: 1,
+      requestId: "req-delta",
+    });
+    expect(r.ok).toBe(true);
+    expect(r.emitted).toBe(2);
+    const b = batches(out)[0]!;
+    expect(b.baselineOnly).toBe(false);
+    expect(b.liveNotify).toBe(true);
+    expect(b.picks.map((p) => p.playerName)).toEqual(["B", "C"]);
+  });
+
+  it("rejects wrong sessionNonce and wrong draftId", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot(board));
+    out.length = 0;
+    expect(
+      pub.handleReplayRequest({
+        draftId: "espn-live-424242-2026",
+        sessionNonce: "wrong",
+        afterOverallPick: 0,
+        requestId: "r1",
+      }).error,
+    ).toBe("wrong_session_nonce");
+    expect(
+      pub.handleReplayRequest({
+        draftId: "espn-live-999-2026",
+        sessionNonce: "n1",
+        afterOverallPick: 0,
+        requestId: "r2",
+      }).error,
+    ).toBe("wrong_draft_id");
+    expect(batches(out)).toHaveLength(0);
+  });
+
+  it("rejects stale replay (afterOverallPick beyond board)", () => {
+    const pub = new EspnBookmarkletPublisher({ emit: () => {} });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot(board));
+    expect(
+      pub.handleReplayRequest({
+        draftId: "espn-live-424242-2026",
+        sessionNonce: "n1",
+        afterOverallPick: 99,
+        requestId: "stale",
+      }).error,
+    ).toBe("stale_replay");
+  });
+
+  it("survives multiple rapid re-ARM + replay cycles without losing board", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "a" });
+    pub.onSnapshot(snapshot(board));
+    for (let i = 0; i < 5; i++) {
+      pub.disarm();
+      pub.arm({ leagueId: "424242", season: 2026, sessionNonce: `n${i}` });
+      const r = pub.handleReplayRequest({
+        draftId: "espn-live-424242-2026",
+        sessionNonce: `n${i}`,
+        afterOverallPick: 0,
+        requestId: `rapid-${i}`,
+      });
+      expect(r.ok).toBe(true);
+      expect(r.emitted).toBe(3);
+    }
+    expect(pub.state.boardPickCount).toBe(3);
+  });
+
+  it("inbound REPLAY_REQUEST message triggers handleReplayRequest", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const listeners: Array<(ev: MessageEvent) => void> = [];
+    const fakeWin = {
+      location: { origin: "https://fantasy.espn.com" },
+      postMessage() {},
+      addEventListener(_t: string, fn: (ev: MessageEvent) => void) {
+        listeners.push(fn);
+      },
+      removeEventListener() {},
+    } as unknown as Window;
+    const pub = new EspnBookmarkletPublisher({
+      emit: (m) => out.push(m),
+      window: fakeWin,
+    });
+    pub.attachInboundListener();
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot(board));
+    out.length = 0;
+    listeners[0]!({
+      source: fakeWin,
+      data: {
+        channel: "GMWR_ESPN_BM_PAGE",
+        type: "GMWR_ESPN_BM_REPLAY_REQUEST",
+        draftId: "espn-live-424242-2026",
+        sessionNonce: "n1",
+        afterOverallPick: 2,
+        requestId: "inbound-1",
+      },
+    } as MessageEvent);
+    expect(batches(out)).toHaveLength(1);
+    expect(batches(out)[0]!.picks).toHaveLength(1);
+    expect(batches(out)[0]!.picks[0]!.overallPick).toBe(3);
+  });
+
+  it("stamps protocolVersion 1 and monotonic revision per armed session", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({
+      emit: (m) => out.push(m),
+    });
+    const mk = (n: number) =>
+      pick({
+        eventKey: `rev-${n}`,
+        overallPick: n,
+        round: 1,
+        pickInRound: n,
+        playerName: `P${n}`,
+        playerId: String(n),
+        currentTeamId: String(n),
+        currentTeamName: `T${n}`,
+      });
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n1" });
+    pub.onSnapshot(snapshot([mk(1), mk(2)]));
+    pub.onSnapshot(snapshot([mk(1), mk(2), mk(3)]));
+    const b = batches(out);
+    expect(b.length).toBeGreaterThanOrEqual(2);
+    expect(b[0]!.protocolVersion).toBe(1);
+    expect(b[1]!.protocolVersion).toBe(1);
+    expect(b[0]!.revision).toBe(1);
+    expect(b[1]!.revision).toBe(2);
+    pub.arm({ leagueId: "424242", season: 2026, sessionNonce: "n2" });
+    pub.onSnapshot(snapshot([mk(1)]));
+    const afterRearm = batches(out).at(-1)!;
+    expect(afterRearm.revision).toBe(1);
+  });
+});
+
 describe("mirror rendering remains unchanged", () => {
   it("publisher module does not import board/render paths", () => {
     const file = path.resolve(

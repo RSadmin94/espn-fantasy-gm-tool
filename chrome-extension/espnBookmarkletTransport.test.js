@@ -8,12 +8,14 @@ import {
   MSG_ESPN_BM_ARM,
   MSG_ESPN_BM_PICK_BATCH,
   MSG_ESPN_BM_PING,
+  MSG_ESPN_BM_REPLAY_REQUEST,
   MSG_ESPN_BM_STATUS,
   isEspnLiveDraftId,
   shouldBridgeAcceptEspnBmCommand,
   shouldBridgeForwardEspnBm,
   validateArmConfig,
   validatePageOutboundMessage,
+  validateReplayRequest,
   validateTransportPick,
 } from "./espnBookmarkletTransport.js";
 
@@ -40,6 +42,8 @@ function validPick(partial = {}) {
 function validBatch(partial = {}) {
   return {
     type: MSG_ESPN_BM_PICK_BATCH,
+    protocolVersion: 1,
+    revision: 1,
     channel: ESPN_BM_PAGE_CHANNEL,
     source: ESPN_BM_PAGE_SOURCE,
     provider: "espn-live",
@@ -115,16 +119,45 @@ describe("espnBookmarkletTransport validation", () => {
     expect(r.ok).toBe(true);
     expect(r.message?.picks).toEqual([]);
   });
+
+  it("rejects unsupported protocolVersion and invalid revision", () => {
+    expect(validatePageOutboundMessage(validBatch({ protocolVersion: 2 })).error).toBe(
+      "unsupported_protocol_version",
+    );
+    expect(validatePageOutboundMessage(validBatch({ revision: 0 })).error).toBe("invalid_revision");
+    const ok = validatePageOutboundMessage(validBatch());
+    expect(ok.ok).toBe(true);
+    expect(ok.message?.protocolVersion).toBe(1);
+    expect(ok.message?.revision).toBe(1);
+  });
 });
 
 describe("bridge namespace isolation", () => {
   it("forwards only ESPN BM types to Rivals page", () => {
     expect(
-      shouldBridgeForwardEspnBm({ type: MSG_ESPN_BM_PICK_BATCH, provider: "espn-live" }),
+      shouldBridgeForwardEspnBm({
+        type: MSG_ESPN_BM_PICK_BATCH,
+        provider: "espn-live",
+        protocolVersion: 1,
+      }),
     ).toBe(true);
-    expect(shouldBridgeForwardEspnBm({ type: MSG_ESPN_BM_STATUS, provider: "espn-live" })).toBe(
-      true,
-    );
+    expect(
+      shouldBridgeForwardEspnBm({
+        type: MSG_ESPN_BM_STATUS,
+        provider: "espn-live",
+        protocolVersion: 1,
+      }),
+    ).toBe(true);
+    expect(
+      shouldBridgeForwardEspnBm({ type: MSG_ESPN_BM_PICK_BATCH, provider: "espn-live" }),
+    ).toBe(false);
+    expect(
+      shouldBridgeForwardEspnBm({
+        type: MSG_ESPN_BM_PICK_BATCH,
+        provider: "espn-live",
+        protocolVersion: 2,
+      }),
+    ).toBe(false);
     expect(
       shouldBridgeForwardEspnBm({ type: "GMWR_FP_MOCK_PICK_BATCH", provider: "fantasypros" }),
     ).toBe(false);
@@ -134,10 +167,53 @@ describe("bridge namespace isolation", () => {
   });
 
   it("accepts only ESPN BM command types from Rivals page", () => {
-    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_ARM })).toBe(true);
-    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_PING })).toBe(true);
+    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_ARM, protocolVersion: 1 })).toBe(
+      true,
+    );
+    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_PING, protocolVersion: 1 })).toBe(
+      true,
+    );
+    expect(
+      shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_REPLAY_REQUEST, protocolVersion: 1 }),
+    ).toBe(true);
+    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_ARM })).toBe(false);
+    expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_ARM, protocolVersion: 2 })).toBe(
+      false,
+    );
     expect(shouldBridgeAcceptEspnBmCommand({ type: "GMWR_FP_MOCK_ARM" })).toBe(false);
     expect(shouldBridgeAcceptEspnBmCommand({ type: MSG_ESPN_BM_STATUS })).toBe(false);
+  });
+
+  it("validates REPLAY_REQUEST payloads", () => {
+    expect(
+      validateReplayRequest({
+        draftId: "espn-live-424242-2026",
+        sessionNonce: "n1",
+        afterOverallPick: 0,
+        requestId: "r1",
+      }),
+    ).toEqual({
+      draftId: "espn-live-424242-2026",
+      sessionNonce: "n1",
+      afterOverallPick: 0,
+      requestId: "r1",
+    });
+    expect(
+      validateReplayRequest({
+        draftId: "espn-live-424242-na",
+        sessionNonce: "n1",
+        afterOverallPick: 0,
+        requestId: "r1",
+      }),
+    ).toBeNull();
+    expect(
+      validateReplayRequest({
+        draftId: "espn-live-424242-2026",
+        sessionNonce: "n1",
+        afterOverallPick: -1,
+        requestId: "r1",
+      }),
+    ).toBeNull();
   });
 });
 

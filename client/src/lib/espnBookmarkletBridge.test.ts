@@ -35,6 +35,8 @@ function batch(
   const { picks, ...rest } = partial;
   return {
     type: "GMWR_ESPN_BM_PICK_BATCH",
+    protocolVersion: 1 as const,
+    revision: 1,
     provider: "espn-live",
     draftType: "live",
     draftId: "espn-live-12345-2026",
@@ -57,6 +59,8 @@ describe("espnBookmarkletBridge", () => {
       source: "gmwarroom-extension",
       channel: "GMWR_ESPN_BM",
       type: "GMWR_ESPN_BM_PICK_BATCH",
+      protocolVersion: 1,
+      revision: 1,
       provider: "espn-live",
       draftId: "espn-live-12345-2026",
       leagueId: "12345",
@@ -79,6 +83,8 @@ describe("espnBookmarkletBridge", () => {
   it("accepts empty completion batch", () => {
     const parsed = parseEspnBookmarkletBridgeMessage({
       type: "GMWR_ESPN_BM_PICK_BATCH",
+      protocolVersion: 1,
+      revision: 1,
       provider: "espn-live",
       draftId: "espn-live-12345-2026",
       leagueId: "12345",
@@ -102,6 +108,8 @@ describe("espnBookmarkletBridge", () => {
     expect(
       parseEspnBookmarkletBridgeMessage({
         type: "GMWR_ESPN_BM_PICK_BATCH",
+        protocolVersion: 1,
+        revision: 1,
         provider: "espn-live",
         draftId: "espn-live-12345-na",
         leagueId: "12345",
@@ -161,5 +169,43 @@ describe("espnBookmarkletBridge", () => {
     expect(converted.ok).toBe(false);
     if (converted.ok) return;
     expect(converted.error).toBe("unknown_draft_id");
+  });
+
+  it("rejects unsupported protocolVersion on pick batches", () => {
+    expect(
+      parseEspnBookmarkletBridgeMessage({
+        type: "GMWR_ESPN_BM_PICK_BATCH",
+        protocolVersion: 2,
+        revision: 1,
+        provider: "espn-live",
+        draftId: "espn-live-12345-2026",
+        leagueId: "12345",
+        season: 2026,
+        sessionNonce: "n",
+        teamCount: 12,
+        draftComplete: false,
+        baselineOnly: false,
+        liveNotify: true,
+        observedAt: "2026-07-19T12:00:00.000Z",
+        picks: [pickRow(1)],
+      }),
+    ).toBeNull();
+  });
+
+  it("rejects pick batches missing revision", () => {
+    expect(
+      parseEspnBookmarkletBridgeMessage({
+        type: "GMWR_ESPN_BM_PICK_BATCH",
+        protocolVersion: 1,
+        provider: "espn-live",
+        draftId: "espn-live-12345-2026",
+        leagueId: "12345",
+        season: 2026,
+        sessionNonce: "n",
+        teamCount: 12,
+        draftComplete: false,
+        picks: [pickRow(1)],
+      }),
+    ).toBeNull();
   });
 });

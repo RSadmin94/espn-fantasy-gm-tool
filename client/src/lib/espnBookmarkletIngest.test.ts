@@ -2,7 +2,7 @@
  * @vitest-environment node
  * Phase 3 — ESPN bookmarklet ingest planner (dedupe / nonce / notify once).
  */
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyNormalizedPickBatch,
   createDraftSessionState,
@@ -13,6 +13,8 @@ import {
   createEspnBmIngestState,
   planEspnBookmarkletBatchIngest,
 } from "./espnBookmarkletIngest";
+
+let batchRevisionSeq = 0;
 
 function pickRow(over: number, name = `Player ${over}`) {
   return {
@@ -36,11 +38,14 @@ function pickRow(over: number, name = `Player ${over}`) {
 function makeBatch(
   overrides: Partial<EspnBmBridgePickBatch> & {
     picks?: ReturnType<typeof pickRow>[];
+    revision?: number;
   } = {},
 ): EspnBmBridgePickBatch {
-  const { picks, ...rest } = overrides;
+  const { picks, revision = ++batchRevisionSeq, ...rest } = overrides;
   return {
     type: "GMWR_ESPN_BM_PICK_BATCH",
+    protocolVersion: 1 as const,
+    revision,
     provider: "espn-live",
     draftType: "live",
     draftId: "espn-live-12345-2026",
@@ -58,6 +63,10 @@ function makeBatch(
 }
 
 describe("planEspnBookmarkletBatchIngest", () => {
+  beforeEach(() => {
+    batchRevisionSeq = 0;
+  });
+
   it("accepts ESPN live batch and plans notify once", () => {
     const plan = planEspnBookmarkletBatchIngest({
       batch: makeBatch({ liveNotify: true, baselineOnly: false }),
@@ -262,5 +271,216 @@ describe("planEspnBookmarkletBatchIngest", () => {
     });
     expect(dup.ok).toBe(false);
     expect(notify).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Phase 4 reload / replay ingest", () => {
+  it("reload before first batch: empty state accepts baseline reconcile", () => {
+    const plan = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: true,
+        liveNotify: false,
+        picks: [pickRow(1), pickRow(2)],
+        diagnostics: { replay: true, replayRequestId: "r0" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state: createEspnBmIngestState(),
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.notifyEvents).toHaveLength(0);
+    expect(plan.projectionBatch?.picks).toHaveLength(2);
+  });
+
+  it("reload after baseline: delta replay notifies only unseen live picks", () => {
+    let state = createEspnBmIngestState();
+    const baseline = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: true,
+        liveNotify: false,
+        picks: [pickRow(1), pickRow(2)],
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(baseline.ok).toBe(true);
+    if (!baseline.ok) return;
+    state = baseline.next;
+
+    const replay = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: false,
+        liveNotify: true,
+        picks: [pickRow(2), pickRow(3)],
+        diagnostics: { replay: true, replayRequestId: "after-base" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(replay.ok).toBe(true);
+    if (!replay.ok) return;
+    expect(replay.notifyEvents.map((e) => e.overallPick)).toEqual([3]);
+  });
+
+  it("reload during live draft: full remount baseline does not re-notify", () => {
+    const plan = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: true,
+        liveNotify: false,
+        picks: [pickRow(1), pickRow(2), pickRow(3)],
+        diagnostics: { replay: true, replayRequestId: "remount" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state: createEspnBmIngestState(),
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    expect(plan.notifyEvents).toHaveLength(0);
+    expect(plan.next.maxOverallSeen).toBe(3);
+  });
+
+  it("replay with duplicate batches is ignored", () => {
+    let state = createEspnBmIngestState();
+    const batch = makeBatch({
+      picks: [pickRow(4)],
+      diagnostics: { replay: true, replayRequestId: "dup" },
+    });
+    const first = planEspnBookmarkletBatchIngest({
+      batch,
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    state = first.next;
+    const second = planEspnBookmarkletBatchIngest({
+      batch,
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.error).toBe("duplicate_batch");
+  });
+
+  it("replay after reconnect delay still applies once (fresh fingerprint per requestId)", () => {
+    let state = createEspnBmIngestState();
+    const a = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: true,
+        liveNotify: false,
+        picks: [pickRow(1)],
+        diagnostics: { replay: true, replayRequestId: "delay-a" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(a.ok).toBe(true);
+    if (!a.ok) return;
+    state = a.next;
+    const b = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        baselineOnly: true,
+        liveNotify: false,
+        picks: [pickRow(1)],
+        diagnostics: { replay: true, replayRequestId: "delay-b" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    // Different requestId → not duplicate_batch; still no notify (baseline + already seeded).
+    expect(b.ok).toBe(true);
+    if (!b.ok) return;
+    expect(b.notifyEvents).toHaveLength(0);
+  });
+
+  it("rejects wrong sessionNonce and unknown draftId on replay-shaped batches", () => {
+    expect(
+      planEspnBookmarkletBatchIngest({
+        batch: makeBatch({
+          sessionNonce: "nope",
+          diagnostics: { replay: true, replayRequestId: "x" },
+        }),
+        expectedLeagueId: "12345",
+        expectedSeason: 2026,
+        expectedSessionNonce: "nonce-abc",
+        state: createEspnBmIngestState(),
+      }).ok,
+    ).toBe(false);
+
+    const badDraft = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({
+        draftId: "espn-live-99999-2026",
+        diagnostics: { replay: true, replayRequestId: "y" },
+      }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state: createEspnBmIngestState(),
+    });
+    expect(badDraft.ok).toBe(false);
+    if (badDraft.ok) return;
+    expect(badDraft.error).toBe("unknown_draft_id");
+  });
+
+  it("rejects regressive and repeated revisions", () => {
+    let state = createEspnBmIngestState();
+    const first = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({ revision: 3, picks: [pickRow(1)] }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    state = first.next;
+
+    const repeated = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({ revision: 3, picks: [pickRow(2)] }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(repeated.ok).toBe(false);
+    if (repeated.ok) return;
+    expect(repeated.error).toBe("duplicate_batch");
+
+    const regressive = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({ revision: 2, picks: [pickRow(2)] }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(regressive.ok).toBe(false);
+    if (regressive.ok) return;
+    expect(regressive.error).toBe("regressive_revision");
+
+    const next = planEspnBookmarkletBatchIngest({
+      batch: makeBatch({ revision: 4, picks: [pickRow(2)] }),
+      expectedLeagueId: "12345",
+      expectedSeason: 2026,
+      expectedSessionNonce: "nonce-abc",
+      state,
+    });
+    expect(next.ok).toBe(true);
   });
 });

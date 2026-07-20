@@ -10,6 +10,9 @@ export const ESPN_BM_CONTENT_SOURCE = "espn-live-content";
 export const ESPN_BM_EXTENSION_SOURCE = "gmwarroom-extension";
 export const ESPN_BM_PROVIDER = "espn-live";
 
+/** Contract version for ESPN bookmarklet transport messages (page ↔ extension ↔ Rivals). */
+export const ESPN_BM_PROTOCOL_VERSION = 1;
+
 export const MSG_ESPN_BM_ARM = "GMWR_ESPN_BM_ARM";
 export const MSG_ESPN_BM_DISARM = "GMWR_ESPN_BM_DISARM";
 export const MSG_ESPN_BM_PING = "GMWR_ESPN_BM_PING";
@@ -18,6 +21,8 @@ export const MSG_ESPN_BM_STATUS = "GMWR_ESPN_BM_STATUS";
 export const MSG_ESPN_BM_PICK_BATCH = "GMWR_ESPN_BM_PICK_BATCH";
 export const MSG_ESPN_BM_SESSION_RESET = "GMWR_ESPN_BM_SESSION_RESET";
 export const MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
+/** Phase 4 — War Room requests idempotent board reconciliation after reconnect. */
+export const MSG_ESPN_BM_REPLAY_REQUEST = "GMWR_ESPN_BM_REPLAY_REQUEST";
 
 /** Types the Rivals page may send toward background (via bridge). */
 export const ESPN_BM_FFR_TO_BG_TYPES = [
@@ -25,6 +30,7 @@ export const ESPN_BM_FFR_TO_BG_TYPES = [
   MSG_ESPN_BM_DISARM,
   MSG_ESPN_BM_PING,
   MSG_ESPN_BM_GET_STATE,
+  MSG_ESPN_BM_REPLAY_REQUEST,
 ];
 
 /** Types background may push to Rivals bridge / page. */
@@ -58,6 +64,34 @@ export function isEspnLiveDraftId(draftId) {
   return /^espn-live-\d+-\d{4}$/.test(id);
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, version: number }|{ ok: false, error: string }}
+ */
+export function validateProtocolVersion(raw) {
+  const version = Math.floor(Number(raw));
+  if (!Number.isFinite(version) || version !== ESPN_BM_PROTOCOL_VERSION) {
+    return { ok: false, error: "unsupported_protocol_version" };
+  }
+  return { ok: true, version };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ ok: true, revision: number }|{ ok: false, error: string }}
+ */
+export function validatePickBatchRevision(raw) {
+  const revision = Math.floor(Number(raw));
+  if (!Number.isFinite(revision) || revision < 1) {
+    return { ok: false, error: "invalid_revision" };
+  }
+  return { ok: true, revision };
+}
+
+export function withProtocolVersion(fields) {
+  return { protocolVersion: ESPN_BM_PROTOCOL_VERSION, ...fields };
+}
+
 export function validateArmConfig(raw) {
   if (!raw || typeof raw !== "object") return null;
   const c = /** @type {Record<string, unknown>} */ (raw);
@@ -77,6 +111,30 @@ export function validateArmConfig(raw) {
     season,
     sessionNonce: sessionNonce.slice(0, 128),
     draftPace: pace,
+  };
+}
+
+/**
+ * Validate War Room → bookmarklet REPLAY_REQUEST payload.
+ * @param {unknown} raw
+ * @returns {{ draftId: string, sessionNonce: string, afterOverallPick: number, requestId: string }|null}
+ */
+export function validateReplayRequest(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const c = /** @type {Record<string, unknown>} */ (raw);
+  const draftId = String(c.draftId ?? "").trim();
+  const sessionNonce = String(c.sessionNonce ?? "").trim();
+  const afterOverallPick = Math.floor(Number(c.afterOverallPick));
+  const requestId = String(c.requestId ?? "").trim();
+  if (!isEspnLiveDraftId(draftId)) return null;
+  if (!sessionNonce || sessionNonce.length > 128) return null;
+  if (!Number.isFinite(afterOverallPick) || afterOverallPick < 0) return null;
+  if (!requestId || requestId.length > 128) return null;
+  return {
+    draftId: draftId.slice(0, 128),
+    sessionNonce: sessionNonce.slice(0, 128),
+    afterOverallPick,
+    requestId: requestId.slice(0, 128),
   };
 }
 
@@ -137,6 +195,8 @@ export function validatePageOutboundMessage(data, opts = {}) {
   if (d.provider != null && d.provider !== ESPN_BM_PROVIDER) {
     return { ok: false, error: "wrong_provider" };
   }
+  const protocol = validateProtocolVersion(d.protocolVersion);
+  if (!protocol.ok) return protocol;
   const type = String(d.type ?? "");
   if (!ESPN_BM_PAGE_TO_CONTENT_TYPES.includes(type)) {
     return { ok: false, error: "wrong_type" };
@@ -176,9 +236,11 @@ export function validatePageOutboundMessage(data, opts = {}) {
     if (d.picks.length > 0 && picks.length === 0) {
       return { ok: false, error: "no_valid_picks" };
     }
+    const revisionCheck = validatePickBatchRevision(d.revision);
+    if (!revisionCheck.ok) return revisionCheck;
     return {
       ok: true,
-      message: {
+      message: withProtocolVersion({
         type: MSG_ESPN_BM_PICK_BATCH,
         provider: ESPN_BM_PROVIDER,
         draftType: "live",
@@ -186,6 +248,7 @@ export function validatePageOutboundMessage(data, opts = {}) {
         leagueId,
         season,
         sessionNonce: sessionNonce.slice(0, 128),
+        revision: revisionCheck.revision,
         teamCount: Math.max(0, Math.floor(Number(d.teamCount)) || 0),
         draftComplete: Boolean(d.draftComplete),
         baselineOnly: Boolean(d.baselineOnly),
@@ -202,18 +265,32 @@ export function validatePageOutboundMessage(data, opts = {}) {
                 rowsScanned: Number(/** @type {any} */ (d.diagnostics).rowsScanned) || 0,
                 baselineOnly: Boolean(/** @type {any} */ (d.diagnostics).baselineOnly),
                 liveNotify: Boolean(/** @type {any} */ (d.diagnostics).liveNotify),
+                replay: Boolean(/** @type {any} */ (d.diagnostics).replay),
+                replayRequestId:
+                  typeof /** @type {any} */ (d.diagnostics).replayRequestId === "string"
+                    ? String(/** @type {any} */ (d.diagnostics).replayRequestId).slice(0, 128)
+                    : undefined,
+                afterOverallPick:
+                  Number.isFinite(Number(/** @type {any} */ (d.diagnostics).afterOverallPick))
+                    ? Math.floor(Number(/** @type {any} */ (d.diagnostics).afterOverallPick))
+                    : undefined,
               }
             : null,
-      },
+      }),
     };
   }
 
   if (type === MSG_ESPN_BM_STATUS) {
+    const revision =
+      d.revision != null && Number.isFinite(Number(d.revision))
+        ? Math.max(0, Math.floor(Number(d.revision)))
+        : 0;
     return {
       ok: true,
-      message: {
+      message: withProtocolVersion({
         type: MSG_ESPN_BM_STATUS,
         provider: ESPN_BM_PROVIDER,
+        revision,
         status: String(d.status ?? "unknown").slice(0, 40),
         reason: d.reason != null ? String(d.reason).slice(0, 80) : null,
         draftId: d.draftId != null ? String(d.draftId).slice(0, 128) : null,
@@ -223,22 +300,27 @@ export function validatePageOutboundMessage(data, opts = {}) {
         draftComplete: d.draftComplete != null ? Boolean(d.draftComplete) : undefined,
         baselineOnly: d.baselineOnly != null ? Boolean(d.baselineOnly) : undefined,
         diagnostics: d.diagnostics && typeof d.diagnostics === "object" ? d.diagnostics : null,
-      },
+      }),
     };
   }
 
   if (type === MSG_ESPN_BM_PONG) {
+    const revision =
+      d.revision != null && Number.isFinite(Number(d.revision))
+        ? Math.max(0, Math.floor(Number(d.revision)))
+        : 0;
     return {
       ok: true,
-      message: {
+      message: withProtocolVersion({
         type: MSG_ESPN_BM_PONG,
         provider: ESPN_BM_PROVIDER,
+        revision,
         armed: Boolean(d.armed),
         draftId: d.draftId != null ? String(d.draftId).slice(0, 128) : null,
         leagueId: d.leagueId != null ? String(d.leagueId).slice(0, 32) : null,
         season: d.season != null && Number.isFinite(Number(d.season)) ? Number(d.season) : null,
         sessionNonce: d.sessionNonce != null ? String(d.sessionNonce).slice(0, 128) : null,
-      },
+      }),
     };
   }
 
@@ -249,13 +331,13 @@ export function validatePageOutboundMessage(data, opts = {}) {
     }
     return {
       ok: true,
-      message: {
+      message: withProtocolVersion({
         type: MSG_ESPN_BM_SESSION_RESET,
         provider: ESPN_BM_PROVIDER,
         draftId: draftId ? draftId.slice(0, 128) : null,
         leagueId: d.leagueId != null ? String(d.leagueId).slice(0, 32) : null,
         sessionNonce: d.sessionNonce != null ? String(d.sessionNonce).slice(0, 128) : null,
-      },
+      }),
     };
   }
 
@@ -269,6 +351,7 @@ export function shouldBridgeForwardEspnBm(message) {
   const type = String(m.type ?? "");
   if (!ESPN_BM_BG_TO_FFR_TYPES.includes(type)) return false;
   if (m.provider != null && m.provider !== ESPN_BM_PROVIDER) return false;
+  if (!validateProtocolVersion(m.protocolVersion).ok) return false;
   // Reject FP namespace contamination
   if (type.startsWith("GMWR_FP_")) return false;
   return true;
@@ -281,6 +364,7 @@ export function shouldBridgeAcceptEspnBmCommand(data) {
   const type = String(d.type ?? "");
   if (!ESPN_BM_FFR_TO_BG_TYPES.includes(type)) return false;
   if (d.provider != null && d.provider !== ESPN_BM_PROVIDER) return false;
+  if (!validateProtocolVersion(d.protocolVersion).ok) return false;
   if (type.startsWith("GMWR_FP_")) return false;
   return true;
 }

@@ -272,16 +272,22 @@
         d.type !== "GMWR_ESPN_BM_ARM" &&
         d.type !== "GMWR_ESPN_BM_DISARM" &&
         d.type !== "GMWR_ESPN_BM_PING" &&
-        d.type !== "GMWR_ESPN_BM_GET_STATE"
+        d.type !== "GMWR_ESPN_BM_GET_STATE" &&
+        d.type !== "GMWR_ESPN_BM_REPLAY_REQUEST"
       ) {
         return;
       }
       if (d.provider != null && d.provider !== "espn-live") return;
+      if (Math.floor(Number(d.protocolVersion)) !== 1) return;
       const id = d.id;
       chrome.runtime.sendMessage(
         {
           type: d.type,
           config: d.config && typeof d.config === "object" ? d.config : undefined,
+          draftId: d.draftId,
+          sessionNonce: d.sessionNonce,
+          afterOverallPick: d.afterOverallPick,
+          requestId: d.requestId,
         },
         (response) => {
           if (chrome.runtime.lastError) {
@@ -328,6 +334,10 @@
     }
     if (message.provider && message.provider !== "espn-live") {
       sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    if (Math.floor(Number(message.protocolVersion)) !== 1) {
+      sendResponse({ ok: false, error: "unsupported_protocol_version" });
       return true;
     }
     // Never forward FP payloads through this listener.

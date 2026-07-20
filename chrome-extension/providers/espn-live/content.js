@@ -1,15 +1,21 @@
 /**
  * Phase 2 — ESPN bookmarklet transport content script (isolated world).
  * Relays GMWR_ESPN_BM_* page messages ↔ background. No DOM parsing / observers.
+ * Phase 4 — rehydrate ARM from background after tab reload; relay REPLAY_REQUEST.
  */
 import {
   ESPN_BM_CONTENT_SOURCE,
   ESPN_BM_PAGE_CHANNEL,
+  ESPN_BM_PROTOCOL_VERSION,
   MSG_ESPN_BM_ARM,
   MSG_ESPN_BM_DISARM,
+  MSG_ESPN_BM_GET_STATE,
   MSG_ESPN_BM_PING,
+  MSG_ESPN_BM_REPLAY_REQUEST,
   validateArmConfig,
   validatePageOutboundMessage,
+  validateReplayRequest,
+  withProtocolVersion,
 } from "../../espnBookmarkletTransport.js";
 
 (function espnLiveBookmarkletContent() {
@@ -21,11 +27,21 @@ import {
   function postToPage(payload) {
     window.postMessage(
       Object.assign(
-        { channel: ESPN_BM_PAGE_CHANNEL, source: ESPN_BM_CONTENT_SOURCE },
+        {
+          channel: ESPN_BM_PAGE_CHANNEL,
+          source: ESPN_BM_CONTENT_SOURCE,
+          protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+        },
         payload,
       ),
       window.location.origin,
     );
+  }
+
+  function applyArmConfig(config) {
+    armedSessionNonce = config.sessionNonce;
+    postToPage({ type: "ARM", config });
+    postToPage({ type: MSG_ESPN_BM_ARM, config });
   }
 
   function relayToBackground(message) {
@@ -35,6 +51,19 @@ import {
     } catch (_) {
       /* ignore */
     }
+  }
+
+  // Phase 4 — if background still armed after ESPN tab reload, rehydrate immediately.
+  try {
+    chrome.runtime.sendMessage({ type: MSG_ESPN_BM_GET_STATE }, function (state) {
+      if (chrome.runtime.lastError) return;
+      if (!state || !state.armed || !state.config) return;
+      const config = validateArmConfig(state.config);
+      if (!config) return;
+      applyArmConfig(config);
+    });
+  } catch (_) {
+    /* ignore */
   }
 
   window.addEventListener("message", function (ev) {
@@ -62,9 +91,7 @@ import {
         sendResponse({ ok: false, error: "invalid_arm_config" });
         return true;
       }
-      armedSessionNonce = config.sessionNonce;
-      postToPage({ type: "ARM", config });
-      postToPage({ type: MSG_ESPN_BM_ARM, config });
+      applyArmConfig(config);
       sendResponse({ ok: true, host: "espn", sessionNonce: config.sessionNonce });
       return true;
     }
@@ -78,6 +105,31 @@ import {
     if (message.type === MSG_ESPN_BM_PING) {
       postToPage({ type: "PING" });
       postToPage({ type: MSG_ESPN_BM_PING });
+      sendResponse({ ok: true, host: "espn" });
+      return true;
+    }
+    if (message.type === MSG_ESPN_BM_REPLAY_REQUEST) {
+      const req = validateReplayRequest(message);
+      if (!req) {
+        sendResponse({ ok: false, error: "invalid_replay_request" });
+        return true;
+      }
+      if (!armedSessionNonce) {
+        sendResponse({ ok: false, error: "not_armed" });
+        return true;
+      }
+      if (req.sessionNonce !== armedSessionNonce) {
+        sendResponse({ ok: false, error: "session_nonce_mismatch" });
+        return true;
+      }
+      postToPage({
+        type: "REPLAY_REQUEST",
+        ...req,
+      });
+      postToPage({
+        type: MSG_ESPN_BM_REPLAY_REQUEST,
+        ...req,
+      });
       sendResponse({ ok: true, host: "espn" });
       return true;
     }

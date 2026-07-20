@@ -5,6 +5,7 @@
   var ESPN_BM_PAGE_SOURCE = "espn-bookmarklet";
   var ESPN_BM_CONTENT_SOURCE = "espn-live-content";
   var ESPN_BM_PROVIDER = "espn-live";
+  var ESPN_BM_PROTOCOL_VERSION = 1;
   var MSG_ESPN_BM_ARM = "GMWR_ESPN_BM_ARM";
   var MSG_ESPN_BM_DISARM = "GMWR_ESPN_BM_DISARM";
   var MSG_ESPN_BM_PING = "GMWR_ESPN_BM_PING";
@@ -12,6 +13,8 @@
   var MSG_ESPN_BM_STATUS = "GMWR_ESPN_BM_STATUS";
   var MSG_ESPN_BM_PICK_BATCH = "GMWR_ESPN_BM_PICK_BATCH";
   var MSG_ESPN_BM_SESSION_RESET = "GMWR_ESPN_BM_SESSION_RESET";
+  var MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
+  var MSG_ESPN_BM_REPLAY_REQUEST = "GMWR_ESPN_BM_REPLAY_REQUEST";
   var ESPN_BM_PAGE_TO_CONTENT_TYPES = [
     MSG_ESPN_BM_PICK_BATCH,
     MSG_ESPN_BM_STATUS,
@@ -23,6 +26,23 @@
     if (!id.startsWith("espn-live-")) return false;
     if (id.endsWith("-na")) return false;
     return /^espn-live-\d+-\d{4}$/.test(id);
+  }
+  function validateProtocolVersion(raw) {
+    const version = Math.floor(Number(raw));
+    if (!Number.isFinite(version) || version !== ESPN_BM_PROTOCOL_VERSION) {
+      return { ok: false, error: "unsupported_protocol_version" };
+    }
+    return { ok: true, version };
+  }
+  function validatePickBatchRevision(raw) {
+    const revision = Math.floor(Number(raw));
+    if (!Number.isFinite(revision) || revision < 1) {
+      return { ok: false, error: "invalid_revision" };
+    }
+    return { ok: true, revision };
+  }
+  function withProtocolVersion(fields) {
+    return { protocolVersion: ESPN_BM_PROTOCOL_VERSION, ...fields };
   }
   function validateArmConfig(raw) {
     if (!raw || typeof raw !== "object") return null;
@@ -43,6 +63,27 @@
       season,
       sessionNonce: sessionNonce.slice(0, 128),
       draftPace: pace
+    };
+  }
+  function validateReplayRequest(raw) {
+    if (!raw || typeof raw !== "object") return null;
+    const c = (
+      /** @type {Record<string, unknown>} */
+      raw
+    );
+    const draftId = String(c.draftId ?? "").trim();
+    const sessionNonce = String(c.sessionNonce ?? "").trim();
+    const afterOverallPick = Math.floor(Number(c.afterOverallPick));
+    const requestId = String(c.requestId ?? "").trim();
+    if (!isEspnLiveDraftId(draftId)) return null;
+    if (!sessionNonce || sessionNonce.length > 128) return null;
+    if (!Number.isFinite(afterOverallPick) || afterOverallPick < 0) return null;
+    if (!requestId || requestId.length > 128) return null;
+    return {
+      draftId: draftId.slice(0, 128),
+      sessionNonce: sessionNonce.slice(0, 128),
+      afterOverallPick,
+      requestId: requestId.slice(0, 128)
     };
   }
   function validateTransportPick(row) {
@@ -93,6 +134,8 @@
     if (d.provider != null && d.provider !== ESPN_BM_PROVIDER) {
       return { ok: false, error: "wrong_provider" };
     }
+    const protocol = validateProtocolVersion(d.protocolVersion);
+    if (!protocol.ok) return protocol;
     const type = String(d.type ?? "");
     if (!ESPN_BM_PAGE_TO_CONTENT_TYPES.includes(type)) {
       return { ok: false, error: "wrong_type" };
@@ -126,9 +169,11 @@
       if (d.picks.length > 0 && picks.length === 0) {
         return { ok: false, error: "no_valid_picks" };
       }
+      const revisionCheck = validatePickBatchRevision(d.revision);
+      if (!revisionCheck.ok) return revisionCheck;
       return {
         ok: true,
-        message: {
+        message: withProtocolVersion({
           type: MSG_ESPN_BM_PICK_BATCH,
           provider: ESPN_BM_PROVIDER,
           draftType: "live",
@@ -136,6 +181,7 @@
           leagueId,
           season,
           sessionNonce: sessionNonce.slice(0, 128),
+          revision: revisionCheck.revision,
           teamCount: Math.max(0, Math.floor(Number(d.teamCount)) || 0),
           draftComplete: Boolean(d.draftComplete),
           baselineOnly: Boolean(d.baselineOnly),
@@ -162,17 +208,35 @@
             liveNotify: Boolean(
               /** @type {any} */
               d.diagnostics.liveNotify
-            )
+            ),
+            replay: Boolean(
+              /** @type {any} */
+              d.diagnostics.replay
+            ),
+            replayRequestId: typeof /** @type {any} */
+            d.diagnostics.replayRequestId === "string" ? String(
+              /** @type {any} */
+              d.diagnostics.replayRequestId
+            ).slice(0, 128) : void 0,
+            afterOverallPick: Number.isFinite(Number(
+              /** @type {any} */
+              d.diagnostics.afterOverallPick
+            )) ? Math.floor(Number(
+              /** @type {any} */
+              d.diagnostics.afterOverallPick
+            )) : void 0
           } : null
-        }
+        })
       };
     }
     if (type === MSG_ESPN_BM_STATUS) {
+      const revision = d.revision != null && Number.isFinite(Number(d.revision)) ? Math.max(0, Math.floor(Number(d.revision))) : 0;
       return {
         ok: true,
-        message: {
+        message: withProtocolVersion({
           type: MSG_ESPN_BM_STATUS,
           provider: ESPN_BM_PROVIDER,
+          revision,
           status: String(d.status ?? "unknown").slice(0, 40),
           reason: d.reason != null ? String(d.reason).slice(0, 80) : null,
           draftId: d.draftId != null ? String(d.draftId).slice(0, 128) : null,
@@ -182,21 +246,23 @@
           draftComplete: d.draftComplete != null ? Boolean(d.draftComplete) : void 0,
           baselineOnly: d.baselineOnly != null ? Boolean(d.baselineOnly) : void 0,
           diagnostics: d.diagnostics && typeof d.diagnostics === "object" ? d.diagnostics : null
-        }
+        })
       };
     }
     if (type === MSG_ESPN_BM_PONG) {
+      const revision = d.revision != null && Number.isFinite(Number(d.revision)) ? Math.max(0, Math.floor(Number(d.revision))) : 0;
       return {
         ok: true,
-        message: {
+        message: withProtocolVersion({
           type: MSG_ESPN_BM_PONG,
           provider: ESPN_BM_PROVIDER,
+          revision,
           armed: Boolean(d.armed),
           draftId: d.draftId != null ? String(d.draftId).slice(0, 128) : null,
           leagueId: d.leagueId != null ? String(d.leagueId).slice(0, 32) : null,
           season: d.season != null && Number.isFinite(Number(d.season)) ? Number(d.season) : null,
           sessionNonce: d.sessionNonce != null ? String(d.sessionNonce).slice(0, 128) : null
-        }
+        })
       };
     }
     if (type === MSG_ESPN_BM_SESSION_RESET) {
@@ -206,13 +272,13 @@
       }
       return {
         ok: true,
-        message: {
+        message: withProtocolVersion({
           type: MSG_ESPN_BM_SESSION_RESET,
           provider: ESPN_BM_PROVIDER,
           draftId: draftId ? draftId.slice(0, 128) : null,
           leagueId: d.leagueId != null ? String(d.leagueId).slice(0, 32) : null,
           sessionNonce: d.sessionNonce != null ? String(d.sessionNonce).slice(0, 128) : null
-        }
+        })
       };
     }
     return { ok: false, error: "unhandled_type" };
@@ -225,11 +291,20 @@
     function postToPage(payload) {
       window.postMessage(
         Object.assign(
-          { channel: ESPN_BM_PAGE_CHANNEL, source: ESPN_BM_CONTENT_SOURCE },
+          {
+            channel: ESPN_BM_PAGE_CHANNEL,
+            source: ESPN_BM_CONTENT_SOURCE,
+            protocolVersion: ESPN_BM_PROTOCOL_VERSION
+          },
           payload
         ),
         window.location.origin
       );
+    }
+    function applyArmConfig(config) {
+      armedSessionNonce = config.sessionNonce;
+      postToPage({ type: "ARM", config });
+      postToPage({ type: MSG_ESPN_BM_ARM, config });
     }
     function relayToBackground(message) {
       try {
@@ -238,6 +313,16 @@
         });
       } catch (_) {
       }
+    }
+    try {
+      chrome.runtime.sendMessage({ type: MSG_ESPN_BM_GET_STATE }, function(state) {
+        if (chrome.runtime.lastError) return;
+        if (!state || !state.armed || !state.config) return;
+        const config = validateArmConfig(state.config);
+        if (!config) return;
+        applyArmConfig(config);
+      });
+    } catch (_) {
     }
     window.addEventListener("message", function(ev) {
       if (ev.source !== window) return;
@@ -261,9 +346,7 @@
           sendResponse({ ok: false, error: "invalid_arm_config" });
           return true;
         }
-        armedSessionNonce = config.sessionNonce;
-        postToPage({ type: "ARM", config });
-        postToPage({ type: MSG_ESPN_BM_ARM, config });
+        applyArmConfig(config);
         sendResponse({ ok: true, host: "espn", sessionNonce: config.sessionNonce });
         return true;
       }
@@ -277,6 +360,31 @@
       if (message.type === MSG_ESPN_BM_PING) {
         postToPage({ type: "PING" });
         postToPage({ type: MSG_ESPN_BM_PING });
+        sendResponse({ ok: true, host: "espn" });
+        return true;
+      }
+      if (message.type === MSG_ESPN_BM_REPLAY_REQUEST) {
+        const req = validateReplayRequest(message);
+        if (!req) {
+          sendResponse({ ok: false, error: "invalid_replay_request" });
+          return true;
+        }
+        if (!armedSessionNonce) {
+          sendResponse({ ok: false, error: "not_armed" });
+          return true;
+        }
+        if (req.sessionNonce !== armedSessionNonce) {
+          sendResponse({ ok: false, error: "session_nonce_mismatch" });
+          return true;
+        }
+        postToPage({
+          type: "REPLAY_REQUEST",
+          ...req
+        });
+        postToPage({
+          type: MSG_ESPN_BM_REPLAY_REQUEST,
+          ...req
+        });
         sendResponse({ ok: true, host: "espn" });
         return true;
       }

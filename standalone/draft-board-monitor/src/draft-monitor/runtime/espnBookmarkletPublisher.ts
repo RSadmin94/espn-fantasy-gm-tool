@@ -10,6 +10,8 @@ import { buildEventKey } from "../normalize/eventKey";
 export const ESPN_BM_CHANNEL = "GMWR_ESPN_BM_PAGE";
 export const ESPN_BM_SOURCE = "espn-bookmarklet";
 export const ESPN_BM_PROVIDER = "espn-live" as const;
+/** Must match chrome-extension/espnBookmarkletTransport.js ESPN_BM_PROTOCOL_VERSION. */
+export const ESPN_BM_PROTOCOL_VERSION = 1 as const;
 
 /** Must match shared/espnLiveDraftMonitor.buildEspnLiveDraftId — never emit "-na". */
 export function buildEspnLiveDraftId(leagueId: string, season: number): string {
@@ -50,10 +52,16 @@ export type EspnBmDiagnostics = {
   rowsScanned: number;
   baselineOnly: boolean;
   liveNotify: boolean;
+  /** Phase 4 — set on reconciliation batches. */
+  replay?: boolean;
+  replayRequestId?: string;
+  afterOverallPick?: number;
 };
 
 export type EspnBmPickBatchMessage = {
   type: "GMWR_ESPN_BM_PICK_BATCH";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision: number;
   channel: typeof ESPN_BM_CHANNEL;
   source: typeof ESPN_BM_SOURCE;
   provider: typeof ESPN_BM_PROVIDER;
@@ -75,6 +83,8 @@ export type EspnBmPickBatchMessage = {
 
 export type EspnBmStatusMessage = {
   type: "GMWR_ESPN_BM_STATUS";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision: number;
   channel: typeof ESPN_BM_CHANNEL;
   source: typeof ESPN_BM_SOURCE;
   provider: typeof ESPN_BM_PROVIDER;
@@ -91,6 +101,8 @@ export type EspnBmStatusMessage = {
 
 export type EspnBmPongMessage = {
   type: "GMWR_ESPN_BM_PONG";
+  protocolVersion: typeof ESPN_BM_PROTOCOL_VERSION;
+  revision: number;
   channel: typeof ESPN_BM_CHANNEL;
   source: typeof ESPN_BM_SOURCE;
   provider: typeof ESPN_BM_PROVIDER;
@@ -237,6 +249,18 @@ export class EspnBookmarkletPublisher {
   private duplicatesSuppressed = 0;
   private inboundAttached = false;
   private onInbound: ((ev: MessageEvent) => void) | null = null;
+  /** Retained board for Phase 4 reconciliation (survives brief DISARM). */
+  private boardPicks: EspnBmTransportPick[] = [];
+  private boardTeamCount = 0;
+  private boardDraftComplete = false;
+  private boardDraftId: string | null = null;
+  private boardLeagueId: string | null = null;
+  private boardSeason: number | null = null;
+  /** Recent emitted batches (bounded) for diagnostics / duplicate-aware replay tests. */
+  private recentBatches: EspnBmPickBatchMessage[] = [];
+  private static readonly RECENT_BATCH_LIMIT = 48;
+  /** Monotonic per armed session — stamped on every outbound batch. */
+  private sessionRevision = 0;
 
   constructor(opts: EspnBookmarkletPublisherOptions = {}) {
     this.win = opts.window ?? (typeof window !== "undefined" ? window : null);
@@ -269,6 +293,9 @@ export class EspnBookmarkletPublisher {
       publishedKeyCount: this.publishedKeys.size,
       picksEmittedLive: this.picksEmittedLive,
       duplicatesSuppressed: this.duplicatesSuppressed,
+      boardPickCount: this.boardPicks.length,
+      recentBatchCount: this.recentBatches.length,
+      sessionRevision: this.sessionRevision,
       leagueId: this.armConfig?.leagueId ?? null,
       season: this.armConfig?.season ?? null,
       sessionNonce: this.armConfig?.sessionNonce ?? null,
@@ -297,6 +324,10 @@ export class EspnBookmarkletPublisher {
       }
       if (msg.type === "PING" || msg.type === "GMWR_ESPN_BM_PING") {
         this.pong();
+        return;
+      }
+      if (msg.type === "REPLAY_REQUEST" || msg.type === "GMWR_ESPN_BM_REPLAY_REQUEST") {
+        this.handleReplayRequest(msg.config ?? msg);
       }
     };
     this.win.addEventListener("message", this.onInbound);
@@ -317,7 +348,21 @@ export class EspnBookmarkletPublisher {
       this.emitStatus("error", { reason: "invalid_arm_config" });
       return { ok: false, error: "invalid_arm_config" };
     }
-    // Re-ARM always starts a fresh nonce session + baseline.
+    const nextDraftId = buildEspnLiveDraftId(config.leagueId, config.season);
+    // Drop retained board when league/season identity changes.
+    if (
+      this.boardDraftId &&
+      (this.boardDraftId !== nextDraftId ||
+        this.boardLeagueId !== config.leagueId ||
+        this.boardSeason !== config.season)
+    ) {
+      this.boardPicks = [];
+      this.boardTeamCount = 0;
+      this.boardDraftComplete = false;
+      this.recentBatches = [];
+    }
+    // Re-ARM always starts a fresh nonce session + baseline cursor.
+    // boardPicks retained for immediate REPLAY_REQUEST before next snapshot.
     this.armed = true;
     this.armConfig = {
       ...config,
@@ -328,6 +373,7 @@ export class EspnBookmarkletPublisher {
     this.completionEmitted = false;
     this.picksEmittedLive = 0;
     this.duplicatesSuppressed = 0;
+    this.sessionRevision = 0;
     this.emitStatus("armed");
     return { ok: true, sessionNonce: this.armConfig.sessionNonce };
   }
@@ -338,6 +384,7 @@ export class EspnBookmarkletPublisher {
     this.publishedKeys = new Set();
     this.baselined = false;
     this.completionEmitted = false;
+    // Intentionally retain boardPicks / recentBatches for reconnect replay.
     this.emitStatus("disarmed");
   }
 
@@ -347,6 +394,8 @@ export class EspnBookmarkletPublisher {
       : null;
     this.emitFn({
       type: "GMWR_ESPN_BM_PONG",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+      revision: this.sessionRevision,
       channel: ESPN_BM_CHANNEL,
       source: ESPN_BM_SOURCE,
       provider: ESPN_BM_PROVIDER,
@@ -356,6 +405,119 @@ export class EspnBookmarkletPublisher {
       season: this.armConfig?.season ?? null,
       sessionNonce: this.armConfig?.sessionNonce ?? null,
     });
+  }
+
+  /**
+   * Phase 4 — idempotent reconciliation after War Room reconnect.
+   * afterOverallPick <= 0 → full board as baseline (no live notify).
+   * afterOverallPick > 0 → only newer picks as liveNotify candidates.
+   */
+  handleReplayRequest(raw: unknown): {
+    ok: boolean;
+    error?: string;
+    emitted?: number;
+  } {
+    if (!this.armed || !this.armConfig) {
+      this.emitStatus("error", { reason: "replay_not_armed" });
+      return { ok: false, error: "not_armed" };
+    }
+    if (!raw || typeof raw !== "object") {
+      this.emitStatus("error", { reason: "invalid_replay_request" });
+      return { ok: false, error: "invalid_replay_request" };
+    }
+    const r = raw as Record<string, unknown>;
+    const draftId = String(r.draftId ?? "").trim();
+    const sessionNonce = String(r.sessionNonce ?? "").trim();
+    const afterOverallPick = Math.floor(Number(r.afterOverallPick));
+    const requestId = String(r.requestId ?? "").trim();
+    const expectedDraftId = buildEspnLiveDraftId(
+      this.armConfig.leagueId,
+      this.armConfig.season,
+    );
+    if (!draftId || draftId !== expectedDraftId) {
+      this.emitStatus("error", {
+        reason: "replay_wrong_draft_id",
+        draftId: expectedDraftId,
+        leagueId: this.armConfig.leagueId,
+        season: this.armConfig.season,
+      });
+      return { ok: false, error: "wrong_draft_id" };
+    }
+    if (!sessionNonce || sessionNonce !== this.armConfig.sessionNonce) {
+      this.emitStatus("error", {
+        reason: "replay_wrong_session_nonce",
+        draftId: expectedDraftId,
+        leagueId: this.armConfig.leagueId,
+        season: this.armConfig.season,
+      });
+      return { ok: false, error: "wrong_session_nonce" };
+    }
+    if (!Number.isFinite(afterOverallPick) || afterOverallPick < 0) {
+      this.emitStatus("error", { reason: "invalid_after_overall_pick" });
+      return { ok: false, error: "invalid_after_overall_pick" };
+    }
+    if (!requestId) {
+      this.emitStatus("error", { reason: "missing_replay_request_id" });
+      return { ok: false, error: "missing_replay_request_id" };
+    }
+
+    const boardMax =
+      this.boardPicks.length > 0
+        ? Math.max(...this.boardPicks.map((p) => p.overallPick))
+        : 0;
+    if (afterOverallPick > boardMax) {
+      this.emitStatus("error", {
+        reason: "stale_replay",
+        draftId: expectedDraftId,
+        leagueId: this.armConfig.leagueId,
+        season: this.armConfig.season,
+      });
+      return { ok: false, error: "stale_replay" };
+    }
+
+    const picks = this.boardPicks
+      .filter((p) => p.overallPick > afterOverallPick)
+      .sort((a, b) => a.overallPick - b.overallPick);
+
+    // Nothing missing — success with no batch (avoids empty non-complete reject).
+    if (picks.length === 0) {
+      this.emitStatus("monitoring", {
+        draftId: expectedDraftId,
+        leagueId: this.armConfig.leagueId,
+        season: this.armConfig.season,
+        draftComplete: this.boardDraftComplete,
+      });
+      return { ok: true, emitted: 0 };
+    }
+
+    const fullReconcile = afterOverallPick <= 0;
+    for (const row of picks) this.publishedKeys.add(row.eventKey);
+    if (fullReconcile) this.baselined = true;
+
+    this.emitBatch({
+      draftId: expectedDraftId,
+      leagueId: this.armConfig.leagueId,
+      season: this.armConfig.season,
+      sessionNonce: this.armConfig.sessionNonce,
+      teamCount: this.boardTeamCount || 12,
+      draftComplete: this.boardDraftComplete,
+      baselineOnly: fullReconcile,
+      liveNotify: !fullReconcile,
+      observedAt: this.nowIso(),
+      picks,
+      rowsScanned: this.boardPicks.length,
+      replay: true,
+      replayRequestId: requestId.slice(0, 128),
+      afterOverallPick,
+    });
+    this.emitStatus("monitoring", {
+      draftId: expectedDraftId,
+      leagueId: this.armConfig.leagueId,
+      season: this.armConfig.season,
+      draftComplete: this.boardDraftComplete,
+      baselineOnly: fullReconcile,
+    });
+    return { ok: true, emitted: picks.length };
   }
 
   /**
@@ -385,6 +547,14 @@ export class EspnBookmarkletPublisher {
       if (row) transport.push(row);
     }
     transport.sort((a, b) => a.overallPick - b.overallPick);
+
+    // Always retain latest board for reconnect replay (Phase 4).
+    this.boardPicks = transport;
+    this.boardTeamCount = teamCount;
+    this.boardDraftComplete = draftComplete;
+    this.boardDraftId = draftId;
+    this.boardLeagueId = leagueId;
+    this.boardSeason = season;
 
     if (!this.baselined) {
       this.baselined = true;
@@ -532,6 +702,9 @@ export class EspnBookmarkletPublisher {
     observedAt: string;
     picks: EspnBmTransportPick[];
     rowsScanned: number;
+    replay?: boolean;
+    replayRequestId?: string;
+    afterOverallPick?: number;
   }): void {
     const diagnostics: EspnBmDiagnostics = {
       picksEmitted: args.liveNotify ? this.picksEmittedLive : 0,
@@ -539,9 +712,18 @@ export class EspnBookmarkletPublisher {
       rowsScanned: args.rowsScanned,
       baselineOnly: args.baselineOnly,
       liveNotify: args.liveNotify,
+      ...(args.replay
+        ? {
+            replay: true,
+            replayRequestId: args.replayRequestId,
+            afterOverallPick: args.afterOverallPick,
+          }
+        : {}),
     };
-    this.emitFn({
+    const message: EspnBmPickBatchMessage = {
       type: "GMWR_ESPN_BM_PICK_BATCH",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+      revision: ++this.sessionRevision,
       channel: ESPN_BM_CHANNEL,
       source: ESPN_BM_SOURCE,
       provider: ESPN_BM_PROVIDER,
@@ -557,7 +739,15 @@ export class EspnBookmarkletPublisher {
       observedAt: args.observedAt,
       picks: args.picks,
       diagnostics,
-    });
+    };
+    this.recentBatches.push(message);
+    if (this.recentBatches.length > EspnBookmarkletPublisher.RECENT_BATCH_LIMIT) {
+      this.recentBatches.splice(
+        0,
+        this.recentBatches.length - EspnBookmarkletPublisher.RECENT_BATCH_LIMIT,
+      );
+    }
+    this.emitFn(message);
   }
 
   private emitStatus(
@@ -576,6 +766,8 @@ export class EspnBookmarkletPublisher {
       : extra?.draftId ?? null;
     this.emitFn({
       type: "GMWR_ESPN_BM_STATUS",
+      protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+      revision: this.sessionRevision,
       channel: ESPN_BM_CHANNEL,
       source: ESPN_BM_SOURCE,
       provider: ESPN_BM_PROVIDER,
