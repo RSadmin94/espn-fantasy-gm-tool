@@ -34,6 +34,14 @@
       "matches": ["https://draftwizard.fantasypros.com/*"],
       "js": ["providers/fantasypros/content.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://fantasy.espn.com/*",
+        "https://*.espn.com/*"
+      ],
+      "js": ["providers/espn-live/content.bundle.js"],
+      "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [

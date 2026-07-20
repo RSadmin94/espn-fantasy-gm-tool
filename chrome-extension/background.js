@@ -587,6 +587,75 @@ async function broadcastToFantasyProsTabs(message) {
   return { tabCount: tabs.length, reached };
 }
 
+/** RFSN Phase 2 — ESPN bookmarklet transport (route only; separate from FP). */
+const MSG_ESPN_BM_ARM = "GMWR_ESPN_BM_ARM";
+const MSG_ESPN_BM_DISARM = "GMWR_ESPN_BM_DISARM";
+const MSG_ESPN_BM_PICK_BATCH = "GMWR_ESPN_BM_PICK_BATCH";
+const MSG_ESPN_BM_STATUS = "GMWR_ESPN_BM_STATUS";
+const MSG_ESPN_BM_SESSION_RESET = "GMWR_ESPN_BM_SESSION_RESET";
+const MSG_ESPN_BM_PING = "GMWR_ESPN_BM_PING";
+const MSG_ESPN_BM_PONG = "GMWR_ESPN_BM_PONG";
+const MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
+
+/** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, batchesRelayed: number, armedAt: string|null, sessionNonce: string|null }} */
+let espnBmConnectorState = {
+  armed: false,
+  config: null,
+  lastStatus: null,
+  lastPickAt: null,
+  batchesRelayed: 0,
+  armedAt: null,
+  sessionNonce: null,
+};
+
+const ESPN_BM_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
+
+function isEspnFantasyTabUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:") return false;
+    return u.hostname === "fantasy.espn.com" || u.hostname.endsWith(".espn.com");
+  } catch {
+    return false;
+  }
+}
+
+function expireEspnBmSessionIfStale(now = Date.now()) {
+  if (!espnBmConnectorState.armedAt && espnBmConnectorState.batchesRelayed === 0) return;
+  const anchor = espnBmConnectorState.lastPickAt || espnBmConnectorState.armedAt;
+  if (!anchor) return;
+  const t = Date.parse(anchor);
+  if (!Number.isFinite(t)) return;
+  if (now - t <= ESPN_BM_SESSION_TTL_MS) return;
+  espnBmConnectorState = {
+    armed: false,
+    config: null,
+    lastStatus: { status: "session_expired", reason: "ttl" },
+    lastPickAt: null,
+    batchesRelayed: 0,
+    armedAt: null,
+    sessionNonce: null,
+  };
+}
+
+async function broadcastToEspnFantasyTabs(message) {
+  const tabs = await chrome.tabs.query({});
+  let tabCount = 0;
+  let reached = 0;
+  for (const tab of tabs) {
+    if (!tab.id || !isEspnFantasyTabUrl(tab.url || "")) continue;
+    tabCount += 1;
+    try {
+      await chrome.tabs.sendMessage(tab.id, message);
+      reached += 1;
+    } catch {
+      /* tab may not have content script */
+    }
+  }
+  return { tabCount, reached };
+}
+
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
   if (parsed.result?.data?.json !== undefined) return parsed.result.data.json;
@@ -2624,6 +2693,174 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
     (async () => {
       await broadcastToFfrTabs(message);
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  // ── Phase 2 ESPN bookmarklet transport (route only; never mixes with FP) ───
+  if (t === MSG_ESPN_BM_ARM) {
+    (async () => {
+      expireEspnBmSessionIfStale();
+      const config =
+        message?.config && typeof message.config === "object" ? message.config : {};
+      const sessionNonce =
+        typeof config.sessionNonce === "string" && config.sessionNonce.trim()
+          ? String(config.sessionNonce).trim().slice(0, 128)
+          : `espn-bm-${Date.now().toString(36)}`;
+      const nextConfig = { ...config, sessionNonce };
+      espnBmConnectorState = {
+        armed: true,
+        config: nextConfig,
+        lastStatus: { status: "arming" },
+        lastPickAt: null,
+        batchesRelayed: 0,
+        armedAt: new Date().toISOString(),
+        sessionNonce,
+      };
+      const r = await broadcastToEspnFantasyTabs({
+        type: MSG_ESPN_BM_ARM,
+        config: nextConfig,
+      });
+      await broadcastToFfrTabs({
+        type: MSG_ESPN_BM_STATUS,
+        provider: "espn-live",
+        status: r.reached > 0 ? "armed" : "waiting_for_espn_tab",
+        espnTabs: r.tabCount,
+        reached: r.reached,
+        sessionNonce,
+      });
+      sendResponse({ ok: true, sessionNonce, ...r });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_DISARM) {
+    (async () => {
+      espnBmConnectorState = {
+        armed: false,
+        config: null,
+        lastStatus: { status: "disarmed" },
+        lastPickAt: null,
+        batchesRelayed: 0,
+        armedAt: null,
+        sessionNonce: null,
+      };
+      await broadcastToEspnFantasyTabs({ type: MSG_ESPN_BM_DISARM });
+      await broadcastToFfrTabs({
+        type: MSG_ESPN_BM_STATUS,
+        provider: "espn-live",
+        status: "disarmed",
+      });
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_PING) {
+    (async () => {
+      expireEspnBmSessionIfStale();
+      const r = await broadcastToEspnFantasyTabs({ type: MSG_ESPN_BM_PING });
+      sendResponse({
+        ok: true,
+        extensionPresent: true,
+        espnTabs: r.tabCount,
+        reached: r.reached,
+        armed: espnBmConnectorState.armed,
+        sessionNonce: espnBmConnectorState.sessionNonce,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_GET_STATE) {
+    (async () => {
+      expireEspnBmSessionIfStale();
+      const espnTabs = (await chrome.tabs.query({})).filter((tab) =>
+        isEspnFantasyTabUrl(tab.url || ""),
+      );
+      const ffrTabs = (await chrome.tabs.query({})).filter((tab) => isFfrTabUrl(tab.url || ""));
+      sendResponse({
+        ok: true,
+        armed: espnBmConnectorState.armed,
+        config: espnBmConnectorState.config,
+        lastStatus: espnBmConnectorState.lastStatus,
+        lastPickAt: espnBmConnectorState.lastPickAt,
+        batchesRelayed: espnBmConnectorState.batchesRelayed,
+        espnTabs: espnTabs.length,
+        ffrTabs: ffrTabs.length,
+        sessionNonce: espnBmConnectorState.sessionNonce,
+        armedAt: espnBmConnectorState.armedAt,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_PICK_BATCH) {
+    if (message?.provider && message.provider !== "espn-live") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    expireEspnBmSessionIfStale();
+    if (!espnBmConnectorState.armed) {
+      sendResponse({ ok: false, error: "not_armed" });
+      return true;
+    }
+    if (
+      espnBmConnectorState.sessionNonce &&
+      message?.sessionNonce &&
+      String(message.sessionNonce) !== espnBmConnectorState.sessionNonce
+    ) {
+      sendResponse({ ok: false, error: "session_nonce_mismatch" });
+      return true;
+    }
+    espnBmConnectorState.lastPickAt = new Date().toISOString();
+    espnBmConnectorState.batchesRelayed += 1;
+    (async () => {
+      const ffr = await broadcastToFfrTabs({
+        ...message,
+        type: MSG_ESPN_BM_PICK_BATCH,
+        provider: "espn-live",
+        relayedAt: espnBmConnectorState.lastPickAt,
+        sessionNonce: espnBmConnectorState.sessionNonce,
+      });
+      sendResponse({
+        ok: true,
+        ffrTabs: ffr.tabCount,
+        ffrReached: ffr.reached,
+        batchesRelayed: espnBmConnectorState.batchesRelayed,
+      });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_STATUS || t === MSG_ESPN_BM_SESSION_RESET || t === MSG_ESPN_BM_PONG) {
+    if (message?.provider && message.provider !== "espn-live") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    expireEspnBmSessionIfStale();
+    if (t === MSG_ESPN_BM_STATUS || t === MSG_ESPN_BM_PONG) {
+      espnBmConnectorState.lastStatus = message;
+    }
+    (async () => {
+      await broadcastToFfrTabs({
+        ...message,
+        provider: "espn-live",
+        sessionNonce: message?.sessionNonce ?? espnBmConnectorState.sessionNonce,
+      });
       sendResponse({ ok: true });
     })().catch((e) => {
       sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });

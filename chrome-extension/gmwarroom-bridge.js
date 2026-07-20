@@ -260,6 +260,97 @@
     return true;
   });
 
+  // ── Phase 2 ESPN bookmarklet transport: FFR page ↔ background ↔ ESPN tab ───
+  // Completely separate namespace from FantasyPros (GMWR_ESPN_BM_*).
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || typeof d.type !== "string") return;
+      if (
+        d.type !== "GMWR_ESPN_BM_ARM" &&
+        d.type !== "GMWR_ESPN_BM_DISARM" &&
+        d.type !== "GMWR_ESPN_BM_PING" &&
+        d.type !== "GMWR_ESPN_BM_GET_STATE"
+      ) {
+        return;
+      }
+      if (d.provider != null && d.provider !== "espn-live") return;
+      const id = d.id;
+      chrome.runtime.sendMessage(
+        {
+          type: d.type,
+          config: d.config && typeof d.config === "object" ? d.config : undefined,
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage(
+              {
+                type: d.type + "_REPLY",
+                id,
+                ok: false,
+                error: chrome.runtime.lastError.message,
+                channel: "GMWR_ESPN_BM",
+                source: "gmwarroom-extension",
+              },
+              "*",
+            );
+            return;
+          }
+          const r = response || {};
+          window.postMessage(
+            {
+              ...r,
+              type: d.type + "_REPLY",
+              id,
+              ok: Boolean(r.ok !== false),
+              channel: "GMWR_ESPN_BM",
+              source: "gmwarroom-extension",
+            },
+            "*",
+          );
+        },
+      );
+    },
+    false,
+  );
+
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message || typeof message.type !== "string") return;
+    if (
+      message.type !== "GMWR_ESPN_BM_PICK_BATCH" &&
+      message.type !== "GMWR_ESPN_BM_STATUS" &&
+      message.type !== "GMWR_ESPN_BM_SESSION_RESET" &&
+      message.type !== "GMWR_ESPN_BM_PONG"
+    ) {
+      return;
+    }
+    if (message.provider && message.provider !== "espn-live") {
+      sendResponse({ ok: false, error: "unsupported_provider" });
+      return true;
+    }
+    // Never forward FP payloads through this listener.
+    if (String(message.type).startsWith("GMWR_FP_")) {
+      sendResponse({ ok: false, error: "fp_namespace_rejected" });
+      return true;
+    }
+    try {
+      window.postMessage(
+        {
+          ...message,
+          channel: "GMWR_ESPN_BM",
+          source: "gmwarroom-extension",
+        },
+        "*",
+      );
+      sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    }
+    return true;
+  });
+
   // Relay: full-coverage weekly box-score / player-stats capture for one season.
   // Forwards to background.js (MSG_CAPTURE_WEEKLY_STATS), which fetches the full
   // ESPN box score (mBoxscore+mScoreboard+mMatchupScore) per week and posts the

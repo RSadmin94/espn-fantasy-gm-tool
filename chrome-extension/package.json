@@ -4,6 +4,7 @@
   "version": "1.13.0",
   "type": "module",
   "scripts": {
-    "build": "node --check background.js && node --check popup.js && node --check popupFantasyProsState.js"
+    "build:espn-bm-content": "esbuild providers/espn-live/content.js --bundle --format=iife --platform=browser --outfile=providers/espn-live/content.bundle.js",
+    "build": "npm run build:espn-bm-content && node --check background.js && node --check popup.js && node --check popupFantasyProsState.js && node --check espnBookmarkletTransport.js && node --check providers/espn-live/content.bundle.js && node --check gmwarroom-bridge.js"
   }
 }
