@@ -103,6 +103,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
     expect(draft?.items.map((i) => i.label)).toEqual([
       "Live Draft",
       "Mock Draft",
+      "Draft War Room",
       "Keeper Center",
       "Draft History",
     ]);
@@ -271,6 +272,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
     const draft = buildV2NavGroups().find((g) => g.id === "draft")!;
     const expected = [
       ["/draft/live", "draft-live"],
+      ["/draft/war-room", "draft-war-room"],
       ["/draft/mock", "draft-mock"],
       ["/draft/keepers", "draft-keepers"],
       ["/draft/history", "draft-history"],
@@ -282,6 +284,9 @@ describe("v2Navigation — locked FFR 2.0", () => {
       expect(getV2NavHref(dest)).toBe(route);
       expect(isV2RouteActive(route, dest)).toBe(true);
     }
+    const warRoom = draft.items.find((i) => i.id === "draft-war-room")!;
+    expect(warRoom.label).toBe("Draft War Room");
+    expect(warRoom.showInSidebar).toBe(true);
     const hub = V2_DESTINATIONS.find((d) => d.id === "draft-hub")!;
     expect(hub.kind).toBe("live");
     expect(getV2NavHref(hub)).toBe("/draft");

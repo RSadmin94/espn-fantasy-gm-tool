@@ -78,16 +78,24 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(hub).not.toContain("DraftRealitySimulator");
   });
 
-  it("Keeper Center composes Forecast + Advisor without new valuation logic", () => {
+  it("Keeper Center owns Manage + Forecast + Advisor on one persistence path", () => {
     const keepers = fs.readFileSync(
       path.join(repoRoot, "client/src/pages/draft/DraftKeepers.tsx"),
       "utf-8",
     );
     expect(keepers).toContain("data-v2-draft-keepers");
+    expect(keepers).toContain("KeeperManagePanel");
+    expect(keepers).toContain('id: "manage"');
     expect(keepers).toContain("LeagueKeeperForecast embedded");
     expect(keepers).toContain("KeeperAdvisor embedded");
     expect(keepers).not.toContain("keeperRecommendationEngine");
     expect(keepers).not.toContain("computeLeagueKeeperForecast");
+
+    const warRoom = fs.readFileSync(path.join(repoRoot, "client/src/pages/DraftWarRoom.tsx"), "utf-8");
+    expect(warRoom).toContain("Manage Keepers →");
+    expect(warRoom).toContain("Temporary Draft Scenario");
+    expect(warRoom).toContain('to="/draft/keepers"');
+    expect(warRoom).toContain("Current Keepers");
   });
 
   it("Draft History mounts existing DraftHistory page", () => {
