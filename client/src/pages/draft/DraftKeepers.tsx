@@ -1,23 +1,31 @@
 /**
  * Canonical `/draft/keepers` — Keeper Center.
- * Composes existing League Keeper Forecast + Keeper Advisor (no new valuation logic).
+ * Manage = authoritative edits (gm_manual_keeper_selections).
+ * Forecast / Advisor = outlook + recommendations (same saved keepers).
  */
 import { useMemo, useState } from "react";
-import { Crown, ListChecks, Brain } from "lucide-react";
+import { Crown, ListChecks, Brain, Wrench } from "lucide-react";
 import { LeagueKeeperForecast } from "@/pages/LeagueKeeperForecast";
 import { KeeperAdvisor } from "@/pages/KeeperAdvisor";
+import { KeeperManagePanel } from "@/components/keepers/KeeperManagePanel";
 import { CinematicPageHeader, IntelPageShell } from "@/components/layout";
 import { cn } from "@/lib/utils";
 
-type KeeperTab = "forecast" | "advisor";
+type KeeperTab = "manage" | "forecast" | "advisor";
 
 const TABS: { id: KeeperTab; label: string; hint: string; icon: typeof ListChecks }[] = [
+  {
+    id: "manage",
+    label: "Manage",
+    hint: "Add, remove, replace, and set costs for keepers across every team in your workspace.",
+    icon: Wrench,
+  },
   { id: "forecast", label: "Forecast", hint: "League-wide keeper outlook", icon: ListChecks },
   { id: "advisor", label: "Advisor", hint: "Valuation & recommendations", icon: Brain },
 ];
 
 export function DraftKeepers() {
-  const [tab, setTab] = useState<KeeperTab>("forecast");
+  const [tab, setTab] = useState<KeeperTab>("manage");
   const active = useMemo(() => TABS.find((t) => t.id === tab) ?? TABS[0], [tab]);
 
   return (
@@ -26,7 +34,7 @@ export function DraftKeepers() {
         eyebrowMono="Draft"
         icon={Crown}
         title="Keeper Center"
-        subtitle="Keeper preparation and decision support — forecast and advisor in one place."
+        subtitle="Official keeper management for your Fantasy Football Rivals workspace — shared with Draft War Room."
         className="mb-4"
         meta={
           <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -64,7 +72,13 @@ export function DraftKeepers() {
 
       <p className="mb-4 text-xs text-muted-foreground">{active.hint}</p>
 
-      {tab === "forecast" ? <LeagueKeeperForecast embedded /> : <KeeperAdvisor embedded />}
+      {tab === "manage" ? (
+        <KeeperManagePanel />
+      ) : tab === "forecast" ? (
+        <LeagueKeeperForecast embedded />
+      ) : (
+        <KeeperAdvisor embedded />
+      )}
     </IntelPageShell>
   );
 }

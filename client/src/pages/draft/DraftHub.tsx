@@ -24,7 +24,7 @@ import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from 
 const DESTINATIONS = [
   { label: "Live Draft", href: "/draft/live", hint: "RFSN draft or connected-league real draft → booth", icon: Radio },
   { label: "Mock Draft", href: "/draft/mock", hint: "External simulated drafts (FantasyPros)", icon: Target },
-  { label: "Keeper Center", href: "/draft/keepers", hint: "Forecast & advisor", icon: Crown },
+  { label: "Keeper Center", href: "/draft/keepers", hint: "Manage keepers, forecast & advisor", icon: Crown },
   { label: "Draft History", href: "/draft/history", hint: "Past boards & picks", icon: ScrollText },
 ] as const;
 
@@ -83,7 +83,7 @@ export function DraftHub() {
       ? {
           title: "Review keeper outlook",
           href: "/draft/keepers",
-          detail: "Keeper Center combines league forecast and owner-level advisor.",
+          detail: "Keeper Center is the official place to manage keepers for every team in your workspace.",
         }
       : {
           title: "Open Live Draft",

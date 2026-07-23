@@ -216,6 +216,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
     { season: draftYear },
     { enabled: leagueKeyReady },
   );
+  const utils = trpc.useUtils();
   const setManual = trpc.espn.setManualKeeperSelection.useMutation({
     onSuccess: (res) => {
       const r = res as { ok?: boolean; error?: string; limit?: number | null } | undefined;
@@ -231,6 +232,9 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
         setManualError(null);
       }
       void manualQ.refetch();
+      void utils.espn.leagueKeeperForecast.invalidate();
+      void utils.espn.keeperValuation.invalidate();
+      void utils.draftWarRoom.getDraftWarRoomData.invalidate();
     },
     onError: () => setManualError("Could not save that selection."),
   });
