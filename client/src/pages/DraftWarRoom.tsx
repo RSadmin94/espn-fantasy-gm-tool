@@ -389,8 +389,27 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
     <div className="px-5 py-8 text-center text-zinc-500 text-sm">No keeper slots found for this season.</div>
   );
 
+  const savedCount = predictions.filter(
+    (k) => k.status === "MANUAL" || k.status === "CONFIRMED",
+  ).length;
+
   return (
-    <div className="divide-y divide-white/[0.06]">
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+        <div>
+          <p className="text-[11px] font-black uppercase tracking-wider text-lime-400">Current Keepers</p>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            {savedCount} saved/confirmed · same workspace data as Keeper Center
+          </p>
+        </div>
+        <Link
+          to="/draft/keepers"
+          className="inline-flex items-center gap-1 rounded border border-lime-500/35 bg-lime-500/10 px-3 py-1.5 text-xs font-black text-lime-300 hover:bg-lime-500/20"
+        >
+          Manage Keepers →
+        </Link>
+      </div>
+      <div className="divide-y divide-white/[0.06]">
       {predictions.map((k, i) => (
         <div key={i} className="px-5 py-4 space-y-2">
           {/* Header row */}
@@ -399,8 +418,10 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="text-xs font-bold text-zinc-100">{k.teamName}</span>
                 <span className="text-[11px] text-zinc-600">· {k.ownerName}</span>
-                {k.status === "CONFIRMED"
-                  ? <span className="flex items-center gap-1 text-[11px] font-bold text-lime-400 bg-lime-500/10 border border-lime-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
+                {k.status === "MANUAL"
+                  ? <span className="flex items-center gap-1 text-[11px] font-bold text-lime-400 bg-lime-500/10 border border-lime-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />SAVED</span>
+                  : k.status === "CONFIRMED"
+                  ? <span className="flex items-center gap-1 text-[11px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
                   : k.status === "HYPOTHETICAL"
                     ? <span className="text-[11px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 rounded">HYPOTHETICAL</span>
                     : <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
@@ -455,6 +476,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
           )}
         </div>
       ))}
+      </div>
     </div>
   );
 }
@@ -2141,11 +2163,29 @@ function MockDraftBoard({
         ))}
 
         {preferLiveDraft && keepersEnabled && (
-        <button onClick={() => setShowKeeperSetup(s => !s)}
-          className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors",
-            showKeeperSetup ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "border-zinc-700 text-zinc-500 hover:text-zinc-300")}>
-          🔑 Keeper Setup {keeperOverrides.length > 0 && <span className="bg-amber-500/30 px-1 rounded">{keeperOverrides.length}</span>}
-        </button>
+        <>
+          <Link
+            to="/draft/keepers"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border border-lime-500/35 bg-lime-500/10 text-lime-300 hover:bg-lime-500/20"
+          >
+            Manage Keepers →
+          </Link>
+          <button
+            type="button"
+            onClick={() => setShowKeeperSetup((s) => !s)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold border transition-colors",
+              showKeeperSetup
+                ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                : "border-zinc-700 text-zinc-500 hover:text-zinc-300",
+            )}
+          >
+            Temporary Draft Scenario
+            {keeperOverrides.length > 0 && (
+              <span className="bg-amber-500/30 px-1 rounded">{keeperOverrides.length}</span>
+            )}
+          </button>
+        </>
         )}
 
         {/* Your team selector — Live Draft workspace */}
@@ -2183,17 +2223,33 @@ function MockDraftBoard({
         )}
       </div>
 
-      {/* Keeper Setup Panel */}
+      {/* Temporary Draft Scenario — session-only; never authoritative keeper state */}
       {keepersEnabled && showKeeperSetup && (
-        <div className="border-b border-white/[0.06] bg-white/[0.02]/40 px-5 py-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-black text-amber-400 uppercase tracking-wider">🔑 Manual Keeper Assignment</p>
-            <button onClick={() => { onKeeperOverride(pendingOverrides); setShowKeeperSetup(false); }}
-              className="px-3 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-bold hover:bg-violet-500/25">
-              ✓ Apply Overrides
-            </button>
+        <div className="border-b border-amber-500/20 bg-amber-500/[0.04] px-5 py-4 space-y-3" data-temp-draft-scenario>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <p className="text-xs font-black text-amber-400 uppercase tracking-wider">Temporary Draft Scenario</p>
+              <p className="text-[11px] text-zinc-500 mt-0.5">
+                Session-only overrides for this War Room view. They do not save to Keeper Center or{" "}
+                <span className="text-zinc-400">gm_manual_keeper_selections</span>.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/draft/keepers"
+                className="px-3 py-1.5 rounded border border-lime-500/35 bg-lime-500/10 text-lime-300 text-xs font-bold hover:bg-lime-500/20"
+              >
+                Manage Keepers →
+              </Link>
+              <button onClick={() => { onKeeperOverride(pendingOverrides); setShowKeeperSetup(false); }}
+                className="px-3 py-1.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-xs font-bold hover:bg-violet-500/25">
+                Apply temporary overrides
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-zinc-600">Override the AI keeper predictions. Select a player from each team's roster to keep at the assigned round.</p>
+          <p className="text-[11px] text-zinc-600">
+            Experiment beyond your saved keepers for this draft session only. Select a player from each team&apos;s roster to keep at the assigned round.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {keeperTeams.map(kt => {
               const current = pendingOverrides.find(o => o.teamId === kt.teamId && o.keeperRound === kt.keeperSlotRound);
@@ -2202,9 +2258,9 @@ function MockDraftBoard({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-zinc-200">{kt.teamName}</span>
                     <span className="text-[11px] text-zinc-600 tabular-nums">Slot Rd {kt.keeperSlotRound} · Cost Rd {kt.keeperCostRound}</span>
-                    {current && <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">OVERRIDE</span>}
+                    {current && <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">TEMP</span>}
                   </div>
-                  <p className="text-[11px] text-zinc-500">AI predicts: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
+                  <p className="text-[11px] text-zinc-500">Current prediction: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
                   {/* Show roster from availablePool + current roster */}
                   <div className="flex gap-2">
                     <select
@@ -2229,7 +2285,7 @@ function MockDraftBoard({
                         }
                       }}
                     >
-                      <option value="">— Use AI prediction —</option>
+                      <option value="">— Use saved / predicted —</option>
                       {(() => {
                         const teamRoster = rosterNeeds.find((n: any) => n.teamId === kt.teamId);
                         const rosterPlayers: string[] = (teamRoster?.allPlayers ?? teamRoster?.draftPriority ?? []) as string[];
@@ -3070,9 +3126,9 @@ export function DraftWarRoom({
           )}
         </div>
 
-        {/* 2. Keeper Predictions */}
+        {/* 2. Current Keepers (same dataset as Keeper Center) */}
         {keepersOn && (
-        <Section id="dwr-keepers" title="Keeper predictions" icon={Trophy} badge={keeperPredictions?.length}>
+        <Section id="dwr-keepers" title="Current Keepers" icon={Trophy} badge={keeperPredictions?.length}>
           <KeeperSection predictions={keeperPredictions ?? []} />
         </Section>
         )}
