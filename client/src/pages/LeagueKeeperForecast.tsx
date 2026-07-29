@@ -79,6 +79,13 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
         </div>
         ) : null}
 
+        {embedded ? (
+          <div className="mb-4 rounded-xl border border-border bg-card/40 px-4 py-3 text-sm text-muted-foreground">
+            Forecast is <span className="font-bold text-foreground">read-only analysis</span>. To change keepers, use the{" "}
+            <span className="font-bold text-lime-300">Manage</span> tab.
+          </div>
+        ) : null}
+
         {/* States */}
         {loading && (
           <div className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 px-4 py-6 text-zinc-400">

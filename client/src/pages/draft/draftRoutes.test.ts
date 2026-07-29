@@ -86,10 +86,29 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(keepers).toContain("data-v2-draft-keepers");
     expect(keepers).toContain("KeeperManagePanel");
     expect(keepers).toContain('id: "manage"');
+    expect(keepers).toMatch(/useState<KeeperTab>\("manage"\)/);
     expect(keepers).toContain("LeagueKeeperForecast embedded");
     expect(keepers).toContain("KeeperAdvisor embedded");
     expect(keepers).not.toContain("keeperRecommendationEngine");
     expect(keepers).not.toContain("computeLeagueKeeperForecast");
+
+    const manage = fs.readFileSync(
+      path.join(repoRoot, "client/src/components/keepers/KeeperManagePanel.tsx"),
+      "utf-8",
+    );
+    expect(manage).toContain("My Keeper Management");
+    expect(manage).toContain("League Keepers");
+    expect(manage).toContain("Change Keeper");
+    expect(manage).toContain("KeeperPlayerPickerDialog");
+    expect(manage).toContain("setManualKeeperSelection");
+    expect(manage).not.toContain("createTable");
+
+    const forecast = fs.readFileSync(
+      path.join(repoRoot, "client/src/pages/LeagueKeeperForecast.tsx"),
+      "utf-8",
+    );
+    expect(forecast).toContain("read-only analysis");
+    expect(forecast).not.toContain("setManualKeeperSelection");
 
     const warRoom = fs.readFileSync(path.join(repoRoot, "client/src/pages/DraftWarRoom.tsx"), "utf-8");
     expect(warRoom).toContain("Manage Keepers →");

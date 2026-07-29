@@ -1,29 +1,30 @@
 /**
- * Keeper Center — authoritative manage surface for this user's workspace keepers.
+ * Keeper Center Manage tab — card-first management UX.
  * Saves only via espn.setManualKeeperSelection → gm_manual_keeper_selections.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Loader2, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { PlayerHeadshot } from "@/components/draft/PlayerHeadshot";
 import {
+  KeeperPlayerPickerDialog,
+  type KeeperPickerCandidate,
+} from "@/components/keepers/KeeperPlayerPickerDialog";
+import {
+  countKeepersForOwner,
   formatKeeperRoundPick,
+  headerKeeperPickerIntent,
   keeperAddBlockReason,
-  keeperSlotsLabel,
+  planKeeperReplace,
+  resolveMyOwnerKey,
   type ManualKeeperRow,
 } from "@/lib/keeperManage";
 
-type ValuationRow = {
-  ownerKey: string;
-  ownerName: string;
-  playerId: number;
-  playerName: string;
-  position: string;
-  keeperRoundCost?: number;
+type ValuationRow = KeeperPickerCandidate & {
   recommendation?: string;
 };
 
@@ -47,6 +48,39 @@ const POS_TONE: Record<string, string> = {
   "D/ST": "text-violet-300",
 };
 
+type PickerState =
+  | null
+  | {
+      mode: "add" | "change";
+      ownerKey: string;
+      ownerName: string;
+      /** When changing, the keeper being replaced (removed after save if different player). */
+      replace?: ManualKeeperRow;
+    };
+
+function costRoundForPlayer(
+  valuations: ValuationRow[],
+  forecast: ForecastRow[],
+  playerId: number,
+): number | null {
+  const v = valuations.find((r) => r.playerId === playerId);
+  if (v?.keeperRoundCost != null && v.keeperRoundCost > 0) return v.keeperRoundCost;
+  const f = forecast.find((r) => r.playerId === playerId);
+  if (f?.keeperRound != null && f.keeperRound > 0) return f.keeperRound;
+  return null;
+}
+
+function RoundBadge({ round }: { round: number | null }) {
+  if (round == null || round <= 0) {
+    return <span className="text-base font-black text-muted-foreground">—</span>;
+  }
+  return (
+    <span className="text-2xl font-black tabular-nums text-foreground tracking-tight">
+      {round}
+    </span>
+  );
+}
+
 export function KeeperManagePanel() {
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady = Boolean(
@@ -55,12 +89,9 @@ export function KeeperManagePanel() {
   const draftYear = new Date().getFullYear();
   const utils = trpc.useUtils();
 
-  const [ownerFilter, setOwnerFilter] = useState<string>("all");
-  const [addOwnerKey, setAddOwnerKey] = useState("");
-  const [addPlayerId, setAddPlayerId] = useState<number | "">("");
-  const [addRoundPick, setAddRoundPick] = useState(0);
-  const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [picker, setPicker] = useState<PickerState>(null);
+  const [roundEdit, setRoundEdit] = useState<ManualKeeperRow | null>(null);
 
   const manualQ = trpc.espn.getManualKeeperSelections.useQuery(
     { season: draftYear },
@@ -74,6 +105,9 @@ export function KeeperManagePanel() {
     withLeagueSalt({ draftYear }, leagueContextKey),
     { enabled: leagueKeyReady },
   );
+  const ownerHomeQ = trpc.me.ownerHome.useQuery(withLeagueSalt({}, leagueContextKey), {
+    enabled: leagueKeyReady,
+  });
 
   const invalidateAll = async () => {
     await Promise.all([
@@ -84,31 +118,41 @@ export function KeeperManagePanel() {
     ]);
   };
 
-  const setManual = trpc.espn.setManualKeeperSelection.useMutation({
-    onSuccess: async (res) => {
-      const r = res as { ok?: boolean; error?: string; limit?: number | null } | undefined;
-      if (r && r.ok === false) {
-        setFeedback({
-          ok: false,
-          text:
-            r.error === "limit_reached"
-              ? `Keeper limit reached — max ${r.limit ?? "?"} per team.`
-              : r.error === "table_missing"
-                ? "Keeper storage is not provisioned yet."
-                : r.error === "no_league"
-                  ? "No active league."
-                  : "Could not save that selection.",
-        });
-        return;
-      }
-      setFeedback({ ok: true, text: "Keeper selection saved." });
-      setAddPlayerId("");
-      setSearch("");
-      await invalidateAll();
-      await manualQ.refetch();
-    },
-    onError: () => setFeedback({ ok: false, text: "Could not save that selection." }),
-  });
+  const setManual = trpc.espn.setManualKeeperSelection.useMutation();
+
+  const persist = async (input: {
+    ownerKey: string;
+    playerId: number;
+    playerName: string;
+    position: string;
+    keep: boolean;
+    keeperRoundPick?: number;
+  }) => {
+    const res = await setManual.mutateAsync({
+      season: draftYear,
+      ...input,
+    });
+    const r = res as { ok?: boolean; error?: string; limit?: number | null } | undefined;
+    if (r && r.ok === false) {
+      const text =
+        r.error === "limit_reached"
+          ? `Keeper limit reached — max ${r.limit ?? "?"} per team.`
+          : r.error === "table_missing"
+            ? "Keeper storage is not provisioned yet."
+            : r.error === "no_league"
+              ? "No active league."
+              : "Could not save that selection.";
+      setFeedback({ ok: false, text });
+      return false;
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    if (!feedback?.ok) return;
+    const t = window.setTimeout(() => setFeedback(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [feedback]);
 
   const selections = useMemo((): ManualKeeperRow[] => {
     const raw = (manualQ.data as { selections?: ManualKeeperRow[] } | undefined)?.selections;
@@ -144,51 +188,169 @@ export function KeeperManagePanel() {
       .sort((a, b) => a.ownerName.localeCompare(b.ownerName));
   }, [valuations, forecast, selections]);
 
-  const ownerNameByKey = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const t of teams) m.set(t.ownerKey, t.ownerName);
-    return m;
-  }, [teams]);
+  const myOwnerKey = useMemo(
+    () => resolveMyOwnerKey(teams, ownerHomeQ.data?.owner?.ownerKey),
+    [ownerHomeQ.data, teams],
+  );
 
-  const candidates = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return valuations
-      .filter((v) => {
-        if (addOwnerKey && v.ownerKey !== addOwnerKey) return false;
-        if (!q) return true;
-        return (
-          v.playerName.toLowerCase().includes(q) ||
-          v.position.toLowerCase().includes(q) ||
-          v.ownerName.toLowerCase().includes(q)
-        );
-      })
-      .slice(0, 80);
-  }, [valuations, addOwnerKey, search]);
+  const myOwnerName = useMemo(() => {
+    if (!myOwnerKey) return "Your team";
+    const fromTeams = teams.find((t) => t.ownerKey === myOwnerKey)?.ownerName;
+    if (fromTeams) return fromTeams;
+    const display = String(ownerHomeQ.data?.owner?.displayName ?? "").trim();
+    return display || "Your team";
+  }, [myOwnerKey, teams, ownerHomeQ.data]);
 
-  const filteredSelections = useMemo(() => {
-    if (ownerFilter === "all") return selections;
-    return selections.filter((s) => s.ownerKey === ownerFilter);
-  }, [selections, ownerFilter]);
+  const mySelections = useMemo(
+    () => (myOwnerKey ? selections.filter((s) => s.ownerKey === myOwnerKey) : []),
+    [selections, myOwnerKey],
+  );
 
-  const leagueRows = useMemo(() => {
-    // Prefer MANUAL/CONFIRMED from forecast; fall back to saved selections.
-    const manualIds = new Set(selections.map((s) => s.playerId));
-    const fromForecast = forecast.filter(
-      (r) => r.status === "MANUAL" || r.status === "CONFIRMED" || manualIds.has(r.playerId),
-    );
-    if (fromForecast.length > 0) return fromForecast;
-    return selections.map(
-      (s): ForecastRow => ({
+  const mySlotCount = useMemo(() => {
+    if (keeperLimit != null && keeperLimit > 0) return keeperLimit;
+    return Math.max(1, mySelections.length || 1);
+  }, [keeperLimit, mySelections.length]);
+
+  const mySlots = useMemo(() => {
+    const slots: Array<{ index: number; keeper: ManualKeeperRow | null }> = [];
+    for (let i = 0; i < mySlotCount; i++) {
+      slots.push({ index: i + 1, keeper: mySelections[i] ?? null });
+    }
+    return slots;
+  }, [mySlotCount, mySelections]);
+
+  const candidatesForOwner = (ownerKey: string): KeeperPickerCandidate[] =>
+    valuations.filter((v) => v.ownerKey === ownerKey);
+
+  const saveKeeper = async (args: {
+    ownerKey: string;
+    player: KeeperPickerCandidate;
+    keeperRoundPick: number;
+    replace?: ManualKeeperRow;
+  }) => {
+    setFeedback(null);
+    const block = keeperAddBlockReason({
+      selections: args.replace
+        ? selections.filter((s) => s.playerId !== args.replace!.playerId)
+        : selections,
+      ownerKey: args.ownerKey,
+      playerId: args.player.playerId,
+      keeperLimit,
+    });
+    if (block && keeperLimit !== 1) {
+      setFeedback({ ok: false, text: block });
+      return;
+    }
+
+    const plan = planKeeperReplace({
+      keeperLimit,
+      replace: args.replace,
+      nextPlayerId: args.player.playerId,
+    });
+
+    try {
+      if (plan.removeFirst && args.replace) {
+        const removed = await persist({
+          ownerKey: args.replace.ownerKey,
+          playerId: args.replace.playerId,
+          playerName: args.replace.playerName,
+          position: args.replace.position,
+          keep: false,
+        });
+        if (!removed) return;
+      }
+
+      const ok = await persist({
+        ownerKey: args.ownerKey,
+        playerId: args.player.playerId,
+        playerName: args.player.playerName,
+        position: args.player.position,
+        keep: true,
+        keeperRoundPick: args.keeperRoundPick,
+      });
+
+      if (!ok) {
+        // Multi-slot remove-then-add: restore prior so the slot is never left empty.
+        if (plan.restoreOnAddFailure && args.replace) {
+          await persist({
+            ownerKey: args.replace.ownerKey,
+            playerId: args.replace.playerId,
+            playerName: args.replace.playerName,
+            position: args.replace.position,
+            keep: true,
+            keeperRoundPick: args.replace.keeperRoundPick,
+          });
+          await invalidateAll();
+          await manualQ.refetch();
+        }
+        return;
+      }
+
+      setFeedback({ ok: true, text: "Keeper saved." });
+      setPicker(null);
+      setRoundEdit(null);
+      await invalidateAll();
+      await manualQ.refetch();
+    } catch {
+      if (plan.restoreOnAddFailure && args.replace) {
+        try {
+          await persist({
+            ownerKey: args.replace.ownerKey,
+            playerId: args.replace.playerId,
+            playerName: args.replace.playerName,
+            position: args.replace.position,
+            keep: true,
+            keeperRoundPick: args.replace.keeperRoundPick,
+          });
+          await invalidateAll();
+          await manualQ.refetch();
+        } catch {
+          /* restore best-effort */
+        }
+      }
+      setFeedback({ ok: false, text: "Could not save that selection." });
+    }
+  };
+
+  const removeKeeper = async (s: ManualKeeperRow) => {
+    setFeedback(null);
+    try {
+      const ok = await persist({
         ownerKey: s.ownerKey,
-        ownerName: ownerNameByKey.get(s.ownerKey) ?? s.ownerKey,
         playerId: s.playerId,
         playerName: s.playerName,
         position: s.position,
-        keeperRound: 0,
-        status: "MANUAL",
-      }),
-    );
-  }, [forecast, selections, ownerNameByKey]);
+        keep: false,
+      });
+      if (!ok) return;
+      setFeedback({ ok: true, text: "Keeper removed." });
+      await invalidateAll();
+      await manualQ.refetch();
+    } catch {
+      setFeedback({ ok: false, text: "Could not save that selection." });
+    }
+  };
+
+  const changeRoundPick = async (s: ManualKeeperRow, pick: number) => {
+    setFeedback(null);
+    try {
+      const ok = await persist({
+        ownerKey: s.ownerKey,
+        playerId: s.playerId,
+        playerName: s.playerName,
+        position: s.position,
+        keep: true,
+        keeperRoundPick: pick,
+      });
+      if (!ok) return;
+      setFeedback({ ok: true, text: "Round updated." });
+      setRoundEdit(null);
+      await invalidateAll();
+      await manualQ.refetch();
+    } catch {
+      setFeedback({ ok: false, text: "Could not save that selection." });
+    }
+  };
 
   const loading = leagueKeyReady && (manualQ.isLoading || valQ.isLoading);
   const disabledPayload =
@@ -197,59 +359,12 @@ export function KeeperManagePanel() {
     "disabled" in valQ.data &&
     (valQ.data as { disabled?: boolean }).disabled === true;
 
-  const submitAdd = () => {
-    setFeedback(null);
-    const playerId = typeof addPlayerId === "number" ? addPlayerId : Number(addPlayerId);
-    const block = keeperAddBlockReason({
-      selections,
-      ownerKey: addOwnerKey,
-      playerId,
-      keeperLimit,
-    });
-    if (block) {
-      setFeedback({ ok: false, text: block });
-      return;
-    }
-    const row = valuations.find((v) => v.playerId === playerId);
-    if (!row) {
-      setFeedback({ ok: false, text: "Could not resolve that player." });
-      return;
-    }
-    setManual.mutate({
-      season: draftYear,
-      ownerKey: addOwnerKey || row.ownerKey,
-      playerId: row.playerId,
-      playerName: row.playerName,
-      position: row.position,
-      keep: true,
-      keeperRoundPick: addRoundPick,
-    });
-  };
-
-  const removeKeeper = (s: ManualKeeperRow) => {
-    setFeedback(null);
-    setManual.mutate({
-      season: draftYear,
-      ownerKey: s.ownerKey,
-      playerId: s.playerId,
-      playerName: s.playerName,
-      position: s.position,
-      keep: false,
-    });
-  };
-
-  const changeRoundPick = (s: ManualKeeperRow, pick: number) => {
-    setFeedback(null);
-    setManual.mutate({
-      season: draftYear,
-      ownerKey: s.ownerKey,
-      playerId: s.playerId,
-      playerName: s.playerName,
-      position: s.position,
-      keep: true,
-      keeperRoundPick: pick,
-    });
-  };
+  const canAddMy =
+    myOwnerKey != null &&
+    (keeperLimit == null ||
+      keeperLimit <= 0 ||
+      keeperLimit === 1 ||
+      countKeepersForOwner(selections, myOwnerKey) < keeperLimit);
 
   if (!leagueKeyReady) {
     return (
@@ -259,32 +374,31 @@ export function KeeperManagePanel() {
 
   if (disabledPayload) {
     return (
-      <div className="rounded-lg border border-border bg-card/40 px-4 py-6 text-sm text-muted-foreground">
+      <div className="rounded-xl border border-border bg-card/40 px-5 py-8 text-sm text-muted-foreground">
         This league does not use keepers (0 keeper slots). Management is disabled.
       </div>
     );
   }
 
   return (
-    <div className="space-y-6" data-keeper-manage>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-black uppercase tracking-wider text-foreground">Manage Keepers</h2>
-          <p className="mt-1 text-xs text-muted-foreground max-w-xl">
-            Saved selections for <span className="text-foreground/80">your</span> Fantasy Football Rivals
-            workspace. They do not write to ESPN or other users. Model any team&apos;s keepers before the draft.
+    <div className="space-y-10" data-keeper-manage>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-2xl">
+          <p className="text-base text-foreground/90 leading-relaxed">
+            This is where you <span className="font-bold text-lime-300">change keepers</span> for your
+            draft scenarios. Selections save to your Fantasy Football Rivals workspace — not ESPN, not
+            other users.
           </p>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {keeperSlotsLabel(selections.length, keeperLimit ? keeperLimit * Math.max(1, teams.length) : null)}
-            {keeperLimit != null ? ` · ${keeperLimit} per team` : ""}
-          </p>
+          {keeperLimit != null ? (
+            <p className="mt-2 text-sm text-muted-foreground">{keeperLimit} keeper slot{keeperLimit === 1 ? "" : "s"} per team</p>
+          ) : null}
         </div>
         <button
           type="button"
           onClick={() => void invalidateAll()}
-          className="inline-flex items-center gap-1.5 rounded border border-border px-2.5 py-1.5 text-[11px] font-bold text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-bold text-muted-foreground hover:text-foreground"
         >
-          <RefreshCw className="h-3 w-3" /> Refresh
+          <RefreshCw className="h-4 w-4" /> Refresh
         </button>
       </div>
 
@@ -292,13 +406,14 @@ export function KeeperManagePanel() {
         <div
           role="status"
           className={cn(
-            "rounded-lg border px-3 py-2 text-xs font-semibold",
+            "rounded-xl border px-4 py-3 text-sm font-bold",
             feedback.ok
-              ? "border-lime-500/30 bg-lime-500/10 text-lime-300"
-              : "border-amber-500/30 bg-amber-500/10 text-amber-200",
+              ? "border-lime-500/40 bg-lime-500/15 text-lime-200"
+              : "border-amber-500/40 bg-amber-500/15 text-amber-100",
           )}
           data-keeper-save-feedback={feedback.ok ? "ok" : "error"}
         >
+          {feedback.ok ? "✓ " : ""}
           {feedback.text}
         </div>
       ) : null}
@@ -309,244 +424,431 @@ export function KeeperManagePanel() {
         </div>
       ) : null}
 
-      {/* A. My / workspace keepers (saved) */}
-      <section className="rounded-lg border border-border bg-card/30 p-4 space-y-3" data-keeper-my-keepers>
-        <div className="flex flex-wrap items-center gap-2 justify-between">
-          <h3 className="text-xs font-black uppercase tracking-wider text-lime-400">Your saved keepers</h3>
-          <select
-            className="text-xs bg-background border border-border rounded px-2 py-1"
-            value={ownerFilter}
-            onChange={(e) => setOwnerFilter(e.target.value)}
-          >
-            <option value="all">All teams</option>
-            {teams.map((t) => (
-              <option key={t.ownerKey} value={t.ownerKey}>
-                {t.ownerName}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {filteredSelections.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No saved keepers yet — add one below.</p>
-        ) : (
-          <ul className="space-y-2">
-            {filteredSelections.map((s) => (
-              <li
-                key={`${s.ownerKey}:${s.playerId}`}
-                className="flex items-center gap-3 rounded-md border border-border/80 bg-background/40 px-3 py-2"
-              >
-                <PlayerHeadshot
-                  variant="hdCompact"
-                  player={{
-                    id: s.playerId,
-                    name: s.playerName,
-                    position: s.position,
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-bold text-sm text-foreground truncate">{s.playerName}</span>
-                    <span className={cn("text-[10px] font-bold uppercase", POS_TONE[s.position] ?? "text-zinc-400")}>
-                      {s.position}
-                    </span>
-                    <span className="text-[10px] font-black uppercase tracking-wide text-lime-400 bg-lime-500/10 border border-lime-500/25 px-1.5 rounded">
-                      Saved
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                    {ownerNameByKey.get(s.ownerKey) ?? s.ownerKey} · {formatKeeperRoundPick(s.keeperRoundPick)}
-                  </div>
-                </div>
-                <select
-                  className="text-[11px] bg-background border border-border rounded px-1.5 py-1 shrink-0"
-                  value={s.keeperRoundPick ?? 0}
-                  disabled={setManual.isPending}
-                  onChange={(e) => changeRoundPick(s, Number(e.target.value))}
-                  aria-label="Keeper pick in round"
-                >
-                  <option value={0}>Auto</option>
-                  <option value={1}>1st</option>
-                  <option value={2}>2nd</option>
-                  <option value={3}>3rd</option>
-                </select>
-                <button
-                  type="button"
-                  disabled={setManual.isPending}
-                  onClick={() => removeKeeper(s)}
-                  className="inline-flex items-center gap-1 rounded border border-red-500/30 bg-red-500/10 px-2 py-1 text-[11px] font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-50"
-                >
-                  <Trash2 className="h-3 w-3" /> Remove
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {/* B. Add / replace */}
-      <section className="rounded-lg border border-border bg-card/30 p-4 space-y-3" data-keeper-add>
-        <h3 className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">
-          <Plus className="h-3.5 w-3.5 text-lime-400" /> Add or change keeper
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <label className="text-[11px] text-muted-foreground space-y-1">
-            <span>Fantasy team</span>
-            <select
-              className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
-              value={addOwnerKey}
-              onChange={(e) => {
-                setAddOwnerKey(e.target.value);
-                setAddPlayerId("");
-              }}
-            >
-              <option value="">Select team…</option>
-              {teams.map((t) => (
-                <option key={t.ownerKey} value={t.ownerKey}>
-                  {t.ownerName}
-                  {keeperLimit != null
-                    ? ` (${selections.filter((s) => s.ownerKey === t.ownerKey).length}/${keeperLimit})`
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[11px] text-muted-foreground space-y-1 sm:col-span-1 lg:col-span-2">
-            <span>Search roster / candidates</span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Player name…"
-              className="w-full text-xs bg-background border border-border rounded px-2 py-1.5 text-foreground"
-            />
-          </label>
-          <label className="text-[11px] text-muted-foreground space-y-1">
-            <span>Pick in cost round</span>
-            <select
-              className="w-full text-xs bg-background border border-border rounded px-2 py-1.5"
-              value={addRoundPick}
-              onChange={(e) => setAddRoundPick(Number(e.target.value))}
-            >
-              <option value={0}>Auto (later)</option>
-              <option value={1}>1st</option>
-              <option value={2}>2nd</option>
-              <option value={3}>3rd</option>
-            </select>
-          </label>
-        </div>
-        <div className="max-h-48 overflow-y-auto rounded border border-border divide-y divide-border/60">
-          {candidates.length === 0 ? (
-            <p className="px-3 py-4 text-xs text-muted-foreground italic">
-              {addOwnerKey ? "No matching players for this team." : "Select a team to list candidates."}
+      {/* ── SECTION 1: My Keeper Management ───────────────────────── */}
+      <section className="space-y-4" data-keeper-my-management>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-foreground">My Keeper Management</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {myOwnerName}
+              {myOwnerKey ? "" : " — pick your team in league setup if this looks wrong"}
             </p>
-          ) : (
-            candidates.map((v) => {
-              const selected = addPlayerId === v.playerId;
-              return (
-                <button
-                  key={`${v.ownerKey}:${v.playerId}`}
-                  type="button"
-                  onClick={() => {
-                    setAddPlayerId(v.playerId);
-                    if (!addOwnerKey) setAddOwnerKey(v.ownerKey);
-                  }}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-white/[0.04]",
-                    selected && "bg-lime-500/10",
-                  )}
-                >
-                  <PlayerHeadshot
-                    variant="hdCompact"
-                    player={{ id: v.playerId, name: v.playerName, position: v.position }}
-                  />
-                  <span className="font-semibold text-foreground truncate flex-1">{v.playerName}</span>
-                  <span className={cn("font-bold uppercase", POS_TONE[v.position] ?? "text-zinc-400")}>
-                    {v.position}
-                  </span>
-                  {v.keeperRoundCost != null ? (
-                    <span className="text-muted-foreground tabular-nums">Rd {v.keeperRoundCost}</span>
-                  ) : null}
-                </button>
-              );
-            })
-          )}
+          </div>
+          {myOwnerKey && canAddMy ? (
+            <button
+              type="button"
+              onClick={() => {
+                const intent = headerKeeperPickerIntent(mySelections);
+                setPicker({
+                  mode: intent.mode,
+                  ownerKey: myOwnerKey,
+                  ownerName: myOwnerName,
+                  replace: intent.replace,
+                });
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-lime-500/50 bg-lime-500/20 px-5 py-3 text-sm font-black text-lime-200 hover:bg-lime-500/30"
+              data-keeper-add-cta
+            >
+              <Plus className="h-4 w-4" />
+              {mySelections.length > 0 ? "Add / Change Keeper" : "Add Keeper"}
+            </button>
+          ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={setManual.isPending || !addOwnerKey || !addPlayerId}
-            onClick={submitAdd}
-            className="inline-flex items-center gap-1.5 rounded bg-lime-500/15 border border-lime-500/40 px-3 py-1.5 text-xs font-black text-lime-300 hover:bg-lime-500/25 disabled:opacity-40"
-          >
-            {setManual.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-            Save keeper
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAddPlayerId("");
-              setSearch("");
-              setFeedback(null);
-            }}
-            className="rounded border border-border px-3 py-1.5 text-xs font-bold text-muted-foreground hover:text-foreground"
-          >
-            Cancel
-          </button>
-        </div>
-      </section>
 
-      {/* D. League-wide view */}
-      <section className="rounded-lg border border-border bg-card/20 p-4 space-y-3" data-keeper-league>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-xs font-black uppercase tracking-wider text-muted-foreground">League keepers</h3>
-          <Link to="/draft/war-room" className="text-[11px] font-bold text-violet-300 hover:text-violet-200">
-            Open Draft War Room →
-          </Link>
-        </div>
-        {leagueRows.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No confirmed or saved keepers to show.</p>
+        {!myOwnerKey ? (
+          <div className="rounded-2xl border border-border bg-card/40 px-5 py-8 text-sm text-muted-foreground">
+            We couldn&apos;t resolve your team yet. Use <span className="text-foreground font-semibold">League Keepers</span>{" "}
+            below to edit any team, or finish league setup so My Keepers can focus on you.
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border">
-                <tr>
-                  <th className="py-2 pr-2 font-bold">Team / Owner</th>
-                  <th className="py-2 pr-2 font-bold">Keeper</th>
-                  <th className="py-2 pr-2 font-bold">Pos</th>
-                  <th className="py-2 pr-2 font-bold">Cost</th>
-                  <th className="py-2 font-bold">Source</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/50">
-                {leagueRows.map((r) => (
-                  <tr key={`${r.ownerKey}:${r.playerId}:${r.status}`}>
-                    <td className="py-2 pr-2 text-foreground/90">{r.ownerName}</td>
-                    <td className="py-2 pr-2 font-semibold text-foreground">{r.playerName}</td>
-                    <td className="py-2 pr-2">{r.position}</td>
-                    <td className="py-2 pr-2 tabular-nums">
-                      {r.keeperRound > 0 ? `Rd ${r.keeperRound}` : "—"}
-                    </td>
-                    <td className="py-2">
-                      <span
-                        className={cn(
-                          "text-[10px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded border",
-                          r.status === "MANUAL"
-                            ? "text-lime-300 border-lime-500/30 bg-lime-500/10"
-                            : r.status === "CONFIRMED"
-                              ? "text-cyan-300 border-cyan-500/30 bg-cyan-500/10"
-                              : "text-amber-300 border-amber-500/30 bg-amber-500/10",
-                        )}
+          <div className="grid grid-cols-1 gap-4">
+            {mySlots.map((slot) => {
+              const k = slot.keeper;
+              const cost = k ? costRoundForPlayer(valuations, forecast, k.playerId) : null;
+              return (
+                <article
+                  key={`my-slot-${slot.index}`}
+                  className="rounded-2xl border border-border bg-card/50 p-5 sm:p-6 shadow-sm"
+                  data-keeper-my-card
+                >
+                  {mySlotCount > 1 ? (
+                    <p className="text-[11px] font-black uppercase tracking-widest text-lime-400 mb-3">
+                      Keeper {slot.index}
+                    </p>
+                  ) : null}
+
+                  {k ? (
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-start gap-4 min-w-0">
+                        <PlayerHeadshot
+                          variant="hdLg"
+                          player={{ id: k.playerId, name: k.playerName, position: k.position }}
+                        />
+                        <div className="min-w-0 space-y-3">
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              {myOwnerName}
+                            </p>
+                            <p className="mt-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Keeper
+                            </p>
+                            <p className="text-2xl font-black text-foreground tracking-tight truncate">
+                              {k.playerName}
+                            </p>
+                            <p className={cn("mt-0.5 text-sm font-bold uppercase", POS_TONE[k.position] ?? "text-zinc-400")}>
+                              {k.position}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-6">
+                            <div>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Round
+                              </p>
+                              <RoundBadge round={cost} />
+                            </div>
+                            <div>
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                                Pick in round
+                              </p>
+                              <p className="text-base font-bold text-foreground mt-0.5">
+                                {formatKeeperRoundPick(k.keeperRoundPick)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-col sm:items-stretch gap-2 shrink-0 w-full sm:w-44">
+                        <button
+                          type="button"
+                          disabled={setManual.isPending}
+                          onClick={() =>
+                            setPicker({
+                              mode: "change",
+                              ownerKey: myOwnerKey,
+                              ownerName: myOwnerName,
+                              replace: k,
+                            })
+                          }
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground hover:bg-white/[0.04]"
+                        >
+                          <Pencil className="h-4 w-4" /> Change Keeper
+                        </button>
+                        <button
+                          type="button"
+                          disabled={setManual.isPending}
+                          onClick={() => setRoundEdit(k)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold text-foreground hover:bg-white/[0.04]"
+                        >
+                          Change Round
+                        </button>
+                        <button
+                          type="button"
+                          disabled={setManual.isPending}
+                          onClick={() => removeKeeper(k)}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-200 hover:bg-red-500/20"
+                        >
+                          <Trash2 className="h-4 w-4" /> Remove Keeper
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          {myOwnerName}
+                        </p>
+                        <p className="mt-2 text-lg font-bold text-muted-foreground">No keeper set</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Add a keeper to model your draft.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPicker({
+                            mode: "add",
+                            ownerKey: myOwnerKey,
+                            ownerName: myOwnerName,
+                          })
+                        }
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-lime-500/50 bg-lime-500/20 px-5 py-3 text-sm font-black text-lime-200 hover:bg-lime-500/30"
                       >
-                        {r.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <Plus className="h-4 w-4" /> Add Keeper
+                      </button>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
+
+      {/* ── SECTION 2: League Keepers ─────────────────────────────── */}
+      <section className="space-y-4" data-keeper-league>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-foreground">League Keepers</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Model every team in your workspace. Edit and Remove are always visible.
+            </p>
+          </div>
+          <Link
+            to="/draft/war-room"
+            className="text-sm font-bold text-violet-300 hover:text-violet-200"
+          >
+            Open Draft War Room →
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-border overflow-hidden bg-card/30">
+          <div className="hidden sm:grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_5rem_6rem_minmax(10rem,auto)] gap-3 px-5 py-3 border-b border-border bg-background/40 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+            <span>Owner</span>
+            <span>Keeper</span>
+            <span>Round</span>
+            <span>Status</span>
+            <span className="text-right">Actions</span>
+          </div>
+
+          {teams.length === 0 ? (
+            <p className="px-5 py-10 text-sm text-muted-foreground italic text-center">
+              No teams loaded yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border/70">
+              {teams.map((team) => {
+                const saved = selections.filter((s) => s.ownerKey === team.ownerKey);
+                const predicted = forecast.filter(
+                  (f) => f.ownerKey === team.ownerKey && f.status !== "MANUAL",
+                );
+                const rows =
+                  saved.length > 0
+                    ? saved.map((s) => ({
+                        kind: "saved" as const,
+                        selection: s,
+                        playerName: s.playerName,
+                        position: s.position,
+                        playerId: s.playerId,
+                        round: costRoundForPlayer(valuations, forecast, s.playerId),
+                        status: "SAVED" as const,
+                      }))
+                    : predicted.length > 0
+                      ? predicted.map((f) => ({
+                          kind: "forecast" as const,
+                          selection: null as ManualKeeperRow | null,
+                          playerName: f.playerName,
+                          position: f.position,
+                          playerId: f.playerId,
+                          round: f.keeperRound > 0 ? f.keeperRound : null,
+                          status: f.status,
+                        }))
+                      : [
+                          {
+                            kind: "empty" as const,
+                            selection: null as ManualKeeperRow | null,
+                            playerName: "—",
+                            position: "",
+                            playerId: 0,
+                            round: null as number | null,
+                            status: "OPEN" as const,
+                          },
+                        ];
+
+                return rows.map((row, idx) => (
+                  <li
+                    key={`${team.ownerKey}:${row.playerId || "empty"}:${idx}`}
+                    className="px-5 py-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)_5rem_6rem_minmax(10rem,auto)] gap-3 sm:gap-3 items-center"
+                  >
+                    <div className="min-w-0">
+                      <p className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Owner
+                      </p>
+                      <p className="font-bold text-foreground truncate">{team.ownerName}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Keeper
+                      </p>
+                      <p className="font-black text-foreground truncate text-base">
+                        {row.playerName}
+                        {row.position ? (
+                          <span className={cn("ml-2 text-xs font-bold uppercase", POS_TONE[row.position] ?? "text-zinc-400")}>
+                            {row.position}
+                          </span>
+                        ) : null}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="sm:hidden text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        Round
+                      </p>
+                      <p className="font-black tabular-nums text-foreground">
+                        {row.round != null && row.round > 0 ? row.round : "—"}
+                      </p>
+                    </div>
+                    <div>
+                      <span
+                        className={cn(
+                          "inline-flex text-[10px] font-black uppercase tracking-wide px-2 py-1 rounded-md border",
+                          row.status === "SAVED" || row.status === "MANUAL"
+                            ? "text-lime-300 border-lime-500/30 bg-lime-500/10"
+                            : row.status === "CONFIRMED"
+                              ? "text-cyan-300 border-cyan-500/30 bg-cyan-500/10"
+                              : row.status === "OPEN"
+                                ? "text-muted-foreground border-border bg-background/40"
+                                : "text-amber-300 border-amber-500/30 bg-amber-500/10",
+                        )}
+                      >
+                        {row.status === "SAVED" ? "Saved" : row.status}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap sm:justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={setManual.isPending}
+                        onClick={() =>
+                          setPicker({
+                            mode: row.selection ? "change" : "add",
+                            ownerKey: team.ownerKey,
+                            ownerName: team.ownerName,
+                            replace: row.selection ?? undefined,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2.5 text-sm font-bold text-foreground hover:bg-white/[0.04]"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {row.selection || row.kind === "forecast" ? "Edit" : "Set"}
+                      </button>
+                      {row.selection ? (
+                        <button
+                          type="button"
+                          disabled={setManual.isPending}
+                          onClick={() => removeKeeper(row.selection!)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2.5 text-sm font-bold text-red-200 hover:bg-red-500/20"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Remove
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                ));
+              })}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* Player picker */}
+      {picker ? (
+        <KeeperPlayerPickerDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPicker(null);
+          }}
+          title={picker.mode === "change" ? "Change Keeper" : "Add Keeper"}
+          ownerName={picker.ownerName}
+          candidates={candidatesForOwner(picker.ownerKey)}
+          initialRoundPick={picker.replace?.keeperRoundPick ?? 0}
+          excludePlayerIds={
+            picker.replace
+              ? selections
+                  .filter((s) => s.ownerKey === picker.ownerKey && s.playerId !== picker.replace!.playerId)
+                  .map((s) => s.playerId)
+              : selections.filter((s) => s.ownerKey === picker.ownerKey).map((s) => s.playerId)
+          }
+          saving={setManual.isPending}
+          onSave={({ player, keeperRoundPick }) => {
+            void saveKeeper({
+              ownerKey: picker.ownerKey,
+              player,
+              keeperRoundPick,
+              replace: picker.replace,
+            });
+          }}
+        />
+      ) : null}
+
+      {/* Round pick editor */}
+      {roundEdit ? (
+        <DialogRoundPick
+          ownerName={
+            teams.find((t) => t.ownerKey === roundEdit.ownerKey)?.ownerName ?? roundEdit.ownerKey
+          }
+          playerName={roundEdit.playerName}
+          value={roundEdit.keeperRoundPick}
+          saving={setManual.isPending}
+          onClose={() => setRoundEdit(null)}
+          onSave={(pick) => {
+            void changeRoundPick(roundEdit, pick);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function DialogRoundPick({
+  ownerName,
+  playerName,
+  value,
+  saving,
+  onClose,
+  onSave,
+}: {
+  ownerName: string;
+  playerName: string;
+  value: number;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (pick: number) => void;
+}) {
+  const [pick, setPick] = useState(value);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Change round"
+      data-keeper-round-dialog
+    >
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-5 shadow-xl space-y-4">
+        <div>
+          <h3 className="text-lg font-black text-foreground">Change Round</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {playerName} · {ownerName}
+          </p>
+        </div>
+        <label className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+          <span className="font-bold uppercase tracking-wider">Pick in cost round</span>
+          <select
+            value={pick}
+            onChange={(e) => setPick(Number(e.target.value))}
+            className="rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground"
+          >
+            <option value={0}>Auto (later / less valuable pick)</option>
+            <option value={1}>1st pick in round</option>
+            <option value={2}>2nd pick in round</option>
+            <option value={3}>3rd pick in round</option>
+          </select>
+        </label>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-4 py-2.5 text-sm font-bold text-muted-foreground"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => onSave(pick)}
+            className="rounded-lg border border-lime-500/50 bg-lime-500/20 px-5 py-2.5 text-sm font-black text-lime-200 disabled:opacity-40"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin inline" /> : null} Save
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

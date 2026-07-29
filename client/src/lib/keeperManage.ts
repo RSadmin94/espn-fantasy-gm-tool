@@ -59,3 +59,61 @@ export function formatKeeperRoundPick(pick: number | null | undefined): string {
   if (n === 3) return "3rd pick in round";
   return `${n}th pick in round`;
 }
+
+/**
+ * Resolve the signed-in owner's key against league team keys.
+ * Unmatched raw keys must return null so My Keepers does not look active with an empty picker.
+ */
+export function resolveMyOwnerKey(
+  teams: ReadonlyArray<{ ownerKey: string }>,
+  rawOwnerKey: string | null | undefined,
+): string | null {
+  const key = String(rawOwnerKey ?? "").trim();
+  if (!key) return null;
+  const exact = teams.find((t) => t.ownerKey === key);
+  if (exact) return exact.ownerKey;
+  const lower = key.toLowerCase();
+  const fuzzy = teams.find((t) => t.ownerKey.toLowerCase() === lower);
+  return fuzzy?.ownerKey ?? null;
+}
+
+export type HeaderKeeperPickerIntent =
+  | { mode: "add"; replace?: undefined }
+  | { mode: "change"; replace: ManualKeeperRow };
+
+/** Header Add / Change CTA: if a keeper already exists, open change with that selection. */
+export function headerKeeperPickerIntent(
+  mySelections: ReadonlyArray<ManualKeeperRow>,
+): HeaderKeeperPickerIntent {
+  const existing = mySelections[0];
+  if (existing) return { mode: "change", replace: existing };
+  return { mode: "add" };
+}
+
+/**
+ * How to apply a replacement without orphaning the slot.
+ * - limit === 1: server atomically replaces on keep:true — do not delete first.
+ * - multi-slot different player: remove then add; caller must restore prior on add failure.
+ * - same player: keep:true updates round only.
+ */
+export type KeeperReplacePlan =
+  | { strategy: "atomic_keep"; removeFirst: false; restoreOnAddFailure: false }
+  | { strategy: "remove_then_add"; removeFirst: true; restoreOnAddFailure: true }
+  | { strategy: "update_same"; removeFirst: false; restoreOnAddFailure: false };
+
+export function planKeeperReplace(args: {
+  keeperLimit: number | null;
+  replace: ManualKeeperRow | undefined;
+  nextPlayerId: number;
+}): KeeperReplacePlan {
+  if (!args.replace) {
+    return { strategy: "atomic_keep", removeFirst: false, restoreOnAddFailure: false };
+  }
+  if (args.replace.playerId === args.nextPlayerId) {
+    return { strategy: "update_same", removeFirst: false, restoreOnAddFailure: false };
+  }
+  if (args.keeperLimit === 1) {
+    return { strategy: "atomic_keep", removeFirst: false, restoreOnAddFailure: false };
+  }
+  return { strategy: "remove_then_add", removeFirst: true, restoreOnAddFailure: true };
+}
