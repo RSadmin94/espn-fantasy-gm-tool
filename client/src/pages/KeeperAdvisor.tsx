@@ -367,7 +367,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
             <span className="text-2xl font-black text-red-400">K</span>
           </div>
           <div>
-            <h1 className="text-3xl font-black text-zinc-50">Keeper Advisor {draftYear}</h1>
+            <h1 className="text-3xl font-black text-zinc-50">Keeper Manager {draftYear}</h1>
             <p className="mt-1 text-sm text-zinc-400">
               Value vs. draft cost — real ADP and market value, joined to each keeper
             </p>

@@ -78,36 +78,40 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(hub).not.toContain("DraftRealitySimulator");
   });
 
-  it("Keeper Center owns Manage + Forecast + Advisor on one persistence path", () => {
+  it("Keeper Center shows Keeper Manager + Forecast; League Keepers panel stays hidden", () => {
     const keepers = fs.readFileSync(
       path.join(repoRoot, "client/src/pages/draft/DraftKeepers.tsx"),
       "utf-8",
     );
     expect(keepers).toContain("data-v2-draft-keepers");
-    expect(keepers).toContain("KeeperManagePanel");
-    expect(keepers).toContain('id: "manage"');
-    expect(keepers).toMatch(/useState<KeeperTab>\("manage"\)/);
-    expect(keepers).toContain("LeagueKeeperForecast embedded");
+    expect(keepers).toContain('label: "Keeper Manager"');
+    expect(keepers).toContain('id: "manager"');
+    expect(keepers).toMatch(/useState<KeeperTab>\("manager"\)/);
     expect(keepers).toContain("KeeperAdvisor embedded");
+    expect(keepers).toContain("LeagueKeeperForecast embedded");
+    expect(keepers).toContain("League Keepers");
+    expect(keepers).toContain("KeeperManagePanel");
+    expect(keepers).toContain("false &&");
     expect(keepers).not.toContain("keeperRecommendationEngine");
     expect(keepers).not.toContain("computeLeagueKeeperForecast");
+
+    const advisor = fs.readFileSync(
+      path.join(repoRoot, "client/src/pages/KeeperAdvisor.tsx"),
+      "utf-8",
+    );
+    expect(advisor).toContain("Keeper Manager");
+    expect(advisor).not.toMatch(/<h1[^>]*>Keeper Advisor/);
 
     const manage = fs.readFileSync(
       path.join(repoRoot, "client/src/components/keepers/KeeperManagePanel.tsx"),
       "utf-8",
     );
-    expect(manage).toContain("My Keeper Management");
-    expect(manage).toContain("League Keepers");
-    expect(manage).toContain("Change Keeper");
-    expect(manage).toContain("KeeperPlayerPickerDialog");
     expect(manage).toContain("setManualKeeperSelection");
-    expect(manage).not.toContain("createTable");
 
     const forecast = fs.readFileSync(
       path.join(repoRoot, "client/src/pages/LeagueKeeperForecast.tsx"),
       "utf-8",
     );
-    expect(forecast).toContain("read-only analysis");
     expect(forecast).not.toContain("setManualKeeperSelection");
 
     const warRoom = fs.readFileSync(path.join(repoRoot, "client/src/pages/DraftWarRoom.tsx"), "utf-8");

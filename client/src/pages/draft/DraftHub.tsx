@@ -24,7 +24,7 @@ import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from 
 const DESTINATIONS = [
   { label: "Live Draft", href: "/draft/live", hint: "RFSN draft or connected-league real draft → booth", icon: Radio },
   { label: "Mock Draft", href: "/draft/mock", hint: "External simulated drafts (FantasyPros)", icon: Target },
-  { label: "Keeper Center", href: "/draft/keepers", hint: "Manage keepers, forecast & advisor", icon: Crown },
+  { label: "Keeper Center", href: "/draft/keepers", hint: "Keeper Manager & forecast", icon: Crown },
   { label: "Draft History", href: "/draft/history", hint: "Past boards & picks", icon: ScrollText },
 ] as const;
 
