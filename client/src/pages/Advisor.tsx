@@ -368,7 +368,9 @@ export function Advisor() {
               ? "Your free trial has ended. Upgrade to continue using the advisor."
               : err.message.includes("Rate limit")
                 ? "You've hit the rate limit. Please wait a moment before sending another message."
-                : "Error: " + err.message,
+                : /Failed query|select\s+`|user_memory|ER_[A-Z_]+|params:\s*\d/i.test(err.message)
+                  ? "Advisor is temporarily unavailable. Please try again in a moment."
+                  : "Error: " + err.message,
           },
         ];
       });

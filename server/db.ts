@@ -24,6 +24,7 @@ import type { EspnCreds } from "./espnService";
 import { decryptCredentialsFromDb } from "./_core/crypto";
 import { ENV } from "./_core/env";
 import { isBetaDemoAccount, BETA_DEMO_LEAGUE_DISPLAY_NAME } from "./_core/betaDemoUsers";
+import { isMissingTableError } from "./optionalEnrichmentTable";
 
 /** Drizzle client typed with the app schema (matches `espnPersistence` `AppDb`). */
 export type AppDb = MySql2Database<typeof schema>;
@@ -908,8 +909,19 @@ export async function updateScheduledJobRun(taskUid: string, status: "success" |
 export async function getUserMemory(userId: number): Promise<UserMemory | null> {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(userMemory).where(eq(userMemory.userId, userId)).limit(1);
-  return rows[0] ?? null;
+  try {
+    const rows = await db.select().from(userMemory).where(eq(userMemory.userId, userId)).limit(1);
+    return rows[0] ?? null;
+  } catch (err) {
+    // Missing table: treat as first-use (no memory) so Advisor still answers.
+    // Root fix is drizzle/migrations/0034_user_memory.sql applied at boot.
+    if (isMissingTableError(err)) {
+      console.warn("[getUserMemory] user_memory table missing — returning null (apply migration 0034_user_memory.sql)");
+      return null;
+    }
+    console.error("[getUserMemory] lookup failed for userId=%s", userId, err);
+    throw err;
+  }
 }
 
 export async function upsertUserMemory(userId: number, data: {
@@ -933,9 +945,18 @@ export async function upsertUserMemory(userId: number, data: {
     notes: data.notes ?? null,
     updatedAt: new Date(),
   };
-  await db.insert(userMemory)
-    .values({ userId, ...updateSet })
-    .onDuplicateKeyUpdate({ set: updateSet });
+  try {
+    await db.insert(userMemory)
+      .values({ userId, ...updateSet })
+      .onDuplicateKeyUpdate({ set: updateSet });
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      console.warn("[upsertUserMemory] user_memory table missing — no-op (apply migration 0034_user_memory.sql)");
+      return;
+    }
+    console.error("[upsertUserMemory] upsert failed for userId=%s", userId, err);
+    throw err;
+  }
 }
 
 // ── Per-user ESPN credentials ─────────────────────────────────────────────────

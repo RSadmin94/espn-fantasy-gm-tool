@@ -19,6 +19,7 @@ import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
 import { addChatMessage, getUserMemory, persistLlmUsage, resolveActiveLeagueId, sanitizeAdvisorChatLeagueId } from "./db";
+import { sanitizeAdvisorClientError } from "./advisorErrorSanitize";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 
 const bodySchema = z.object({
@@ -73,7 +74,12 @@ export function registerAdvisorStreamRoute(app: Express) {
 
     try {
       // Fetch GM memory and build memory block
-      const gmMem = await getUserMemory(user.id);
+      let gmMem: Awaited<ReturnType<typeof getUserMemory>> = null;
+      try {
+        gmMem = await getUserMemory(user.id);
+      } catch (memErr) {
+        console.error("[AdvisorStream] getUserMemory failed; continuing without memory", memErr);
+      }
       let gmMemoryBlock: string | undefined;
       if (gmMem) {
         const parts: string[] = [];
@@ -117,9 +123,8 @@ export function registerAdvisorStreamRoute(app: Express) {
 
       sendEvent({ done: true });
     } catch (err) {
-      const errMsg = err instanceof Error ? err.message : "Stream error";
-      console.error("[AdvisorStream] Error:", errMsg);
-      sendEvent({ error: errMsg });
+      console.error("[AdvisorStream] Error:", err);
+      sendEvent({ error: sanitizeAdvisorClientError(err) });
     } finally {
       res.end();
     }

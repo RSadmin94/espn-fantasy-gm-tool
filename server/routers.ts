@@ -10565,47 +10565,63 @@ Provide:
       }))
       .mutation(async ({ input, ctx }) => {
         void input.activeLeagueKey;
-        const userId = ctx.user.id;
-        const season = input.season ?? 2025;
-        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
-        const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
-        // Rate limit check
-        const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
-        if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
-        const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
-        const gmMemory = await getUserMemory(userId);
-        let gmMemoryBlock: string | undefined;
-        if (gmMemory) {
-          const memParts: string[] = [];
-          if (gmMemory.riskTolerance) memParts.push(`Risk Tolerance: ${gmMemory.riskTolerance}`);
-          if (gmMemory.tradePhilosophy) memParts.push(`Trade Philosophy: ${gmMemory.tradePhilosophy}`);
-          if (gmMemory.keeperPhilosophy) memParts.push(`Keeper Philosophy: ${gmMemory.keeperPhilosophy}`);
-          if (gmMemory.draftStyle) memParts.push(`Draft Style: ${gmMemory.draftStyle}`);
-          if (gmMemory.favoritePlayerTypes) memParts.push(`Favorite Player Types: ${gmMemory.favoritePlayerTypes}`);
-          if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
-          if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
-          if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
-        }
-        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
-        const history = await getChatHistory(userId, season, chatLeagueId);
-        const messages: Message[] = [
-          { role: "system", content: leagueContext },
-          ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
-          { role: "user", content: input.message },
-        ];
+        try {
+          const userId = ctx.user.id;
+          const season = input.season ?? 2025;
+          const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
+          const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
+          // Rate limit check
+          const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
+          if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
+          const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
+          let gmMemory: Awaited<ReturnType<typeof getUserMemory>> = null;
+          try {
+            gmMemory = await getUserMemory(userId);
+          } catch (memErr) {
+            // Non-missing-table failures: log and continue without memory (first-use equivalent).
+            console.error("[advisor.chat] getUserMemory failed; continuing without memory", memErr);
+          }
+          let gmMemoryBlock: string | undefined;
+          if (gmMemory) {
+            const memParts: string[] = [];
+            if (gmMemory.riskTolerance) memParts.push(`Risk Tolerance: ${gmMemory.riskTolerance}`);
+            if (gmMemory.tradePhilosophy) memParts.push(`Trade Philosophy: ${gmMemory.tradePhilosophy}`);
+            if (gmMemory.keeperPhilosophy) memParts.push(`Keeper Philosophy: ${gmMemory.keeperPhilosophy}`);
+            if (gmMemory.draftStyle) memParts.push(`Draft Style: ${gmMemory.draftStyle}`);
+            if (gmMemory.favoritePlayerTypes) memParts.push(`Favorite Player Types: ${gmMemory.favoritePlayerTypes}`);
+            if (gmMemory.rivalManagers) memParts.push(`Rival Managers to Watch: ${gmMemory.rivalManagers}`);
+            if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
+            if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
+          }
+          const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+          const history = await getChatHistory(userId, season, chatLeagueId);
+          const messages: Message[] = [
+            { role: "system", content: leagueContext },
+            ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
+            { role: "user", content: input.message },
+          ];
 
-        await addChatMessage(userId, "user", input.message, season, chatLeagueId);
-        const response = await invokeLLM({
-          messages,
-          callType: "advisor",
-          persistUsage: (u) => persistLlmUsage({ userId, ...u }),
-        });
-        const rawContent = response.choices?.[0]?.message?.content;
-        const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
-        await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
-        // Record usage for rate limiter
-        recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
-        return { message: assistantMessage };
+          await addChatMessage(userId, "user", input.message, season, chatLeagueId);
+          const response = await invokeLLM({
+            messages,
+            callType: "advisor",
+            persistUsage: (u) => persistLlmUsage({ userId, ...u }),
+          });
+          const rawContent = response.choices?.[0]?.message?.content;
+          const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
+          await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
+          // Record usage for rate limiter
+          recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
+          return { message: assistantMessage };
+        } catch (err) {
+          if (err instanceof TRPCError) throw err;
+          const { sanitizeAdvisorClientError } = await import("./advisorErrorSanitize");
+          console.error("[advisor.chat] unexpected failure", err);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: sanitizeAdvisorClientError(err),
+          });
+        }
       }),
 
     history: protectedProcedure
