@@ -21,6 +21,7 @@ import { LandingPage } from "./pages/LandingPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
 import { RivalryShare } from "./pages/RivalryShare";
 import { HistoricalReceiptSharePage } from "./pages/HistoricalReceiptSharePage";
+import { OwnerAwardSharePage } from "./pages/OwnerAwardSharePage";
 import { Claim } from "./pages/Claim";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
@@ -53,6 +54,8 @@ import { RivalsOwnerDossier } from "./pages/rivals/RivalsOwnerDossier";
 import { RivalsRivalries } from "./pages/rivals/RivalsRivalries";
 import { RivalsLeagueMap } from "./pages/rivals/RivalsLeagueMap";
 import { RivalsRelationships } from "./pages/rivals/RivalsRelationships";
+import { OwnerAwardsCatalogPage } from "./pages/rivals/OwnerAwardsCatalogPage";
+import { OwnerAwardDetailPage } from "./pages/rivals/OwnerAwardDetailPage";
 import { MyTeamHub } from "./pages/my-team/MyTeamHub";
 import { MyTeamRoster } from "./pages/my-team/MyTeamRoster";
 import { MyTeamMatchup } from "./pages/my-team/MyTeamMatchup";
@@ -240,6 +243,7 @@ const router = createBrowserRouter([
       { path: "/r/:code", element: <ReceiptShare /> },
       { path: "/rivalry/:shareCode", element: <RivalryShare /> },
       { path: "/historical-receipt/:shareCode", element: <HistoricalReceiptSharePage /> },
+      { path: "/owner-award/:shareCode", element: <OwnerAwardSharePage /> },
       { path: "/claim", element: <Claim /> },
       { path: "/reveal", element: <SignatureReveal /> },
       {
@@ -252,6 +256,8 @@ const router = createBrowserRouter([
           { path: "/rivals/cast", element: <RivalsCast /> },
           { path: "/rivals/owners", element: <RivalsOwners /> },
           { path: "/rivals/owners/:ownerId", element: <RivalsOwnerDossier /> },
+          { path: "/rivals/awards", element: <OwnerAwardsCatalogPage /> },
+          { path: "/rivals/awards/:awardId", element: <OwnerAwardDetailPage /> },
           { path: "/rivals/head-to-head", element: <Navigate to="/rivals/rivalries" replace /> },
           { path: "/rivals/rivalries", element: <RivalsRivalries /> },
           { path: "/rivals/league-map", element: <RivalsLeagueMap /> },

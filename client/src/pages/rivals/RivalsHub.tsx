@@ -3,7 +3,7 @@
  * Curates existing Cast, rivalry, DNA behavior, and H2H signals — no new calculations.
  */
 import { Link } from "react-router";
-import { Clapperboard, Map as MapIcon, Network, Swords, Users } from "lucide-react";
+import { Clapperboard, Map as MapIcon, Network, Swords, Users, Award } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
@@ -15,6 +15,7 @@ import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from 
 const DESTINATIONS = [
   { label: "The Cast", href: "/rivals/cast", hint: "League characters", icon: Clapperboard },
   { label: "Owner Dossier", href: "/rivals/owners", hint: "Manager scouting", icon: Users },
+  { label: "Award Catalog", href: "/rivals/awards", hint: "What awards mean", icon: Award },
   { label: "Rivalries", href: "/rivals/rivalries", hint: "Heat, feuds & series records", icon: Swords },
 ] as const;
 

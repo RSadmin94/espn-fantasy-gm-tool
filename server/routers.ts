@@ -36,6 +36,7 @@ import { enrichNormalizedTransactionsWithReconstruction } from "./transactionTra
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { historicalReceiptShareRouter } from "./historicalReceiptShareRouter";
+import { ownerAwardShareRouter } from "./ownerAwardShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
 import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
@@ -767,6 +768,7 @@ export const appRouter = router({
   sofia: sofiaRouter,
   rivalryShare: rivalryShareRouter,
   historicalReceiptShare: historicalReceiptShareRouter,
+  ownerAwardShare: ownerAwardShareRouter,
   demo: demoRouter,
   activityDna: activityDnaRouter,
   transactionAnalysis: transactionAnalysisRouter,

@@ -1,5 +1,5 @@
 import { useState, useMemo, Fragment, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -58,16 +58,14 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
   countAwardsForOwner,
   formatOwnerAwardStat,
-  ownerAwardHowto,
+  getOwnerAwardMetaByName,
   sortOwnerAwardsForDisplay,
 } from "@/lib/ownerAwardsDisplay";
+import { OwnerAchievementGallery } from "@/components/ownerAwards/OwnerAchievementGallery";
+import { OwnerAwardTooltip } from "@/components/ownerAwards/OwnerAwardTooltip";
+import { ownerAwardIcon, rarityCardStyle, RARITY_COLORS } from "@/components/ownerAwards/ownerAwardVisuals";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -521,7 +519,7 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
   return String(o?.ownerName ?? "").trim();
 }
 
-/** Restored Owner Awards gallery (league winners) — select owner on click. */
+/** League-wide Owner Awards board — select owner or open award detail. */
 function OwnerAwardsGallery({
   ownerAwards,
   selectedOwnerKey,
@@ -535,10 +533,18 @@ function OwnerAwardsGallery({
 
   return (
     <IntelPanel variant="warm" className="mb-5 overflow-hidden p-0">
-      <div className="flex items-center gap-2 border-b border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
-        <Award className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
-        <h2 className="text-sm font-semibold text-zinc-100">Owner Awards</h2>
-        <span className="text-xs text-zinc-500">deterministic · league history</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <Award className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
+          <h2 className="text-sm font-semibold text-zinc-100">Owner Awards</h2>
+          <span className="text-xs text-zinc-500">current holders · league history</span>
+        </div>
+        <Link
+          to="/rivals/awards"
+          className="text-[11px] font-bold uppercase tracking-wide text-[#a3e635] hover:underline"
+        >
+          Full catalog →
+        </Link>
       </div>
       {sorted.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-zinc-500">
@@ -550,39 +556,65 @@ function OwnerAwardsGallery({
             const key = listRowLookupKey(a);
             const sel = !!selectedOwnerKey && !!key && selectedOwnerKey === key;
             const awardName = str(a.awardName);
-            const howto = ownerAwardHowto(awardName);
+            const meta = getOwnerAwardMetaByName(awardName);
+            const Icon = meta ? ownerAwardIcon(meta.icon) : Award;
+            const colors = meta ? RARITY_COLORS[meta.rarity] : RARITY_COLORS.Common;
             return (
-              <Tooltip key={`${awardName}-${key}`}>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (key) onSelectOwner(key);
-                    }}
-                    className={cn(
-                      "rounded-lg border p-3 text-left transition-colors",
-                      sel
-                        ? "border-[#a3e635]/45 bg-[#a3e635]/10 ring-1 ring-[#a3e635]/25"
-                        : "border-white/[0.08] bg-white/[0.03] hover:border-white/[0.14] hover:bg-white/[0.05]",
-                    )}
-                  >
-                    <div className="flex items-start gap-2">
-                      <Award className="mt-0.5 h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
-                      <div className="min-w-0 flex-1">
+              <OwnerAwardTooltip key={`${awardName}-${key}`} awardName={awardName} timesEarned={1}>
+                <div
+                  className={cn(
+                    "rounded-lg border p-3 text-left transition-colors",
+                    sel
+                      ? "border-[#a3e635]/45 bg-[#a3e635]/10 ring-1 ring-[#a3e635]/25"
+                      : "border-white/[0.08]",
+                  )}
+                  style={!sel && meta ? rarityCardStyle(meta.rarity) : undefined}
+                >
+                  <div className="flex items-start gap-2">
+                    <span
+                      className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border"
+                      style={{ borderColor: colors.border, background: colors.bg, color: colors.fg }}
+                      aria-hidden
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <p className="text-[11px] font-bold uppercase tracking-wide text-amber-400/90">{awardName}</p>
-                        <p className="mt-1 text-sm font-semibold text-zinc-100">{str(a.ownerName)}</p>
-                        <p className="mt-0.5 font-mono text-xs text-zinc-400">
-                          {formatOwnerAwardStat(awardName, a.value)}
-                        </p>
-                        <p className="mt-2 text-xs leading-relaxed text-zinc-500">{str(a.reason)}</p>
+                        {meta ? (
+                          <span className={cn("rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase", colors.chip)}>
+                            {meta.rarity}
+                          </span>
+                        ) : null}
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (key) onSelectOwner(key);
+                        }}
+                        className="mt-1 text-sm font-semibold text-zinc-100 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70"
+                      >
+                        {str(a.ownerName)}
+                      </button>
+                      <p className="mt-0.5 font-mono text-xs text-zinc-400">
+                        {formatOwnerAwardStat(awardName, a.value)}
+                      </p>
+                      <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                        {meta?.shortDescription ?? str(a.reason)}
+                      </p>
+                      {meta ? (
+                        <Link
+                          to={`/rivals/awards/${meta.id}`}
+                          className="mt-2 inline-flex text-[11px] font-bold text-[#a3e635] hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Details →
+                        </Link>
+                      ) : null}
                     </div>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
-                  {howto}
-                </TooltipContent>
-              </Tooltip>
+                  </div>
+                </div>
+              </OwnerAwardTooltip>
             );
           })}
         </div>
@@ -2517,6 +2549,13 @@ export function OwnerProfiles({
         ) : null}
 
         <div ref={profileRef} className="flex-1 min-w-0">
+          {profileKeyValid && !authenticatedOwnerOnly ? (
+            <OwnerAchievementGallery
+              ownerName={headerDisplayName || "Owner"}
+              ownerKey={selectedOwnerKey}
+              ownerAwards={ownerAwards}
+            />
+          ) : null}
           {profileKeyValid ? (
             <ProfilePanel
               key={`${leagueContextKey}:${selectedOwnerKey}`}

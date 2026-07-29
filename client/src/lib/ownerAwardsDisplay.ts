@@ -2,45 +2,55 @@
  * Display helpers for Owner Awards V1 (owners.ownerList.ownerAwards).
  * Pure presentation — does not recompute award winners.
  */
+import {
+  getOwnerAwardMetaByName,
+  OWNER_AWARD_ORDER as META_ORDER,
+} from "@shared/ownerAwardMeta";
+import {
+  buildOwnerAwardComparisonStats,
+  type OwnerAwardRowLike,
+} from "@shared/ownerAwardGallery";
 
-export type OwnerAwardLike = {
-  awardName?: string | null;
-  ownerKey?: string | null;
-  ownerName?: string | null;
-  value?: string | number | null;
-  reason?: string | null;
-};
+// Re-export gallery builders for client consumers
+export {
+  buildAwardCatalog,
+  buildAwardDetail,
+  buildOwnerAwardComparisonStats,
+  buildOwnerEarnedAwards,
+  filterAndSortCatalog,
+  type AwardCatalogRow,
+  type AwardDetailView,
+  type CatalogSort,
+  type OwnerAwardComparisonStats,
+  type OwnerAwardRowLike,
+  type OwnerEarnedAwardView,
+} from "@shared/ownerAwardGallery";
+export {
+  getOwnerAwardMetaById,
+  getOwnerAwardMetaByName,
+  listOwnerAwardMeta,
+  OWNER_AWARD_CATEGORIES,
+  OWNER_AWARD_META,
+  OWNER_AWARD_RARITIES,
+  rarityRank,
+  type OwnerAwardCategory,
+  type OwnerAwardMeta,
+  type OwnerAwardRarity,
+} from "@shared/ownerAwardMeta";
+
+export type OwnerAwardLike = OwnerAwardRowLike;
 
 /** Stable display order matching server push order. */
-export const OWNER_AWARD_ORDER: readonly string[] = [
-  "Best Drafter",
-  "Worst Drafter",
-  "Keeper King",
-  "Transaction Addict",
-  "Trade Shark",
-  "Regular Season Bully",
-  "Playoff Merchant",
-  "Rivalry Killer",
-  "One-Year Wonder",
-  "Graveyard Legend",
-] as const;
+export const OWNER_AWARD_ORDER: readonly string[] = META_ORDER;
 
-/** Short “how it’s won” copy for tooltips. */
-export const OWNER_AWARD_HOWTO: Readonly<Record<string, string>> = {
-  "Best Drafter": "Most RB/WR picks in rounds 1–3 among multi-season owners with enough draft history.",
-  "Worst Drafter": "Fewest RB/WR picks in rounds 1–3 among eligible multi-season owners (cannot match Best Drafter).",
-  "Keeper King": "Highest keeper rate (keepers ÷ resolved picks) among multi-season owners with enough keepers.",
-  "Transaction Addict": "Most lifetime acquisitions among multi-season owners.",
-  "Trade Shark": "Most completed trades among multi-season owners.",
-  "Regular Season Bully": "Highest career regular-season win % (≥14 games) among multi-season owners.",
-  "Playoff Merchant": "Most runner-up + 3rd-place finishes; fewer titles preferred when tied.",
-  "Rivalry Killer": "Best regular-season head-to-head net record (≥10 H2H games) among multi-season owners.",
-  "One-Year Wonder": "Highest win % among one-season (graveyard) owners with games played.",
-  "Graveyard Legend": "Highest points for among one-season (graveyard) owners.",
-};
-
+/** Short “how it’s won” copy for tooltips — sourced from shared metadata. */
 export function ownerAwardHowto(awardName: string): string {
-  return OWNER_AWARD_HOWTO[awardName] ?? "League award from historical owner stats.";
+  const meta = getOwnerAwardMetaByName(awardName);
+  return meta?.howEarned ?? "League award from historical owner stats.";
+}
+
+export function ownerAwardShortDescription(awardName: string): string {
+  return getOwnerAwardMetaByName(awardName)?.shortDescription ?? "League award.";
 }
 
 /** Format the award statistic for cards — never blank when value is present. */
@@ -85,14 +95,5 @@ export function countAwardsForOwner(
   ownerKey: string | null | undefined,
   ownerName?: string | null,
 ): number {
-  const key = String(ownerKey ?? "").trim();
-  const name = String(ownerName ?? "").trim();
-  if (!key && !name) return 0;
-  return awards.filter((a) => {
-    const ak = String(a.ownerKey ?? "").trim();
-    if (key && ak && ak === key) return true;
-    if (!key && name && String(a.ownerName ?? "").trim() === name) return true;
-    if (key && !ak && name && String(a.ownerName ?? "").trim() === name) return true;
-    return false;
-  }).length;
+  return buildOwnerAwardComparisonStats(awards, ownerKey, ownerName).totalAwards;
 }

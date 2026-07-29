@@ -22,6 +22,7 @@ import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from 
 const DESTINATIONS = [
   { label: "Standings", href: "/league/standings", hint: "Current season record", icon: Trophy },
   { label: "Power Rankings", href: "/league/standings/power-rankings", hint: "Roster strength", icon: Gem },
+  { label: "Owner Awards", href: "/rivals/awards", hint: "Award catalog & rarity", icon: Award },
   { label: "History", href: "/league/history", hint: "Full league archive", icon: History },
   { label: "Champions", href: "/league/history/champions", hint: "Title authority", icon: Crown },
   { label: "Hall of Fame", href: "/league/history/hall-of-fame", hint: "Archive honor roll", icon: Award },
