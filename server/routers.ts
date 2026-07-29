@@ -10567,21 +10567,26 @@ Provide:
       }))
       .mutation(async ({ input, ctx }) => {
         void input.activeLeagueKey;
+        const requestId = (await import("./advisorErrorSanitize")).newAdvisorRequestId();
+        let stage = "init";
         try {
           const userId = ctx.user.id;
           const season = input.season ?? 2025;
+          stage = "resolve_league";
           const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
           const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
           // Rate limit check
+          stage = "rate_limit";
           const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
           if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
           const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
           let gmMemory: Awaited<ReturnType<typeof getUserMemory>> = null;
+          stage = "user_memory";
           try {
             gmMemory = await getUserMemory(userId);
           } catch (memErr) {
             // Non-missing-table failures: log and continue without memory (first-use equivalent).
-            console.error("[advisor.chat] getUserMemory failed; continuing without memory", memErr);
+            console.error(`[advisor.chat] ${requestId} stage=${stage} getUserMemory failed; continuing without memory`, memErr);
           }
           let gmMemoryBlock: string | undefined;
           if (gmMemory) {
@@ -10595,7 +10600,9 @@ Provide:
             if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
             if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
           }
+          stage = "context";
           const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+          stage = "chat_history";
           const history = await getChatHistory(userId, season, chatLeagueId);
           const messages: Message[] = [
             { role: "system", content: leagueContext },
@@ -10603,7 +10610,9 @@ Provide:
             { role: "user", content: input.message },
           ];
 
+          stage = "persist_user_message";
           await addChatMessage(userId, "user", input.message, season, chatLeagueId);
+          stage = "llm";
           const response = await invokeLLM({
             messages,
             callType: "advisor",
@@ -10611,17 +10620,23 @@ Provide:
           });
           const rawContent = response.choices?.[0]?.message?.content;
           const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
+          stage = "persist_assistant_message";
           await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
           // Record usage for rate limiter
           recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
           return { message: assistantMessage };
         } catch (err) {
           if (err instanceof TRPCError) throw err;
-          const { sanitizeAdvisorClientError } = await import("./advisorErrorSanitize");
-          console.error("[advisor.chat] unexpected failure", err);
+          const { sanitizeAdvisorClientError, classifyAdvisorError } = await import("./advisorErrorSanitize");
+          const kind = classifyAdvisorError(err);
+          const safe = sanitizeAdvisorClientError(err);
+          console.error(
+            `[advisor.chat] ${requestId} stage=${stage} kind=${kind} failure`,
+            err instanceof Error ? { name: err.name, message: err.message.slice(0, 240) } : err,
+          );
           throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: sanitizeAdvisorClientError(err),
+            code: kind === "permission" ? "FORBIDDEN" : kind === "rate_limit" ? "TOO_MANY_REQUESTS" : "INTERNAL_SERVER_ERROR",
+            message: safe,
           });
         }
       }),

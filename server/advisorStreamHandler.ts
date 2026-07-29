@@ -19,7 +19,11 @@ import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
 import { addChatMessage, getUserMemory, persistLlmUsage, resolveActiveLeagueId, sanitizeAdvisorChatLeagueId } from "./db";
-import { sanitizeAdvisorClientError } from "./advisorErrorSanitize";
+import {
+  classifyAdvisorError,
+  newAdvisorRequestId,
+  sanitizeAdvisorClientError,
+} from "./advisorErrorSanitize";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 
 const bodySchema = z.object({
@@ -72,13 +76,16 @@ export function registerAdvisorStreamRoute(app: Express) {
       res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
+    const requestId = newAdvisorRequestId();
+    let stage = "init";
     try {
       // Fetch GM memory and build memory block
+      stage = "getUserMemory";
       let gmMem: Awaited<ReturnType<typeof getUserMemory>> = null;
       try {
         gmMem = await getUserMemory(user.id);
       } catch (memErr) {
-        console.error("[AdvisorStream] getUserMemory failed; continuing without memory", memErr);
+        console.error(`[AdvisorStream] ${requestId} getUserMemory failed; continuing without memory`, memErr);
       }
       let gmMemoryBlock: string | undefined;
       if (gmMem) {
@@ -93,6 +100,7 @@ export function registerAdvisorStreamRoute(app: Express) {
         if (parts.length > 0) gmMemoryBlock = parts.join("\n");
       }
       // Build messages (same context as tRPC advisor.chat)
+      stage = "buildAdvisorMessages";
       const messages = await buildAdvisorMessages({
         userId: user.id,
         season,
@@ -102,9 +110,11 @@ export function registerAdvisorStreamRoute(app: Express) {
       });
 
       // Persist the user message before streaming
+      stage = "addChatMessage.user";
       await addChatMessage(user.id, "user", message, season, chatLeagueId);
 
       // Stream the response
+      stage = "invokeLLMStream";
       let fullResponse = "";
       for await (const chunk of invokeLLMStream({
         messages,
@@ -116,14 +126,19 @@ export function registerAdvisorStreamRoute(app: Express) {
       }
 
       // Persist the complete assistant message
+      stage = "addChatMessage.assistant";
       await addChatMessage(user.id, "assistant", fullResponse || "No response generated.", season, chatLeagueId);
 
       // Record usage for rate limiter (token count not available from stream, use estimate)
+      stage = "recordUsage";
       recordUsage({ userId: user.id, callType: "advisor", tokensUsed: Math.ceil(fullResponse.length / 4) });
 
       sendEvent({ done: true });
     } catch (err) {
-      console.error("[AdvisorStream] Error:", err);
+      const classified = classifyAdvisorError(err);
+      console.error(`[AdvisorStream] ${requestId} stage=${stage} type=${classified}`, {
+        message: err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200),
+      });
       sendEvent({ error: sanitizeAdvisorClientError(err) });
     } finally {
       res.end();

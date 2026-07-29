@@ -145,12 +145,38 @@ describe("advisor.chat", () => {
     expect(result.message.length).toBeGreaterThan(0);
   });
 
+  it("answers Who always reaches in the draft with season 2025 and league resolved", async () => {
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.advisor.chat({
+      message: "Who always reaches in the draft?",
+      season: 2025,
+    });
+    expect(result.message).toBeTruthy();
+    expect(String(result.message)).not.toMatch(/Failed query|chat_history|user_memory/i);
+    expect(db.resolveActiveLeagueId).toHaveBeenCalled();
+    expect(db.getChatHistory).toHaveBeenCalledWith(1, 2025, expect.any(String));
+    expect(db.addChatMessage).toHaveBeenCalled();
+  });
+
+  it("still answers when chat history soft-fails empty (missing table path)", async () => {
+    vi.mocked(db.getChatHistory).mockResolvedValue([]);
+    vi.mocked(db.addChatMessage).mockResolvedValue(undefined);
+    const ctx = createAuthContext(1);
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.advisor.chat({
+      message: "Who always reaches in the draft?",
+      season: 2025,
+    });
+    expect(result.message.length).toBeGreaterThan(0);
+  });
+
   it("does not expose raw SQL when a non-memory failure is sanitized", () => {
     const leaked =
-      "Failed query: select `id`, `userId` from `user_memory` where `user_memory`.`userId` = ? limit ?\nparams: 1,1";
+      "Failed query: select `id`, `userId` from `chat_history` where `chat_history`.`userId` = ? limit ?\nparams: 1,1";
     const safe = sanitizeAdvisorClientError(new Error(leaked));
     expect(safe).not.toMatch(/Failed query/i);
-    expect(safe).not.toMatch(/user_memory/);
+    expect(safe).not.toMatch(/chat_history/);
     expect(safe).not.toMatch(/params:/);
     expect(() => {
       throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: safe });

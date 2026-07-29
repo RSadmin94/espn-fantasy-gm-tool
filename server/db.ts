@@ -568,7 +568,18 @@ export async function getChatHistory(userId: number, season: number | undefined,
   const conditions = season != null
     ? and(eq(chatHistory.userId, userId), eq(chatHistory.season, season), eq(chatHistory.leagueId, lid))
     : and(eq(chatHistory.userId, userId), eq(chatHistory.leagueId, lid));
-  return db.select().from(chatHistory).where(conditions).orderBy(chatHistory.createdAt).limit(100);
+  try {
+    return await db.select().from(chatHistory).where(conditions).orderBy(chatHistory.createdAt).limit(100);
+  } catch (err) {
+    // Missing table: treat as empty history so Advisor can still answer.
+    // Root fix is drizzle/migrations/0035_chat_history.sql applied at boot.
+    if (isMissingTableError(err)) {
+      console.warn("[getChatHistory] chat_history table missing — returning [] (apply migration 0035_chat_history.sql)");
+      return [];
+    }
+    console.error("[getChatHistory] lookup failed for userId=%s leagueId=%s", userId, lid, err);
+    throw err;
+  }
 }
 
 export async function addChatMessage(
@@ -581,14 +592,32 @@ export async function addChatMessage(
   const db = await getDb();
   if (!db) return;
   const lid = sanitizeAdvisorChatLeagueId(leagueId);
-  await db.insert(chatHistory).values({ userId, leagueId: lid, role, content, season: season ?? null });
+  try {
+    await db.insert(chatHistory).values({ userId, leagueId: lid, role, content, season: season ?? null });
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      console.warn("[addChatMessage] chat_history table missing — no-op (apply migration 0035_chat_history.sql)");
+      return;
+    }
+    console.error("[addChatMessage] insert failed for userId=%s leagueId=%s", userId, lid, err);
+    throw err;
+  }
 }
 
 export async function clearChatHistory(userId: number, leagueId: string) {
   const db = await getDb();
   if (!db) return;
   const lid = sanitizeAdvisorChatLeagueId(leagueId);
-  await db.delete(chatHistory).where(and(eq(chatHistory.userId, userId), eq(chatHistory.leagueId, lid)));
+  try {
+    await db.delete(chatHistory).where(and(eq(chatHistory.userId, userId), eq(chatHistory.leagueId, lid)));
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      console.warn("[clearChatHistory] chat_history table missing — no-op (apply migration 0035_chat_history.sql)");
+      return;
+    }
+    console.error("[clearChatHistory] delete failed for userId=%s leagueId=%s", userId, lid, err);
+    throw err;
+  }
 }
 
 // ── Pick Trade helpers ────────────────────────────────────────────────────────

@@ -1,5 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { isAdvisorSqlLeakMessage, sanitizeAdvisorClientError } from "./advisorErrorSanitize";
+import { describe, expect, it } from "vitest";
+import {
+  isAdvisorSqlLeakMessage,
+  sanitizeAdvisorClientError,
+  classifyAdvisorError,
+  newAdvisorRequestId,
+} from "./advisorErrorSanitize";
 import { isMissingTableError } from "./optionalEnrichmentTable";
 
 describe("sanitizeAdvisorClientError", () => {
@@ -14,9 +19,37 @@ describe("sanitizeAdvisorClientError", () => {
     expect(safe).toMatch(/temporarily unavailable/i);
   });
 
+  it("strips missing chat_history table errors", () => {
+    const raw =
+      "Failed query: select `id` from `chat_history` where (`chat_history`.`userId` = ?)\nparams: 1\nTable 'railway.chat_history' doesn't exist";
+    expect(isAdvisorSqlLeakMessage(raw)).toBe(true);
+    expect(classifyAdvisorError(new Error(raw))).toBe("sql");
+    const safe = sanitizeAdvisorClientError(new Error(raw));
+    expect(safe).not.toMatch(/chat_history/);
+    expect(safe).not.toMatch(/Failed query/i);
+  });
+
+  it("maps provider timeouts to a safe provider message", () => {
+    expect(classifyAdvisorError(new Error("OpenAI timeout ETIMEDOUT"))).toBe("provider");
+    expect(sanitizeAdvisorClientError(new Error("OpenAI timeout ETIMEDOUT"))).toMatch(
+      /Advisor service is temporarily unavailable/i,
+    );
+  });
+
+  it("maps permission errors distinctly", () => {
+    expect(classifyAdvisorError(new Error("subscription required"))).toBe("permission");
+    expect(sanitizeAdvisorClientError(new Error("subscription required"))).toMatch(
+      /does not currently have access/i,
+    );
+  });
+
   it("preserves rate-limit and trial messages", () => {
     expect(sanitizeAdvisorClientError(new Error("Rate limit exceeded"))).toMatch(/Rate limit/i);
     expect(sanitizeAdvisorClientError(new Error("Your free trial has ended"))).toMatch(/trial/i);
+  });
+
+  it("creates stable request ids", () => {
+    expect(newAdvisorRequestId()).toMatch(/^adv_/);
   });
 });
 
