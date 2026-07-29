@@ -57,6 +57,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  countAwardsForOwner,
+  formatOwnerAwardStat,
+  ownerAwardHowto,
+  sortOwnerAwardsForDisplay,
+} from "@/lib/ownerAwardsDisplay";
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -510,6 +521,76 @@ function listRowLookupKey(o: { ownerKey?: string; ownerName?: string } | null | 
   return String(o?.ownerName ?? "").trim();
 }
 
+/** Restored Owner Awards gallery (league winners) — select owner on click. */
+function OwnerAwardsGallery({
+  ownerAwards,
+  selectedOwnerKey,
+  onSelectOwner,
+}: {
+  ownerAwards: any[];
+  selectedOwnerKey: string | null;
+  onSelectOwner: (ownerKey: string) => void;
+}) {
+  const sorted = useMemo(() => sortOwnerAwardsForDisplay(ownerAwards ?? []), [ownerAwards]);
+
+  return (
+    <IntelPanel variant="warm" className="mb-5 overflow-hidden p-0">
+      <div className="flex items-center gap-2 border-b border-white/[0.08] bg-white/[0.03] px-4 py-2.5">
+        <Award className="h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
+        <h2 className="text-sm font-semibold text-zinc-100">Owner Awards</h2>
+        <span className="text-xs text-zinc-500">deterministic · league history</span>
+      </div>
+      {sorted.length === 0 ? (
+        <p className="px-4 py-6 text-center text-sm text-zinc-500">
+          No awards yet — need more league history (multi-season drafts, matchups, or medals).
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+          {sorted.map((a: any) => {
+            const key = listRowLookupKey(a);
+            const sel = !!selectedOwnerKey && !!key && selectedOwnerKey === key;
+            const awardName = str(a.awardName);
+            const howto = ownerAwardHowto(awardName);
+            return (
+              <Tooltip key={`${awardName}-${key}`}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (key) onSelectOwner(key);
+                    }}
+                    className={cn(
+                      "rounded-lg border p-3 text-left transition-colors",
+                      sel
+                        ? "border-[#a3e635]/45 bg-[#a3e635]/10 ring-1 ring-[#a3e635]/25"
+                        : "border-white/[0.08] bg-white/[0.03] hover:border-white/[0.14] hover:bg-white/[0.05]",
+                    )}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Award className="mt-0.5 h-4 w-4 shrink-0 text-amber-400/90" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-amber-400/90">{awardName}</p>
+                        <p className="mt-1 text-sm font-semibold text-zinc-100">{str(a.ownerName)}</p>
+                        <p className="mt-0.5 font-mono text-xs text-zinc-400">
+                          {formatOwnerAwardStat(awardName, a.value)}
+                        </p>
+                        <p className="mt-2 text-xs leading-relaxed text-zinc-500">{str(a.reason)}</p>
+                      </div>
+                    </div>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs text-xs leading-relaxed">
+                  {howto}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
+        </div>
+      )}
+    </IntelPanel>
+  );
+}
+
 // ─── Dynasty Identity badge ───────────────────────────────────────────────────
 // Presentational only. The badge identity (key/label/icon/explanation) and the
 // Now/Later percentiles are consumed verbatim from the dynasty.powerRankings
@@ -761,11 +842,14 @@ function CompareOwnersPanel({
 
             {(() => {
               const prL = powerRankings.find((r: any) => listRowLookupKey(r) === profileLookupKey);
-              const prR = powerRankings.find((r: any) => r.ownerName === compareWith);
+              const prR =
+                powerRankings.find((r: any) => listRowLookupKey(r) && String(r?.ownerName ?? "").trim() === compareWith) ??
+                powerRankings.find((r: any) => r.ownerName === compareWith);
+              const peerKey = listRowLookupKey(prR) || listRowLookupKey(peer as { ownerKey?: string; ownerName?: string } | null);
               const rankL = prL ? num(prL.rank) : 999;
               const rankR = prR ? num(prR.rank) : 999;
-              const awardsL = ownerAwards.filter((a: any) => listRowLookupKey(a) === profileLookupKey).length;
-              const awardsR = ownerAwards.filter((a: any) => a.ownerName === compareWith).length;
+              const awardsL = countAwardsForOwner(ownerAwards, profileLookupKey, headerDisplayName);
+              const awardsR = countAwardsForOwner(ownerAwards, peerKey || undefined, compareWith);
               const topL = topDraftedPosCount(draft);
               const topR = topDraftedPosCount(draftP);
 
@@ -2340,6 +2424,14 @@ export function OwnerProfiles({
         <IntelPanel variant="warm" className="mb-4 border-red-500/25 bg-red-500/[0.06] px-4 py-3 text-sm text-zinc-300">
           Owner not found in this league. Pick someone from the directory.
         </IntelPanel>
+      ) : null}
+
+      {!authenticatedOwnerOnly ? (
+        <OwnerAwardsGallery
+          ownerAwards={ownerAwards}
+          selectedOwnerKey={selectedOwnerKey}
+          onSelectOwner={selectOwner}
+        />
       ) : null}
 
       <div className="flex gap-6">

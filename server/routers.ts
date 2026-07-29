@@ -40,6 +40,12 @@ import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
 import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
 import { getActivityDnaForOwner } from "./activityDnaService";
+import {
+  canAwardWorstDrafter,
+  isGraveyardLegendEligible,
+  isOneYearWonderEligible,
+  ownerAwardNameKeyTie,
+} from "./ownerAwardsRules";
 import { offseasonRouter } from "./offseasonRouter";
 import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { getLeagueScoringSettings, getScoringBreakdown } from "./leagueScoringService";
@@ -12286,7 +12292,7 @@ Provide:
           const db = draftAgg.get(b.ownerKey)!;
           if (db.earlyPremium !== da.earlyPremium) return db.earlyPremium - da.earlyPremium;
           if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         });
         const best = bestSorted[0]!;
         const bd = draftAgg.get(best.ownerKey)!;
@@ -12295,7 +12301,7 @@ Provide:
           ownerKey: best.ownerKey,
           ownerName: best.ownerName,
           value: bd.earlyPremium,
-          reason: `Most RB/WR heat in rounds 1–3 (${bd.earlyPremium} hits on ${bd.totalPicks} resolved picks).`,
+          reason: `Most RB/WR picks in rounds 1–3 (${bd.earlyPremium} of ${bd.totalPicks} resolved picks).`,
         });
         if (draftEligible.length >= 2) {
           const worstSorted = [...draftEligible].sort((a, b) => {
@@ -12305,17 +12311,17 @@ Provide:
             const avgA = da.sumRound / da.totalPicks;
             const avgB = db.sumRound / db.totalPicks;
             if (avgB !== avgA) return avgB - avgA;
-            return a.ownerName.localeCompare(b.ownerName);
+            return ownerAwardNameKeyTie(a, b);
           });
           const worst = worstSorted[0]!;
-          if (worst.ownerName !== best.ownerName) {
+          if (canAwardWorstDrafter(best.ownerKey, worst.ownerKey)) {
             const wd = draftAgg.get(worst.ownerKey)!;
             pushAward({
               awardName: "Worst Drafter",
               ownerKey: worst.ownerKey,
               ownerName: worst.ownerName,
               value: wd.earlyPremium,
-              reason: `Fewest early RB/WR strikes (${wd.earlyPremium}) on ${wd.totalPicks} picks — premium window closed early.`,
+              reason: `Fewest RB/WR picks in rounds 1–3 (${wd.earlyPremium} of ${wd.totalPicks} resolved picks).`,
             });
           }
         }
@@ -12333,7 +12339,7 @@ Provide:
           const rb = (db.keeperPicks / db.totalPicks) * 100;
           if (Math.abs(rb - ra) > 0.001) return rb - ra;
           if (db.keeperPicks !== da.keeperPicks) return db.keeperPicks - da.keeperPicks;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         });
         const wk = sortedK[0]!;
         const kd = draftAgg.get(wk.ownerKey)!;
@@ -12343,7 +12349,7 @@ Provide:
           ownerKey: wk.ownerKey,
           ownerName: wk.ownerName,
           value: `${rate}%`,
-          reason: `${kd.keeperPicks} keepers / ${kd.totalPicks} picks (${rate}%) — rent-controlled roster spots.`,
+          reason: `Highest keeper rate: ${kd.keeperPicks} keepers of ${kd.totalPicks} picks (${rate}%).`,
         });
       }
 
@@ -12353,7 +12359,7 @@ Provide:
           const ca = activityByOwner.get(a.ownerKey)?.acquisitions ?? 0;
           const cb = activityByOwner.get(b.ownerKey)?.acquisitions ?? 0;
           if (cb !== ca) return cb - ca;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         })[0]!;
         const ac = activityByOwner.get(wa.ownerKey)?.acquisitions ?? 0;
         pushAward({
@@ -12361,7 +12367,7 @@ Provide:
           ownerKey: wa.ownerKey,
           ownerName: wa.ownerName,
           value: ac,
-          reason: `${ac} lifetime acquisitions — waiver wire is cardio.`,
+          reason: `Most lifetime acquisitions: ${ac}.`,
         });
       }
 
@@ -12371,7 +12377,7 @@ Provide:
           const ca = activityByOwner.get(a.ownerKey)?.trades ?? 0;
           const cb = activityByOwner.get(b.ownerKey)?.trades ?? 0;
           if (cb !== ca) return cb - ca;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         })[0]!;
         const tc = activityByOwner.get(wt.ownerKey)?.trades ?? 0;
         pushAward({
@@ -12379,7 +12385,7 @@ Provide:
           ownerKey: wt.ownerKey,
           ownerName: wt.ownerName,
           value: tc,
-          reason: `${tc} completed trades — roster diplomacy with teeth.`,
+          reason: `Most completed trades: ${tc}.`,
         });
       }
 
@@ -12388,14 +12394,14 @@ Provide:
         const wb = [...bullyCand].sort((a, b) => {
           if (b.winPct !== a.winPct) return b.winPct - a.winPct;
           if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         })[0]!;
         pushAward({
           awardName: "Regular Season Bully",
           ownerKey: wb.ownerKey,
           ownerName: wb.ownerName,
           value: `${wb.winPct}%`,
-          reason: `${wb.totalWins}-${wb.totalLosses}-${wb.totalTies} ledger at ${wb.winPct}% — spreadsheet villain arc.`,
+          reason: `Best career regular-season win rate: ${wb.totalWins}-${wb.totalLosses}-${wb.totalTies} (${wb.winPct}%).`,
         });
       }
 
@@ -12407,7 +12413,7 @@ Provide:
             const pb = b.runnerUps + b.thirdPlace;
             if (pb !== pa) return pb - pa;
             if (a.championships !== b.championships) return a.championships - b.championships;
-            return a.ownerName.localeCompare(b.ownerName);
+            return ownerAwardNameKeyTie(a, b);
           })[0]!;
         if (wp.runnerUps + wp.thirdPlace > 0) {
           pushAward({
@@ -12415,7 +12421,7 @@ Provide:
             ownerKey: wp.ownerKey,
             ownerName: wp.ownerName,
             value: `${wp.runnerUps} RU · ${wp.thirdPlace} 3rd`,
-            reason: `${wp.runnerUps + wp.thirdPlace} podium trips vs ${wp.championships} titles — always open for January business.`,
+            reason: `Most non-title podium finishes: ${wp.runnerUps} runner-up + ${wp.thirdPlace} third (${wp.championships} titles).`,
           });
         }
       }
@@ -12434,7 +12440,7 @@ Provide:
           const pa = h2hWinPctForPower(ha.w, ha.l, ha.t);
           const pb = h2hWinPctForPower(hb.w, hb.l, hb.t);
           if (pb !== pa) return pb - pa;
-          return a.ownerName.localeCompare(b.ownerName);
+          return ownerAwardNameKeyTie(a, b);
         })[0]!;
         const h = h2hByOwner.get(wr.ownerKey)!;
         const net = h.w - h.l;
@@ -12443,49 +12449,58 @@ Provide:
           ownerKey: wr.ownerKey,
           ownerName: wr.ownerName,
           value: `${h.w}-${h.l}-${h.t}`,
-          reason: `${net >= 0 ? "+" : ""}${net} net H2H (${h2hWinPctForPower(h.w, h.l, h.t)}% in ${h.w + h.l + h.t} games) — receipts filed.`,
+          reason: `Best regular-season H2H net: ${net >= 0 ? "+" : ""}${net} (${h2hWinPctForPower(h.w, h.l, h.t)}% in ${h.w + h.l + h.t} games).`,
         });
       }
 
       const grave = all.filter((o) => o.seasons.length === 1);
       if (grave.length > 0) {
-        const ow = [...grave].sort((a, b) => {
-          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-          return a.ownerName.localeCompare(b.ownerName);
-        })[0]!;
-        pushAward({
-          awardName: "One-Year Wonder",
-          ownerKey: ow.ownerKey,
-          ownerName: ow.ownerName,
-          value: `${ow.winPct}%`,
-          reason: `Single-season ${ow.totalWins}-${ow.totalLosses}-${ow.totalTies} at ${ow.winPct}% — comet, not constellation.`,
-        });
-        const legend = [...grave].sort((a, b) => {
-          const rowA = teamRows.find((r) => {
-            const k = rowOwnerKey(r as GmTeamRow);
-            return k === a.ownerKey && a.seasons.includes(r.season);
+        const graveWithGames = grave.filter((o) =>
+          isOneYearWonderEligible(o.totalWins, o.totalLosses, o.totalTies),
+        );
+        if (graveWithGames.length > 0) {
+          const ow = [...graveWithGames].sort((a, b) => {
+            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+            if (b.totalWins !== a.totalWins) return b.totalWins - a.totalWins;
+            return ownerAwardNameKeyTie(a, b);
+          })[0]!;
+          pushAward({
+            awardName: "One-Year Wonder",
+            ownerKey: ow.ownerKey,
+            ownerName: ow.ownerName,
+            value: `${ow.winPct}%`,
+            reason: `Best single-season win rate among one-season owners: ${ow.totalWins}-${ow.totalLosses}-${ow.totalTies} (${ow.winPct}%).`,
           });
-          const rowB = teamRows.find((r) => {
+        }
+        const pfForGrave = (o: (typeof grave)[number]): number => {
+          const season = o.seasons[0];
+          let best = 0;
+          for (const r of teamRows) {
             const k = rowOwnerKey(r as GmTeamRow);
-            return k === b.ownerKey && b.seasons.includes(r.season);
+            if (k === o.ownerKey && (season == null || r.season === season)) {
+              const pf = Number(r.pointsFor ?? 0);
+              if (pf > best) best = pf;
+            }
+          }
+          return best;
+        };
+        const graveWithPf = grave
+          .map((o) => ({ o, pf: pfForGrave(o) }))
+          .filter((x) => isGraveyardLegendEligible(x.pf));
+        if (graveWithPf.length > 0) {
+          graveWithPf.sort((a, b) => {
+            if (b.pf !== a.pf) return b.pf - a.pf;
+            return ownerAwardNameKeyTie(a.o, b.o);
           });
-          const pfa = Number(rowA?.pointsFor ?? 0);
-          const pfb = Number(rowB?.pointsFor ?? 0);
-          if (pfb !== pfa) return pfb - pfa;
-          return a.ownerName.localeCompare(b.ownerName);
-        })[0]!;
-        const prow = teamRows.find((r) => {
-          const k = rowOwnerKey(r as GmTeamRow);
-          return k === legend.ownerKey && legend.seasons.includes(r.season);
-        });
-        const pf = Number(prow?.pointsFor ?? 0);
-        pushAward({
-          awardName: "Graveyard Legend",
-          ownerKey: legend.ownerKey,
-          ownerName: legend.ownerName,
-          value: Number(pf.toFixed(1)),
-          reason: `One-season ${pf.toFixed(1)} PF before exit — ghosted the league like a legend should.`,
-        });
+          const legend = graveWithPf[0]!;
+          pushAward({
+            awardName: "Graveyard Legend",
+            ownerKey: legend.o.ownerKey,
+            ownerName: legend.o.ownerName,
+            value: Number(legend.pf.toFixed(1)),
+            reason: `Highest points for among one-season owners: ${legend.pf.toFixed(1)} PF.`,
+          });
+        }
       }
 
       const CANON_DEBUG = new Set(["christian edmondson", "rod sellers"]);
