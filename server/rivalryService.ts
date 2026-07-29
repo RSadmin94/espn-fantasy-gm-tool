@@ -47,10 +47,22 @@ export interface RivalryPair {
   recentLosses: number;
   heatLabel: "Cold" | "Simmering" | "Heated" | "Burning" | "Inferno";
   painfulLossSeason: number | null;
+  painfulLossWeek?: number | null;
   painfulLossMargin: number | null;       // pts (float)
   painfulLossOpponentScore: number | null;
+  painfulLossFocalScore?: number | null;
   revengeAchieved: boolean;
+  /** Season of the meeting that collected revenge (focal win after prior elim history). */
+  revengeSeason?: number | null;
+  revengeWeek?: number | null;
+  revengeFocalScore?: number | null;
+  revengeRivalScore?: number | null;
   lastMatchupSeason: number | null;
+  /** Most recent playoff meeting where the rival eliminated the focal owner. */
+  lastPlayoffEliminationSeason?: number | null;
+  lastPlayoffEliminationWeek?: number | null;
+  lastPlayoffEliminationFocalScore?: number | null;
+  lastPlayoffEliminationRivalScore?: number | null;
   loreSentence: string | null;
   // Focal owner's all-time playoff record (for narrative context)
   rivalPlayoffWins?: number;
@@ -204,10 +216,23 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
     recentLossSeasons: Set<number>;
     // Most painful loss
     painfulLossSeason: number | null;
+    painfulLossWeek: number | null;
     painfulLossMargin: number | null;
     painfulLossOpponentScore: number | null;
+    painfulLossFocalScore: number | null;
     lastMatchupSeason: number | null;
+    lastMatchupWeek: number | null;
+    lastMatchupFocalScore: number | null;
+    lastMatchupRivalScore: number | null;
     revengeAchieved: boolean;
+    revengeSeason: number | null;
+    revengeWeek: number | null;
+    revengeFocalScore: number | null;
+    revengeRivalScore: number | null;
+    lastPlayoffEliminationSeason: number | null;
+    lastPlayoffEliminationWeek: number | null;
+    lastPlayoffEliminationFocalScore: number | null;
+    lastPlayoffEliminationRivalScore: number | null;
     // Rich regular-season H2H stats
     totalOwnerPF: number;
     totalRivalPF: number;
@@ -232,8 +257,14 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
         h2hWins: 0, h2hLosses: 0, h2hTies: 0,
         playoffEliminations: 0, closeLossCount: 0, tradeVerdictLosses: 0,
         recentLossSeasons: new Set(),
-        painfulLossSeason: null, painfulLossMargin: null, painfulLossOpponentScore: null,
-        lastMatchupSeason: null, revengeAchieved: false,
+        painfulLossSeason: null, painfulLossWeek: null, painfulLossMargin: null,
+        painfulLossOpponentScore: null, painfulLossFocalScore: null,
+        lastMatchupSeason: null, lastMatchupWeek: null,
+        lastMatchupFocalScore: null, lastMatchupRivalScore: null,
+        revengeAchieved: false,
+        revengeSeason: null, revengeWeek: null, revengeFocalScore: null, revengeRivalScore: null,
+        lastPlayoffEliminationSeason: null, lastPlayoffEliminationWeek: null,
+        lastPlayoffEliminationFocalScore: null, lastPlayoffEliminationRivalScore: null,
         totalOwnerPF: 0, totalRivalPF: 0,
         biggestRodWinMargin: null, biggestRodWinSeason: null,
         biggestRodWinRodScore: null, biggestRodWinRivalScore: null,
@@ -285,8 +316,10 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
           if (margin < 5) rivalA.closeLossCount++;
           if (rivalA.painfulLossOpponentScore === null || rivalScore > rivalA.painfulLossOpponentScore) {
             rivalA.painfulLossSeason = season;
+            rivalA.painfulLossWeek = m.week;
             rivalA.painfulLossMargin = Math.round(margin * 10) / 10;
             rivalA.painfulLossOpponentScore = Math.round(rivalScore * 10) / 10;
+            rivalA.painfulLossFocalScore = Math.round(rodScore * 10) / 10;
           }
           if (rivalA.biggestRodLossMargin === null || margin > rivalA.biggestRodLossMargin) {
             rivalA.biggestRodLossMargin = Math.round(margin * 10) / 10;
@@ -302,13 +335,54 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
 
         if (rivalA.lastMatchupSeason === null || season > rivalA.lastMatchupSeason) {
           rivalA.lastMatchupSeason = season;
+          rivalA.lastMatchupWeek = m.week;
+          rivalA.lastMatchupFocalScore = Math.round(rodScore * 10) / 10;
+          rivalA.lastMatchupRivalScore = Math.round(rivalScore * 10) / 10;
           rivalA.revengeAchieved = rodWon;
+          if (rodWon && rivalA.playoffEliminations > 0) {
+            rivalA.revengeSeason = season;
+            rivalA.revengeWeek = m.week;
+            rivalA.revengeFocalScore = Math.round(rodScore * 10) / 10;
+            rivalA.revengeRivalScore = Math.round(rivalScore * 10) / 10;
+          } else if (!rodWon) {
+            rivalA.revengeSeason = null;
+            rivalA.revengeWeek = null;
+            rivalA.revengeFocalScore = null;
+            rivalA.revengeRivalScore = null;
+          }
         }
       } else {
-        if (!rodWon) rivalA.playoffEliminations++;
+        if (!rodWon) {
+          rivalA.playoffEliminations++;
+          if (
+            rivalA.lastPlayoffEliminationSeason === null ||
+            season > rivalA.lastPlayoffEliminationSeason ||
+            (season === rivalA.lastPlayoffEliminationSeason &&
+              m.week >= (rivalA.lastPlayoffEliminationWeek ?? 0))
+          ) {
+            rivalA.lastPlayoffEliminationSeason = season;
+            rivalA.lastPlayoffEliminationWeek = m.week;
+            rivalA.lastPlayoffEliminationFocalScore = Math.round(rodScore * 10) / 10;
+            rivalA.lastPlayoffEliminationRivalScore = Math.round(rivalScore * 10) / 10;
+          }
+        }
         if (rivalA.lastMatchupSeason === null || season > rivalA.lastMatchupSeason) {
           rivalA.lastMatchupSeason = season;
+          rivalA.lastMatchupWeek = m.week;
+          rivalA.lastMatchupFocalScore = Math.round(rodScore * 10) / 10;
+          rivalA.lastMatchupRivalScore = Math.round(rivalScore * 10) / 10;
           rivalA.revengeAchieved = rodWon;
+          if (rodWon && rivalA.playoffEliminations > 0) {
+            rivalA.revengeSeason = season;
+            rivalA.revengeWeek = m.week;
+            rivalA.revengeFocalScore = Math.round(rodScore * 10) / 10;
+            rivalA.revengeRivalScore = Math.round(rivalScore * 10) / 10;
+          } else if (!rodWon) {
+            rivalA.revengeSeason = null;
+            rivalA.revengeWeek = null;
+            rivalA.revengeFocalScore = null;
+            rivalA.revengeRivalScore = null;
+          }
         }
       }
     }
@@ -378,10 +452,20 @@ export async function computeRivalryScores(userId?: number, leagueId?: string): 
       recentLosses: a.recentLossSeasons.size,
       heatLabel: heatLabel(score),
       painfulLossSeason: a.painfulLossSeason,
+      painfulLossWeek: a.painfulLossWeek,
       painfulLossMargin: a.painfulLossMargin,
       painfulLossOpponentScore: a.painfulLossOpponentScore,
+      painfulLossFocalScore: a.painfulLossFocalScore,
       revengeAchieved: a.revengeAchieved,
+      revengeSeason: a.revengeSeason,
+      revengeWeek: a.revengeWeek,
+      revengeFocalScore: a.revengeFocalScore,
+      revengeRivalScore: a.revengeRivalScore,
       lastMatchupSeason: a.lastMatchupSeason,
+      lastPlayoffEliminationSeason: a.lastPlayoffEliminationSeason,
+      lastPlayoffEliminationWeek: a.lastPlayoffEliminationWeek,
+      lastPlayoffEliminationFocalScore: a.lastPlayoffEliminationFocalScore,
+      lastPlayoffEliminationRivalScore: a.lastPlayoffEliminationRivalScore,
       loreSentence: null,
       ownerName: nameOf.get(focalCanon) || undefined,
       rivalPlayoffWins: rivalProfile?.career.playoffWins,

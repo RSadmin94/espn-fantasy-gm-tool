@@ -15,6 +15,7 @@ import { registerStripeWebhook } from "../stripeWebhook";
 import { registerHealthRoute } from "./healthRoute";
 import { registerReceiptOg } from "../receiptOg";
 import { registerRivalryOg } from "../rivalryOg";
+import { registerHistoricalReceiptOg } from "../historicalReceiptOg";
 import { registerRfsnAudioRoute } from "../rfsnAudioHandler";
 
 async function startServer() {
@@ -58,6 +59,7 @@ async function startServer() {
 
   // Rivalry share: OG image + /rivalry/:shareCode meta injection (before the SPA fallthrough)
   registerRivalryOg(app);
+  registerHistoricalReceiptOg(app);
   registerRfsnAudioRoute(app);
 
   // development mode uses Vite, production mode uses static files

@@ -35,6 +35,7 @@ import { loadGmTradeLegs } from "./completedTradeAuthority";
 import { enrichNormalizedTransactionsWithReconstruction } from "./transactionTradeClusterEnrichment";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
+import { historicalReceiptShareRouter } from "./historicalReceiptShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
 import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
@@ -765,6 +766,7 @@ export const appRouter = router({
   rivalryStory: rivalryStoryRouter,
   sofia: sofiaRouter,
   rivalryShare: rivalryShareRouter,
+  historicalReceiptShare: historicalReceiptShareRouter,
   demo: demoRouter,
   activityDna: activityDnaRouter,
   transactionAnalysis: transactionAnalysisRouter,

@@ -20,6 +20,7 @@ import { ImportSleeperWorkbook } from "./pages/ImportSleeperWorkbook";
 import { LandingPage } from "./pages/LandingPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
 import { RivalryShare } from "./pages/RivalryShare";
+import { HistoricalReceiptSharePage } from "./pages/HistoricalReceiptSharePage";
 import { Claim } from "./pages/Claim";
 import { SyncData } from "./pages/SyncData";
 import { Dashboard } from "./pages/Dashboard";
@@ -238,6 +239,7 @@ const router = createBrowserRouter([
       { path: "/p/:token", element: <ReceiptShare /> },
       { path: "/r/:code", element: <ReceiptShare /> },
       { path: "/rivalry/:shareCode", element: <RivalryShare /> },
+      { path: "/historical-receipt/:shareCode", element: <HistoricalReceiptSharePage /> },
       { path: "/claim", element: <Claim /> },
       { path: "/reveal", element: <SignatureReveal /> },
       {

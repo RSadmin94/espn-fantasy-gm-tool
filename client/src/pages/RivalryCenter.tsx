@@ -11,6 +11,12 @@ import {
 } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { RivalryShareButton } from "@/components/RivalryShareButton";
+import { HistoricalReceiptShareButton } from "@/components/HistoricalReceiptShareButton";
+import {
+  buildHistoricalReceiptsFromPairs,
+  type HistoricalReceiptView,
+} from "../../../shared/historicalReceipts";
+import { rivalsOwnerDossierPath } from "@/lib/ownerIdentity";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
@@ -49,6 +55,7 @@ const LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
 const TEXT = "var(--color-foreground)";
 const MUTED = "var(--color-muted-foreground)";
 const GOLD = "#f5c518";
+const LIME = "#a3e635";
 const ACCENT = "#a3e635";
 const GREEN = "#a3e635";
 const RED = "#ef4444";
@@ -914,49 +921,62 @@ export function RivalryCenter({
             {/* ── Historical Receipts ────────────────────────────── */}
             {showRivalryNarrative && (
             <Panel id="receipts">
-              <SectionHead icon={ScrollText} title="Historical Receipts" caption="Evidence from synced matchups, playoffs and trades." />
+              <SectionHead icon={ScrollText} title="Historical Receipts" caption="Evidence from synced matchups and playoffs — shareable outside the app." />
               {(() => {
-                type R = { season: number | null; evidence: string; impact: string; tone: "bad" | "good" };
-                const out: R[] = [];
-                for (const p of pairs) {
-                  const name = String(p.rivalName ?? "Rival");
-                  if (n(p.playoffEliminations) > 0) {
-                    out.push({
-                      season: p.lastMatchupSeason ?? null,
-                      evidence: `${name} eliminated ${rodName} from the playoffs ${n(p.playoffEliminations) > 1 ? `${n(p.playoffEliminations)} times` : "once"}.`,
-                      impact: "Season ended by rival",
-                      tone: "bad",
-                    });
-                  }
-                  if (p.painfulLossMargin != null) {
-                    out.push({
-                      season: p.painfulLossSeason ?? null,
-                      evidence: `Lost to ${name} by ${Number(p.painfulLossMargin).toFixed(1)} pts${p.painfulLossOpponentScore != null ? ` (${Number(p.painfulLossOpponentScore).toFixed(1)} against)` : ""}.`,
-                      impact: "Closest defeat in the series",
-                      tone: "bad",
-                    });
-                  }
-                  if (p.revengeAchieved && n(p.playoffEliminations) > 0) {
-                    out.push({
-                      season: p.lastMatchupSeason ?? null,
-                      evidence: `Revenge served — ${rodName} struck back against ${name}.`,
-                      impact: "Receipt collected",
-                      tone: "good",
-                    });
-                  }
-                }
-                out.sort((a, b) => (b.season ?? 0) - (a.season ?? 0));
+                const out: HistoricalReceiptView[] = buildHistoricalReceiptsFromPairs({
+                  pairs: pairs as any[],
+                  focalName: rodName,
+                  limit: 8,
+                });
                 if (out.length === 0)
                   return <p className="py-6 text-sm" style={{ color: MUTED }}>No receipts on file yet — the data hasn't surfaced a defining moment.</p>;
                 return (
                   <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    {out.slice(0, 8).map((r, i) => (
-                      <div key={i} className={cn(SUB_CLASS, "p-4")}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "—"}</span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
+                    {out.map((r, i) => (
+                      <div key={`${r.kind}-${r.rivalId}-${r.season}-${i}`} className={cn(SUB_CLASS, "flex flex-col p-4")}>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.whenLabel}</span>
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.typeLabel}</p>
+                          </div>
+                          <HistoricalReceiptShareButton
+                            leagueId={leagueContextKey}
+                            rivalId={r.rivalId}
+                            kind={r.kind}
+                            focalDisplayName={rodName}
+                          />
                         </div>
-                        <p className="mt-2 text-[15px] leading-snug">{r.evidence}</p>
+                        <h3 className="mt-2 text-[15px] font-bold leading-snug">{r.headline}</h3>
+                        <p className="mt-1 text-sm font-semibold" style={{ color: LIME }}>{r.centralResult}</p>
+                        <p className="mt-2 text-[13px] leading-snug" style={{ color: MUTED }}>{r.evidence}</p>
+                        <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-2.5">
+                          <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>Why this matters</p>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-200">{r.whyMatters}</p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                          {r.rivalId ? (
+                            <Link
+                              to={rivalsOwnerDossierPath(r.rivalId)}
+                              className="rounded-md border border-white/10 px-2 py-1 text-zinc-300 hover:bg-white/[0.06]"
+                            >
+                              Owner dossier
+                            </Link>
+                          ) : null}
+                          <Link
+                            to="/rivals/rivalries"
+                            className="rounded-md border border-white/10 px-2 py-1 text-zinc-300 hover:bg-white/[0.06]"
+                          >
+                            Rivalry timeline
+                          </Link>
+                          {r.kind === "playoff_elimination" || r.season != null ? (
+                            <Link
+                              to="/league/standings"
+                              className="rounded-md border border-white/10 px-2 py-1 text-zinc-300 hover:bg-white/[0.06]"
+                            >
+                              Season standings
+                            </Link>
+                          ) : null}
+                        </div>
                       </div>
                     ))}
                   </div>
