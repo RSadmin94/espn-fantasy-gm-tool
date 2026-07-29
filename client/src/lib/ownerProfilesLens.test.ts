@@ -12,10 +12,13 @@ describe("RFSN-023 / RFSN-027B ownerProfilesLens", () => {
     const self = ownerProfilesLensCopy("self");
     const scout = ownerProfilesLensCopy("scout");
     expect(self.sectionGm).toBe("GM Identity");
+    expect(self.navAwards).toBe("Your Awards");
+    expect(self.sectionAwards).toBe("Your Awards");
     expect(self.sectionRivalries).toBe("Your Rivalries");
     expect(self.sectionHighlights).toBe("Your Legacy");
     expect(self.sectionBuilding).toBe("Your Draft Pattern");
     expect(scout.sectionGm).toBe("Opponent Scout Report");
+    expect(scout.navAwards).toBe("Awards");
     expect(scout.sectionMatchups).toBe("Matchup Intelligence");
     expect(scout.sectionHighlights).toBe("Their Legacy");
     expect(scout.toughestLabel).toBe("Biggest threat");

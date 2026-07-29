@@ -63,7 +63,7 @@ import {
   getOwnerAwardMetaByName,
   sortOwnerAwardsForDisplay,
 } from "@/lib/ownerAwardsDisplay";
-import { OwnerAchievementGallery } from "@/components/ownerAwards/OwnerAchievementGallery";
+import { YourAwardsPanel } from "@/components/ownerAwards/YourAwardsPanel";
 import { OwnerAwardTooltip } from "@/components/ownerAwards/OwnerAwardTooltip";
 import { ownerAwardIcon, rarityCardStyle, RARITY_COLORS } from "@/components/ownerAwards/ownerAwardVisuals";
 
@@ -777,6 +777,7 @@ function dossierNavItems(mode: OwnerProfilesMode) {
   return [
     { id: "dossier-summary", label: "Summary" },
     { id: "dossier-gm", label: copy.navGm },
+    { id: "dossier-awards", label: copy.navAwards },
     { id: "dossier-building", label: copy.navBuilding },
     { id: "dossier-trading", label: copy.navTrading },
     { id: "dossier-matchups", label: copy.navMatchups },
@@ -969,6 +970,7 @@ function ProfilePanel({
   headerDisplayName,
   powerRankings,
   ownerAwards,
+  leagueName,
   availableOwnerKeysCount,
   dossierPickerOptions,
   dossierActiveSeason,
@@ -982,6 +984,7 @@ function ProfilePanel({
   headerDisplayName: string;
   powerRankings: any[];
   ownerAwards: any[];
+  leagueName?: string;
   /** Distinct ownerKey count from ownerList (active + graveyard). */
   availableOwnerKeysCount: number;
   dossierPickerOptions: RivalryPickerOption[];
@@ -1473,6 +1476,29 @@ function ProfilePanel({
           </div>
         )}
       </IntelPanel>
+
+      {/* ── 2b. Your Awards ─────────────────────────────────────────────────── */}
+      {!gated ? (
+        <YourAwardsPanel
+          ownerName={headerDisplayName || "Owner"}
+          ownerKey={profileLookupKey}
+          ownerAwards={ownerAwards}
+          leagueName={leagueName}
+          title={lens.sectionAwards}
+          progressStats={{
+            earlyRbWr:
+              num(earlyPos.RB ?? 0) + num(earlyPos.WR ?? 0) > 0
+                ? num(earlyPos.RB ?? 0) + num(earlyPos.WR ?? 0)
+                : null,
+            totalTrades: num(activity.totalTrades) || null,
+            totalAcq: num(activity.totalAcq) || null,
+            winPct: num(snap.winPct) || null,
+            keeperRate: num(keeper.keeperRate) || null,
+            pointsFor:
+              seasonRecords.reduce((s: number, sr: any) => s + num(sr.pointsFor), 0) || null,
+          }}
+        />
+      ) : null}
 
       {/* ── 3. Team Building / Draft Pattern ───────────────────────────────── */}
       <IntelPanel id="dossier-building" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
@@ -2549,13 +2575,6 @@ export function OwnerProfiles({
         ) : null}
 
         <div ref={profileRef} className="flex-1 min-w-0">
-          {profileKeyValid && !authenticatedOwnerOnly ? (
-            <OwnerAchievementGallery
-              ownerName={headerDisplayName || "Owner"}
-              ownerKey={selectedOwnerKey}
-              ownerAwards={ownerAwards}
-            />
-          ) : null}
           {profileKeyValid ? (
             <ProfilePanel
               key={`${leagueContextKey}:${selectedOwnerKey}`}
@@ -2564,6 +2583,7 @@ export function OwnerProfiles({
               headerDisplayName={headerDisplayName}
               powerRankings={powerRankings}
               ownerAwards={ownerAwards}
+              leagueName={String(listQ.data?.leagueName ?? "")}
               availableOwnerKeysCount={availableOwnerKeysCount}
               dossierPickerOptions={dossierPickerOptions}
               dossierActiveSeason={dossierActiveSeason}

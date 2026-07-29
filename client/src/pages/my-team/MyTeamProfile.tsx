@@ -12,7 +12,7 @@ export function MyTeamProfile() {
         mode="self"
         pageEyebrow="My Team"
         pageTitle="My GM"
-        pageSubtitle="Who you are as a fantasy GM — identity, draft pattern, legacy, and rivalries."
+        pageSubtitle="Who you are as a fantasy GM — identity, awards, draft pattern, legacy, and rivalries."
       />
     </FeatureRouteGate>
   );

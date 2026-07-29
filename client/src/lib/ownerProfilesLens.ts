@@ -18,12 +18,14 @@ export function ownerProfilesLensCopy(mode: OwnerProfilesMode) {
   if (mode === "self") {
     return {
       navGm: "GM Identity",
+      navAwards: "Your Awards",
       navBuilding: "Your Draft Pattern",
       navTrading: "Trading",
       navMatchups: "Rivalry History",
       navRivalries: "Your Rivalries",
       navHighlights: "Your Legacy",
       sectionGm: "GM Identity",
+      sectionAwards: "Your Awards",
       sectionBuilding: "Your Draft Pattern",
       sectionTrading: "Trading Profile",
       sectionMatchups: "Rivalry History",
@@ -46,17 +48,19 @@ export function ownerProfilesLensCopy(mode: OwnerProfilesMode) {
       tradeHistoryEmpty: "No completed trade history for you yet.",
       matchupIntelCaption: "Records from completed league matchups.",
       defaultSubtitle:
-        "Who you are as a fantasy GM — identity, draft pattern, legacy, and rivalries.",
+        "Who you are as a fantasy GM — identity, awards, draft pattern, legacy, and rivalries.",
     } as const;
   }
   return {
     navGm: "Opponent Scout Report",
+    navAwards: "Awards",
     navBuilding: "Team Building",
     navTrading: "Trading",
     navMatchups: "Matchups",
     navRivalries: "Rivalries",
     navHighlights: "Their Legacy",
     sectionGm: "Opponent Scout Report",
+    sectionAwards: "Awards",
     sectionBuilding: "Team Building Philosophy",
     sectionTrading: "Trading Profile",
     sectionMatchups: "Matchup Intelligence",

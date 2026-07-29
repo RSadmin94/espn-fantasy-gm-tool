@@ -26,6 +26,19 @@ export {
   type OwnerEarnedAwardView,
 } from "@shared/ownerAwardGallery";
 export {
+  buildAwardDnaSummary,
+  buildAwardQuickStats,
+  buildAwardsInProgress,
+  buildMissingAwards,
+  buildYourAwardsModel,
+  type AwardDnaLine,
+  type AwardProgressRow,
+  type AwardQuickStats,
+  type MissingAwardView,
+  type OwnerAwardProgressStats,
+  type YourAwardsModel,
+} from "@shared/ownerAwardMyGm";
+export {
   getOwnerAwardMetaById,
   getOwnerAwardMetaByName,
   listOwnerAwardMeta,

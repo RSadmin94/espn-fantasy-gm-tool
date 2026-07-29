@@ -42,6 +42,7 @@ describe("RFSN-023 — GM Identity Lens Separation", () => {
 describe("RFSN-027B — Owner Intelligence UX consolidation", () => {
   it("self copy drops opponent/exploit framing; scout keeps scout language", () => {
     expect(lens).toContain("GM Identity");
+    expect(lens).toContain("Your Awards");
     expect(lens).toContain("Your Rivalries");
     expect(lens).toContain("Your Legacy");
     expect(lens).toContain("Your Draft Pattern");
@@ -52,6 +53,8 @@ describe("RFSN-027B — Owner Intelligence UX consolidation", () => {
     expect(lens).toContain("Punching Bag");
     expect(lens).toContain("Comfort Matchup");
     expect(owners).toContain("Opponent Scout Report");
+    expect(owners).toContain("dossier-awards");
+    expect(owners).toContain("YourAwardsPanel");
     expect(owners).toContain("lens.sectionRivalries");
     expect(owners).toContain("matchupTagLabel");
     expect(owners).toContain("lens.opponentColumn");
