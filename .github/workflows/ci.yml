@@ -1,13 +1,13 @@
-# ci.yml — runs on every push and PR to main
+# ci.yml — runs on every push and PR to production
 # Catches TypeScript errors and failing tests before they reach production
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [production]
   pull_request:
-    branches: [main]
+    branches: [production]
 
 jobs:
   check-and-test:

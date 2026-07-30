@@ -47,11 +47,11 @@ jobs:
       OWNER_OPEN_ID: ci-test-owner
 
     steps:
-      - name: Checkout main
+      - name: Checkout production
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: main
+          ref: production
 
       - name: Download patch zip from release
         run: |
@@ -113,7 +113,7 @@ jobs:
           Applied via GitHub Actions patch workflow.
           Release: ${{ github.event.release.html_url }}
           $(git diff --cached --name-only | wc -l) files changed."
-          git push origin main
+          git push origin production
 
       - name: Summary
         run: |
