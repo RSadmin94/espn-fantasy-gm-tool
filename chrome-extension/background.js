@@ -597,8 +597,11 @@ const MSG_ESPN_BM_PING = "GMWR_ESPN_BM_PING";
 const MSG_ESPN_BM_PONG = "GMWR_ESPN_BM_PONG";
 const MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
 const MSG_ESPN_BM_REPLAY_REQUEST = "GMWR_ESPN_BM_REPLAY_REQUEST";
+const MSG_ESPN_BM_SET_AUTO_INJECT = "GMWR_ESPN_BM_SET_AUTO_INJECT";
+const MSG_ESPN_BM_DRAFT_AVAILABILITY = "GMWR_ESPN_BM_DRAFT_AVAILABILITY";
+const MSG_ESPN_BM_TELEMETRY = "GMWR_ESPN_BM_TELEMETRY";
 
-/** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, batchesRelayed: number, armedAt: string|null, sessionNonce: string|null }} */
+/** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, batchesRelayed: number, armedAt: string|null, sessionNonce: string|null, autoInjectEnabled: boolean, draftRooms: Record<string, object>, lastTelemetry: object|null, diagnostics: object }} */
 let espnBmConnectorState = {
   armed: false,
   config: null,
@@ -607,6 +610,18 @@ let espnBmConnectorState = {
   batchesRelayed: 0,
   armedAt: null,
   sessionNonce: null,
+  autoInjectEnabled: false,
+  draftRooms: {},
+  lastTelemetry: null,
+  diagnostics: {
+    extensionVersion: chrome.runtime.getManifest?.()?.version ?? null,
+    lastHeartbeat: null,
+    lastBatchRevision: null,
+    lastSuccessfulPick: null,
+    lastReplayRequest: null,
+    lastError: null,
+    featureFlagState: false,
+  },
 };
 
 const ESPN_BM_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
@@ -630,6 +645,7 @@ function expireEspnBmSessionIfStale(now = Date.now()) {
   if (!Number.isFinite(t)) return;
   if (now - t <= ESPN_BM_SESSION_TTL_MS) return;
   espnBmConnectorState = {
+    ...espnBmConnectorState,
     armed: false,
     config: null,
     lastStatus: { status: "session_expired", reason: "ttl" },
@@ -2719,6 +2735,73 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   // ── Phase 2 ESPN bookmarklet transport (route only; never mixes with FP) ───
+  if (t === MSG_ESPN_BM_SET_AUTO_INJECT) {
+    (async () => {
+      const enabled = message?.enabled === true;
+      espnBmConnectorState.autoInjectEnabled = enabled;
+      espnBmConnectorState.diagnostics.featureFlagState = enabled;
+      try {
+        await chrome.storage.local.set({ rfsnEspnAutoInjectEnabled: enabled });
+      } catch (_) {
+        /* ignore */
+      }
+      const r = await broadcastToEspnFantasyTabs({
+        type: MSG_ESPN_BM_SET_AUTO_INJECT,
+        enabled,
+      });
+      sendResponse({ ok: true, enabled, ...r });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_DRAFT_AVAILABILITY) {
+    (async () => {
+      const tabId = sender?.tab?.id != null ? String(sender.tab.id) : "unknown";
+      const room = {
+        tabId,
+        urlKind: message?.urlKind != null ? String(message.urlKind) : null,
+        leagueId: message?.leagueId != null ? String(message.leagueId) : null,
+        readerLifecycle: message?.readerLifecycle != null ? String(message.readerLifecycle) : null,
+        at: new Date().toISOString(),
+        planAction: message?.planAction != null ? String(message.planAction) : null,
+      };
+      espnBmConnectorState.draftRooms[tabId] = room;
+      espnBmConnectorState.diagnostics.lastHeartbeat = room.at;
+      await broadcastToFfrTabs({
+        type: MSG_ESPN_BM_DRAFT_AVAILABILITY,
+        protocolVersion: 1,
+        provider: "espn-live",
+        rooms: Object.values(espnBmConnectorState.draftRooms),
+        roomCount: Object.keys(espnBmConnectorState.draftRooms).length,
+        ...room,
+      });
+      sendResponse({ ok: true });
+    })().catch((e) => {
+      sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+    });
+    return true;
+  }
+
+  if (t === MSG_ESPN_BM_TELEMETRY) {
+    espnBmConnectorState.lastTelemetry = {
+      event: message?.event != null ? String(message.event).slice(0, 64) : null,
+      at: message?.at != null ? String(message.at) : new Date().toISOString(),
+      leagueId: message?.leagueId != null ? String(message.leagueId).slice(0, 32) : null,
+    };
+    try {
+      console.info("[rfsn-031b-telemetry]", espnBmConnectorState.lastTelemetry.event, {
+        leagueId: espnBmConnectorState.lastTelemetry.leagueId,
+        at: espnBmConnectorState.lastTelemetry.at,
+      });
+    } catch (_) {
+      /* ignore */
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
   if (t === MSG_ESPN_BM_ARM) {
     (async () => {
       expireEspnBmSessionIfStale();
@@ -2730,6 +2813,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           : `espn-bm-${Date.now().toString(36)}`;
       const nextConfig = { ...config, sessionNonce };
       espnBmConnectorState = {
+        ...espnBmConnectorState,
         armed: true,
         config: nextConfig,
         lastStatus: { status: "arming" },
@@ -2762,6 +2846,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (t === MSG_ESPN_BM_DISARM) {
     (async () => {
       espnBmConnectorState = {
+        ...espnBmConnectorState,
         armed: false,
         config: null,
         lastStatus: { status: "disarmed" },
@@ -2820,6 +2905,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         ffrTabs: ffrTabs.length,
         sessionNonce: espnBmConnectorState.sessionNonce,
         armedAt: espnBmConnectorState.armedAt,
+        autoInjectEnabled: espnBmConnectorState.autoInjectEnabled,
+        draftRooms: espnBmConnectorState.draftRooms,
+        lastTelemetry: espnBmConnectorState.lastTelemetry,
+        diagnostics: espnBmConnectorState.diagnostics,
       });
     })().catch((e) => {
       sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });

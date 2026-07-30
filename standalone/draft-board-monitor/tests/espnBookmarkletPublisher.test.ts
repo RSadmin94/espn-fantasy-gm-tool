@@ -230,6 +230,66 @@ describe("EspnBookmarkletPublisher", () => {
     expect(batches(out)).toHaveLength(0);
   });
 
+  it("RFSN-031B rejects ARM when page league mismatches Rivals league", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    const arm = pub.arm({
+      leagueId: "457622",
+      season: 2026,
+      sessionNonce: "nonce-mm",
+      destination: "live-draft",
+      pageLeagueId: "999001",
+    });
+    expect(arm.ok).toBe(false);
+    expect(arm.error).toBe("league_mismatch");
+    expect(pub.isArmed).toBe(false);
+    pub.onSnapshot(
+      snapshot([
+        pick({
+          eventKey: "x1",
+          overallPick: 1,
+          round: 1,
+          pickInRound: 1,
+          playerName: "A",
+          playerId: "1",
+          currentTeamId: "1",
+          currentTeamName: "A",
+        }),
+      ]),
+    );
+    expect(batches(out)).toHaveLength(0);
+  });
+
+  it("RFSN-031B accepts destination live-draft and stays dormant until ARM", () => {
+    const out: EspnBmOutboundMessage[] = [];
+    const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });
+    pub.onSnapshot(
+      snapshot([
+        pick({
+          eventKey: "pre",
+          overallPick: 1,
+          round: 1,
+          pickInRound: 1,
+          playerName: "Pre",
+          playerId: "9",
+          currentTeamId: "1",
+          currentTeamName: "A",
+        }),
+      ]),
+    );
+    expect(batches(out)).toHaveLength(0);
+    const arm = pub.arm({
+      leagueId: "424242",
+      season: 2026,
+      sessionNonce: "nonce-dest",
+      destination: "live-draft",
+    });
+    expect(arm.ok).toBe(true);
+    const armedStatus = statuses(out).find((s) => s.status === "armed");
+    expect(armedStatus?.readerVersion).toBeTruthy();
+    expect(armedStatus?.destination).toBe("live-draft");
+  });
+
   it("reconnect DISARM then ARM re-arms publisher and emits a fresh baseline", () => {
     const out: EspnBmOutboundMessage[] = [];
     const pub = new EspnBookmarkletPublisher({ emit: (m) => out.push(m) });

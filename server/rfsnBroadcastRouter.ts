@@ -4,7 +4,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled } from "./services/sofia/liveBroadcastFeature";
+import { canAccessRfsnLiveBroadcast, isEspnAutoInjectEnabled, isRfsnLiveBroadcastEnabled } from "./services/sofia/liveBroadcastFeature";
 import { isRfsnTtsEnabled, isRfsnTtsConfigured } from "./services/rfsn/rfsnTtsConfig";
 import { getLiveAudioStatus } from "./services/rfsn/rfsnVoiceAudioCache";
 import {
@@ -62,6 +62,8 @@ export const rfsnBroadcastRouter = router({
     enabled: isRfsnLiveBroadcastEnabled(),
     canAccess: canAccessRfsnLiveBroadcast(ctx.user),
     ttsEnabled: isRfsnTtsEnabled() && isRfsnTtsConfigured(),
+    /** RFSN-031B — when true, War Room may enable extension auto-injection. Default false. */
+    espnAutoInjectEnabled: isEspnAutoInjectEnabled(),
   })),
 
   getLiveSnapshot: protectedProcedure

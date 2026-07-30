@@ -26,8 +26,14 @@ export type EspnBookmarkletArmConfig = {
   season: number;
   /** Required opaque session id from Rivals ARM (or generated for local tests). */
   sessionNonce: string;
+  /** Pick destination / surface — Rivals session authority (e.g. live-draft). */
+  destination: string;
   draftPace?: "broadcast" | "brisk" | "turbo";
 };
+
+/** RFSN-031B production reader identity (must match autoInjectEntry). */
+export const ESPN_LIVE_READER_VERSION = "1.0.0";
+export const ESPN_LIVE_READER_CAPABILITIES = ["pick_batch", "replay", "dormant_until_arm"] as const;
 
 export type EspnBmTransportPick = {
   eventKey: string;
@@ -97,6 +103,9 @@ export type EspnBmStatusMessage = {
   draftComplete?: boolean;
   baselineOnly?: boolean;
   diagnostics?: EspnBmDiagnostics | null;
+  readerVersion?: string;
+  supportedCapabilities?: readonly string[];
+  destination?: string | null;
 };
 
 export type EspnBmPongMessage = {
@@ -179,12 +188,34 @@ function isValidArmConfig(raw: unknown): EspnBookmarkletArmConfig | null {
   if (!Number.isFinite(season) || season < 2000 || season > 2100) return null;
   const sessionNonce =
     String(c.sessionNonce ?? "").trim() || newNonce();
+  // Destination required for arm — default live-draft for legacy test harnesses.
+  const destinationRaw = String(c.destination ?? "live-draft").trim();
+  if (!/^[a-z0-9_-]{1,64}$/i.test(destinationRaw)) return null;
   const draftPace = c.draftPace;
   const pace =
     draftPace === "broadcast" || draftPace === "brisk" || draftPace === "turbo"
       ? draftPace
       : undefined;
-  return { leagueId, season, sessionNonce, draftPace: pace };
+  return {
+    leagueId,
+    season,
+    sessionNonce,
+    destination: destinationRaw.toLowerCase(),
+    draftPace: pace,
+  };
+}
+
+/**
+ * Reject ARM when page-reported ESPN league disagrees with Rivals session league.
+ * Missing page league does not reject (URL may omit until SPA settles).
+ */
+export function armLeagueMatchesPage(args: {
+  armLeagueId: string;
+  pageLeagueId: string | null | undefined;
+}): boolean {
+  const page = String(args.pageLeagueId ?? "").trim();
+  if (!page) return true;
+  return page === String(args.armLeagueId ?? "").trim();
 }
 
 export function toTransportPick(
@@ -347,6 +378,21 @@ export class EspnBookmarkletPublisher {
     if (!config) {
       this.emitStatus("error", { reason: "invalid_arm_config" });
       return { ok: false, error: "invalid_arm_config" };
+    }
+    const raw =
+      rawConfig && typeof rawConfig === "object"
+        ? (rawConfig as Record<string, unknown>)
+        : {};
+    const pageLeagueId =
+      raw.pageLeagueId != null
+        ? String(raw.pageLeagueId).trim()
+        : this.readPageLeagueIdHint();
+    if (!armLeagueMatchesPage({ armLeagueId: config.leagueId, pageLeagueId })) {
+      this.emitStatus("error", {
+        reason: "league_mismatch",
+        leagueId: config.leagueId,
+      });
+      return { ok: false, error: "league_mismatch" };
     }
     const nextDraftId = buildEspnLiveDraftId(config.leagueId, config.season);
     // Drop retained board when league/season identity changes.
@@ -778,6 +824,20 @@ export class EspnBookmarkletPublisher {
     this.emitFn(message);
   }
 
+  /** Best-effort leagueId from page URL — never scrapes pick DOM. */
+  private readPageLeagueIdHint(): string | null {
+    try {
+      const href = this.win?.location?.href;
+      if (!href) return null;
+      const u = new URL(href);
+      const qp = u.searchParams.get("leagueId") || u.searchParams.get("league_id");
+      if (qp && /^\d+$/.test(qp.trim())) return qp.trim();
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
   private emitStatus(
     status: EspnBmStatusMessage["status"],
     extra?: {
@@ -806,6 +866,9 @@ export class EspnBookmarkletPublisher {
       season: extra?.season ?? this.armConfig?.season ?? null,
       sessionNonce: this.armConfig?.sessionNonce ?? null,
       draftComplete: extra?.draftComplete,
+      readerVersion: ESPN_LIVE_READER_VERSION,
+      supportedCapabilities: ESPN_LIVE_READER_CAPABILITIES,
+      destination: this.armConfig?.destination ?? null,
       baselineOnly: extra?.baselineOnly,
       diagnostics: {
         picksEmitted: this.picksEmittedLive,

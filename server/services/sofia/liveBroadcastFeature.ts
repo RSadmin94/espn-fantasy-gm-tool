@@ -11,6 +11,15 @@ export function isRfsnLiveBroadcastEnabled(): boolean {
   return process.env.RFSN_LIVE_BROADCAST_ENABLED === "true";
 }
 
+/**
+ * RFSN-031B — ESPN Live Draft Connector auto-injection kill switch.
+ * Default disabled. Set RFSN_ESPN_AUTO_INJECT_ENABLED=true to allow Rivals to
+ * push enable to the extension when Live Draft is active.
+ */
+export function isEspnAutoInjectEnabled(): boolean {
+  return process.env.RFSN_ESPN_AUTO_INJECT_ENABLED === "true";
+}
+
 /** Internal beta: founders, staff, or beta-demo premium users when flag is on. */
 export function canAccessRfsnLiveBroadcast(user: User | null | undefined): boolean {
   if (!isRfsnLiveBroadcastEnabled()) return false;

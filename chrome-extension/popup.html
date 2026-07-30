@@ -125,6 +125,25 @@
   <body>
     <h1>GM War Room</h1>
     <div id="root"></div>
+
+    <details id="advancedTroubleshooting" style="margin-top: 12px; border-top: 1px solid #333; padding-top: 10px">
+      <summary style="cursor: pointer; font-weight: 600; font-size: 12px; color: #b0b0b0">
+        Advanced Troubleshooting
+      </summary>
+      <p class="meta" style="margin-top: 8px">
+        Rivals Live Draft Connector — diagnostics only. Manual connect remains available when automatic connect is off.
+      </p>
+      <label class="meta" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+        <input type="checkbox" id="espnAutoInjectToggle" />
+        Enable automatic ESPN draft connect (local override)
+      </label>
+      <button type="button" class="secondary" id="espnConnectorDiagRefresh">Refresh connector diagnostics</button>
+      <pre id="espnConnectorDiag" class="meta" style="white-space: pre-wrap; word-break: break-word; background: #1e1e1e; padding: 8px; border-radius: 8px; max-height: 180px; overflow: auto"></pre>
+      <p class="meta">
+        Manual path: with Live Draft on in Rivals, open the matching ESPN live draft room. If automatic connect is disabled, use the existing console/manual reader install under Advanced docs — do not remove that path.
+      </p>
+    </details>
+
     <div id="adminTools" hidden>
     <hr style="border: none; border-top: 1px solid #333; margin: 12px 0" />
     <h2 class="h2">Import Historical League Data</h2>

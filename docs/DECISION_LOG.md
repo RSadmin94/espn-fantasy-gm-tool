@@ -4,6 +4,38 @@ Product and architecture decisions with dates. Newest first.
 
 ---
 
+## 2026-07-30 — RFSN-031B production ESPN auto-injection (PARTIAL; live gate blocked)
+
+**Decision:** Implement **RFSN-031B** production auto-injection of the existing ESPN reader behind `RFSN_ESPN_AUTO_INJECT_ENABLED` (default **off**). Parser relocation **not** performed; `espnAdapter` / normalize / protocol / replay / dedupe unchanged.
+
+**031A:** Remains **PASS / GO** (closed). Spike harness stays disabled (`RFSN_031A_SPIKE_ENABLED = false`).
+
+**031B approach:** FantasyPros-style WAR + page `<script>` delivery of `espn-live-reader.iife.js` (dormant `preferPopup:false` bootstrap); idempotent handshake; Rivals session authority + ARM with `destination: live-draft`; league mismatch reject; customer connector UX; Advanced Troubleshooting diagnostics + local override; event-only telemetry.
+
+**Live validation:** **Not executed** (no live ESPN draft room in agent session). Status: **PARTIAL — IMPLEMENTED, LIVE GATE BLOCKED**. See `docs/validation/RFSN-031B_AUTO_INJECT_IMPLEMENTATION.md`.
+
+**Release decision:** **Not ready for preview/production enablement** until operator live checklist 1–16 passes. Flag must remain default off. Manual path retained. Do not Web Store submit as part of 031B.
+
+**Fallback:** Env kill switch + `SET_AUTO_INJECT enabled:false` restores prior no-auto-inject behavior without full rollback.
+
+---
+
+## 2026-07-29 — RFSN-031A auto-inject spike CLOSED (GO); 031B approved
+
+**Decision:** Close **RFSN-031A** as **PASS / GO**. Chrome extension **auto-injection of the existing ESPN reader** is feasible without parser relocation. Proceed to **RFSN-031B** (production auto-injection) when scheduled.
+
+**031A proved:** ESPN hosts eligible; `executeScript({ world: "MAIN" })` and WAR+`<script>` patterns available; existing reader IIFE deliverable unchanged; no CSP/`script-src` blocker on probed ESPN pages; frozen parser/transport/board/grading/RFSN untouched; static suite 5/5.
+
+**031A did not prove:** live pick → reader → transport → ingest → board → replay/dedupe. That remains a **hard 031B completion gate** (operator live draft checklist in `docs/validation/RFSN-031A_AUTO_INJECT_SPIKE.md`).
+
+**031B must:** replace spike harness; keep parser; dormancy + READY handshake; single inject; league match; Rivals-owned ARM before capture; version/diagnostics/telemetry/kill switch; keep manual path under Advanced Troubleshooting; pass live operator gate before merge/release.
+
+**Spike harness:** `RFSN_031A_SPIKE_ENABLED = false` (closed). Authority: `docs/validation/RFSN-031A_AUTO_INJECT_SPIKE.md`.
+
+**Does not:** start Chrome Web Store submission; claim full live connection validated.
+
+---
+
 ## 2026-07-19 — RFSN-031 Durable offense ADP (last-good)
 
 **Decision:** Persist last-good ESPN **offense** ADP in `fantasy_data_cache` (`espn:offense-adp:{season}`) write-through from `getEspnPlayerInfoMap`, obeying `shouldPersistEspnOffenseCache`. On cold memory / empty or **undrafted-sentinel** ESPN offense feeds (ADP ≈ 170 with zero early-round elites), seed and serve durable last-good — or **null ADPs** — instead of ranking Chase/Allen/etc. by sentinel ~170. Soft-include uses `adp: null`. UI: **ADP unavailable** + no vs-market when missing. Bounded retries (3). No grading/commentary/extension changes.

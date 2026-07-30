@@ -318,6 +318,7 @@ export function postEspnBookmarkletArm(config: {
   leagueId: string;
   season: number;
   sessionNonce: string;
+  destination?: string;
   draftPace?: "broadcast" | "brisk" | "turbo";
 }): Promise<{
   ok: boolean;
@@ -328,6 +329,10 @@ export function postEspnBookmarkletArm(config: {
 }> {
   return new Promise((resolve) => {
     const id = `espn-bm-arm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const armConfig = {
+      ...config,
+      destination: config.destination || "live-draft",
+    };
     const onReply = (ev: MessageEvent) => {
       if (ev.source !== window) return;
       const d = ev.data;
@@ -335,7 +340,7 @@ export function postEspnBookmarkletArm(config: {
       window.removeEventListener("message", onReply);
       resolve({
         ok: Boolean(d.ok),
-        sessionNonce: d.sessionNonce != null ? String(d.sessionNonce) : config.sessionNonce,
+        sessionNonce: d.sessionNonce != null ? String(d.sessionNonce) : armConfig.sessionNonce,
         espnTabs: d.espnTabs != null ? Number(d.espnTabs) : d.tabCount != null ? Number(d.tabCount) : undefined,
         reached: d.reached != null ? Number(d.reached) : undefined,
         error: d.error ? String(d.error) : undefined,
@@ -348,7 +353,7 @@ export function postEspnBookmarkletArm(config: {
         protocolVersion: ESPN_BM_PROTOCOL_VERSION,
         id,
         provider: "espn-live",
-        config,
+        config: armConfig,
       },
       "*",
     );
@@ -356,6 +361,35 @@ export function postEspnBookmarkletArm(config: {
       window.removeEventListener("message", onReply);
       resolve({ ok: false, error: "extension_timeout" });
     }, 8000);
+  });
+}
+
+/** RFSN-031B — push auto-inject enable/kill to extension (default off server-side). */
+export function postEspnAutoInjectEnabled(enabled: boolean): Promise<{ ok: boolean; error?: string }> {
+  return new Promise((resolve) => {
+    const id = `espn-bm-auto-${Date.now()}`;
+    const onReply = (ev: MessageEvent) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_ESPN_BM_SET_AUTO_INJECT_REPLY" || d.id !== id) return;
+      window.removeEventListener("message", onReply);
+      resolve({ ok: Boolean(d.ok), error: d.error ? String(d.error) : undefined });
+    };
+    window.addEventListener("message", onReply);
+    window.postMessage(
+      {
+        type: "GMWR_ESPN_BM_SET_AUTO_INJECT",
+        protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+        id,
+        provider: "espn-live",
+        enabled: Boolean(enabled),
+      },
+      "*",
+    );
+    setTimeout(() => {
+      window.removeEventListener("message", onReply);
+      resolve({ ok: false, error: "extension_timeout" });
+    }, 5000);
   });
 }
 

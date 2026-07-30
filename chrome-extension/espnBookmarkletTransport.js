@@ -23,6 +23,12 @@ export const MSG_ESPN_BM_SESSION_RESET = "GMWR_ESPN_BM_SESSION_RESET";
 export const MSG_ESPN_BM_GET_STATE = "GMWR_ESPN_BM_GET_STATE";
 /** Phase 4 — War Room requests idempotent board reconciliation after reconnect. */
 export const MSG_ESPN_BM_REPLAY_REQUEST = "GMWR_ESPN_BM_REPLAY_REQUEST";
+/** RFSN-031B — Rivals pushes auto-inject enable/kill from getAccess. */
+export const MSG_ESPN_BM_SET_AUTO_INJECT = "GMWR_ESPN_BM_SET_AUTO_INJECT";
+/** RFSN-031B — content reports draft-room availability / reader lifecycle. */
+export const MSG_ESPN_BM_DRAFT_AVAILABILITY = "GMWR_ESPN_BM_DRAFT_AVAILABILITY";
+/** RFSN-031B — event-only telemetry (no secrets). */
+export const MSG_ESPN_BM_TELEMETRY = "GMWR_ESPN_BM_TELEMETRY";
 
 /** Types the Rivals page may send toward background (via bridge). */
 export const ESPN_BM_FFR_TO_BG_TYPES = [
@@ -31,6 +37,7 @@ export const ESPN_BM_FFR_TO_BG_TYPES = [
   MSG_ESPN_BM_PING,
   MSG_ESPN_BM_GET_STATE,
   MSG_ESPN_BM_REPLAY_REQUEST,
+  MSG_ESPN_BM_SET_AUTO_INJECT,
 ];
 
 /** Types background may push to Rivals bridge / page. */
@@ -111,6 +118,8 @@ export function validateArmConfig(raw) {
   if (!/^\d+$/.test(leagueId)) return null;
   if (!Number.isFinite(season) || season < 2000 || season > 2100) return null;
   if (!sessionNonce || sessionNonce.length > 128) return null;
+  const destinationRaw = String(c.destination ?? "live-draft").trim();
+  if (!/^[a-z0-9_-]{1,64}$/i.test(destinationRaw)) return null;
   const draftPace = c.draftPace;
   const pace =
     draftPace === "broadcast" || draftPace === "brisk" || draftPace === "turbo"
@@ -120,6 +129,7 @@ export function validateArmConfig(raw) {
     leagueId,
     season,
     sessionNonce: sessionNonce.slice(0, 128),
+    destination: destinationRaw.toLowerCase(),
     draftPace: pace,
   };
 }

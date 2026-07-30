@@ -8,11 +8,20 @@ import { isGmWarRoomExtensionPresent } from "@/lib/espnApi";
 import {
   newEspnBookmarkletSessionNonce,
   parseEspnBookmarkletBridgeMessage,
+  postEspnAutoInjectEnabled,
   postEspnBookmarkletArm,
   postEspnBookmarkletDisarm,
   postEspnBookmarkletReplayRequest,
   type EspnBmBridgePickBatch,
 } from "@/lib/espnBookmarkletBridge";
+import {
+  buildEspnConnectorDiagnostics,
+  espnConnectorStatusLines,
+  maskSessionNonceSuffix,
+  resolveEspnConnectorMatchPhase,
+  type EspnConnectorDiagnostics,
+  type EspnConnectorMatchPhase,
+} from "@/lib/espnLiveConnectorUx";
 import {
   createEspnBmIngestState,
   planEspnBookmarkletBatchIngest,
@@ -47,6 +56,11 @@ export type EspnBookmarkletMonitorStatus = {
   lastRevision: number | null;
   espnTabs: number | null;
   diagnostics: Record<string, unknown> | null;
+  /** RFSN-031B — customer connector match phase. */
+  connectorMatchPhase: EspnConnectorMatchPhase;
+  connectorMatchLines: string[];
+  connectorDiagnostics: EspnConnectorDiagnostics | null;
+  espnLiveRoomCount: number;
 };
 
 type Args = {
@@ -76,6 +90,10 @@ const INITIAL = (draftId: string): EspnBookmarkletMonitorStatus => ({
   lastRevision: null,
   espnTabs: null,
   diagnostics: null,
+  connectorMatchPhase: "waiting_for_draft",
+  connectorMatchLines: espnConnectorStatusLines("waiting_for_draft"),
+  connectorDiagnostics: null,
+  espnLiveRoomCount: 0,
 });
 
 export function useEspnBookmarkletDraftMonitor({
@@ -168,6 +186,7 @@ export function useEspnBookmarkletDraftMonitor({
         leagueId: String(leagueId),
         season,
         sessionNonce: nonce,
+        destination: "live-draft",
         draftPace,
       });
       if (cancelled) return;
@@ -177,6 +196,7 @@ export function useEspnBookmarkletDraftMonitor({
       const transportActive = Boolean(arm.ok);
       const mirrorHandshake = false;
       setStatus({
+        ...INITIAL(draftId),
         active: true,
         transportActive,
         mirrorHandshake,
@@ -221,8 +241,19 @@ export function useEspnBookmarkletDraftMonitor({
     return () => {
       cancelled = true;
       void postEspnBookmarkletDisarm().catch(() => {});
+      void postEspnAutoInjectEnabled(false).catch(() => {});
     };
   }, [canRun, armExtension, leagueId, season, enabled, draftId, draftPace]);
+
+  // RFSN-031B — push auto-inject enable from server flag when Live Draft owns session.
+  useEffect(() => {
+    if (!canRun) {
+      void postEspnAutoInjectEnabled(false).catch(() => {});
+      return;
+    }
+    const flag = Boolean(accessQ.data?.espnAutoInjectEnabled);
+    void postEspnAutoInjectEnabled(flag).catch(() => {});
+  }, [canRun, accessQ.data?.espnAutoInjectEnabled]);
 
   // Listen for bridge events
   useEffect(() => {
@@ -231,6 +262,81 @@ export function useEspnBookmarkletDraftMonitor({
     const onMessage = (ev: MessageEvent) => {
       if (ev.source !== window) return;
       const raw = ev.data as Record<string, unknown> | null;
+
+      // RFSN-031B draft availability (before parse filter).
+      if (raw && raw.type === "GMWR_ESPN_BM_DRAFT_AVAILABILITY") {
+        const rooms = Array.isArray(raw.rooms) ? raw.rooms : [];
+        const liveRooms = rooms.filter(
+          (r) =>
+            r &&
+            typeof r === "object" &&
+            String((r as { urlKind?: string }).urlKind) === "live_draft_room",
+        );
+        const leagueIds = liveRooms
+          .map((r) => String((r as { leagueId?: string }).leagueId ?? "").trim())
+          .filter(Boolean);
+        const roomCount =
+          typeof raw.roomCount === "number"
+            ? Number(raw.roomCount)
+            : liveRooms.length || (String(raw.urlKind) === "live_draft_room" ? 1 : 0);
+        const urlKind =
+          raw.urlKind != null
+            ? String(raw.urlKind)
+            : liveRooms[0]
+              ? String((liveRooms[0] as { urlKind?: string }).urlKind ?? "")
+              : null;
+        const detectedLeague =
+          leagueIds[0] ||
+          (raw.leagueId != null ? String(raw.leagueId) : null);
+        const lifecycle =
+          raw.readerLifecycle != null
+            ? String(raw.readerLifecycle)
+            : liveRooms[0]
+              ? String((liveRooms[0] as { readerLifecycle?: string }).readerLifecycle ?? "")
+              : null;
+
+        setStatus((s) => {
+          const phase = resolveEspnConnectorMatchPhase({
+            liveDraftActive: true,
+            autoInjectEnabled: Boolean(accessQ.data?.espnAutoInjectEnabled),
+            espnLiveRoomCount: roomCount,
+            espnLeagueIds: leagueIds.length ? leagueIds : detectedLeague ? [detectedLeague] : [],
+            rivalsLeagueId: leagueId ? String(leagueId) : null,
+            connectorReady: s.mirrorHandshake,
+            monitoring: s.connectorStatus === "monitoring",
+            lastError: s.lastError,
+            incompatibleReader: String(s.lastError || "").includes("incompatible"),
+          });
+          const diag = buildEspnConnectorDiagnostics({
+            ...(s.connectorDiagnostics ?? {}),
+            detectedEspnUrlType: urlKind,
+            detectedEspnLeagueId: detectedLeague,
+            activeRivalsLeagueId: leagueId ? String(leagueId) : null,
+            sessionNonceSuffix: maskSessionNonceSuffix(sessionNonceRef.current),
+            readerLifecycleState: lifecycle,
+            armState: s.mirrorHandshake ? "armed" : s.transportActive ? "pending" : "idle",
+            lastHeartbeat: new Date().toISOString(),
+            featureFlagState: Boolean(accessQ.data?.espnAutoInjectEnabled),
+            lastError: s.lastError,
+            lastBatchRevision: s.lastRevision,
+          });
+          return {
+            ...s,
+            espnLiveRoomCount: roomCount,
+            connectorMatchPhase: phase,
+            connectorMatchLines: espnConnectorStatusLines(phase),
+            connectorDiagnostics: diag,
+            lastError:
+              phase === "league_mismatch"
+                ? "league_mismatch"
+                : phase === "ambiguous_espn_drafts"
+                  ? "ambiguous_espn_drafts"
+                  : s.lastError,
+          };
+        });
+        return;
+      }
+
       if (raw && raw.type === "GMWR_ESPN_BM_PICK_BATCH") {
         console.info("[espn-bm-path]", "warroom_recv_PICK_BATCH", {
           hop: "warroom",
@@ -527,7 +633,7 @@ export function useEspnBookmarkletDraftMonitor({
 
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [canRun, leagueId, season, draftPace, draftId]);
+  }, [canRun, leagueId, season, draftPace, draftId, accessQ.data?.espnAutoInjectEnabled]);
 
   useEffect(() => {
     if (!enabled) {

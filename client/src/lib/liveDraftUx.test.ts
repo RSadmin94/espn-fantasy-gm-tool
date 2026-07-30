@@ -57,7 +57,7 @@ describe("RFSN-024 liveDraftUx status phases", () => {
     expect(liveDraftStatusLines(s)[0]).toBe("Reconnecting to league feed");
   });
 
-  it("espn-mirror waiting is Waiting for ESPN Mirror (not reconnecting)", () => {
+  it("espn-mirror waiting is Waiting for your ESPN draft room (not reconnecting)", () => {
     const s = {
       ...base,
       connectorReady: false,
@@ -65,10 +65,10 @@ describe("RFSN-024 liveDraftUx status phases", () => {
       lastError: null,
     };
     expect(resolveLiveDraftUiPhase(s)).toBe("waiting");
-    expect(liveDraftStatusLines(s)[0]).toBe("Waiting for ESPN Mirror");
+    expect(liveDraftStatusLines(s)[0]).toBe("Waiting for your ESPN draft room");
   });
 
-  it("espn-mirror connected labels Connected to ESPN Mirror", () => {
+  it("espn-mirror connected labels Live Draft Connected", () => {
     const s = {
       ...base,
       transportKind: "espn-mirror" as const,
@@ -76,7 +76,7 @@ describe("RFSN-024 liveDraftUx status phases", () => {
       lockedCount: 2,
       lastRevision: 4,
     };
-    expect(liveDraftStatusLines(s)[0]).toBe("Connected to ESPN Mirror");
+    expect(liveDraftStatusLines(s)[0]).toBe("Live Draft Connected");
     expect(liveDraftStatusLines(s).join(" ")).toMatch(/Picks 2 · rev 4/);
   });
 

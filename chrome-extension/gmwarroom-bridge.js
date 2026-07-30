@@ -273,7 +273,8 @@
         d.type !== "GMWR_ESPN_BM_DISARM" &&
         d.type !== "GMWR_ESPN_BM_PING" &&
         d.type !== "GMWR_ESPN_BM_GET_STATE" &&
-        d.type !== "GMWR_ESPN_BM_REPLAY_REQUEST"
+        d.type !== "GMWR_ESPN_BM_REPLAY_REQUEST" &&
+        d.type !== "GMWR_ESPN_BM_SET_AUTO_INJECT"
       ) {
         return;
       }
@@ -288,6 +289,7 @@
           sessionNonce: d.sessionNonce,
           afterOverallPick: d.afterOverallPick,
           requestId: d.requestId,
+          enabled: d.enabled,
         },
         (response) => {
           if (chrome.runtime.lastError) {
@@ -328,7 +330,8 @@
       message.type !== "GMWR_ESPN_BM_PICK_BATCH" &&
       message.type !== "GMWR_ESPN_BM_STATUS" &&
       message.type !== "GMWR_ESPN_BM_SESSION_RESET" &&
-      message.type !== "GMWR_ESPN_BM_PONG"
+      message.type !== "GMWR_ESPN_BM_PONG" &&
+      message.type !== "GMWR_ESPN_BM_DRAFT_AVAILABILITY"
     ) {
       return;
     }

@@ -498,6 +498,55 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("adminTools")?.remove();
   }
 
+  // RFSN-031B — Advanced Troubleshooting (auto-inject local override + diagnostics).
+  try {
+    const toggle = document.getElementById("espnAutoInjectToggle");
+    const diagEl = document.getElementById("espnConnectorDiag");
+    const refreshBtn = document.getElementById("espnConnectorDiagRefresh");
+    const stored = await chrome.storage.local.get(["rfsnEspnAutoInjectEnabled"]);
+    if (toggle) toggle.checked = stored?.rfsnEspnAutoInjectEnabled === true;
+    toggle?.addEventListener("change", async () => {
+      const enabled = Boolean(toggle.checked);
+      await chrome.storage.local.set({ rfsnEspnAutoInjectEnabled: enabled });
+      await chrome.runtime.sendMessage({
+        type: "GMWR_ESPN_BM_SET_AUTO_INJECT",
+        enabled,
+      });
+    });
+    async function refreshEspnDiag() {
+      try {
+        const state = await chrome.runtime.sendMessage({ type: "GMWR_ESPN_BM_GET_STATE" });
+        const manifest = chrome.runtime.getManifest();
+        const lines = [
+          `extension version: ${manifest.version}`,
+          `protocol version: 1`,
+          `feature-flag state: ${Boolean(state?.autoInjectEnabled ?? stored?.rfsnEspnAutoInjectEnabled)}`,
+          `armed: ${Boolean(state?.armed)}`,
+          `session nonce suffix: ${
+            state?.sessionNonce ? `…${String(state.sessionNonce).slice(-6)}` : "—"
+          }`,
+          `espn tabs: ${state?.espnTabs ?? "—"}`,
+          `draft rooms: ${JSON.stringify(state?.draftRooms || state?.diagnostics || {}, null, 0).slice(0, 800)}`,
+          `last telemetry: ${JSON.stringify(state?.lastTelemetry || null)}`,
+          `last error: ${state?.diagnostics?.lastError ?? "—"}`,
+          `last heartbeat: ${state?.diagnostics?.lastHeartbeat ?? "—"}`,
+          `last batch revision: ${state?.diagnostics?.lastBatchRevision ?? "—"}`,
+          `last successful pick: ${state?.diagnostics?.lastSuccessfulPick ?? "—"}`,
+          `last replay request: ${state?.diagnostics?.lastReplayRequest ?? "—"}`,
+        ];
+        if (diagEl) diagEl.textContent = lines.join("\n");
+      } catch (e) {
+        if (diagEl) diagEl.textContent = e instanceof Error ? e.message : String(e);
+      }
+    }
+    refreshBtn?.addEventListener("click", () => {
+      void refreshEspnDiag();
+    });
+    void refreshEspnDiag();
+  } catch {
+    /* ignore */
+  }
+
   document.getElementById("histDiscover")?.addEventListener("click", async () => {
     const lid = (document.getElementById("histLeagueId")?.value || "").trim() || "457622";
     setHistOut("Discovering seasons from ESPN history…");

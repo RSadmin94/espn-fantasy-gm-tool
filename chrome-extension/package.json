@@ -1,7 +1,7 @@
 {
   "name": "gm-war-room-chrome-extension",
   "private": true,
-  "version": "1.13.0",
+  "version": "1.14.0",
   "type": "module",
   "scripts": {
     "build:espn-bm-content": "esbuild providers/espn-live/content.js --bundle --format=iife --platform=browser --outfile=providers/espn-live/content.bundle.js",

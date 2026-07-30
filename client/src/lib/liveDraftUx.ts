@@ -68,8 +68,8 @@ export function liveDraftStatusLines(status: LiveDraftUxStatusInput): string[] {
   const mirror = status.transportKind === "espn-mirror";
   const sourceLabel = mirror
     ? status.connectorReady
-      ? "Connected to ESPN Mirror"
-      : "Waiting for ESPN Mirror"
+      ? "Live Draft Connected"
+      : "Waiting for your ESPN draft room"
     : isEspnSource(status.source)
       ? "Connected League"
       : "RFSN Draft";
@@ -87,15 +87,15 @@ export function liveDraftStatusLines(status: LiveDraftUxStatusInput): string[] {
       return ["Draft complete", boothLine];
     case "reconnecting":
       return mirror
-        ? ["Reconnecting to ESPN Mirror", "Live Draft will resume when the Mirror recovers"]
+        ? ["Reconnecting", "Live Draft will resume when the connection recovers"]
         : ["Reconnecting to league feed", "Live Draft will resume when the feed recovers"];
     case "paused":
       return ["Draft paused — monitoring suspended", boothLine];
     case "waiting":
       if (mirror && !status.connectorReady) {
         return [
-          "Waiting for ESPN Mirror",
-          "Open the ESPN draft and run Board Mirror",
+          "Waiting for your ESPN draft room",
+          "Open your ESPN live draft to connect",
           boothLine,
         ];
       }
