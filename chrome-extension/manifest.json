@@ -48,6 +48,13 @@
     {
       "resources": ["providers/fantasypros/page-observer.js"],
       "matches": ["https://draftwizard.fantasypros.com/*"]
+    },
+    {
+      "resources": ["providers/espn-live/board-mirror.iife.js"],
+      "matches": [
+        "https://fantasy.espn.com/*",
+        "https://*.espn.com/*"
+      ]
     }
   ],
   "action": {
