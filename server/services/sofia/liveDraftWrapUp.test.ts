@@ -113,6 +113,73 @@ describe("live draft wrap-up", () => {
     expect(getLiveSession(LEAGUE, DRAFT)?.state).toBe("draft_complete");
   });
 
+  it("regenerates wrap-up when board fingerprint changes under the same draftId", async () => {
+    const { buildDraftMomentForLockedPick, resetLiveDraftMomentSessionsForTests } =
+      await import("./liveDraftMomentSession");
+    resetLiveDraftMomentSessionsForTests();
+
+    await buildDraftMomentForLockedPick(LEAGUE, "same-id", {
+      overallPick: 1,
+      round: 1,
+      roundPick: 1,
+      teamId: "1",
+      ownerName: "A",
+      playerId: "111",
+      playerName: "Player One",
+      position: "WR",
+    });
+    const firstMoment = await buildDraftMomentForLockedPick(LEAGUE, "same-id", {
+      overallPick: 2,
+      round: 1,
+      roundPick: 2,
+      teamId: "2",
+      ownerName: "B",
+      playerId: "222",
+      playerName: "Player Two",
+      position: "RB",
+    });
+    const first = await processDraftWrapUp({
+      leagueId: LEAGUE,
+      draftId: "same-id",
+      finalDraftMoment: firstMoment,
+      teamCount: 2,
+      useDeterministicProvider: true,
+    });
+    expect(first?.draftNightShow).toBeTruthy();
+    const firstAt = first?.draftNightShow?.generatedAt;
+
+    resetLiveDraftMomentSessionsForTests();
+    await buildDraftMomentForLockedPick(LEAGUE, "same-id", {
+      overallPick: 1,
+      round: 1,
+      roundPick: 1,
+      teamId: "1",
+      ownerName: "A",
+      playerId: "999",
+      playerName: "Other Star",
+      position: "QB",
+    });
+    const secondMoment = await buildDraftMomentForLockedPick(LEAGUE, "same-id", {
+      overallPick: 2,
+      round: 1,
+      roundPick: 2,
+      teamId: "2",
+      ownerName: "B",
+      playerId: "888",
+      playerName: "Other Back",
+      position: "RB",
+    });
+    const second = await processDraftWrapUp({
+      leagueId: LEAGUE,
+      draftId: "same-id",
+      finalDraftMoment: secondMoment,
+      teamCount: 2,
+      useDeterministicProvider: true,
+    });
+    expect(second?.draftNightShow?.generatedAt).toBeTruthy();
+    expect(second?.draftNightShow?.generatedAt).not.toBe(firstAt);
+  });
+
   it("marks draft complete with on-air commentary after the final pick", async () => {
     const finalPick = await seedAllPicks();
     const payload = await processDraftWrapUp({

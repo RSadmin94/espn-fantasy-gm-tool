@@ -73,6 +73,11 @@ type Args = {
   teamCount?: number;
   draftPace?: "broadcast" | "brisk" | "turbo";
   armExtension?: boolean;
+  /**
+   * Booth / wrap-up session id (includes run suffix). When set, notifyLockedPick
+   * uses this instead of the provider batch draftId so ESPN Mock runs do not collide.
+   */
+  notifyDraftId?: string | null;
   onNormalizedBatch?: (batch: NormalizedPickBatch) => void;
   onSessionReset?: (draftId: string) => void;
 };
@@ -125,6 +130,7 @@ export function useEspnBookmarkletDraftMonitor({
   teamCount = 12,
   draftPace = "broadcast",
   armExtension = true,
+  notifyDraftId = null,
   onNormalizedBatch,
   onSessionReset,
 }: Args): EspnBookmarkletMonitorStatus {
@@ -139,6 +145,10 @@ export function useEspnBookmarkletDraftMonitor({
   useEffect(() => {
     canNotifyRef.current = canNotify;
   }, [canNotify]);
+  const notifyDraftIdRef = useRef(notifyDraftId);
+  useEffect(() => {
+    notifyDraftIdRef.current = notifyDraftId;
+  }, [notifyDraftId]);
   const notifyMut = _trpc.rfsnBroadcast.notifyLockedPick.useMutation();
   const resetMut = _trpc.rfsnBroadcast.resetLiveSession.useMutation();
   const notifyMutRef = useRef(notifyMut);
@@ -636,11 +646,17 @@ export function useEspnBookmarkletDraftMonitor({
           });
           continue;
         }
-        const request = toNotifyLockedPickRequest(event, {
-          teamCount: teams,
-          draftComplete: Boolean(event.metadata?.draftCompletePick),
-          draftPace: pace,
-        });
+        const request = toNotifyLockedPickRequest(
+          {
+            ...event,
+            draftId: notifyDraftIdRef.current?.trim() || event.draftId,
+          },
+          {
+            teamCount: teams,
+            draftComplete: Boolean(event.metadata?.draftCompletePick),
+            draftPace: pace,
+          },
+        );
         try {
           await notifyMutRef.current.mutateAsync(request);
           notified += 1;
