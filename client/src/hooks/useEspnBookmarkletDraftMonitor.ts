@@ -10,6 +10,7 @@ import {
   parseEspnBookmarkletBridgeMessage,
   postEspnBookmarkletArm,
   postEspnBookmarkletDisarm,
+  postEspnBookmarkletPing,
   postEspnBookmarkletReplayRequest,
   type EspnBmBridgePickBatch,
 } from "@/lib/espnBookmarkletBridge";
@@ -18,7 +19,11 @@ import {
   planEspnBookmarkletBatchIngest,
   type EspnBmIngestState,
 } from "@/lib/espnBookmarkletIngest";
-import { isEspnMirrorPublisherHandshake } from "@/lib/espnBookmarkletLivePath";
+import {
+  ESPN_BM_LIVE_STALE_MS,
+  isEspnMirrorPublisherHandshake,
+  resolveEspnBmTransportPresence,
+} from "@/lib/espnBookmarkletLivePath";
 import {
   buildEspnLiveDraftId,
   toNotifyLockedPickRequest,
@@ -416,72 +421,76 @@ export function useEspnBookmarkletDraftMonitor({
           sessionNonce: parsed.sessionNonce ?? null,
           espnTabs: parsed.espnTabs ?? null,
         });
-        setStatus((s) => ({
-          ...s,
-          extensionPresent: true,
-          transportActive: s.transportActive || publisherConfirmed,
-          mirrorHandshake: s.mirrorHandshake || publisherConfirmed,
-          connectorStatus: publisherConfirmed
-            ? parsed.status === "complete"
-              ? "complete"
-              : "monitoring"
-            : parsed.status === "ready" ||
-                parsed.status === "waiting_for_espn_mirror" ||
-                parsed.status === "waiting_for_espn_tab" ||
-                parsed.status === "mirror_inject_failed"
-              ? parsed.status === "ready"
-                ? "waiting_for_espn_mirror"
-                : parsed.status
-              : parsed.status || s.connectorStatus,
-          draftComplete: parsed.draftComplete ?? s.draftComplete,
-          lastError:
-            parsed.reason &&
-            !publisherConfirmed
-              ? String(parsed.reason)
-              : publisherConfirmed
-                ? null
-                : s.lastError,
-          espnTabs: parsed.espnTabs ?? s.espnTabs,
-          diagnostics: {
-            ...(parsed.diagnostics ?? s.diagnostics ?? {}),
-            lastStatus: parsed.status,
+        setStatus((s) => {
+          const presence = resolveEspnBmTransportPresence({
+            prevMirrorHandshake: s.mirrorHandshake,
+            prevTransportActive: s.transportActive,
+            prevConnectorStatus: s.connectorStatus,
+            prevEspnTabs: s.espnTabs,
+            status: parsed.status,
+            espnTabs: parsed.espnTabs ?? null,
             publisherConfirmed,
-          },
-          lastPollAt: new Date().toISOString(),
-          lastRevision:
-            parsed.revision != null && Number.isFinite(Number(parsed.revision))
-              ? Math.max(s.lastRevision ?? 0, Math.floor(Number(parsed.revision)))
-              : s.lastRevision,
-          sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
-          checkpoints: {
-            ...s.checkpoints,
+          });
+          return {
+            ...s,
             extensionPresent: true,
-            espnTabs: parsed.espnTabs ?? s.checkpoints.espnTabs,
-            mirrorHandshake: s.mirrorHandshake || publisherConfirmed,
-            draftId: parsed.draftId ?? s.checkpoints.draftId,
-            sessionNonce: parsed.sessionNonce ?? s.checkpoints.sessionNonce,
-            canNotify: canNotifyRef.current,
-          },
-        }));
+            transportActive: presence.transportActive,
+            mirrorHandshake: presence.mirrorHandshake,
+            connectorStatus: presence.connectorStatus,
+            draftComplete: parsed.draftComplete ?? s.draftComplete,
+            lastError:
+              parsed.reason && !presence.liveConnected
+                ? String(parsed.reason)
+                : presence.liveConnected
+                  ? null
+                  : s.lastError,
+            espnTabs: presence.espnTabs,
+            diagnostics: {
+              ...(parsed.diagnostics ?? s.diagnostics ?? {}),
+              lastStatus: parsed.status,
+              publisherConfirmed,
+              liveConnected: presence.liveConnected,
+            },
+            lastPollAt: new Date().toISOString(),
+            lastRevision:
+              parsed.revision != null && Number.isFinite(Number(parsed.revision))
+                ? Math.max(s.lastRevision ?? 0, Math.floor(Number(parsed.revision)))
+                : s.lastRevision,
+            sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
+            checkpoints: {
+              ...s.checkpoints,
+              extensionPresent: true,
+              espnTabs: presence.espnTabs,
+              mirrorHandshake: presence.mirrorHandshake,
+              draftId: parsed.draftId ?? s.checkpoints.draftId,
+              sessionNonce: parsed.sessionNonce ?? s.checkpoints.sessionNonce,
+              canNotify: canNotifyRef.current,
+            },
+          };
+        });
         return;
       }
 
       if (parsed.type === "GMWR_ESPN_BM_PONG") {
-        setStatus((s) => ({
-          ...s,
-          extensionPresent: true,
-          transportActive: s.transportActive || Boolean(parsed.armed),
-          mirrorHandshake: s.mirrorHandshake || Boolean(parsed.armed),
-          connectorStatus: parsed.armed ? "monitoring" : s.connectorStatus,
-          sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
-          checkpoints: {
-            ...s.checkpoints,
+        setStatus((s) => {
+          const armed = Boolean(parsed.armed);
+          return {
+            ...s,
             extensionPresent: true,
-            mirrorHandshake: s.mirrorHandshake || Boolean(parsed.armed),
-            sessionNonce: parsed.sessionNonce ?? s.checkpoints.sessionNonce,
-            canNotify: canNotifyRef.current,
-          },
-        }));
+            transportActive: s.transportActive || armed,
+            mirrorHandshake: armed ? true : s.mirrorHandshake,
+            connectorStatus: armed ? "monitoring" : s.connectorStatus,
+            lastPollAt: new Date().toISOString(),
+            sessionNonce: parsed.sessionNonce ?? s.sessionNonce,
+            checkpoints: {
+              ...s.checkpoints,
+              extensionPresent: true,
+              mirrorHandshake: armed ? true : s.mirrorHandshake,
+              sessionNonce: parsed.sessionNonce ?? s.checkpoints.sessionNonce,
+              canNotify: canNotifyRef.current,
+            },
+          };
+        });
         return;
       }
 
@@ -727,6 +736,64 @@ export function useEspnBookmarkletDraftMonitor({
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [canTransport, leagueId, season, draftPace, draftId]);
+
+  // Heartbeat: recount ESPN tabs so sticky Connected cannot survive tab close
+  // if onRemoved STATUS was missed (SW sleep / race).
+  useEffect(() => {
+    if (!canTransport || !armExtension || !enabled) return;
+    let cancelled = false;
+    const tick = () => {
+      void postEspnBookmarkletPing()
+        .then((ping) => {
+          if (cancelled || !ping.ok) return;
+          const tabs =
+            ping.espnTabs != null && Number.isFinite(Number(ping.espnTabs))
+              ? Math.max(0, Math.floor(Number(ping.espnTabs)))
+              : null;
+          if (tabs === 0) {
+            setStatus((s) => {
+              if (!s.mirrorHandshake && s.connectorStatus === "waiting_for_espn_tab") {
+                return { ...s, espnTabs: 0, lastPollAt: new Date().toISOString() };
+              }
+              return {
+                ...s,
+                mirrorHandshake: false,
+                connectorStatus: "waiting_for_espn_tab",
+                espnTabs: 0,
+                lastPollAt: new Date().toISOString(),
+                lastError: "espn_tab_closed",
+                checkpoints: {
+                  ...s.checkpoints,
+                  mirrorHandshake: false,
+                  espnTabs: 0,
+                  canNotify: canNotifyRef.current,
+                },
+              };
+            });
+            return;
+          }
+          if (tabs != null) {
+            setStatus((s) => ({
+              ...s,
+              espnTabs: tabs,
+              lastPollAt: new Date().toISOString(),
+              checkpoints: {
+                ...s.checkpoints,
+                espnTabs: tabs,
+                canNotify: canNotifyRef.current,
+              },
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+    const intervalMs = Math.min(20_000, Math.max(8_000, Math.floor(ESPN_BM_LIVE_STALE_MS / 3)));
+    const id = window.setInterval(tick, intervalMs);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [canTransport, armExtension, enabled]);
 
   useEffect(() => {
     if (!enabled) {

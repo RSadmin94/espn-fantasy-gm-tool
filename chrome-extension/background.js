@@ -674,6 +674,27 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     .catch(() => {});
 });
 
+/**
+ * When the last ESPN fantasy tab closes, tell War Room immediately so
+ * "Connected to ESPN Mirror" cannot stick on a dead transport.
+ */
+chrome.tabs.onRemoved.addListener((_tabId, _removeInfo) => {
+  if (!espnBmConnectorState.armed) return;
+  void (async () => {
+    const tabs = await chrome.tabs.query({});
+    const espnTabs = tabs.filter((tab) => isEspnFantasyTabUrl(tab.url || "")).length;
+    await broadcastToFfrTabs({
+      type: MSG_ESPN_BM_STATUS,
+      protocolVersion: 1,
+      provider: "espn-live",
+      status: espnTabs > 0 ? "waiting_for_espn_mirror" : "waiting_for_espn_tab",
+      espnTabs,
+      sessionNonce: espnBmConnectorState.sessionNonce,
+      reason: espnTabs > 0 ? null : "espn_tab_closed",
+    });
+  })().catch(() => {});
+});
+
 function trpcResultJson(parsed) {
   if (!parsed || typeof parsed !== "object") return null;
   if (parsed.result?.data?.json !== undefined) return parsed.result.data.json;
@@ -2788,6 +2809,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       expireEspnBmSessionIfStale();
       const r = await broadcastToEspnFantasyTabs({ type: MSG_ESPN_BM_PING });
+      if (espnBmConnectorState.armed && r.tabCount === 0) {
+        await broadcastToFfrTabs({
+          type: MSG_ESPN_BM_STATUS,
+          protocolVersion: 1,
+          provider: "espn-live",
+          status: "waiting_for_espn_tab",
+          espnTabs: 0,
+          sessionNonce: espnBmConnectorState.sessionNonce,
+          reason: "espn_tab_absent",
+        });
+      }
       sendResponse({
         ok: true,
         extensionPresent: true,

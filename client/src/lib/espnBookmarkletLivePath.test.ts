@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isEspnMirrorPublisherHandshake,
+  resolveEspnBmTransportPresence,
   shouldEnableLegacyEspnLeagueFetch,
   shouldPreferEspnBookmarkletStatus,
 } from "./espnBookmarkletLivePath";
@@ -100,5 +101,65 @@ describe("espnBookmarkletLivePath", () => {
         leagueId: "457622",
       }),
     ).toBe(true);
+  });
+
+  it("connected → espnTabs:0 / waiting_for_espn_tab clears mirrorHandshake", () => {
+    const cleared = resolveEspnBmTransportPresence({
+      prevMirrorHandshake: true,
+      prevTransportActive: true,
+      prevConnectorStatus: "monitoring",
+      prevEspnTabs: 1,
+      status: "waiting_for_espn_tab",
+      espnTabs: 0,
+      publisherConfirmed: false,
+    });
+    expect(cleared.mirrorHandshake).toBe(false);
+    expect(cleared.liveConnected).toBe(false);
+    expect(cleared.connectorStatus).toBe("waiting_for_espn_tab");
+    expect(cleared.espnTabs).toBe(0);
+  });
+
+  it("multiple tabs: closing one (espnTabs still >0) keeps connected when publisher confirmed", () => {
+    const still = resolveEspnBmTransportPresence({
+      prevMirrorHandshake: true,
+      prevTransportActive: true,
+      prevConnectorStatus: "monitoring",
+      prevEspnTabs: 2,
+      status: "waiting_for_espn_mirror",
+      espnTabs: 1,
+      publisherConfirmed: false,
+    });
+    expect(still.mirrorHandshake).toBe(true);
+    expect(still.liveConnected).toBe(true);
+    expect(still.espnTabs).toBe(1);
+  });
+
+  it("stale STATUS without live tab is not connected", () => {
+    const stale = resolveEspnBmTransportPresence({
+      prevMirrorHandshake: true,
+      prevTransportActive: true,
+      prevConnectorStatus: "monitoring",
+      prevEspnTabs: 1,
+      status: "monitoring",
+      espnTabs: 0,
+      publisherConfirmed: true,
+    });
+    expect(stale.liveConnected).toBe(false);
+    expect(stale.mirrorHandshake).toBe(false);
+  });
+
+  it("publisher confirmed with tabs present sets connected", () => {
+    const live = resolveEspnBmTransportPresence({
+      prevMirrorHandshake: false,
+      prevTransportActive: true,
+      prevConnectorStatus: "waiting_for_espn_mirror",
+      prevEspnTabs: 1,
+      status: "monitoring",
+      espnTabs: 1,
+      publisherConfirmed: true,
+    });
+    expect(live.mirrorHandshake).toBe(true);
+    expect(live.liveConnected).toBe(true);
+    expect(live.connectorStatus).toBe("monitoring");
   });
 });
