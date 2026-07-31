@@ -1310,7 +1310,18 @@ function LiveDraftEngine({
     { refetchInterval: done ? 2000 : false, staleTime: 1000 },
   );
   const livePayload = liveSnapQ.data as RfsnLivePublicPayload | undefined;
-  const draftNightShow = livePayload?.draftNightShow as DraftNightShowPayload | null | undefined;
+  // Drop prior-run awards immediately when boothDraftId rotates (before new poll lands).
+  const [draftNightShowClearedFor, setDraftNightShowClearedFor] = useState(boothDraftId);
+  useEffect(() => {
+    setDraftNightShowClearedFor(boothDraftId);
+  }, [boothDraftId]);
+  const payloadDraftId =
+    livePayload?.activePickIdentity?.draftId ?? livePayload?.audioStatus?.draftId ?? null;
+  const draftNightShow =
+    draftNightShowClearedFor !== boothDraftId ||
+    (payloadDraftId != null && payloadDraftId !== boothDraftId)
+      ? null
+      : (livePayload?.draftNightShow as DraftNightShowPayload | null | undefined);
   const analystRecap =
     livePayload?.snapshot?.primary?.text ??
     livePayload?.snapshot?.secondary?.text ??
