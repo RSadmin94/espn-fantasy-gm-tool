@@ -492,6 +492,219 @@ export async function fetchEspnCombinedAndWeekliesViaExtension(
   };
 }
 
+// ── Deterministic connect via the ESPN Connector ──────────────────────────────
+
+/**
+ * Every terminal state of a connect attempt. Each one maps to exactly one next action in the UI,
+ * so the page never has to poll the database to find out what happened.
+ */
+export type EspnConnectStage =
+  | "connector_missing"
+  | "espn_signed_out"
+  | "ready"
+  | "no_leagues"
+  | "choose"
+  | "save_failed"
+  | "connected"
+  | "timeout"
+  | "error";
+
+export interface EspnConnectLeagueOption {
+  id: string;
+  name: string;
+}
+
+export interface EspnConnectResult {
+  stage: EspnConnectStage;
+  connectorPresent: boolean;
+  espnSignedIn: boolean | null;
+  saveHttpStatus: number | null;
+  leagues: EspnConnectLeagueOption[];
+  leagueId: string | null;
+  leagueName: string | null;
+  error: string | null;
+  elapsedMs: number;
+}
+
+/** Cookie read only — answers "is ESPN signed in?" without touching the network. */
+export const ESPN_CONNECT_PROBE_TIMEOUT_MS = 5_000;
+/** League discovery hits ESPN's fan API once, then saves. */
+export const ESPN_CONNECT_DISCOVER_TIMEOUT_MS = 20_000;
+/** League already chosen: one saveCredentials round trip. */
+export const ESPN_CONNECT_SAVE_TIMEOUT_MS = 12_000;
+
+const ESPN_CONNECT_STAGES: readonly EspnConnectStage[] = [
+  "connector_missing",
+  "espn_signed_out",
+  "ready",
+  "no_leagues",
+  "choose",
+  "save_failed",
+  "connected",
+  "timeout",
+  "error",
+];
+
+function parseConnectLeagues(raw: unknown): EspnConnectLeagueOption[] {
+  if (!Array.isArray(raw)) return [];
+  const out: EspnConnectLeagueOption[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const id = String(rec.id ?? rec.leagueId ?? "").trim();
+    if (!id) continue;
+    const name = String(rec.name ?? rec.leagueName ?? "").trim();
+    out.push({ id, name: name || `League ${id}` });
+  }
+  return out;
+}
+
+function parseHttpStatus(raw: unknown): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+}
+
+/**
+ * Turn a raw `GMWR_CONNECT_ESPN_REPLY` into a typed result. Pure so each stage — especially the
+ * save failure with its HTTP status — is unit-testable without a browser or extension.
+ */
+export function normalizeEspnConnectReply(raw: unknown, elapsedMs: number): EspnConnectResult {
+  const d = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const rawStage = String(d.stage ?? "").trim() as EspnConnectStage;
+  const stage: EspnConnectStage = ESPN_CONNECT_STAGES.includes(rawStage) ? rawStage : "error";
+  const leagues = parseConnectLeagues(d.leagues);
+  const leagueId = String(d.leagueId ?? "").trim() || null;
+  const leagueName = String(d.leagueName ?? "").trim() || null;
+  const error = d.error != null && String(d.error).trim() !== "" ? String(d.error).trim() : null;
+
+  const espnSignedIn =
+    stage === "espn_signed_out"
+      ? false
+      : typeof d.espnSignedIn === "boolean"
+        ? d.espnSignedIn
+        : stage === "error"
+          ? null
+          : true;
+
+  return {
+    stage,
+    connectorPresent: true,
+    espnSignedIn,
+    saveHttpStatus: parseHttpStatus(d.httpStatus),
+    leagues,
+    leagueId,
+    leagueName: leagueName ?? (leagueId ? `League ${leagueId}` : null),
+    error: stage === "error" && !error ? "Connector returned an unrecognized reply." : error,
+    elapsedMs,
+  };
+}
+
+function connectorMissingResult(elapsedMs: number): EspnConnectResult {
+  return {
+    stage: "connector_missing",
+    connectorPresent: false,
+    espnSignedIn: null,
+    saveHttpStatus: null,
+    leagues: [],
+    leagueId: null,
+    leagueName: null,
+    error: null,
+    elapsedMs,
+  };
+}
+
+export interface ConnectEspnOptions {
+  /** Cookie-only preflight: resolves `ready` or `espn_signed_out` without discovering or saving. */
+  probe?: boolean;
+  /** Skip discovery and save this league directly (used after the user picks from `choose`). */
+  leagueId?: string;
+  leagueName?: string;
+  timeoutMs?: number;
+}
+
+/**
+ * Ask the Connector to capture the ESPN session and save it. Resolves on the connector's own reply
+ * within a short bounded window — the page never polls the database waiting for a row to appear.
+ */
+export function connectEspnViaConnector(opts?: ConnectEspnOptions): Promise<EspnConnectResult> {
+  const startedAt = Date.now();
+  const probe = opts?.probe === true;
+  const leagueId = String(opts?.leagueId ?? "").trim();
+  const timeoutMs =
+    opts?.timeoutMs ??
+    (probe
+      ? ESPN_CONNECT_PROBE_TIMEOUT_MS
+      : leagueId
+        ? ESPN_CONNECT_SAVE_TIMEOUT_MS
+        : ESPN_CONNECT_DISCOVER_TIMEOUT_MS);
+
+  if (!isGmWarRoomExtensionPresent()) {
+    return Promise.resolve(connectorMissingResult(Date.now() - startedAt));
+  }
+
+  return new Promise((resolve) => {
+    const id = randomId();
+    let settled = false;
+
+    function finish(result: EspnConnectResult) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(to);
+      window.removeEventListener("message", onMsg);
+      resolve(result);
+    }
+
+    const to = window.setTimeout(() => {
+      finish({
+        stage: "timeout",
+        connectorPresent: true,
+        espnSignedIn: null,
+        saveHttpStatus: null,
+        leagues: [],
+        leagueId: null,
+        leagueName: null,
+        error: `Connector did not reply within ${Math.round(timeoutMs / 1000)}s.`,
+        elapsedMs: Date.now() - startedAt,
+      });
+    }, timeoutMs);
+
+    function onMsg(ev: MessageEvent) {
+      if (ev.source !== window) return;
+      const d = ev.data as Record<string, unknown> | null;
+      if (!d || d.type !== "GMWR_CONNECT_ESPN_REPLY" || d.id !== id) return;
+      finish(normalizeEspnConnectReply(d, Date.now() - startedAt));
+    }
+
+    window.addEventListener("message", onMsg);
+    window.postMessage(
+      {
+        type: "GMWR_CONNECT_ESPN",
+        id,
+        probe,
+        leagueId,
+        leagueName: String(opts?.leagueName ?? "").trim(),
+      },
+      "*",
+    );
+  });
+}
+
+/** Read-back check: did the league the connector claims it saved actually land in the backend? */
+export function findConnectedLeague<T extends { leagueId?: unknown; provider?: unknown }>(
+  rows: readonly T[] | undefined | null,
+  leagueId: string | null | undefined,
+): T | null {
+  const target = String(leagueId ?? "").trim();
+  if (!target || !Array.isArray(rows)) return null;
+  return (
+    rows.find(
+      (r) =>
+        String(r?.leagueId ?? "").trim() === target &&
+        (r?.provider == null || String(r.provider).trim().toLowerCase() === "espn"),
+    ) ?? null
+  );
+}
+
 /** Browser `fetch` first (no extension); on CORS/5xx/429 call `onBrowserBlocked`, then extension-only gather if available. */
 export async function fetchEspnSeasonBundleBrowserOrExtension(args: {
   leagueId: string;

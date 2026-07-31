@@ -1,6 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { buildEspnFantasyFootballConnectUrl } from "@/lib/espnConnectUrl";
+import {
+  connectEspnViaConnector,
+  findConnectedLeague,
+  type EspnConnectResult,
+} from "@/lib/espnApi";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { V1 } from "@/lib/v1Copy";
@@ -20,7 +25,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Clock,
   ExternalLink,
   Loader2,
   Plug,
@@ -50,9 +54,6 @@ interface LeagueRow {
   syncStatus: string | null;
   lastSyncedAt: Date | string | null;
 }
-
-const POLL_INTERVAL_MS = 3000;
-const TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 
@@ -344,46 +345,58 @@ function DiagnosticsCard() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function ConnectESPN() {
-  const [isWaiting, setIsWaiting] = useState(false);
-  const [timedOut, setTimedOut] = useState(false);
   const [newLeague, setNewLeague] = useState<LeagueRow | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [result, setResult] = useState<EspnConnectResult | null>(null);
+  const [readBackMissing, setReadBackMissing] = useState(false);
+  const [preflight, setPreflight] = useState<{
+    checked: boolean;
+    connectorPresent: boolean;
+    espnSignedIn: boolean | null;
+  }>({ checked: false, connectorPresent: false, espnSignedIn: null });
   const { atLimit } = useConnectedLeagueLimits();
   useConnectTeamStepHighlight();
 
-  // IDs that existed before polling started
-  const baselineIdsRef = useRef<Set<number>>(new Set());
-  const timeoutHandleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const utils = trpc.useUtils();
 
-  // Always-on leagues query; polling interval only active while waiting
-  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, {
-    refetchInterval: isWaiting ? POLL_INTERVAL_MS : false,
-  });
+  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined);
   const activeQ = trpc.league.getActive.useQuery();
 
   const leagues = (leaguesQ.data as LeagueRow[] | undefined) ?? [];
   const alreadyConnected = leagues.length > 0;
 
-  // Detect new league while polling
+  /** R7: one line per stage, with the fields that explain why the user is seeing what they see. */
+  function logConnectStage(
+    phase: "preflight" | "connect",
+    r: EspnConnectResult,
+    leagueFound: boolean | null,
+  ) {
+    console.info("[ConnectESPN] connect stage", {
+      phase,
+      stage: r.stage,
+      connectorPresent: r.connectorPresent,
+      espnSignedIn: r.espnSignedIn,
+      saveHttpStatus: r.saveHttpStatus,
+      leagueFound,
+      elapsedMs: r.elapsedMs,
+    });
+  }
+
+  // Preflight: answer "connector present?" and "ESPN signed in?" before the user clicks anything.
+  async function runPreflight(): Promise<void> {
+    const probe = await connectEspnViaConnector({ probe: true });
+    logConnectStage("preflight", probe, null);
+    setPreflight({
+      checked: true,
+      connectorPresent: probe.connectorPresent,
+      espnSignedIn:
+        probe.stage === "ready" ? true : probe.stage === "espn_signed_out" ? false : null,
+    });
+  }
+
   useEffect(() => {
-    if (!isWaiting) return;
-    const current = leaguesQ.data as LeagueRow[] | undefined;
-    if (!current) return;
-
-    const added = current.filter(l => !baselineIdsRef.current.has(l.id));
-    if (added.length > 0) {
-      const found = added[0];
-      setNewLeague(found);
-      setIsWaiting(false);
-      setTimedOut(false);
-      if (timeoutHandleRef.current) clearTimeout(timeoutHandleRef.current);
-    }
-  }, [leaguesQ.data, isWaiting]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => () => {
-    if (timeoutHandleRef.current) clearTimeout(timeoutHandleRef.current);
+    void runPreflight();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function openEspnConnectTab() {
@@ -392,40 +405,56 @@ export function ConnectESPN() {
     console.info("[ConnectESPN] ESPN connect open", {
       espnUrlOpened,
       leagueIdDetected: leagueIdForUrl ?? null,
-      swidPresent: false,
-      espnS2Present: false,
-      saveCredentialsHttpStatus: null,
-      refreshStarted: null,
+      connectorPresent: preflight.connectorPresent,
+      espnSignedIn: preflight.espnSignedIn,
+      saveCredentialsHttpStatus: result?.saveHttpStatus ?? null,
     });
     window.open(espnUrlOpened, "_blank", "noopener,noreferrer");
   }
 
-  function handleConnect() {
-    // Snapshot current league IDs as baseline
-    const current = (leaguesQ.data as LeagueRow[] | undefined) ?? [];
-    baselineIdsRef.current = new Set(current.map(l => l.id));
-
-    setIsWaiting(true);
-    setTimedOut(false);
+  /**
+   * Ask the Connector to capture and save the ESPN session. Resolves on the Connector's own reply,
+   * then confirms with a single backend read — no waiting for a row to show up on a timer.
+   */
+  async function runConnect(opts?: { leagueId?: string; leagueName?: string }) {
+    setConnecting(true);
+    setReadBackMissing(false);
     setNewLeague(null);
+    try {
+      const r = await connectEspnViaConnector(opts);
+      setResult(r);
+      setPreflight((p) => ({
+        checked: true,
+        connectorPresent: r.connectorPresent,
+        espnSignedIn: r.espnSignedIn ?? p.espnSignedIn,
+      }));
 
-    // Open ESPN in new tab (league overview when we know an active league id)
-    openEspnConnectTab();
+      if (r.stage !== "connected") {
+        logConnectStage("connect", r, null);
+        return;
+      }
 
-    // Start 2-minute timeout
-    timeoutHandleRef.current = setTimeout(() => {
-      setTimedOut(true);
-    }, TIMEOUT_MS);
+      void utils.league.getActive.invalidate();
+      const rows = (await utils.league.getMyLeagues.fetch(undefined)) as LeagueRow[] | undefined;
+      const saved = findConnectedLeague(rows ?? [], r.leagueId);
+      logConnectStage("connect", r, Boolean(saved));
+      if (saved) setNewLeague(saved);
+      else setReadBackMissing(true);
+    } finally {
+      setConnecting(false);
+    }
   }
 
-  function handleCancelWait() {
-    setIsWaiting(false);
-    setTimedOut(false);
-    if (timeoutHandleRef.current) clearTimeout(timeoutHandleRef.current);
+  function handleRetryPreflight() {
+    setResult(null);
+    setReadBackMissing(false);
+    void runPreflight();
   }
 
   function handleManualSuccess(leagueId: string, leagueName?: string) {
     setNewLeague(null);
+    setResult(null);
+    setReadBackMissing(false);
     void utils.league.getMyLeagues.invalidate();
     void utils.league.getActive.invalidate();
     setNewLeague({ id: 0, provider: "espn", leagueId, leagueName: leagueName ?? `ESPN League ${leagueId}`, season: 0, isActive: true, syncStatus: "pending", lastSyncedAt: null });
@@ -441,6 +470,10 @@ export function ConnectESPN() {
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────
+
+  const chooseLeagues = result?.stage === "choose" ? result.leagues : [];
+  const connectorMissing = preflight.checked && !preflight.connectorPresent;
+  const espnSignedOut = preflight.connectorPresent && preflight.espnSignedIn === false;
 
   return (
     <div className="mx-auto max-w-xl space-y-5">
@@ -471,7 +504,17 @@ export function ConnectESPN() {
       </div>
 
       <EspnConnectorGuide
-        highlightStep={newLeague ? 4 : isWaiting ? 2 : alreadyConnected ? 3 : 1}
+        highlightStep={
+          newLeague
+            ? 4
+            : preflight.connectorPresent && preflight.espnSignedIn === false
+              ? 2
+              : !preflight.connectorPresent && preflight.checked
+                ? 1
+                : alreadyConnected
+                  ? 3
+                  : 1
+        }
       />
 
       {/* Quick connect by League ID */}
@@ -481,7 +524,7 @@ export function ConnectESPN() {
       <Card className={cn(
         "border-2 transition-colors",
         newLeague ? "border-lime-500/40 bg-lime-500/5"
-          : isWaiting ? "border-primary/30 bg-primary/5"
+          : connecting ? "border-primary/30 bg-primary/5"
           : alreadyConnected ? "border-lime-500/20 bg-lime-500/5"
           : "border-primary/20 bg-primary/5"
       )}>
@@ -522,67 +565,61 @@ export function ConnectESPN() {
             </div>
           )}
 
-          {/* ── Waiting state ── */}
-          {!newLeague && isWaiting && (
+          {/* ── Connecting (bounded, Connector-driven) ── */}
+          {!newLeague && connecting && (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15">
                   <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 </div>
                 <div>
-                  <div className="font-semibold text-foreground">Waiting for ESPN connection…</div>
-                  <div className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    Checking every 3 seconds
+                  <div className="font-semibold text-foreground">Connecting your league…</div>
+                  <div className="text-sm text-muted-foreground">
+                    The ESPN Connector is reading your session and linking your league.
                   </div>
                 </div>
-              </div>
-
-              {timedOut && (
-                <div className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>
-                    Still waiting. Install the Fantasy Football Rivals ESPN Connector, open ESPN Fantasy Football,
-                    log in, then return to this tab.
-                  </span>
-                </div>
-              )}
-
-              <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-sm text-muted-foreground space-y-1">
-                <p className="font-medium text-foreground text-xs uppercase tracking-wide mb-2">
-                  In the ESPN tab (step 2):
-                </p>
-                <ol className="list-decimal pl-4 space-y-1 text-xs">
-                  <li>Log in to ESPN if prompted</li>
-                  <li>Open your fantasy football league</li>
-                  <li>The ESPN Connector reads your session — nothing to paste manually</li>
-                  <li>Return here — connection updates within seconds</li>
-                </ol>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={openEspnConnectTab}
-                  className="gap-1.5 text-xs"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" /> Re-open ESPN
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancelWait}
-                  className="text-xs text-muted-foreground"
-                >
-                  Cancel
-                </Button>
               </div>
             </div>
           )}
 
-          {/* ── Idle / already-connected state ── */}
-          {!newLeague && !isWaiting && (
+          {/* ── Pick a league (Connector found more than one) ── */}
+          {!newLeague && !connecting && chooseLeagues.length > 0 && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-foreground font-medium mb-1">
+                  Which league is yours?
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  The ESPN Connector found {chooseLeagues.length} leagues on your ESPN account. Pick one to link.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {chooseLeagues.map(l => (
+                  <Button
+                    key={l.id}
+                    variant="outline"
+                    className="w-full justify-between gap-2 font-medium"
+                    disabled={atLimit}
+                    onClick={() => void runConnect({ leagueId: l.id, leagueName: l.name })}
+                  >
+                    <span className="truncate">{l.name || `League ${l.id}`}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">ID {l.id}</span>
+                  </Button>
+                ))}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setResult(null)}
+                className="text-xs text-muted-foreground"
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+
+          {/* ── Idle / already-connected / blocked state ── */}
+          {!newLeague && !connecting && chooseLeagues.length === 0 && (
             <div className="space-y-4">
               {alreadyConnected && (
                 <div className="flex items-center gap-2">
@@ -593,26 +630,117 @@ export function ConnectESPN() {
                 </div>
               )}
 
-              <div>
-                <p className="text-sm text-foreground font-medium mb-1">
-                  Step 3 — Connect your league
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Click <span className="font-medium text-foreground">Connect ESPN</span> to open ESPN in a new tab.
-                  The ESPN Connector passes your session back here — you stay in Fantasy Football Rivals for everything else.
-                </p>
-              </div>
+              {connectorMissing ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      The Fantasy Football Rivals ESPN Connector isn&apos;t installed in this browser.
+                      Install it (step 1 above), then recheck — it&apos;s the secure bridge for private league data.
+                    </span>
+                  </div>
+                  <Button
+                    onClick={handleRetryPreflight}
+                    className="w-full gap-2 font-semibold"
+                    size="lg"
+                  >
+                    <Plug className="h-4 w-4" />
+                    I installed it — recheck
+                  </Button>
+                </div>
+              ) : espnSignedOut ? (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      You&apos;re not signed in to ESPN. Open ESPN Fantasy Football, log in with the account that
+                      can see your league, then come back and recheck.
+                    </span>
+                  </div>
+                  <Button
+                    onClick={openEspnConnectTab}
+                    className="w-full gap-2 font-semibold"
+                    size="lg"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Sign in at ESPN
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryPreflight}
+                    className="w-full text-xs"
+                  >
+                    I&apos;m signed in — recheck
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {result?.stage === "no_leagues" && (
+                    <div className="flex items-start gap-2 rounded border border-yellow-500/20 bg-yellow-500/10 px-3 py-3 text-sm text-yellow-300">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        No ESPN fantasy football leagues were found on your account. Open your league at
+                        fantasy.espn.com, then try again — or connect by League ID above.
+                      </span>
+                    </div>
+                  )}
 
-              <Button
-                onClick={handleConnect}
-                disabled={atLimit}
-                className="w-full gap-2 font-semibold"
-                size="lg"
-              >
-                <Plug className="h-4 w-4" />
-                Connect ESPN
-                <ExternalLink className="h-3.5 w-3.5 opacity-60" />
-              </Button>
+                  {result?.stage === "save_failed" && (
+                    <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-3 text-sm text-red-300">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        Saving your ESPN session failed
+                        {result.saveHttpStatus ? ` (HTTP ${result.saveHttpStatus})` : ""}
+                        {result.error ? `: ${result.error}` : "."}
+                      </span>
+                    </div>
+                  )}
+
+                  {(result?.stage === "timeout" || result?.stage === "error") && (
+                    <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-3 text-sm text-red-300">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>{result.error ?? "The ESPN Connector didn't respond."}</span>
+                    </div>
+                  )}
+
+                  {readBackMissing && (
+                    <div className="flex items-start gap-2 rounded border border-red-500/20 bg-red-500/10 px-3 py-3 text-sm text-red-300">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        The Connector saved your session, but the league didn&apos;t come back from Fantasy Football
+                        Rivals. Try again — if it keeps failing, connect by League ID above.
+                      </span>
+                    </div>
+                  )}
+
+                  <div>
+                    <p className="text-sm text-foreground font-medium mb-1">
+                      Step 3 — Connect your league
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Click <span className="font-medium text-foreground">Connect ESPN</span> and the ESPN Connector
+                      links your league from the session you&apos;re already signed in to — no League ID, no copying
+                      cookies. You stay in Fantasy Football Rivals for everything else.
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={() => void runConnect()}
+                    disabled={atLimit || !preflight.checked}
+                    className="w-full gap-2 font-semibold"
+                    size="lg"
+                  >
+                    <Plug className="h-4 w-4" />
+                    {result?.stage === "save_failed" ||
+                    result?.stage === "timeout" ||
+                    result?.stage === "error" ||
+                    readBackMissing
+                      ? "Retry connect"
+                      : "Connect ESPN"}
+                  </Button>
+                </div>
+              )}
 
               <p className="text-center text-xs text-muted-foreground">
                 Requires the{" "}

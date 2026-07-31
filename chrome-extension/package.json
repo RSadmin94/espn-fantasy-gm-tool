@@ -1,7 +1,7 @@
 {
   "name": "gm-war-room-chrome-extension",
   "private": true,
-  "version": "1.13.0",
+  "version": "1.14.0",
   "type": "module",
   "scripts": {
     "build:board-mirror": "node ../standalone/draft-board-monitor/scripts/build.mjs && node -e \"require('fs').copyFileSync('../standalone/draft-board-monitor/dist/draft-board-monitor.iife.js','providers/espn-live/board-mirror.iife.js')\"",

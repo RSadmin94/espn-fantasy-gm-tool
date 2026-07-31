@@ -473,6 +473,8 @@ const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
+/** Page (gmwarroom) → background: deterministic connect — cookies → discover → saveCredentials. */
+const MSG_CONNECT_ESPN = "GMWR_CONNECT_ESPN";
 
 /** RFSN-030C — FantasyPros solo mock connector (extension relay). */
 const MSG_FP_MOCK_ARM = "GMWR_FP_MOCK_ARM";
@@ -3065,6 +3067,132 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
       sendResponse({ ok: false, status: 0, error: msg, result: null, bodyText: "" });
+    });
+    return true;
+  }
+
+  // ─── Deterministic ESPN connect: read cookies → discover leagues → saveCredentials.
+  //     Every exit reports a stage so the page can render one specific next action. ───
+  if (t === MSG_CONNECT_ESPN) {
+    const connectStartedAt = Date.now();
+    const since = () => Date.now() - connectStartedAt;
+
+    (async () => {
+      const probe = message?.probe === true;
+      const requestedLeagueId = String(message?.leagueId || "").trim();
+      const requestedLeagueName = String(message?.leagueName || "").trim();
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        console.info("[GMWR] connect ESPN", { stage: "espn_signed_out", probe });
+        sendResponse({
+          ok: false,
+          stage: "espn_signed_out",
+          espnSignedIn: false,
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      if (probe) {
+        sendResponse({ ok: true, stage: "ready", espnSignedIn: true, elapsedMs: since() });
+        return;
+      }
+
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString();
+      if (!warRoomCookieHeader) {
+        console.info("[GMWR] connect ESPN", { stage: "save_failed", reason: "no_war_room_session" });
+        sendResponse({
+          ok: false,
+          stage: "save_failed",
+          espnSignedIn: true,
+          httpStatus: 401,
+          error:
+            "GM War Room session not found. Sign in at fantasyfootballrivals.com in this browser, then try again.",
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      let chosenId = requestedLeagueId;
+      let chosenName = requestedLeagueName;
+
+      if (!chosenId) {
+        const discovered = await discoverLeaguesWithEspnCookie(
+          buildEspnCookieHeader(swid, espnS2),
+          swid,
+        );
+        const leagues = Array.isArray(discovered?.leagues) ? discovered.leagues : [];
+        if (leagues.length === 0) {
+          console.info("[GMWR] connect ESPN", { stage: "no_leagues", httpStatus: discovered?.httpStatus ?? null });
+          sendResponse({
+            ok: false,
+            stage: "no_leagues",
+            espnSignedIn: true,
+            leagues: [],
+            httpStatus: discovered?.httpStatus ?? null,
+            error: discovered?.error || null,
+            elapsedMs: since(),
+          });
+          return;
+        }
+        if (leagues.length > 1) {
+          console.info("[GMWR] connect ESPN", { stage: "choose", leagueCount: leagues.length });
+          sendResponse({
+            ok: true,
+            stage: "choose",
+            espnSignedIn: true,
+            leagues: leagues.map((L) => ({
+              id: String(L?.id ?? "").trim(),
+              name: String(L?.name ?? "").trim(),
+            })),
+            elapsedMs: since(),
+          });
+          return;
+        }
+        chosenId = String(leagues[0]?.id ?? "").trim();
+        chosenName = String(leagues[0]?.name ?? "").trim();
+      }
+
+      const saved = await postSaveCredentials({
+        swid,
+        espnS2,
+        leagueId: chosenId,
+        leagueName: chosenName,
+        warRoomCookieHeader,
+      });
+      if (!saved.ok) {
+        console.info("[GMWR] connect ESPN", {
+          stage: "save_failed",
+          leagueId: chosenId,
+          httpStatus: saved.status ?? null,
+        });
+        sendResponse({
+          ok: false,
+          stage: "save_failed",
+          espnSignedIn: true,
+          leagueId: chosenId,
+          httpStatus: saved.status ?? null,
+          error: saved.error || "Save failed.",
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      console.info("[GMWR] connect ESPN", { stage: "connected", leagueId: chosenId });
+      sendResponse({
+        ok: true,
+        stage: "connected",
+        espnSignedIn: true,
+        leagueId: chosenId,
+        leagueName: chosenName,
+        httpStatus: saved.status ?? 200,
+        elapsedMs: since(),
+      });
+    })().catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.info("[GMWR] connect ESPN failed", { error: msg });
+      sendResponse({ ok: false, stage: "error", error: msg, elapsedMs: since() });
     });
     return true;
   }

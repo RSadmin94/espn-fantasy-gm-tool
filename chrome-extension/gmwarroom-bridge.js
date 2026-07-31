@@ -416,6 +416,54 @@
     return true;
   });
 
+  // Relay: deterministic ESPN connect. Background reads ESPN cookies, discovers leagues and
+  // POSTs saveCredentials; every reply carries a stage the page turns into one next action.
+  window.addEventListener(
+    "message",
+    (ev) => {
+      if (ev.source !== window) return;
+      const d = ev.data;
+      if (!d || d.type !== "GMWR_CONNECT_ESPN") return;
+      const id = d.id;
+      if (!id) return;
+      chrome.runtime.sendMessage(
+        {
+          type: "GMWR_CONNECT_ESPN",
+          probe: d.probe === true,
+          leagueId: d.leagueId != null ? String(d.leagueId).trim() : "",
+          leagueName: d.leagueName != null ? String(d.leagueName).trim() : "",
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage(
+              {
+                type: "GMWR_CONNECT_ESPN_REPLY",
+                id,
+                ok: false,
+                stage: "error",
+                error: chrome.runtime.lastError.message,
+              },
+              "*",
+            );
+            return;
+          }
+          const r = response || {};
+          window.postMessage(
+            {
+              ...r,
+              type: "GMWR_CONNECT_ESPN_REPLY",
+              id,
+              ok: Boolean(r.ok),
+              stage: typeof r.stage === "string" ? r.stage : "error",
+            },
+            "*",
+          );
+        },
+      );
+    },
+    false,
+  );
+
   // Relay: full-coverage weekly box-score / player-stats capture for one season.
   // Forwards to background.js (MSG_CAPTURE_WEEKLY_STATS), which fetches the full
   // ESPN box score (mBoxscore+mScoreboard+mMatchupScore) per week and posts the
