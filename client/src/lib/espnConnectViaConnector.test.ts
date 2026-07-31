@@ -208,6 +208,10 @@ describe("findConnectedLeague (backend read-back)", () => {
 
 describe("connect path timing (code property)", () => {
   const repoRoot = path.resolve(__dirname, "..", "..", "..");
+  const flowSource = readFileSync(
+    path.join(repoRoot, "client", "src", "hooks", "useEspnConnectFlow.ts"),
+    "utf8",
+  );
   const pageSource = readFileSync(
     path.join(repoRoot, "client", "src", "pages", "ConnectESPN.tsx"),
     "utf8",
@@ -225,13 +229,21 @@ describe("connect path timing (code property)", () => {
   });
 
   it("does not poll the leagues query on the primary connect path", () => {
-    expect(pageSource).not.toMatch(/refetchInterval/);
-    expect(pageSource).not.toMatch(/2 \* 60 \* 1000/);
-    expect(pageSource).not.toMatch(/POLL_INTERVAL_MS|TIMEOUT_MS/);
+    for (const source of [flowSource, pageSource]) {
+      expect(source).not.toMatch(/refetchInterval/);
+      expect(source).not.toMatch(/2 \* 60 \* 1000/);
+      expect(source).not.toMatch(/POLL_INTERVAL_MS|TIMEOUT_MS/);
+    }
   });
 
   it("drives the primary connect path through the Connector", () => {
-    expect(pageSource).toMatch(/connectEspnViaConnector/);
-    expect(pageSource).toMatch(/findConnectedLeague/);
+    expect(flowSource).toMatch(/connectEspnViaConnector/);
+    expect(flowSource).toMatch(/findConnectedLeague/);
+  });
+
+  it("keeps the page free of the legacy onboarding surfaces", () => {
+    expect(pageSource).not.toMatch(/Connect by League ID/);
+    expect(pageSource).not.toMatch(/EspnConnectorGuide|ProviderConnectCards/);
+    expect(pageSource).not.toMatch(/team-selection-help/);
   });
 });
