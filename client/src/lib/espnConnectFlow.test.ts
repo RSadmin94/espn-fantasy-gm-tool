@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { EspnConnectResult } from "./espnApi";
 import {
+  advanceSaving,
   applyConnectResult,
   applyPreflight,
   applyReadBack,
+  defaultLeagueSelection,
   initialEspnConnectFlowState,
+  recordFailedLeague,
   shouldAutoConnect,
+  startConfirming,
   startConnecting,
   startSaving,
 } from "./espnConnectFlow";
@@ -19,6 +23,7 @@ function result(over: Partial<EspnConnectResult>): EspnConnectResult {
     leagues: [],
     leagueId: null,
     leagueName: null,
+    savedTo: null,
     error: null,
     elapsedMs: 10,
     ...over,
@@ -71,10 +76,10 @@ describe("connect run", () => {
     );
     expect(s.step).toBe("connecting");
     expect(s.progress).toBe("confirming");
-    expect(s.league).toEqual({ id: "457622", name: "Atlanta's Finest" });
+    expect(s.connected).toEqual([{ id: "457622", name: "Atlanta's Finest" }]);
 
-    expect(applyReadBack(s, true).step).toBe("connected");
-    expect(applyReadBack(s, false).problem?.kind).toBe("read_back_missing");
+    expect(applyReadBack(s, ["457622"]).step).toBe("connected");
+    expect(applyReadBack(s, []).problem?.kind).toBe("read_back_missing");
   });
 
   it("keeps the HTTP status out of the copy but not out of the record", () => {
@@ -105,6 +110,71 @@ describe("connect run", () => {
 
   it("shows the linking line once a league has been picked", () => {
     expect(startSaving(initialEspnConnectFlowState()).progress).toBe("linking");
+  });
+});
+
+describe("connecting several leagues at once", () => {
+  const picks = [
+    { id: "1", name: "Atlanta's Finest" },
+    { id: "2", name: "Dynasty Money" },
+    { id: "3", name: "The Gauntlet" },
+  ];
+
+  it("starts the batch on the first pick and counts through the rest", () => {
+    const s = startSaving(initialEspnConnectFlowState(), picks);
+    expect(s.progress).toBe("linking");
+    expect(s.pending).toEqual({ index: 0, total: 3, name: "Atlanta's Finest" });
+
+    const next = advanceSaving(s, 1, "Dynasty Money", 3);
+    expect(next.pending).toEqual({ index: 1, total: 3, name: "Dynasty Money" });
+  });
+
+  it("keeps going when one league fails and reports it alongside the winners", () => {
+    let s = startSaving(initialEspnConnectFlowState(), picks);
+    s = recordFailedLeague(s, picks[1]);
+    s = startConfirming(s, [picks[0], picks[2]]);
+    expect(s.progress).toBe("confirming");
+    expect(s.connected).toHaveLength(2);
+
+    s = applyReadBack(s, ["1", "3"]);
+    expect(s.step).toBe("connected");
+    expect(s.connected.map((l) => l.id)).toEqual(["1", "3"]);
+    expect(s.failed.map((l) => l.id)).toEqual(["2"]);
+  });
+
+  it("demotes a league the backend cannot see, even when its siblings saved", () => {
+    let s = startConfirming(startSaving(initialEspnConnectFlowState(), picks), picks);
+    s = applyReadBack(s, ["1", "2"]);
+    expect(s.step).toBe("connected");
+    expect(s.connected.map((l) => l.id)).toEqual(["1", "2"]);
+    expect(s.failed.map((l) => l.id)).toEqual(["3"]);
+  });
+
+  it("treats a batch the backend confirms none of as a failure", () => {
+    const s = applyReadBack(
+      startConfirming(startSaving(initialEspnConnectFlowState(), picks), picks),
+      [],
+    );
+    expect(s.step).toBe("problem");
+    expect(s.problem?.kind).toBe("read_back_missing");
+    expect(s.failed).toHaveLength(3);
+  });
+
+  it("records a failed league only once", () => {
+    let s = startSaving(initialEspnConnectFlowState(), picks);
+    s = recordFailedLeague(s, picks[0]);
+    s = recordFailedLeague(s, picks[0]);
+    expect(s.failed).toHaveLength(1);
+  });
+
+  it("ticks every league by default", () => {
+    expect(defaultLeagueSelection(picks, null)).toEqual(["1", "2", "3"]);
+    expect(defaultLeagueSelection(picks, 5)).toEqual(["1", "2", "3"]);
+  });
+
+  it("never pre-selects more leagues than the account has room for", () => {
+    expect(defaultLeagueSelection(picks, 2)).toEqual(["1", "2"]);
+    expect(defaultLeagueSelection(picks, 0)).toEqual([]);
   });
 
   it("never leaks technical language into any problem message", () => {

@@ -16,7 +16,7 @@ import {
  * connecting — it only picks which step the user is looking at.
  */
 export function EspnConnectFlow() {
-  const { state, busy, connectedLeagues, atLimit, recheck, connect, chooseLeague } =
+  const { state, busy, connectedLeagues, atLimit, remainingSlots, recheck, connect, chooseLeagues } =
     useEspnConnectFlow();
 
   switch (state.step) {
@@ -35,15 +35,23 @@ export function EspnConnectFlow() {
       return <SignInEspnStep onRecheck={recheck} busy={busy} />;
 
     case "connecting":
-      return <ConnectingStep progress={state.progress} leagueName={state.league?.name ?? null} />;
+      return <ConnectingStep progress={state.progress} pending={state.pending} />;
 
     case "choose":
-      return <ChooseLeagueStep leagues={state.leagues} onChoose={chooseLeague} disabled={busy} />;
+      return (
+        <ChooseLeagueStep
+          leagues={state.leagues}
+          onConnect={chooseLeagues}
+          disabled={busy}
+          remainingSlots={remainingSlots}
+        />
+      );
 
     case "connected":
       return (
         <ConnectedStep
-          leagueName={state.league?.name || "Your league"}
+          leagues={state.connected}
+          failed={state.failed}
           onConnectAnother={connect}
           canConnectAnother={!atLimit}
         />
@@ -58,11 +66,12 @@ export function EspnConnectFlow() {
     default: {
       // Connector and ESPN are both ready but we did not auto-connect: this account already has a
       // league (or is at its limit), so show where they stand rather than reconnecting silently.
-      const existing = connectedLeagues.find((l) => l.provider === "espn") ?? connectedLeagues[0];
-      if (existing && !atLimit) {
+      const existing = connectedLeagues.filter((l) => l.provider === "espn");
+      const shown = existing.length ? existing : connectedLeagues;
+      if (shown.length && !atLimit) {
         return (
           <ConnectedStep
-            leagueName={existing.leagueName || "Your league"}
+            leagues={shown.map((l) => ({ id: l.leagueId, name: l.leagueName || "Your league" }))}
             onConnectAnother={connect}
             canConnectAnother
           />

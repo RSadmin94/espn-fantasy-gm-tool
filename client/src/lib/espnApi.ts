@@ -522,6 +522,8 @@ export interface EspnConnectResult {
   leagues: EspnConnectLeagueOption[];
   leagueId: string | null;
   leagueName: string | null;
+  /** Origin the connector posted the save to — proves which environment received the connection. */
+  savedTo: string | null;
   error: string | null;
   elapsedMs: number;
 }
@@ -594,6 +596,7 @@ export function normalizeEspnConnectReply(raw: unknown, elapsedMs: number): Espn
     leagues,
     leagueId,
     leagueName: leagueName ?? (leagueId ? `League ${leagueId}` : null),
+    savedTo: String(d.savedTo ?? "").trim() || null,
     error: stage === "error" && !error ? "Connector returned an unrecognized reply." : error,
     elapsedMs,
   };
@@ -608,6 +611,7 @@ function connectorMissingResult(elapsedMs: number): EspnConnectResult {
     leagues: [],
     leagueId: null,
     leagueName: null,
+    savedTo: null,
     error: null,
     elapsedMs,
   };
@@ -663,6 +667,7 @@ export function connectEspnViaConnector(opts?: ConnectEspnOptions): Promise<Espn
         leagues: [],
         leagueId: null,
         leagueName: null,
+        savedTo: null,
         error: `Connector did not reply within ${Math.round(timeoutMs / 1000)}s.`,
         elapsedMs: Date.now() - startedAt,
       });

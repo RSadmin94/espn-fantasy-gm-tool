@@ -36,16 +36,40 @@ export interface EspnConnectProblem {
 /** Which line of the connecting checklist is still in flight. */
 export type EspnConnectProgress = "searching" | "linking" | "confirming";
 
+export interface EspnConnectLeagueRef {
+  id: string;
+  name: string;
+}
+
+/** Position within a multi-league save, so the checklist can say which one is linking. */
+export interface EspnConnectPending {
+  index: number;
+  total: number;
+  name: string;
+}
+
 export interface EspnConnectFlowState {
   step: EspnConnectStep;
   leagues: EspnConnectLeagueOption[];
-  league: { id: string; name: string } | null;
+  /** Leagues linked in this run, confirmed by the backend once the run reaches `connected`. */
+  connected: EspnConnectLeagueRef[];
+  /** Leagues the user picked that did not link, so a partial success can say which. */
+  failed: EspnConnectLeagueRef[];
+  pending: EspnConnectPending | null;
   problem: EspnConnectProblem | null;
   progress: EspnConnectProgress;
 }
 
 export function initialEspnConnectFlowState(): EspnConnectFlowState {
-  return { step: "preflight", leagues: [], league: null, problem: null, progress: "searching" };
+  return {
+    step: "preflight",
+    leagues: [],
+    connected: [],
+    failed: [],
+    pending: null,
+    problem: null,
+    progress: "searching",
+  };
 }
 
 function problemFor(
@@ -104,7 +128,16 @@ export function applyPreflight(result: EspnConnectResult): EspnConnectFlowState 
 
 /** Entering a connect run, whether auto-advanced from preflight or started by the user. */
 export function startConnecting(state: EspnConnectFlowState): EspnConnectFlowState {
-  return { ...state, step: "connecting", progress: "searching", problem: null, leagues: [] };
+  return {
+    ...state,
+    step: "connecting",
+    progress: "searching",
+    problem: null,
+    leagues: [],
+    connected: [],
+    failed: [],
+    pending: null,
+  };
 }
 
 /** A finished connect run. `connected` is provisional until the backend read-back confirms it. */
@@ -114,52 +147,139 @@ export function applyConnectResult(
 ): EspnConnectFlowState {
   switch (result.stage) {
     case "connector_missing":
-      return { ...state, step: "connector_missing", problem: null, leagues: [] };
+      return { ...state, step: "connector_missing", problem: null, leagues: [], pending: null };
     case "espn_signed_out":
-      return { ...state, step: "espn_signed_out", problem: null, leagues: [] };
+      return { ...state, step: "espn_signed_out", problem: null, leagues: [], pending: null };
     case "choose":
       return { ...state, step: "choose", leagues: result.leagues, problem: null };
-    case "connected":
+    case "connected": {
+      const linked: EspnConnectLeagueRef = {
+        id: result.leagueId ?? "",
+        name: result.leagueName ?? `League ${result.leagueId ?? ""}`,
+      };
       return {
         ...state,
         step: "connecting",
         progress: "confirming",
         problem: null,
-        league: {
-          id: result.leagueId ?? "",
-          name: result.leagueName ?? `League ${result.leagueId ?? ""}`,
-        },
+        connected: state.connected.some((l) => l.id === linked.id)
+          ? state.connected
+          : [...state.connected, linked],
       };
+    }
     case "no_leagues":
-      return { ...state, step: "problem", leagues: [], problem: problemFor("no_leagues", result.error) };
+      return {
+        ...state,
+        step: "problem",
+        leagues: [],
+        pending: null,
+        problem: problemFor("no_leagues", result.error),
+      };
     case "save_failed":
       return {
         ...state,
         step: "problem",
+        pending: null,
         problem: problemFor(
           "save_failed",
           result.saveHttpStatus ? `HTTP ${result.saveHttpStatus} ${result.error ?? ""}`.trim() : result.error,
         ),
       };
     case "timeout":
-      return { ...state, step: "problem", problem: problemFor("timeout", result.error) };
+      return { ...state, step: "problem", pending: null, problem: problemFor("timeout", result.error) };
     default:
-      return { ...state, step: "problem", problem: problemFor("error", result.error) };
+      return { ...state, step: "problem", pending: null, problem: problemFor("error", result.error) };
   }
 }
 
-/** The backend read-back is what actually decides whether the user is connected. */
+/**
+ * The backend read-back is what actually decides whether the user is connected. A league the
+ * connector claimed but the backend cannot see is a failure, even when its siblings succeeded.
+ */
 export function applyReadBack(
   state: EspnConnectFlowState,
-  found: boolean,
+  confirmedIds: readonly string[],
 ): EspnConnectFlowState {
-  if (found) return { ...state, step: "connected", problem: null };
-  return { ...state, step: "problem", problem: problemFor("read_back_missing", null) };
+  const confirmed = new Set(confirmedIds);
+  const kept = state.connected.filter((l) => confirmed.has(l.id));
+  const lost = state.connected.filter((l) => !confirmed.has(l.id));
+  const failed = [...state.failed, ...lost];
+
+  if (kept.length === 0) {
+    return {
+      ...state,
+      step: "problem",
+      connected: [],
+      failed,
+      pending: null,
+      problem: problemFor("read_back_missing", null),
+    };
+  }
+  return { ...state, step: "connected", connected: kept, failed, pending: null, problem: null };
 }
 
-/** Moving from the league picker into the save, so the checklist shows the right line. */
-export function startSaving(state: EspnConnectFlowState): EspnConnectFlowState {
-  return { ...state, step: "connecting", progress: "linking", problem: null };
+/** Moving from the league picker into the saves, so the checklist shows the right line. */
+export function startSaving(
+  state: EspnConnectFlowState,
+  picks: readonly EspnConnectLeagueRef[] = [],
+): EspnConnectFlowState {
+  return {
+    ...state,
+    step: "connecting",
+    progress: "linking",
+    problem: null,
+    connected: [],
+    failed: [],
+    pending: picks.length
+      ? { index: 0, total: picks.length, name: picks[0]?.name ?? "" }
+      : state.pending,
+  };
+}
+
+/** Advancing to the next league in a multi-league save. */
+export function advanceSaving(
+  state: EspnConnectFlowState,
+  index: number,
+  name: string,
+  total: number,
+): EspnConnectFlowState {
+  return { ...state, step: "connecting", progress: "linking", pending: { index, total, name } };
+}
+
+/** One league in a batch did not link; the rest of the batch carries on. */
+export function recordFailedLeague(
+  state: EspnConnectFlowState,
+  league: EspnConnectLeagueRef,
+): EspnConnectFlowState {
+  if (state.failed.some((l) => l.id === league.id)) return state;
+  return { ...state, failed: [...state.failed, league] };
+}
+
+/** Every league the connector accepted is saved; waiting on the backend to confirm them. */
+export function startConfirming(
+  state: EspnConnectFlowState,
+  linked: readonly EspnConnectLeagueRef[],
+): EspnConnectFlowState {
+  return {
+    ...state,
+    step: "connecting",
+    progress: "confirming",
+    pending: null,
+    connected: [...linked],
+  };
+}
+
+/**
+ * Which leagues start ticked in the picker. Connecting everything is the common case, so the
+ * default is all of them — trimmed to the slots the account has left rather than letting the user
+ * pick a batch the backend would reject halfway through.
+ */
+export function defaultLeagueSelection(
+  leagues: readonly EspnConnectLeagueOption[],
+  remainingSlots: number | null,
+): string[] {
+  const cap = remainingSlots == null ? leagues.length : Math.max(0, remainingSlots);
+  return leagues.slice(0, cap).map((league) => league.id);
 }
 
 /**

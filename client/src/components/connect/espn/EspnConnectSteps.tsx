@@ -10,8 +10,12 @@ import {
   Puzzle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { buildEspnFantasyFootballConnectUrl } from "@/lib/espnConnectUrl";
+import { defaultLeagueSelection } from "@/lib/espnConnectFlow";
 import type {
+  EspnConnectLeagueRef,
+  EspnConnectPending,
   EspnConnectProblem,
   EspnConnectProgress,
 } from "@/lib/espnConnectFlow";
@@ -176,16 +180,19 @@ function ChecklistRow({
 
 export function ConnectingStep({
   progress,
-  leagueName,
+  pending,
 }: {
   progress: EspnConnectProgress;
-  leagueName: string | null;
+  pending: EspnConnectPending | null;
 }) {
+  const many = (pending?.total ?? 1) > 1;
   const headline =
     progress === "searching"
       ? "Finding your leagues"
       : progress === "linking"
-        ? "Linking your league"
+        ? many
+          ? `Linking league ${(pending?.index ?? 0) + 1} of ${pending?.total}`
+          : "Linking your league"
         : "Almost there";
 
   const searchState = progress === "searching" ? "active" : "done";
@@ -200,7 +207,7 @@ export function ConnectingStep({
         <ChecklistRow state="done">ESPN session found</ChecklistRow>
         <ChecklistRow state={searchState}>Searching your leagues</ChecklistRow>
         <ChecklistRow state={linkState}>
-          {leagueName ? `Linking ${leagueName}` : "Linking your league"}
+          {pending?.name ? `Linking ${pending.name}` : "Linking your leagues"}
         </ChecklistRow>
         <ChecklistRow state={confirmState}>Confirming</ChecklistRow>
       </ul>
@@ -212,34 +219,91 @@ export function ConnectingStep({
 
 export function ChooseLeagueStep({
   leagues,
-  onChoose,
+  onConnect,
   disabled,
+  remainingSlots,
 }: {
   leagues: readonly EspnConnectLeagueOption[];
-  onChoose: (leagueId: string, leagueName: string) => void;
+  onConnect: (picks: readonly EspnConnectLeagueRef[]) => void;
   disabled?: boolean;
+  remainingSlots: number | null;
 }) {
+  const [selected, setSelected] = useState<string[]>(() =>
+    defaultLeagueSelection(leagues, remainingSlots),
+  );
+
+  const cap = remainingSlots == null ? leagues.length : Math.max(0, remainingSlots);
+  const capped = cap < leagues.length;
+  const allSelected = selected.length === Math.min(cap, leagues.length) && selected.length > 0;
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= cap) return prev;
+      return [...prev, id];
+    });
+  }
+
+  function toggleAll() {
+    setSelected(allSelected ? [] : defaultLeagueSelection(leagues, remainingSlots));
+  }
+
+  const picks = leagues
+    .filter((league) => selected.includes(league.id))
+    .map((league) => ({ id: league.id, name: league.name }));
+
   return (
     <ConnectStepCard
-      headline="Which league is yours?"
-      message={`We found ${leagues.length} on your ESPN account.`}
+      headline="Which leagues are yours?"
+      message={
+        capped
+          ? `We found ${leagues.length} on your ESPN account. You can connect ${cap} more.`
+          : `We found ${leagues.length} on your ESPN account. Pick as many as you like.`
+      }
+      primary={
+        <Button
+          size="lg"
+          disabled={disabled || picks.length === 0}
+          className="w-full gap-2 font-semibold"
+          onClick={() => onConnect(picks)}
+        >
+          {disabled ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+          {picks.length > 1 ? `Connect ${picks.length} leagues` : "Connect league"}
+        </Button>
+      }
+      secondary={
+        <ConnectStepLink onClick={toggleAll}>
+          {allSelected ? "Clear all" : "Select all"}
+        </ConnectStepLink>
+      }
     >
       <ul className="space-y-2 text-left">
-        {leagues.map((league) => (
-          <li key={league.id}>
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onChoose(league.id, league.name)}
-              className="flex w-full items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/40 px-4 py-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
-            >
-              <span className="truncate text-sm font-semibold text-foreground">
-                {league.name || "ESPN league"}
-              </span>
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-            </button>
-          </li>
-        ))}
+        {leagues.map((league) => {
+          const checked = selected.includes(league.id);
+          const full = !checked && selected.length >= cap;
+          return (
+            <li key={league.id}>
+              <label
+                className={cn(
+                  "flex w-full cursor-pointer items-center gap-3 rounded-xl border px-4 py-4 transition-colors",
+                  checked
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border/70 bg-card/40 hover:border-primary/30",
+                  (disabled || full) && "cursor-not-allowed opacity-50",
+                )}
+              >
+                <Checkbox
+                  checked={checked}
+                  disabled={disabled || full}
+                  onCheckedChange={() => toggle(league.id)}
+                />
+                <span className="truncate text-sm font-semibold text-foreground">
+                  {league.name || "ESPN league"}
+                </span>
+              </label>
+            </li>
+          );
+        })}
       </ul>
     </ConnectStepCard>
   );
@@ -248,14 +312,18 @@ export function ChooseLeagueStep({
 // ── 5. Connected ──────────────────────────────────────────────────────────────
 
 export function ConnectedStep({
-  leagueName,
+  leagues,
+  failed = [],
   onConnectAnother,
   canConnectAnother,
 }: {
-  leagueName: string;
+  leagues: readonly EspnConnectLeagueRef[];
+  failed?: readonly EspnConnectLeagueRef[];
   onConnectAnother: () => void;
   canConnectAnother: boolean;
 }) {
+  const many = leagues.length > 1;
+
   return (
     <ConnectStepCard
       tone="success"
@@ -264,11 +332,17 @@ export function ConnectedStep({
           <Check className="h-7 w-7" />
         </Mark>
       }
-      headline={leagueName}
-      message="Connected. We're pulling in your league history now."
+      headline={many ? `${leagues.length} leagues connected` : leagues[0]?.name || "Your league"}
+      message={
+        failed.length === 0
+          ? "Connected. We're pulling in your league history now."
+          : failed.length === 1
+            ? "We're pulling in your league history now. One league didn't link — you can try it again."
+            : "We're pulling in your league history now. Some leagues didn't link — you can try them again."
+      }
       primary={
         <Button asChild size="lg" className="w-full gap-2 font-semibold">
-          <Link to="/connected-leagues">Pick your team</Link>
+          <Link to="/connected-leagues">{many ? "Pick your teams" : "Pick your team"}</Link>
         </Button>
       }
       secondary={
@@ -276,7 +350,36 @@ export function ConnectedStep({
           <ConnectStepLink onClick={onConnectAnother}>Connect another league</ConnectStepLink>
         ) : undefined
       }
-    />
+    >
+      {many && (
+        <ul className="space-y-2 text-left">
+          {leagues.map((league) => (
+            <li
+              key={league.id}
+              className="flex items-center gap-3 rounded-xl border border-lime-500/20 bg-lime-500/5 px-4 py-3"
+            >
+              <Check className="h-4 w-4 shrink-0 text-lime-400" />
+              <span className="truncate text-sm font-medium text-foreground">{league.name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {failed.length > 0 && (
+        <ul className="space-y-2 text-left">
+          {failed.map((league) => (
+            <li
+              key={league.id}
+              className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+              <span className="truncate text-sm font-medium text-muted-foreground">
+                {league.name} didn't link
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </ConnectStepCard>
   );
 }
 
