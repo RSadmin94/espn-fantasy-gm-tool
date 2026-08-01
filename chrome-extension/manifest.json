@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GM War Room — ESPN + FantasyPros",
-  "version": "1.14.0",
+  "version": "1.14.1",
   "description": "Connect ESPN Fantasy credentials and FantasyPros solo mock draft picks to Fantasy Football Rivals / GM War Room.",
   "permissions": ["cookies", "tabs", "scripting", "storage", "declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
   "host_permissions": [
