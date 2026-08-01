@@ -283,6 +283,59 @@ export function defaultLeagueSelection(
 }
 
 /**
+ * What the last connector call told us, carried alongside the funnel event so a step can be read
+ * without joining it to anything else. Null means "not observed yet on this run".
+ */
+export interface ConnectFunnelFacts {
+  connectorPresent: boolean | null;
+  espnSignedIn: boolean | null;
+  saveHttpStatus: number | null;
+  leagueFound: boolean | null;
+  elapsedMs: number | null;
+}
+
+export function emptyConnectFunnelFacts(): ConnectFunnelFacts {
+  return {
+    connectorPresent: null,
+    espnSignedIn: null,
+    saveHttpStatus: null,
+    leagueFound: null,
+    elapsedMs: null,
+  };
+}
+
+/**
+ * Funnel step name for a state. Every state a user can land on gets one, so the drop-off between
+ * any two adjacent screens is a subtraction rather than an inference.
+ */
+export function connectFunnelStep(step: EspnConnectStep): string {
+  return `onboarding_${step}`;
+}
+
+/**
+ * The payload for a step event. Counts come from the state so a funnel row explains itself:
+ * how many leagues were offered, how many linked, how many did not.
+ */
+export function connectFunnelExtra(
+  state: EspnConnectFlowState,
+  facts: ConnectFunnelFacts,
+): Record<string, unknown> {
+  return {
+    provider: "espn",
+    step: state.step,
+    problemKind: state.problem?.kind ?? null,
+    leagueCount: state.leagues.length,
+    connectedCount: state.connected.length,
+    failedCount: state.failed.length,
+    connectorPresent: facts.connectorPresent,
+    espnSignedIn: facts.espnSignedIn,
+    saveHttpStatus: facts.saveHttpStatus,
+    leagueFound: facts.leagueFound,
+    elapsedMs: facts.elapsedMs,
+  };
+}
+
+/**
  * Auto-advance is what makes the page feel like it just works, but it also saves credentials
  * without a click — so it only runs for someone who has no league yet and can act on the result.
  */

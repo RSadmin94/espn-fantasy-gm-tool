@@ -5,7 +5,10 @@ import {
   applyConnectResult,
   applyPreflight,
   applyReadBack,
+  connectFunnelExtra,
+  connectFunnelStep,
   defaultLeagueSelection,
+  emptyConnectFunnelFacts,
   initialEspnConnectFlowState,
   recordFailedLeague,
   shouldAutoConnect,
@@ -226,5 +229,82 @@ describe("auto-advance guard", () => {
   it("does not fire from any step other than ready", () => {
     expect(shouldAutoConnect({ ...base, step: "connector_missing" })).toBe(false);
     expect(shouldAutoConnect({ ...base, step: "problem" })).toBe(false);
+  });
+});
+
+describe("funnel instrumentation", () => {
+  it("names one event per step a user can reach", () => {
+    expect(connectFunnelStep("preflight")).toBe("onboarding_preflight");
+    expect(connectFunnelStep("connector_missing")).toBe("onboarding_connector_missing");
+    expect(connectFunnelStep("espn_signed_out")).toBe("onboarding_espn_signed_out");
+    expect(connectFunnelStep("connected")).toBe("onboarding_connected");
+  });
+
+  it("gives every step a distinct name so drop-off is a subtraction", () => {
+    const steps = [
+      "preflight",
+      "connector_missing",
+      "espn_signed_out",
+      "ready",
+      "connecting",
+      "choose",
+      "connected",
+      "problem",
+    ] as const;
+    const names = steps.map(connectFunnelStep);
+    expect(new Set(names).size).toBe(steps.length);
+  });
+
+  it("starts with nothing observed rather than guessing", () => {
+    const facts = emptyConnectFunnelFacts();
+    expect(facts.connectorPresent).toBeNull();
+    expect(facts.espnSignedIn).toBeNull();
+    expect(facts.elapsedMs).toBeNull();
+  });
+
+  it("carries the connector reading onto the step event", () => {
+    const extra = connectFunnelExtra(initialEspnConnectFlowState(), {
+      connectorPresent: true,
+      espnSignedIn: false,
+      saveHttpStatus: 500,
+      leagueFound: false,
+      elapsedMs: 42,
+    });
+    expect(extra.provider).toBe("espn");
+    expect(extra.connectorPresent).toBe(true);
+    expect(extra.espnSignedIn).toBe(false);
+    expect(extra.saveHttpStatus).toBe(500);
+    expect(extra.leagueFound).toBe(false);
+    expect(extra.elapsedMs).toBe(42);
+  });
+
+  it("explains a partial connect without needing a join", () => {
+    let s = applyConnectResult(startConnecting(initialEspnConnectFlowState()), {
+      ...result({ stage: "choose" }),
+      leagues: [
+        { id: "1", name: "Alpha" },
+        { id: "2", name: "Beta" },
+      ],
+    });
+    s = startSaving(s, [{ id: "1", name: "Alpha" }]);
+    s = recordFailedLeague(s, { id: "2", name: "Beta" });
+    s = startConfirming(s, [{ id: "1", name: "Alpha" }]);
+
+    const extra = connectFunnelExtra(s, emptyConnectFunnelFacts());
+    expect(extra.leagueCount).toBe(2);
+    expect(extra.connectedCount).toBe(1);
+    expect(extra.failedCount).toBe(1);
+  });
+
+  it("reports why a run failed", () => {
+    const s = applyConnectResult(initialEspnConnectFlowState(), result({ stage: "no_leagues" }));
+    const extra = connectFunnelExtra(s, emptyConnectFunnelFacts());
+    expect(extra.step).toBe("problem");
+    expect(extra.problemKind).toBe("no_leagues");
+  });
+
+  it("leaves problemKind null on a healthy step", () => {
+    const extra = connectFunnelExtra(initialEspnConnectFlowState(), emptyConnectFunnelFacts());
+    expect(extra.problemKind).toBeNull();
   });
 });

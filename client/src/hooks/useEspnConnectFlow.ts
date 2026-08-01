@@ -16,15 +16,21 @@ import {
   applyConnectResult,
   applyPreflight,
   applyReadBack,
+  connectFunnelExtra,
+  connectFunnelStep,
+  emptyConnectFunnelFacts,
   initialEspnConnectFlowState,
   recordFailedLeague,
   shouldAutoConnect,
   startConfirming,
   startConnecting,
   startSaving,
+  type ConnectFunnelFacts,
   type EspnConnectFlowState,
   type EspnConnectLeagueRef,
+  type EspnConnectStep,
 } from "@/lib/espnConnectFlow";
+import { useFunnel } from "@/lib/funnel";
 import { trpc } from "@/lib/trpc";
 
 interface ConnectedLeagueRow {
@@ -54,6 +60,10 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
   const [busy, setBusy] = useState(false);
   const autoRanRef = useRef(false);
   const runIdRef = useRef(0);
+  const track = useFunnel();
+  /** Latest connector reading, so a step event explains itself without a join. */
+  const factsRef = useRef<ConnectFunnelFacts>(emptyConnectFunnelFacts());
+  const trackedStepRef = useRef<EspnConnectStep | null>(null);
 
   const utils = trpc.useUtils();
   const sessionQ = trpc.me.session.useQuery();
@@ -68,6 +78,14 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
   /** R7: one line per stage with the fields that explain what the user is about to see. */
   const report = useCallback(
     (phase: "preflight" | "connect" | "verify", r: EspnConnectResult, leagueFound: boolean | null) => {
+      // Recorded before the state update that follows, so the step event it lands on is current.
+      factsRef.current = {
+        connectorPresent: r.connectorPresent,
+        espnSignedIn: r.espnSignedIn,
+        saveHttpStatus: r.saveHttpStatus,
+        leagueFound,
+        elapsedMs: r.elapsedMs,
+      };
       console.info("[ConnectESPN] connect stage", {
         phase,
         stage: r.stage,
@@ -188,6 +206,21 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
     },
     [report, verify],
   );
+
+  /**
+   * One event per step the user actually reaches, so drop-off between two adjacent screens is a
+   * subtraction. Deduped on the step itself: progress moving inside `connecting` is not a new
+   * funnel position, but returning to a step after a retry is.
+   */
+  useEffect(() => {
+    if (trackedStepRef.current === state.step) return;
+    trackedStepRef.current = state.step;
+    track(connectFunnelStep(state.step), {
+      eventType: "feature_open",
+      page: "/connect",
+      extra: connectFunnelExtra(state, factsRef.current),
+    });
+  }, [state, track]);
 
   useEffect(() => {
     void runPreflight();
