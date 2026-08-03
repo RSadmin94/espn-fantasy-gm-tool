@@ -14,7 +14,7 @@ import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRec
 import { FirstWowMomentCard } from "@/components/onboarding/FirstWowMomentCard";
 import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
-import { useRivalsProCheckout } from "@/hooks/useRivalsProCheckout";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { trpc } from "@/lib/trpc";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -400,7 +400,7 @@ function ComingNext({ comingNext, hasAccess, onUnlock, pending }: {
 
 export function GmBriefingPage(props: GmBriefingPageProps) {
   const { hasAccess, isLoading: accessLoading } = usePremiumAccess();
-  const { startCheckout, isPending: checkoutPending } = useRivalsProCheckout();
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog();
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const rivalryReady = Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
   const rivalryQ = trpc.rivalry.getScores.useQuery(withLeagueSalt({}, leagueContextKey), {
@@ -474,9 +474,11 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
     syncReady: props.syncReady,
   });
 
-  const onUnlock = () => void startCheckout();
+  const onUnlock = () => openUpgrade();
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell
       width="standard"
       background="none"
@@ -512,7 +514,7 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
             rival={edition.rival}
             hasAccess={hasAccess}
             onUnlock={onUnlock}
-            pending={checkoutPending || accessLoading}
+            pending={accessLoading}
           />
         ) : (
           <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/60 p-8 text-sm text-muted-foreground">
@@ -525,7 +527,7 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
         advantage={edition.advantage}
         hasAccess={hasAccess}
         onUnlock={onUnlock}
-        pending={checkoutPending}
+        pending={false}
       />
 
       <section className="space-y-3">
@@ -546,8 +548,9 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
         comingNext={edition.comingNext}
         hasAccess={hasAccess}
         onUnlock={onUnlock}
-        pending={checkoutPending}
+        pending={false}
       />
     </IntelPageShell>
+    </>
   );
 }

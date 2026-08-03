@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useFunnel } from "@/lib/funnel";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -7,6 +6,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
   Dna, Users, TrendingUp, AlertTriangle, ChevronRight, Loader2,
   Trophy, Repeat2, Boxes, Crown,
@@ -52,14 +52,9 @@ export function LeagueDna() {
     "Your archetype and blind spot are free — the who. Rivals Pro explains why your draft, trade, and roster DNA succeed or cost you titles.",
   );
 
-  const checkout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
+    description: dnaPaywallCopy.description,
   });
   // Funnel events (visitorId stitch via metadata; userId added server-side). Canonical funnel
   // names plus the legacy dna_* names kept for existing UsageMonitor dashboards.
@@ -86,12 +81,14 @@ export function LeagueDna() {
     track("upgrade_clicked", { eventType: "cta_click", page: "league-dna", extra: { section: "league_dna" } });
     track("dna_unlock_clicked", { eventType: "cta_click", page: "league-dna" });
     track("checkout_started", { eventType: "cta_click", page: "league-dna" });
-    checkout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   const loading = !ready || q.isLoading;
 
   return (
+    <>
+    {upgradeDialog}
     <div style={PAGEBG} className="-m-4 md:-m-6 p-5 md:p-7 min-h-full">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -230,11 +227,10 @@ export function LeagueDna() {
                 </p>
                 <button
                   onClick={startCheckout}
-                  disabled={checkout.isPending}
-                  className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-6 py-3 text-sm font-extrabold disabled:opacity-60"
+                  className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-6 py-3 text-sm font-extrabold"
                   style={{ background: ACCENT, color: "#1e1623" }}
                 >
-                  {checkout.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy} <ChevronRight className="h-4 w-4" />
+                  {COMMERCIAL.upgradeCtaUnderstandWhy} <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             ) : (
@@ -306,5 +302,6 @@ export function LeagueDna() {
         )}
       </main>
     </div>
+    </>
   );
 }

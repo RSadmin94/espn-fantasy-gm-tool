@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { useEffect, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import {
   Loader2, HelpCircle, Trophy, Target, TrendingDown, TrendingUp, Swords, Crown, Calendar, ShoppingCart,
@@ -170,8 +171,8 @@ export function WhyHaventIWon() {
     withLeagueSalt({}, leagueContextKey),
     { staleTime: 60_000, enabled: leagueKeyReady },
   );
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (res) => { window.open(res.url, "_blank", "noopener,noreferrer"); },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
   });
   const [openReason, setOpenReason] = useState<string | null>(null);
   const [showThreat, setShowThreat] = useState(false);
@@ -230,6 +231,8 @@ export function WhyHaventIWon() {
     : [];
 
   return (
+    <>
+    {upgradeDialog}
     <div className="min-h-screen w-full" style={PAGEBG}>
       <div className="px-6 py-6 max-w-[1400px]">
 
@@ -499,12 +502,11 @@ export function WhyHaventIWon() {
                 <button
                   onClick={() => {
                     logEvent.mutate({ eventType: "cta_click", featureName: "whyhavent_unlock_clicked", page: "why-havent-i-won" });
-                    checkoutMutation.mutate({ origin: window.location.origin });
+                    openUpgrade();
                   }}
-                  disabled={checkoutMutation.isPending}
-                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300 disabled:opacity-60"
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-lime-400 px-5 py-2.5 text-[15px] font-bold text-black transition hover:bg-lime-300"
                 >
-                  {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
+                  {COMMERCIAL.upgradeCtaUnderstandWhy}
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
@@ -688,6 +690,7 @@ export function WhyHaventIWon() {
         )}
       </div>
     </div>
+    </>
   );
 }
 

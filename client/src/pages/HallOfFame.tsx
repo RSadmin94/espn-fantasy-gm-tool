@@ -1,13 +1,13 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { V1 } from "@/lib/v1Copy";
 import { Loader2, Trophy, Medal, Crown, Landmark, ChevronDown, Skull, ArrowLeftRight, ScrollText, History, Archive, BookOpen } from "lucide-react";
 import {
@@ -587,14 +587,9 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
 
   // -- Freemium gate (deep record book) --------------------------------------
   const hofGated = Boolean((hofQ.data as any)?.gated);
-  const hofCheckout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (res) => {
-      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCta,
+    description: "Unlock the deep record book — champions, dynasties, and every receipt your league remembers.",
   });
   const hofLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const hofSnapLogged = useRef(false);
@@ -615,7 +610,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
   const startHofCheckout = () => {
     if (typeof window === "undefined") return;
     hofLog.mutate({ eventType: "cta_click", featureName: "hof_unlock_clicked" });
-    hofCheckout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   // Canonical focused History routes share this instance — scroll after data mounts.
@@ -723,6 +718,8 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
   })();
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell
       bleed
       minHeight="full"
@@ -917,7 +914,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
             ctaLabel={COMMERCIAL.upgradeCtaDiscoverWhatChanged}
             accent="amber"
             onUnlock={startHofCheckout}
-            pending={hofCheckout.isPending}
+            pending={false}
           />
         ) : (
           <div className="space-y-8">
@@ -1141,7 +1138,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
               ctaLabel={COMMERCIAL.upgradeCtaDiscoverWhatChanged}
               accent="amber"
               onUnlock={startHofCheckout}
-              pending={hofCheckout.isPending}
+              pending={false}
             />
           </IntelPanel>
         ) : (
@@ -1160,7 +1157,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
             ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
             accent="amber"
             onUnlock={startHofCheckout}
-            pending={hofCheckout.isPending}
+            pending={false}
           />
         </IntelPanel>
       ) : (
@@ -1348,6 +1345,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
       </Collapsible>
       </div>
     </IntelPageShell>
+    </>
   );
 }
 
