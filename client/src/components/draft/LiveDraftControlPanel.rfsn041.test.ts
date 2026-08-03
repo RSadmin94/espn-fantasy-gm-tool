@@ -12,33 +12,35 @@ const panel = readFileSync(
 );
 
 describe("RFSN-041 Live Draft Control compression", () => {
-  it("uses a compact status card instead of a tall instructional stack", () => {
+  it("uses a dense dashboard metric row", () => {
     expect(panel).toContain("data-live-compact-status");
     expect(panel).toContain('label="Status"');
-    expect(panel).toContain('label="Source"');
-    expect(panel).toContain('label="Session"');
     expect(panel).toContain('label="Mirror"');
-    expect(panel).toContain('label="Picks Locked"');
+    expect(panel).toContain('label="Session"');
+    expect(panel).toContain('label="Source"');
+    expect(panel).toContain('label="Picks"');
     expect(panel).toContain("data-rfsn-041");
+    expect(panel).toContain("liveDraftPhaseBadgeLabel(phase)");
   });
 
-  it("moves diagnostics into a collapsed Advanced section", () => {
+  it("keeps board driver, source picker, and errors under Advanced", () => {
     expect(panel).toContain("data-live-advanced");
     expect(panel).toContain("<details");
-    expect(panel).toContain("data-live-board-driver");
-    expect(panel).toContain("data-live-status-lines");
-    // Board driver / multi-line status live under Advanced, not the primary card.
     const advancedIdx = panel.indexOf("data-live-advanced");
-    const boardIdx = panel.indexOf("data-live-board-driver");
-    const linesIdx = panel.indexOf("data-live-status-lines");
-    expect(advancedIdx).toBeGreaterThan(0);
-    expect(boardIdx).toBeGreaterThan(advancedIdx);
-    expect(linesIdx).toBeGreaterThan(advancedIdx);
+    expect(panel.indexOf("data-live-board-driver")).toBeGreaterThan(advancedIdx);
+    expect(panel.indexOf("data-live-source-picker")).toBeGreaterThan(advancedIdx);
+    expect(panel.indexOf("data-live-draft-error")).toBeGreaterThan(advancedIdx);
+    expect(panel.indexOf("data-live-status-lines")).toBeGreaterThan(advancedIdx);
+  });
+
+  it("filters duplicate explanatory sentences from the primary path", () => {
+    expect(panel).toContain("HIDDEN_PRIMARY_EXPLANATIONS");
+    expect(panel).toContain("Live Draft will resume when the Mirror recovers");
+    expect(panel).toContain("Keep the ESPN draft tab open");
   });
 
   it("preserves control surface hooks and actions", () => {
     expect(panel).toContain("data-live-draft-control");
-    expect(panel).toContain("data-live-source-picker");
     expect(panel).toContain("data-live-draft-power");
     expect(panel).toContain("data-live-espn-connect");
     expect(panel).toContain("data-live-session-actions");
