@@ -2375,6 +2375,7 @@
       this.win = opts.window ?? window;
       this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
       this.preferPopup = opts.preferPopup !== false;
+      this.headless = Boolean(opts.headless);
       this.espnPublisher = opts.espnPublisher === null ? null : opts.espnPublisher ?? new EspnBookmarkletPublisher({ window: this.win });
     }
     /** Phase 1/2 — expose publisher for ARM tests and extension handshake. */
@@ -2447,6 +2448,9 @@
       });
     }
     createMount() {
+      if (this.headless) {
+        return this.createHeadlessMount();
+      }
       if (this.preferPopup) {
         try {
           const popup = this.win.open(
@@ -2474,9 +2478,26 @@
       if (!mount) {
         mount = this.win.document.createElement("div");
         mount.id = "dbm-mount";
-        mount.style.cssText = "position:fixed;inset:0;z-index:2147483646;overflow:auto;background:#0f1419;";
+        mount.setAttribute("data-rfsn-dbm", "floating");
+        mount.style.cssText = "position:fixed;right:12px;top:12px;width:min(920px,46vw);height:min(78vh,880px);z-index:2147483646;overflow:auto;background:#0f1419;border:2px solid #3d8bfd;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.55);resize:both;";
         this.win.document.body.appendChild(mount);
       }
+      return mount;
+    }
+    createHeadlessMount() {
+      this.displayDoc = this.win.document;
+      let mount = this.win.document.getElementById("dbm-mount");
+      if (!mount) {
+        mount = this.win.document.createElement("div");
+        mount.id = "dbm-mount";
+        (this.win.document.documentElement || this.win.document.body).appendChild(
+          mount
+        );
+      }
+      mount.setAttribute("data-rfsn-dbm", "headless");
+      mount.setAttribute("aria-hidden", "true");
+      mount.style.cssText = "display:none!important;position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;";
+      mount.innerHTML = "";
       return mount;
     }
   };
@@ -2485,12 +2506,43 @@
     const result = c.start();
     if (!result.ok) {
       console.error("[DraftBoardMonitor]", result.error);
-      try {
-        alert(result.error);
-      } catch {
+      if (!opts?.headless) {
+        try {
+          alert(result.error);
+        } catch {
+        }
       }
     }
     return c;
+  }
+
+  // ../standalone/draft-board-monitor/src/draft-monitor/runtime/mirrorLaunchMode.ts
+  function detectMirrorLaunchMode(args) {
+    const el2 = args.currentScript ?? null;
+    if (el2?.getAttribute?.("data-rfsn-ext")) {
+      return "extension-headless";
+    }
+    const datasetMode = args.documentElement?.dataset?.rfsnMirrorMode;
+    if (datasetMode === "headless" || datasetMode === "extension") {
+      return "extension-headless";
+    }
+    const src = String(args.scriptSrc || el2?.src || "");
+    if (src) {
+      try {
+        const u = new URL(src, "https://example.invalid/");
+        if (u.searchParams.get("rfsn_ext") === "1" || u.searchParams.get("mode") === "headless") {
+          return "extension-headless";
+        }
+      } catch {
+      }
+    }
+    return "standalone-ui";
+  }
+  function mirrorStartOptions(mode) {
+    if (mode === "extension-headless") {
+      return { preferPopup: false, headless: true, pollMs: 1e3 };
+    }
+    return { preferPopup: true, headless: false, pollMs: 1e3 };
   }
 
   // ../standalone/draft-board-monitor/src/draft-monitor/browserEntry.ts
@@ -2509,11 +2561,13 @@
       document.documentElement.dataset.rfsnBoardMirror = "1";
     } catch {
     }
-    const fromExtension = typeof document !== "undefined" && Boolean(document.currentScript?.getAttribute?.("data-rfsn-ext"));
-    startDraftBoardMonitor({
-      preferPopup: !fromExtension,
-      pollMs: 1e3
+    const mode = detectMirrorLaunchMode({
+      currentScript: typeof document !== "undefined" ? document.currentScript : null,
+      scriptSrc: typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement ? document.currentScript.src : null,
+      documentElement: typeof document !== "undefined" ? document.documentElement : null
     });
+    const opts = mirrorStartOptions(mode);
+    startDraftBoardMonitor(opts);
   }
 })();
 //# sourceMappingURL=draft-board-monitor.iife.js.map

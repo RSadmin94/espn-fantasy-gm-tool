@@ -1,4 +1,8 @@
 import { startDraftBoardMonitor } from "./runtime/monitorController";
+import {
+  detectMirrorLaunchMode,
+  mirrorStartOptions,
+} from "./runtime/mirrorLaunchMode";
 
 declare global {
   interface Window {
@@ -33,13 +37,18 @@ if (!window.__RFSN_BOARD_MIRROR_STARTED__) {
   } catch {
     /* ignore */
   }
-  // Extension inject: prefer in-page panel (popup often blocked from content scripts).
-  // Bookmarklet / console-paste still pass preferPopup via query on script URL when needed.
-  const fromExtension =
-    typeof document !== "undefined" &&
-    Boolean(document.currentScript?.getAttribute?.("data-rfsn-ext"));
-  startDraftBoardMonitor({
-    preferPopup: !fromExtension,
-    pollMs: 1000,
+
+  // Bookmarklet / console: standalone UI (popup, then floating panel).
+  // Extension inject: headless scrape+publish only — never replace the ESPN page.
+  const mode = detectMirrorLaunchMode({
+    currentScript: typeof document !== "undefined" ? document.currentScript : null,
+    scriptSrc:
+      typeof document !== "undefined" && document.currentScript instanceof HTMLScriptElement
+        ? document.currentScript.src
+        : null,
+    documentElement:
+      typeof document !== "undefined" ? document.documentElement : null,
   });
+  const opts = mirrorStartOptions(mode);
+  startDraftBoardMonitor(opts);
 }

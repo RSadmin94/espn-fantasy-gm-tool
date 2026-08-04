@@ -96,7 +96,7 @@ describe("GMWR_CONNECT_ESPN bridge", () => {
   });
 
   it("ships a bumped extension version", () => {
-    expect(manifest.version).toBe("1.14.1");
+    expect(manifest.version).toBe("1.14.2");
     expect(pkg.version).toBe(manifest.version);
   });
 });

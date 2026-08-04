@@ -307,8 +307,14 @@
           pathLog("content_board_mirror_already_present", { reason: reason || "dataset" });
           return;
         }
+        try {
+          if (document.documentElement && document.documentElement.dataset) {
+            document.documentElement.dataset.rfsnMirrorMode = "headless";
+          }
+        } catch (_) {
+        }
         var s = document.createElement("script");
-        s.src = chrome.runtime.getURL("providers/espn-live/board-mirror.iife.js");
+        s.src = chrome.runtime.getURL("providers/espn-live/board-mirror.iife.js") + "?mode=headless&rfsn_ext=1";
         s.async = false;
         s.setAttribute("data-rfsn-ext", "1");
         (document.documentElement || document.head).appendChild(s);
@@ -319,7 +325,7 @@
           }
         };
         boardMirrorInjected = true;
-        pathLog("content_inject_board_mirror", { reason: reason || "arm", ok: true });
+        pathLog("content_inject_board_mirror", { reason: reason || "arm", ok: true, mode: "headless" });
       } catch (err) {
         pathLog("content_inject_board_mirror", {
           reason: reason || "arm",
