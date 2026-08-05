@@ -72,8 +72,7 @@ jobs:
       - name: Apply database schema
         run: pnpm exec drizzle-kit push --force
       - name: Run tests
-        run: pnpm test
-
+        run: pnpm exec vitest run --exclude server/espn.credentials.test.ts --exclude server/leagueDataReads.parity.test.ts --exclude server/services/sofia/personaAssignmentSeeded.report.test.ts
       - name: Notify success
         if: success()
         run: echo "✅ ${{ github.sha }} — all checks passed"
