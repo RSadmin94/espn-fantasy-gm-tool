@@ -77,7 +77,7 @@ export const CONNECTED_LEAGUE_COPY = {
     "You've reached the maximum of 5 connected leagues. Disconnect one of your existing leagues before connecting another.",
   manageCta: "Manage Connected Leagues",
   pageDescription:
-    "Each slot is one league (ESPN, Sleeper API, or Sleeper Workbook). Historical seasons never count against the limit.",
+    "Each slot is one league (ESPN, Sleeper API, Sleeper Workbook, or Yahoo). Historical seasons never count against the limit.",
   providerIntro: "Historical seasons import inside each connected league and never use an extra slot.",
   seasonNote:
     "Disconnecting a league frees a slot immediately. Reconnecting the same league does not consume an additional slot.",

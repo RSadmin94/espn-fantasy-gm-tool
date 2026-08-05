@@ -37,6 +37,8 @@ type Args = {
   pollMs?: number;
   draftPace?: "broadcast" | "brisk" | "turbo";
   ownerNameByTeamId?: ReadonlyMap<string, string>;
+  /** Booth session id (run-suffixed). Overrides provider draftId on notify. */
+  notifyDraftId?: string | null;
   /** Shared board projection — idempotent NormalizedPickBatch (may include reconnect baseline). */
   onNormalizedBatch?: (batch: NormalizedPickBatch) => void;
 };
@@ -48,6 +50,7 @@ export function useEspnLiveDraftMonitor({
   pollMs = ESPN_LIVE_POLL_MS_DEFAULT,
   draftPace = "broadcast",
   ownerNameByTeamId,
+  notifyDraftId = null,
   onNormalizedBatch,
 }: Args): EspnLiveMonitorStatus {
   const _trpc = trpc as any;
@@ -61,6 +64,10 @@ export function useEspnLiveDraftMonitor({
   useEffect(() => {
     notifyMutRef.current = notifyMut;
   }, [notifyMut]);
+  const notifyDraftIdRef = useRef(notifyDraftId);
+  useEffect(() => {
+    notifyDraftIdRef.current = notifyDraftId;
+  }, [notifyDraftId]);
   const onNormalizedBatchRef = useRef(onNormalizedBatch);
   useEffect(() => {
     onNormalizedBatchRef.current = onNormalizedBatch;
@@ -170,11 +177,17 @@ export function useEspnLiveDraftMonitor({
           const isLast = Boolean(event.metadata?.draftCompletePick);
           void notifyMutRef.current
             .mutateAsync(
-              toNotifyLockedPickRequest(event, {
-                teamCount: snap.teamCount,
-                draftComplete: isLast,
-                draftPace,
-              }),
+              toNotifyLockedPickRequest(
+                {
+                  ...event,
+                  draftId: notifyDraftIdRef.current?.trim() || event.draftId,
+                },
+                {
+                  teamCount: snap.teamCount,
+                  draftComplete: isLast,
+                  draftPace,
+                },
+              ),
             )
             .catch((err: unknown) => {
               if (import.meta.env.DEV) {

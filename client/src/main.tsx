@@ -16,6 +16,7 @@ import { TryDemoButton } from "./components/TryDemoButton";
 import { ThemeProvider } from "./context/ThemeContext";
 import { ConnectESPN } from "./pages/ConnectESPN";
 import { ConnectSleeper } from "./pages/ConnectSleeper";
+import { ConnectYahoo } from "./pages/ConnectYahoo";
 import { ImportSleeperWorkbook } from "./pages/ImportSleeperWorkbook";
 import { LandingPage } from "./pages/LandingPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
@@ -264,6 +265,7 @@ const router = createBrowserRouter([
           { path: "/dashboard", element: <Dashboard /> },
           { path: "/connect", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },
+          { path: "/connect/yahoo", element: <ConnectYahoo /> },
           { path: "/import/sleeper-workbook", element: <ImportSleeperWorkbook /> },
           { path: "/sync", element: <SyncData /> },
           { path: "/commissioner-command-center", element: <Navigate to="/league/commissioner" replace /> },

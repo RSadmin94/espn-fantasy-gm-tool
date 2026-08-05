@@ -12,6 +12,7 @@ import {
   MSG_ESPN_BM_GET_STATE,
   MSG_ESPN_BM_PING,
   MSG_ESPN_BM_REPLAY_REQUEST,
+  MSG_ESPN_BM_STATUS,
   shouldRepostArmOnPageStatus,
   validateArmConfig,
   validatePageOutboundMessage,
@@ -25,6 +26,76 @@ import {
   let armedSessionNonce = null;
   /** @type {{ leagueId: string, season: number, sessionNonce: string, draftPace?: string }|null} */
   let lastArmConfig = null;
+  /** Idempotent page-world Board Mirror inject (same IIFE as bookmarklet — not a second parser). */
+  let boardMirrorInjected = false;
+
+  function pathLog(event, extra) {
+    try {
+      console.info("[espn-bm-path]", event, extra || {});
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Ensure Board Mirror publisher/monitor is present before / during ARM.
+   * Uses the existing standalone IIFE via web_accessible_resources (FantasyPros-style inject).
+   */
+  function injectBoardMirrorIfNeeded(reason) {
+    if (boardMirrorInjected) return;
+    try {
+      if (
+        document.documentElement &&
+        document.documentElement.dataset &&
+        document.documentElement.dataset.rfsnBoardMirror === "1"
+      ) {
+        boardMirrorInjected = true;
+        pathLog("content_board_mirror_already_present", { reason: reason || "dataset" });
+        return;
+      }
+      // Signal headless Board Mirror before the IIFE runs (currentScript is unreliable).
+      try {
+        if (document.documentElement && document.documentElement.dataset) {
+          document.documentElement.dataset.rfsnMirrorMode = "headless";
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      var s = document.createElement("script");
+      s.src =
+        chrome.runtime.getURL("providers/espn-live/board-mirror.iife.js") +
+        "?mode=headless&rfsn_ext=1";
+      s.async = false;
+      s.setAttribute("data-rfsn-ext", "1");
+      (document.documentElement || document.head).appendChild(s);
+      s.onload = function () {
+        try {
+          s.remove();
+        } catch (_) {
+          /* ignore */
+        }
+      };
+      boardMirrorInjected = true;
+      pathLog("content_inject_board_mirror", { reason: reason || "arm", ok: true, mode: "headless" });
+    } catch (err) {
+      pathLog("content_inject_board_mirror", {
+        reason: reason || "arm",
+        ok: false,
+        error: err && err.message ? String(err.message) : "inject_failed",
+      });
+      try {
+        chrome.runtime.sendMessage({
+          type: MSG_ESPN_BM_STATUS,
+          protocolVersion: ESPN_BM_PROTOCOL_VERSION,
+          provider: "espn-live",
+          status: "mirror_inject_failed",
+          reason: err && err.message ? String(err.message) : "inject_failed",
+        });
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
 
   function postToPage(payload) {
     window.postMessage(
@@ -93,14 +164,6 @@ import {
     };
   }
 
-  function pathLog(event, extra) {
-    try {
-      console.info("[espn-bm-path]", event, extra || {});
-    } catch (_) {
-      /* ignore */
-    }
-  }
-
   function relayToBackground(message) {
     if (message && message.type === "GMWR_ESPN_BM_PICK_BATCH") {
       pathLog("content_relay_PICK_BATCH", hopFields(message));
@@ -113,6 +176,9 @@ import {
     }
   }
 
+  // Bootstrap Board Mirror on ESPN draft tabs (relay still owns transport).
+  injectBoardMirrorIfNeeded("content_boot");
+
   // Phase 4 — if background still armed after ESPN tab reload, rehydrate immediately.
   try {
     chrome.runtime.sendMessage({ type: MSG_ESPN_BM_GET_STATE }, function (state) {
@@ -120,6 +186,7 @@ import {
       if (!state || !state.armed || !state.config) return;
       const config = validateArmConfig(state.config);
       if (!config) return;
+      injectBoardMirrorIfNeeded("rehydrate_arm");
       applyArmConfig(config);
     });
   } catch (_) {
@@ -184,6 +251,7 @@ import {
         sendResponse({ ok: false, error: "invalid_arm_config" });
         return true;
       }
+      injectBoardMirrorIfNeeded("arm");
       applyArmConfig(config);
       sendResponse({ ok: true, host: "espn", sessionNonce: config.sessionNonce });
       return true;

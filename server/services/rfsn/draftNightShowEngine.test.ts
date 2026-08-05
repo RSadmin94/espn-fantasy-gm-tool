@@ -101,4 +101,121 @@ describe("draftNightShowEngine", () => {
       show.suppressed.find((s) => s.awardType === "biggest_mistake")?.reason,
     ).toBe("No catastrophic draft mistake detected.");
   });
+
+  it("does not fabricate Mahomes sleeper from shadow ADP when real ADP is missing", () => {
+    const picks: DraftNightLockedPick[] = [
+      {
+        overall: 21,
+        round: 2,
+        roundPick: 7,
+        teamId: "1",
+        ownerName: "Snake",
+        playerId: "mahomes",
+        playerName: "Patrick Mahomes",
+        position: "QB",
+        nflTeam: "KC",
+        // no adp — shadow used to invent ADP 8 → sleeper
+      },
+      {
+        overall: 112,
+        round: 8,
+        roundPick: 2,
+        teamId: "2",
+        ownerName: "Other",
+        playerId: "olave",
+        playerName: "Chris Olave",
+        position: "WR",
+        nflTeam: "NO",
+      },
+    ];
+    const show = buildDraftNightShowFromPicks({
+      leagueId: LEAGUE,
+      draftId: DRAFT,
+      picks,
+      teamCount: 12,
+      snapshot: snapshot({ championships: [], rivalries: [] }),
+    });
+    expect(show.awards.find((a) => a.awardType === "sleeper_value")).toBeUndefined();
+    expect(show.awards.find((a) => a.playerName === "Patrick Mahomes")).toBeUndefined();
+    expect(show.suppressed.find((s) => s.awardType === "sleeper_value")?.reason).toBe(
+      "ADP unavailable",
+    );
+    expect(show.suppressed.find((s) => s.awardType === "biggest_mistake")?.reason).toBe(
+      "ADP unavailable",
+    );
+  });
+
+  it("A/B boards with real ADP produce different sleeper awards", () => {
+    const boardA: DraftNightLockedPick[] = [
+      {
+        overall: 40,
+        round: 3,
+        roundPick: 4,
+        teamId: "1",
+        ownerName: "Alice",
+        playerId: "a",
+        playerName: "Steal A",
+        position: "WR",
+        nflTeam: "DET",
+        adp: 10,
+      },
+      {
+        overall: 41,
+        round: 3,
+        roundPick: 5,
+        teamId: "2",
+        ownerName: "Bob",
+        playerId: "b",
+        playerName: "Filler B",
+        position: "RB",
+        nflTeam: "ATL",
+        adp: 40,
+      },
+    ];
+    const boardB: DraftNightLockedPick[] = [
+      {
+        overall: 55,
+        round: 4,
+        roundPick: 7,
+        teamId: "1",
+        ownerName: "Alice",
+        playerId: "c",
+        playerName: "Steal B",
+        position: "RB",
+        nflTeam: "SF",
+        adp: 12,
+      },
+      {
+        overall: 56,
+        round: 4,
+        roundPick: 8,
+        teamId: "2",
+        ownerName: "Bob",
+        playerId: "d",
+        playerName: "Filler D",
+        position: "WR",
+        nflTeam: "MIA",
+        adp: 55,
+      },
+    ];
+    const showA = buildDraftNightShowFromPicks({
+      leagueId: LEAGUE,
+      draftId: `${DRAFT}:run:a`,
+      picks: boardA,
+      teamCount: 12,
+      snapshot: snapshot({ championships: [], rivalries: [] }),
+    });
+    const showB = buildDraftNightShowFromPicks({
+      leagueId: LEAGUE,
+      draftId: `${DRAFT}:run:b`,
+      picks: boardB,
+      teamCount: 12,
+      snapshot: snapshot({ championships: [], rivalries: [] }),
+    });
+    const sleeperA = showA.awards.find((a) => a.awardType === "sleeper_value");
+    const sleeperB = showB.awards.find((a) => a.awardType === "sleeper_value");
+    expect(sleeperA?.playerName).toBe("Steal A");
+    expect(sleeperB?.playerName).toBe("Steal B");
+    expect(sleeperA?.fact).not.toBe(sleeperB?.fact);
+  });
 });

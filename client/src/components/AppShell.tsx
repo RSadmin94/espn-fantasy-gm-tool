@@ -38,6 +38,7 @@ import { V1 } from "@/lib/v1Copy";
 import { buildV2NavGroups, getV2NavHref, isV2RouteActive, type V2Destination } from "@/lib/v2Navigation";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
+import { normalizeLeagueProvider, shouldShowSyncDataNav } from "@/lib/leagueProvider";
 
 type NavEntry = { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean };
 
@@ -636,6 +637,9 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const location = useLocation();
+  const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
+  const activeProvider = normalizeLeagueProvider(activeQ.data?.provider);
+  const showSyncData = shouldShowSyncDataNav(activeProvider);
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border/70 px-4 md:px-6" style={{ background: "oklch(0.12 0.015 300 / 0.92)", backdropFilter: "blur(14px) saturate(1.3)", WebkitBackdropFilter: "blur(14px) saturate(1.3)" }}>
@@ -680,11 +684,13 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
                 {V1.features.settings}
               </Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link to="/sync" className="cursor-pointer">
-                {V1.features.syncData}
-              </Link>
-            </DropdownMenuItem>
+            {showSyncData ? (
+              <DropdownMenuItem asChild>
+                <Link to="/sync" className="cursor-pointer" data-nav="sync-data">
+                  {V1.features.syncData}
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuItem asChild>
               <Link to="/league-settings" className="cursor-pointer">
                 League Settings

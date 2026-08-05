@@ -95,7 +95,7 @@ export function liveDraftStatusLines(status: LiveDraftUxStatusInput): string[] {
       if (mirror && !status.connectorReady) {
         return [
           "Waiting for ESPN Mirror",
-          "Open the ESPN draft and run Board Mirror",
+          "Keep the ESPN draft tab open — extension injects Board Mirror",
           boothLine,
         ];
       }

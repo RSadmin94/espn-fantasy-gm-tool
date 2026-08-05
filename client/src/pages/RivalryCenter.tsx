@@ -14,6 +14,7 @@ import { RivalryShareButton } from "@/components/RivalryShareButton";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
   getLastFreeFeature,
   hasWallViewedRecorded,
@@ -298,14 +299,9 @@ export function RivalryCenter({
     `${totalRivalries > 1 ? `${totalRivalries} rivalries on your ledger.` : "Your full rivalry ledger."} The records are locked.`,
     `You can see your hottest rival above — the who. Unlock the complete story: head-to-head records, heartbreak losses, playoff scars, every other rivalry${lockedRivalries > 0 ? ` (${lockedRivalries} more)` : ""}, and the league-wide rivalry grid.`,
   );
-  const checkoutMutation = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (res) => {
-      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
+    description: rivalryPaywallCopy.description,
   });
 
   // -- Conversion funnel (funnel_events; rivalry-wall beta path) --------------
@@ -348,7 +344,7 @@ export function RivalryCenter({
         lockedRivalries,
       },
     });
-    checkoutMutation.mutate({ origin: window.location.origin, plan: "rivals", interval: "year" });
+    openUpgrade();
   };
 
   const keyForRival = (p: Pair) => nameToKey[norm(p.rivalName)] ?? undefined;
@@ -483,6 +479,8 @@ export function RivalryCenter({
   const ranked = pairs.slice(0, 10);
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell bleed minHeight="full" background="cinematic-token" padding="default">
       <CinematicPageHeader
         title={pageTitle}
@@ -523,11 +521,10 @@ export function RivalryCenter({
               </div>
               <button
                 onClick={startCheckout}
-                disabled={checkoutMutation.isPending}
                 className="shrink-0 inline-flex items-center gap-2 rounded-[10px] px-5 py-3 text-sm font-extrabold"
                 style={{ background: ACCENT, color: "#1e1623" }}
               >
-                {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCtaUnderstandWhy}
+                {COMMERCIAL.upgradeCtaUnderstandWhy}
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -1063,6 +1060,7 @@ export function RivalryCenter({
         </div>
       )}
     </IntelPageShell>
+    </>
   );
 }
 

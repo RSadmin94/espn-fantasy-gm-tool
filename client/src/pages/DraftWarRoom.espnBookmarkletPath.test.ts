@@ -109,6 +109,24 @@ describe("DraftWarRoom ESPN bookmarklet path wiring", () => {
     expect(warRoom).toContain("mirrorHandshake");
     expect(warRoom).toContain("lastRevision");
   });
+  it("transport handshake does not require canAccess; notify remains gated", () => {
+    expect(hook).toContain("const canTransport = Boolean(enabled && leagueId)");
+    expect(hook).toContain("const canNotify = Boolean(accessQ.data?.canAccess)");
+    expect(hook).toMatch(/if\s*\(\s*!canTransport\s*\|\|\s*!armExtension\s*\)/);
+    expect(hook).toMatch(/if\s*\(\s*!canTransport\s*\|\|\s*!leagueId\s*\)\s*return/);
+    expect(hook).not.toMatch(
+      /canTransport\s*=\s*Boolean\([\s\S]{0,120}canAccess/,
+    );
+    expect(hook).not.toMatch(
+      /const canRun\s*=\s*Boolean\([\s\S]{0,200}canAccess/,
+    );
+    expect(hook).toContain("if (!canNotifyRef.current)");
+    expect(hook).toContain("notify_skipped_no_access");
+    expect(hook).toContain("[espn-bm-checkpoint]");
+    expect(hook).toContain("arm_sent");
+    expect(hook).toContain("arm_reply");
+    expect(hook).toContain("snapshot_applied");
+  });
 });
 
 describe("PICK_BATCH → applyNormalizedPickBatch pipeline", () => {

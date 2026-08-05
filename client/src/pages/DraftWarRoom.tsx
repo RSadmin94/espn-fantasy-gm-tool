@@ -22,6 +22,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
+import { useDraftRunIdentity } from "@/hooks/useDraftRunIdentity";
 import {
   buildConnectedLeagueDraftId,
   useConnectedLeagueLiveMonitor,
@@ -848,6 +849,8 @@ function LiveDraftEngine({
   const [fpVoiceEnabled, setFpVoiceEnabled] = useState(true);
   const [fpCommentaryEnabled, setFpCommentaryEnabled] = useState(true);
   const [fpSessionEpoch, setFpSessionEpoch] = useState(0);
+  /** Last FantasyPros provider draftId — base for run identity while FP is armed. */
+  const [fpBaseDraftId, setFpBaseDraftId] = useState<string | null>(null);
   const liveSource = normalizeLiveDraftSource(liveDraftSource);
   const mockSource = normalizeMockDraftSource(mockDraftSource);
   /** Built-in RFSN local mock may generate picks only on Mock + RFSN source. */
@@ -1051,26 +1054,6 @@ function LiveDraftEngine({
   const awaitingUser = !!slot && !slot.isKeeperSlot && isPickManual(manualTeamIds, slot?.teamId) && !results[slot.pickNumber];
   const onClock = slot ? teams.find((t: any) => Number(t.teamId) === Number(slot.teamId)) : null;
 
-  useRfsnLiveLockedPickNotify({
-    enabled: Boolean(leagueId) && allowInternalSimPicks && !connectedLeagueLive,
-    leagueId,
-    draftId,
-    schedule: schedule.map((s: any) => ({
-      pickNumber: s.pickNumber,
-      round: s.round,
-      roundPick: s.roundPick,
-      teamId: s.teamId,
-      ownerName: teams.find((t: any) => Number(t.teamId) === Number(s.teamId))?.ownerName ?? s.ownerName,
-      isKeeperSlot: s.isKeeperSlot,
-    })),
-    results,
-    draftComplete: done,
-    teamCount: teams.length || 14,
-    draftPace: draftPaceFromTimerMs(paceMs),
-    resetKey: scheduleSig,
-    baselineResults: initialResults,
-  });
-
   const ownerNameByTeamId = useMemo(() => {
     const m = new Map<string, string>();
     for (const t of teams) {
@@ -1096,6 +1079,73 @@ function LiveDraftEngine({
     });
   }, [teams, myTeamId, fpUserOwnerPos]);
 
+  const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
+
+  /** Provider base id (may repeat across runs) — run suffix applied below for booth/wrap-up. */
+  const providerBaseDraftId =
+    fpSessionArmed && fpBaseDraftId
+      ? fpBaseDraftId
+      : connectedLeagueLive && leagueId
+        ? buildConnectedLeagueDraftId(leagueId, season)
+        : draftId;
+
+  const lockedPicksForRun = useMemo(() => {
+    const out: Array<{ overallPick: number; playerId?: string | null; playerName?: string | null }> =
+      [];
+    for (const [k, v] of Object.entries(results)) {
+      if (!v?.name || (v as { isKeeper?: boolean }).isKeeper) continue;
+      const overallPick = Number(k);
+      if (!Number.isFinite(overallPick) || overallPick < 1) continue;
+      out.push({
+        overallPick,
+        playerId: String((v as { playerId?: string }).playerId ?? ""),
+        playerName: String(v.name ?? ""),
+      });
+    }
+    return out;
+  }, [results]);
+
+  const newDraftEpoch = resetCounter + fpSessionEpoch * 1_000_000;
+
+  const draftRun = useDraftRunIdentity({
+    baseDraftId: providerBaseDraftId,
+    enabled: Boolean(leagueId),
+    lockedPicks: lockedPicksForRun,
+    draftComplete: done,
+    newDraftEpoch,
+  });
+
+  const boothDraftId = draftRun.boothDraftId;
+  const prevBoothDraftIdRef = useRef(boothDraftId);
+  useEffect(() => {
+    const prev = prevBoothDraftIdRef.current;
+    if (prev && prev !== boothDraftId && leagueId) {
+      // Drop prior run's wrap-up / Draft Night Show so UI cannot keep stale awards.
+      resetSession.mutate?.({ leagueId: String(leagueId), draftId: prev });
+    }
+    prevBoothDraftIdRef.current = boothDraftId;
+  }, [boothDraftId, leagueId, resetSession]);
+
+  useRfsnLiveLockedPickNotify({
+    enabled: Boolean(leagueId) && allowInternalSimPicks && !connectedLeagueLive,
+    leagueId,
+    draftId: boothDraftId,
+    schedule: schedule.map((s: any) => ({
+      pickNumber: s.pickNumber,
+      round: s.round,
+      roundPick: s.roundPick,
+      teamId: s.teamId,
+      ownerName: teams.find((t: any) => Number(t.teamId) === Number(s.teamId))?.ownerName ?? s.ownerName,
+      isKeeperSlot: s.isKeeperSlot,
+    })),
+    results,
+    draftComplete: done,
+    teamCount: teams.length || 14,
+    draftPace: draftPaceFromTimerMs(paceMs),
+    resetKey: scheduleSig,
+    baselineResults: initialResults,
+  });
+
   const fpMock = useFantasyProsMockDraftMonitor({
     enabled: Boolean(leagueId) && fpSessionArmed,
     leagueId,
@@ -1107,11 +1157,16 @@ function LiveDraftEngine({
     voiceEnabled: fpVoiceEnabled,
     commentaryEnabled: fpCommentaryEnabled,
     armExtension: true,
+    notifyDraftId: boothDraftId,
     onNormalizedBatch: applyProjectionBatch,
     onSessionReset: () => {
       setFpSessionEpoch((n) => n + 1);
     },
   });
+
+  useEffect(() => {
+    if (fpMock.draftId) setFpBaseDraftId(fpMock.draftId);
+  }, [fpMock.draftId]);
 
   /** Bookmarklet-primary ESPN live ingest (Phase 3). */
   const espnBookmarklet = useEspnBookmarkletDraftMonitor({
@@ -1121,6 +1176,7 @@ function LiveDraftEngine({
     teamCount: teams.length || 12,
     draftPace: draftPaceFromTimerMs(paceMs),
     armExtension: true,
+    notifyDraftId: boothDraftId,
     onNormalizedBatch: applyProjectionBatch,
   });
 
@@ -1138,6 +1194,7 @@ function LiveDraftEngine({
     season,
     draftPace: draftPaceFromTimerMs(paceMs),
     ownerNameByTeamId,
+    notifyDraftId: boothDraftId,
     onNormalizedBatch: applyProjectionBatch,
   });
 
@@ -1171,13 +1228,6 @@ function LiveDraftEngine({
         lastRevision: null as number | null,
         sessionNonce: null as string | null,
       };
-
-  const boothDraftId =
-    fpSessionArmed && fpMock.draftId
-      ? fpMock.draftId
-      : connectedLeagueLive && leagueId
-        ? buildConnectedLeagueDraftId(leagueId, season)
-        : draftId;
 
   /** Source/session identity — changing this clears board/rosters/grades/wrap-up. */
   const draftSessionIdentity = useMemo(
@@ -1254,15 +1304,24 @@ function LiveDraftEngine({
     setIdx(projectedCursor);
   }, [allowInternalSimPicks, projectedCursor]);
 
-  const resetSession = (trpc as any).rfsnBroadcast.resetLiveSession.useMutation();
-
   // Poll live session for Draft Night Show awards after wrap-up (same source as booth).
   const liveSnapQ = (trpc as any).rfsnBroadcast.getLiveSnapshot.useQuery(
     leagueId && done ? { leagueId, draftId: boothDraftId } : skipToken,
     { refetchInterval: done ? 2000 : false, staleTime: 1000 },
   );
   const livePayload = liveSnapQ.data as RfsnLivePublicPayload | undefined;
-  const draftNightShow = livePayload?.draftNightShow as DraftNightShowPayload | null | undefined;
+  // Drop prior-run awards immediately when boothDraftId rotates (before new poll lands).
+  const [draftNightShowClearedFor, setDraftNightShowClearedFor] = useState(boothDraftId);
+  useEffect(() => {
+    setDraftNightShowClearedFor(boothDraftId);
+  }, [boothDraftId]);
+  const payloadDraftId =
+    livePayload?.activePickIdentity?.draftId ?? livePayload?.audioStatus?.draftId ?? null;
+  const draftNightShow =
+    draftNightShowClearedFor !== boothDraftId ||
+    (payloadDraftId != null && payloadDraftId !== boothDraftId)
+      ? null
+      : (livePayload?.draftNightShow as DraftNightShowPayload | null | undefined);
   const analystRecap =
     livePayload?.snapshot?.primary?.text ??
     livePayload?.snapshot?.secondary?.text ??
@@ -1481,7 +1540,7 @@ function LiveDraftEngine({
     applyBroadcastHold(INITIAL_BROADCAST_HOLD); setRemainingMs(paceMs);
     // Manual-team choices (manualTeamIds) are intentionally PRESERVED through draft reset;
     // they reset only on league/season/schedule change or via "Reset team controls".
-    if (leagueId) resetSession.mutate?.({ leagueId, draftId });
+    if (leagueId) resetSession.mutate?.({ leagueId, draftId: boothDraftId });
     setResetCounter((n) => n + 1);
   }
 
@@ -1690,9 +1749,9 @@ function LiveDraftEngine({
           }}
           onNewDraft={() => {
             setFpSessionEpoch((n) => n + 1);
-            if (leagueId && fpMock.draftId) {
+            if (leagueId && boothDraftId) {
               void resetSession
-                .mutateAsync({ leagueId: String(leagueId), draftId: fpMock.draftId })
+                .mutateAsync({ leagueId: String(leagueId), draftId: boothDraftId })
                 .catch(() => {});
             }
             void postFantasyProsMockArm({

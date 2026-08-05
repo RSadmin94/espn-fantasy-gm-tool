@@ -22,6 +22,8 @@ import {
   getLiveSessionEpoch,
   hasWrapUpBeenProcessed,
   markWrapUpProcessed,
+  clearWrapUpProcessed,
+  getWrapUpBoardFingerprint,
   updateLiveSession,
   type PublicLiveBroadcastPayload,
   type RfsnLiveSessionState,
@@ -46,6 +48,7 @@ import {
   summarizeDraftWrapUp,
   wrapUpEventIdForDraft,
 } from "./liveDraftWrapUp";
+import { fingerprintLockedBoard } from "../../../shared/draftRunIdentity";
 
 export type BuildLiveBroadcastFrameInput = {
   moment: BroadcastMoment;
@@ -327,13 +330,27 @@ export async function processDraftWrapUp(
   if (!isRfsnLiveBroadcastEnabled()) return null;
 
   const eventId = wrapUpEventIdForDraft(input.draftId);
+  const picks = getLockedPicksForSession(input.leagueId, input.draftId);
+  const boardFingerprint = fingerprintLockedBoard(
+    picks.map((p) => ({
+      overallPick: p.overall,
+      playerId: p.playerId,
+      playerName: p.playerName,
+    })),
+  );
+
   if (hasWrapUpBeenProcessed(input.leagueId, input.draftId)) {
-    return getLiveSessionPayload(input.leagueId, input.draftId);
+    const priorFp = getWrapUpBoardFingerprint(input.leagueId, input.draftId);
+    // Defensive: same draftId with a different final board must not reuse awards.
+    if (priorFp && priorFp !== boardFingerprint) {
+      clearWrapUpProcessed(input.leagueId, input.draftId);
+    } else {
+      return getLiveSessionPayload(input.leagueId, input.draftId);
+    }
   }
 
-  markWrapUpProcessed(input.leagueId, input.draftId, eventId);
+  markWrapUpProcessed(input.leagueId, input.draftId, eventId, boardFingerprint);
 
-  const picks = getLockedPicksForSession(input.leagueId, input.draftId);
   const teamCount = input.teamCount ?? 14;
   const summary = summarizeDraftWrapUp(picks, teamCount);
 
