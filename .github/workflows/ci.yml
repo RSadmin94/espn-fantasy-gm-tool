@@ -69,6 +69,8 @@ jobs:
       - name: TypeScript check
         run: pnpm check
 
+      - name: Apply database schema
+        run: pnpm exec drizzle-kit push --force
       - name: Run tests
         run: pnpm test
 
