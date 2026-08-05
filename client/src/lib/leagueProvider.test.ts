@@ -19,7 +19,9 @@ describe("leagueProvider", () => {
     expect(normalizeLeagueProvider("ESPN")).toBe("espn");
     expect(normalizeLeagueProvider("sleeper")).toBe("sleeper");
     expect(normalizeLeagueProvider("sleeper_workbook")).toBe("sleeper_workbook");
-    expect(normalizeLeagueProvider("yahoo")).toBe("unknown");
+    expect(normalizeLeagueProvider("yahoo")).toBe("yahoo");
+    expect(normalizeLeagueProvider("Yahoo")).toBe("yahoo");
+    expect(normalizeLeagueProvider("cbs")).toBe("unknown");
     expect(normalizeLeagueProvider("")).toBeNull();
     expect(normalizeLeagueProvider(null)).toBeNull();
     expect(normalizeLeagueProvider(undefined)).toBeNull();
@@ -30,6 +32,7 @@ describe("leagueProvider", () => {
     expect(isEspnSyncProvider("unknown")).toBe(false);
     expect(isEspnSyncProvider("sleeper")).toBe(false);
     expect(isEspnSyncProvider("sleeper_workbook")).toBe(false);
+    expect(isEspnSyncProvider("yahoo")).toBe(false);
     expect(isEspnSyncProvider("espn")).toBe(true);
   });
 
@@ -37,6 +40,7 @@ describe("leagueProvider", () => {
     expect(shouldShowSyncDataNav("espn")).toBe(true);
     expect(shouldShowSyncDataNav("sleeper")).toBe(false);
     expect(shouldShowSyncDataNav("sleeper_workbook")).toBe(false);
+    expect(shouldShowSyncDataNav("yahoo")).toBe(false);
     expect(shouldShowSyncDataNav("unknown")).toBe(false);
     expect(shouldShowSyncDataNav(null)).toBe(false);
   });
@@ -70,12 +74,14 @@ describe("RFSN-040 Sync Data provider awareness (source)", () => {
     expect(sync.slice(gateIdx, espnCenterIdx)).not.toContain("trpc.espn");
   });
 
-  it("Sleeper / workbook / unknown notices never include ESPN controls", () => {
+  it("Sleeper / workbook / Yahoo / unknown notices never include ESPN controls", () => {
     const notice = readClient("pages/SyncDataNonEspnNotice.tsx");
     expect(notice).toContain("This league is connected through Sleeper.");
     expect(notice).toContain('/connect/sleeper');
     expect(notice).toContain("Sleeper workbook");
     expect(notice).toContain('/import/sleeper-workbook');
+    expect(notice).toContain("This league is connected through Yahoo Fantasy.");
+    expect(notice).toContain('/connect/yahoo');
     expect(notice).toContain("Unsupported sync source");
     expect(notice).not.toContain("Step 4 of ESPN setup");
     expect(notice).not.toContain("EspnConnectorGuide");

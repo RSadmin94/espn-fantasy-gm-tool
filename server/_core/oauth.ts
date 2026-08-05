@@ -4,9 +4,7 @@ import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 import { exchangeYahooCode, buildYahooAuthUrl, isYahooConfigured } from "../providers/yahooOAuth";
-import { getDb } from "../db";
-import { leagueConnections } from "../../drizzle/schema";
-
+import { writeYahooPendingCredentials } from "../yahooLeagueImport";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
@@ -35,9 +33,24 @@ export function registerOAuthRoutes(app: Express) {
     const state = getQueryParam(req, "state");
     const error = getQueryParam(req, "error");
 
+    const connectYahooPath = (origin: string, query: string) => {
+      const base = origin || "";
+      return `${base}/connect/yahoo?${query}`;
+    };
+
     if (error) {
       console.error("[Yahoo OAuth] User denied access:", error);
-      res.redirect(302, "/connect?yahoo_error=denied");
+      // Try to recover origin from state when present
+      let origin = "";
+      if (state) {
+        try {
+          const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
+          origin = decoded.origin ?? "";
+        } catch {
+          /* ignore */
+        }
+      }
+      res.redirect(302, connectYahooPath(origin, "yahoo_error=denied"));
       return;
     }
 
@@ -62,47 +75,19 @@ export function registerOAuthRoutes(app: Express) {
     try {
       const tokens = await exchangeYahooCode(code, redirectUri);
 
-      // Persist tokens in leagueConnections as a pending Yahoo connection
-      // (no leagueId yet — user will pick their league in the UI)
-      const database = await getDb();
-      if (database && userId) {
-        const userIdNum = parseInt(userId, 10);
-        if (!isNaN(userIdNum)) {
-          // Upsert a pending Yahoo connection record to store the tokens
-          await database
-            .insert(leagueConnections)
-            .values({
-              userId: userIdNum,
-              provider: "yahoo",
-              leagueId: "__pending__",
-              leagueName: "Pending Yahoo Connection",
-              season: new Date().getFullYear(),
-              isActive: false,
-              credentials: {
-                accessToken: tokens.accessToken,
-                refreshToken: tokens.refreshToken,
-                expiresAt: tokens.expiresAt,
-              },
-              syncStatus: "pending",
-            })
-            .onDuplicateKeyUpdate({
-              set: {
-                credentials: {
-                  accessToken: tokens.accessToken,
-                  refreshToken: tokens.refreshToken,
-                  expiresAt: tokens.expiresAt,
-                },
-                syncStatus: "pending",
-              },
-            });
-        }
+      const userIdNum = parseInt(userId, 10);
+      if (!isNaN(userIdNum)) {
+        await writeYahooPendingCredentials(userIdNum, {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+          expiresAt: tokens.expiresAt,
+        });
       }
 
-      // Redirect back to the connect page with success flag
-      res.redirect(302, `${origin}/connect?yahoo_auth=success&userId=${userId}`);
+      res.redirect(302, connectYahooPath(origin, "yahoo_auth=success"));
     } catch (err) {
       console.error("[Yahoo OAuth] Callback failed:", err);
-      res.redirect(302, `${origin}/connect?yahoo_error=callback_failed`);
+      res.redirect(302, connectYahooPath(origin, "yahoo_error=callback_failed"));
     }
   });
 

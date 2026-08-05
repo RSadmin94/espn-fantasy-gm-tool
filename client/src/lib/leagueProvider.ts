@@ -2,7 +2,7 @@
  * Stored `league_connections.provider` values used by the app today.
  * Keep in sync with connect / workbook / ESPN connect writers.
  */
-export const LEAGUE_PROVIDERS = ["espn", "sleeper", "sleeper_workbook"] as const;
+export const LEAGUE_PROVIDERS = ["espn", "sleeper", "sleeper_workbook", "yahoo"] as const;
 
 export type LeagueProvider = (typeof LEAGUE_PROVIDERS)[number];
 
@@ -18,6 +18,7 @@ export function normalizeLeagueProvider(
   if (trimmed === "espn") return "espn";
   if (trimmed === "sleeper") return "sleeper";
   if (trimmed === "sleeper_workbook") return "sleeper_workbook";
+  if (trimmed === "yahoo") return "yahoo";
   return "unknown";
 }
 

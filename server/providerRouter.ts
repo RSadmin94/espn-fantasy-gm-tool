@@ -7,18 +7,24 @@
  */
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { getSupportedProviders, PROVIDER_INFO, getAdapter } from "./providers/registry";
 import { fetchSleeperLeagueImportSnapshots } from "./providers/sleeperAdapter";
 import type { UniversalLeague } from "./providers/types";
-import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
+import { getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
-import { invokeLLM } from "./_core/llm";
 import { getDb, reconcileActiveLeague, setActiveLeagueForUser } from "./db";
 import { gmTeams, leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
 import { fetchEspnViewsHardened, normalizeTeams, normalizeSettings, type EspnCreds } from "./espnService";
 import { encryptCredentialsForDb } from "./_core/crypto";
+import {
+  readYahooPendingCredentials,
+  runSelectYahooTeam,
+  runYahooLeagueImport,
+  yahooDiscoveryCustomerError,
+} from "./yahooLeagueImport";
 import {
   persistUniversalLeague,
   type PersistUniversalLeagueResult,
@@ -809,27 +815,11 @@ export const providerRouter = router({
    * Returns the token expiry and whether the user needs to pick a league.
    */
   getYahooPendingAuth: protectedProcedure.query(async ({ ctx }) => {
-    const database = await getDb();
-    if (!database) return { hasPendingAuth: false };
-
-    const rows = await database
-      .select()
-      .from(leagueConnections)
-      .where(
-        and(
-          eq(leagueConnections.userId, ctx.user.id),
-          eq(leagueConnections.provider, "yahoo"),
-          eq(leagueConnections.leagueId, "__pending__")
-        )
-      )
-      .limit(1);
-
-    if (!rows.length) return { hasPendingAuth: false };
-
-    const creds = rows[0].credentials as { accessToken?: string; refreshToken?: string; expiresAt?: number } | null;
+    const creds = await readYahooPendingCredentials(ctx.user.id);
+    if (!creds) return { hasPendingAuth: false as const };
     return {
-      hasPendingAuth: true,
-      expiresAt: creds?.expiresAt ?? 0,
+      hasPendingAuth: true as const,
+      expiresAt: creds.expiresAt,
     };
   }),
 
@@ -840,29 +830,19 @@ export const providerRouter = router({
   getYahooLeagues: protectedProcedure
     .input(z.object({ season: z.number().default(2025) }))
     .query(async ({ input, ctx }) => {
-      const database = await getDb();
-      if (!database) return { leagues: [], error: "Database unavailable" };
-
-      // Get pending auth tokens
-      const rows = await database
-        .select()
-        .from(leagueConnections)
-        .where(
-          and(
-            eq(leagueConnections.userId, ctx.user.id),
-            eq(leagueConnections.provider, "yahoo"),
-            eq(leagueConnections.leagueId, "__pending__")
-          )
-        )
-        .limit(1);
-
-      if (!rows.length) {
-        return { leagues: [], error: "No Yahoo authorization found. Please connect Yahoo first." };
-      }
-
-      const creds = rows[0].credentials as { accessToken: string; refreshToken: string; expiresAt: number } | null;
-      if (!creds?.accessToken) {
-        return { leagues: [], error: "Invalid Yahoo credentials. Please reconnect." };
+      const creds = await readYahooPendingCredentials(ctx.user.id);
+      if (!creds) {
+        return {
+          leagues: [] as Array<{
+            leagueKey: string;
+            leagueId: string;
+            name: string;
+            season: string;
+            teamCount: number;
+          }>,
+          error: "no_pending_auth" as const,
+          message: yahooDiscoveryCustomerError("authorization"),
+        };
       }
 
       try {
@@ -870,208 +850,89 @@ export const providerRouter = router({
           creds.accessToken,
           creds.refreshToken,
           creds.expiresAt,
-          input.season
+          input.season,
         );
-        return { leagues, error: null };
+        if (leagues.length === 0) {
+          return {
+            leagues,
+            error: "no_leagues" as const,
+            message: "No Yahoo Fantasy football leagues were found for this account.",
+          };
+        }
+        return { leagues, error: null, message: null };
       } catch (err) {
+        console.error("[Yahoo] getYahooLeagues failed:", err);
         return {
-          leagues: [],
-          error: err instanceof Error ? err.message : "Failed to fetch Yahoo leagues",
+          leagues: [] as Array<{
+            leagueKey: string;
+            leagueId: string;
+            name: string;
+            season: string;
+            teamCount: number;
+          }>,
+          error: "discovery_failed" as const,
+          message: yahooDiscoveryCustomerError("fetch failed"),
         };
       }
     }),
 
   /**
-   * Import a Yahoo league and generate its DNA profile.
+   * Import a Yahoo league through UniversalLeague → persistUniversalLeague → gm_*.
    * Requires a pending Yahoo auth token stored in leagueConnections.
    */
   importYahooLeague: protectedProcedure
-    .input(z.object({
-      leagueId: z.string().min(1),
-      leagueName: z.string().default(""),
-      season: z.number().default(2025),
-    }))
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        leagueName: z.string().default(""),
+        season: z.number().default(2025),
+        dryRun: z.boolean().optional(),
+      }),
+    )
     .mutation(async ({ input, ctx }) => {
-      const database = await getDb();
-      if (!database) throw new Error("Database unavailable");
-
-      // Get pending auth tokens
-      const rows = await database
-        .select()
-        .from(leagueConnections)
-        .where(
-          and(
-            eq(leagueConnections.userId, ctx.user.id),
-            eq(leagueConnections.provider, "yahoo"),
-            eq(leagueConnections.leagueId, "__pending__")
-          )
-        )
-        .limit(1);
-
-      if (!rows.length) throw new Error("No Yahoo authorization found. Please connect Yahoo first.");
-
-      const creds = rows[0].credentials as { accessToken: string; refreshToken: string; expiresAt: number } | null;
-      if (!creds?.accessToken) throw new Error("Invalid Yahoo credentials. Please reconnect.");
-
-      const steps: string[] = [];
-      steps.push("Connecting to Yahoo Fantasy API...");
-
-      // Build adapter with token-refresh persistence
-      const adapter = new YahooAdapter(
-        {
-          leagueId: input.leagueId,
-          accessToken: creds.accessToken,
-          refreshToken: creds.refreshToken,
-          expiresAt: creds.expiresAt,
-        },
-        async (newTokens) => {
-          // Persist refreshed tokens back to the pending connection
-          await database
-            .update(leagueConnections)
-            .set({
-              credentials: {
-                accessToken: newTokens.accessToken,
-                refreshToken: newTokens.refreshToken,
-                expiresAt: newTokens.expiresAt,
-              },
-            })
-            .where(
-              and(
-                eq(leagueConnections.userId, ctx.user.id),
-                eq(leagueConnections.provider, "yahoo"),
-                eq(leagueConnections.leagueId, "__pending__")
-              )
-            );
-        }
-      );
-
-      steps.push(`Fetching league data for ${input.leagueName || input.leagueId}...`);
-      const league = await adapter.fetchAndNormalize(input.leagueId, input.season);
-      steps.push(`Found league: ${league.settings.leagueName} (${league.teams.length} teams)`);
-
-      steps.push("Analyzing roster compositions...");
-      steps.push("Detecting behavioral patterns...");
-
-      const txByTeam = new Map<string, number>();
-      for (const tx of league.transactions) {
-        txByTeam.set(tx.teamId, (txByTeam.get(tx.teamId) || 0) + 1);
-      }
-
-      const tradesByTeam = new Map<string, number>();
-      for (const tx of league.transactions.filter(t => t.type === "TRADE")) {
-        tradesByTeam.set(tx.teamId, (tradesByTeam.get(tx.teamId) || 0) + 1);
-      }
-
-      steps.push("Generating League DNA Profile...");
-      const teamSummaries = league.teams.map(t => {
-        const trades = tradesByTeam.get(t.teamId) || 0;
-        const moves = txByTeam.get(t.teamId) || 0;
-        return `${t.ownerName} (${t.wins}-${t.losses}, ${t.pointsFor} PF): ${trades} trades, ${moves} total moves`;
-      }).join("\n");
-
-      const dnaResponse = await invokeLLM({
-        messages: [
-          {
-            role: "system" as const,
-            content: `You are an expert fantasy football analyst. Analyze this Yahoo Fantasy league and provide a DNA profile for each manager. For each manager, identify their archetype from: Aggressive Trader, Waiver Hawk, Draft & Hold, Contrarian, Reactive, Balanced, or Data-Driven. Return JSON matching the provided schema.`,
-          },
-          {
-            role: "user" as const,
-            content: `League: ${league.settings.leagueName} (${league.settings.season} season, ${league.settings.scoringType} scoring)\nTeams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "league_dna",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                leagueName: { type: "string" },
-                season: { type: "number" },
-                provider: { type: "string" },
-                teamProfiles: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      teamId: { type: "string" },
-                      ownerName: { type: "string" },
-                      archetype: { type: "string" },
-                      archetypeReason: { type: "string" },
-                      desperationScore: { type: "number" },
-                      exploitabilityScore: { type: "number" },
-                      keyTrait: { type: "string" },
-                    },
-                    required: ["teamId", "ownerName", "archetype", "archetypeReason", "desperationScore", "exploitabilityScore", "keyTrait"],
-                    additionalProperties: false,
-                  },
-                },
-                leagueSummary: { type: "string" },
-              },
-              required: ["leagueName", "season", "provider", "teamProfiles", "leagueSummary"],
-              additionalProperties: false,
-            },
-          },
-        },
+      const result = await runYahooLeagueImport({
+        userId: ctx.user.id,
+        leagueId: input.leagueId,
+        leagueName: input.leagueName,
+        season: input.season,
+        dryRun: input.dryRun,
       });
-
-      const rawContent = dnaResponse.choices?.[0]?.message?.content;
-      const dnaContent = typeof rawContent === "string" ? rawContent : null;
-      let dnaProfile: unknown = null;
-      try {
-        dnaProfile = JSON.parse(dnaContent || "{}");
-      } catch {
-        dnaProfile = { error: "Failed to parse DNA profile" };
-      }
-
-      steps.push("League DNA Profile complete.");
-      // Persist the real league connection (replace __pending__)
-      // Use the adapter's current credentials (may have been refreshed)
-      const adapterCreds = (adapter as unknown as { credentials: { accessToken: string; refreshToken: string; expiresAt: number } }).credentials;
-      const encryptedYahooCreds = encryptCredentialsForDb(adapterCreds as unknown as Record<string, unknown>);
-      await database
-        .insert(leagueConnections)
-        .values({
-          userId: ctx.user.id,
-          provider: "yahoo",
-          leagueId: input.leagueId,
-          leagueName: league.settings.leagueName,
-          season: input.season,
-          isActive: true,
-          credentials: encryptedYahooCreds,
-          syncStatus: "ok",
-          dnaProfile,
-        })
-        .onDuplicateKeyUpdate({
-          set: {
-            leagueName: league.settings.leagueName,
-            isActive: true,
-            credentials: encryptedYahooCreds,
-            syncStatus: "ok",
-            dnaProfile,
-            lastSyncedAt: new Date(),
-          },
+      if (!result.success) {
+        throw new TRPCError({
+          code:
+            result.code === "no_pending_auth" || result.code === "invalid_credentials"
+              ? "UNAUTHORIZED"
+              : result.code === "no_db"
+                ? "INTERNAL_SERVER_ERROR"
+                : "BAD_REQUEST",
+          message: result.message,
         });
-      await reconcileActiveLeague(ctx.user.id);
-      return {
-        success: true,
-        steps,
-        league: {
-          leagueId: input.leagueId,
-          leagueName: league.settings.leagueName,
-          season: league.settings.season,
-          teamCount: league.teams.length,
-          scoringType: league.settings.scoringType,
-          currentWeek: league.settings.currentWeek,
-          provider: "yahoo" as const,
-        },
-        teams: league.teams,
-        matchupCount: league.matchups.length,
-        transactionCount: league.transactions.length,
-        dnaProfile,
-      };
+      }
+      return result;
+    }),
+
+  selectYahooTeam: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        teamId: z.number().int().positive(),
+        ownerName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await runSelectYahooTeam({
+        userId: ctx.user.id,
+        leagueId: input.leagueId,
+        teamId: input.teamId,
+        ownerName: input.ownerName,
+      });
+      if (!result.success) {
+        throw new TRPCError({
+          code: result.code === "no_db" ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
+          message: result.message,
+        });
+      }
+      return result;
     }),
 
   // ─── ESPN import ────────────────────────────────────────────────────────────────────────────────

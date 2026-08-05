@@ -25,6 +25,7 @@ function providerLabel(provider: string): string {
   if (provider === "espn") return "ESPN";
   if (provider === "sleeper") return "Sleeper API";
   if (provider === "sleeper_workbook") return "Sleeper Workbook";
+  if (provider === "yahoo") return "Yahoo";
   return provider;
 }
 
@@ -243,7 +244,9 @@ export function ConnectedLeagues() {
                         to={
                           league.provider === "sleeper"
                             ? "/connect/sleeper"
-                            : `/select-team/espn/${league.leagueId}`
+                            : league.provider === "yahoo"
+                              ? "/connect/yahoo"
+                              : `/select-team/espn/${league.leagueId}`
                         }
                       >
                         Select my team

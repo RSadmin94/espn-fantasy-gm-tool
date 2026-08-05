@@ -78,6 +78,37 @@ export function SyncDataNonEspnNotice({ provider }: SyncDataNonEspnNoticeProps) 
     );
   }
 
+  if (provider === "yahoo") {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6" data-sync-provider="yahoo">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">League Synchronization Center</h1>
+          <p className="mt-1 text-muted-foreground">
+            This league is connected through Yahoo Fantasy.
+          </p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Plug className="h-5 w-5 text-primary" />
+              Yahoo Fantasy
+            </CardTitle>
+            <CardDescription>
+              ESPN sync tools do not apply to Yahoo leagues. Re-authorize and re-import from the Yahoo
+              connect flow if you need to refresh this league. Continuous Yahoo sync is not available
+              yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild>
+              <Link to="/connect/yahoo">Open Yahoo connect</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6" data-sync-provider="unknown">
       <div>
