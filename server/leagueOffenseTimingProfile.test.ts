@@ -67,7 +67,7 @@ describe("league offense timing", () => {
     };
     const prof = offenseTimingToProfile(raw);
     expect(prof.position).toBe("TE");
-    expect(prof.window).toBeTruthy();
-    expect(prof.windowStartPick ?? prof.window?.windowOpen).not.toBeNull();
+    expect(prof.seasonsAnalyzed).toBe(5);
+    expect(prof.baselineFirstPick ?? prof.firstPickP25 ?? prof.windowStartPick).toBeTruthy();
   });
 });
