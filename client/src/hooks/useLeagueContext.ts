@@ -6,6 +6,7 @@ import {
   normalizeLeagueProvider,
   type LeagueProviderKind,
 } from "@/lib/leagueProvider";
+import { resolveCanonicalMyTeam } from "@/lib/resolveCanonicalMyTeam";
 
 export type LeagueContext = {
   leagueId: string;
@@ -56,32 +57,6 @@ function buildOwnerMatchClues(
     clues.push(email);
   }
   return clues.filter(Boolean) as string[];
-}
-
-function resolveMyTeam(
-  teams: Array<{ teamId: number; teamName: string; owners: string | unknown }>,
-  clues: string[]
-): { teamId: number; teamName: string; ownerName: string } | null {
-  const clean = clues.map((c) => c.trim().toLowerCase()).filter((c) => c.length >= 2);
-  if (!clean.length) return null;
-  for (const t of teams) {
-    const raw =
-      typeof t.owners === "string"
-        ? t.owners
-        : Array.isArray(t.owners)
-          ? (t.owners as unknown[]).map(String).join(";")
-          : "";
-    const segments = raw.split(";").map((s) => s.trim()).filter(Boolean);
-    for (const seg of segments) {
-      const low = seg.toLowerCase();
-      for (const clue of clean) {
-        if (low === clue || low.includes(clue) || clue.includes(low)) {
-          return { teamId: t.teamId, teamName: t.teamName, ownerName: seg };
-        }
-      }
-    }
-  }
-  return null;
 }
 
 /**
@@ -176,7 +151,31 @@ export function useLeagueContext(): LeagueContext {
     () => buildOwnerMatchClues(userLoaded ? user : null),
     [user, userLoaded]
   );
-  const my = useMemo(() => resolveMyTeam(teams, clues), [teams, clues]);
+
+  const activeConnection = useMemo(() => {
+    const activeLeagueId = activeQ.data?.leagueId?.trim() ?? "";
+    const activeProvider = normalizeLeagueProvider(activeQ.data?.provider);
+    const rows = leaguesQ.data ?? [];
+    if (!activeLeagueId || !activeProvider) return null;
+    return (
+      rows.find(
+        (r) =>
+          r.leagueId === activeLeagueId &&
+          normalizeLeagueProvider(r.provider) === activeProvider,
+      ) ?? null
+    );
+  }, [activeQ.data?.leagueId, activeQ.data?.provider, leaguesQ.data]);
+
+  const my = useMemo(
+    () =>
+      resolveCanonicalMyTeam({
+        provider,
+        connection: activeConnection,
+        espnTeams: teams,
+        ownerClues: clues,
+      }),
+    [provider, activeConnection, teams, clues],
+  );
 
   const leagueId = useMemo(() => {
     const fromActive = activeQ.data?.leagueId?.trim();
