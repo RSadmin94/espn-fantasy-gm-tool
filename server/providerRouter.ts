@@ -51,6 +51,7 @@ import { gmTeamOwnerResolution } from "../drizzle/schema";
 import type { SleeperLeagueSnapshot } from "./providers/sleeperAdapter";
 import {
   previewSleeperWorkbookFile,
+  runSelectSleeperWorkbookTeam,
   runSleeperWorkbookImport,
 } from "./sleeperWorkbookImport";
 
@@ -630,6 +631,30 @@ export const providerRouter = router({
         fileBase64: input.fileBase64,
         dryRun: input.dryRun,
       });
+    }),
+
+  selectSleeperWorkbookTeam: protectedProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1),
+        teamId: z.number().int().positive(),
+        ownerName: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const result = await runSelectSleeperWorkbookTeam({
+        userId: ctx.user.id,
+        leagueId: input.leagueId,
+        teamId: input.teamId,
+        ownerName: input.ownerName,
+      });
+      if (!result.success) {
+        throw new TRPCError({
+          code: result.error === "no_db" ? "INTERNAL_SERVER_ERROR" : "BAD_REQUEST",
+          message: result.message,
+        });
+      }
+      return result;
     }),
 
   listSleeperOwnerResolutions: protectedProcedure

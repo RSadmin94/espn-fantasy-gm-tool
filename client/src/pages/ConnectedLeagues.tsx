@@ -245,9 +245,11 @@ export function ConnectedLeagues() {
                         to={
                           league.provider === "sleeper"
                             ? "/connect/sleeper"
-                            : league.provider === "yahoo"
-                              ? "/connect/yahoo"
-                              : `/select-team/espn/${league.leagueId}`
+                            : league.provider === "sleeper_workbook"
+                              ? "/import/sleeper-workbook"
+                              : league.provider === "yahoo"
+                                ? "/connect/yahoo"
+                                : `/select-team/espn/${league.leagueId}`
                         }
                       >
                         Select my team
