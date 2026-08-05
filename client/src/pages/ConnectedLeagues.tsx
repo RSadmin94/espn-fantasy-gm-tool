@@ -120,7 +120,8 @@ export function ConnectedLeagues() {
             <div>
               <p className="font-medium text-foreground">No leagues connected yet</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Connect ESPN, Sleeper, or upload a Sleeper workbook to import your league history.
+                Connect ESPN, Sleeper, Yahoo, or upload a Sleeper workbook to import your league
+                history.
               </p>
             </div>
             <Button asChild>

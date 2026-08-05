@@ -54,4 +54,12 @@ describe("Yahoo onboarding wiring (source)", () => {
     expect(oauth).toContain("writeYahooPendingCredentials");
     expect(oauth).not.toContain("/connect?yahoo_auth=success");
   });
+
+  it("ConnectYahoo surfaces not-configured setup without a dead Connect button", () => {
+    const page = read("client/src/pages/ConnectYahoo.tsx");
+    expect(page).toContain('data-yahoo-auth="not_configured"');
+    expect(page).toContain("YAHOO_CLIENT_ID");
+    expect(page).toContain("YAHOO_CLIENT_SECRET");
+    expect(page).toContain("/api/yahoo/oauth/callback");
+  });
 });

@@ -251,8 +251,10 @@ export function ConnectYahoo() {
     });
   }
 
-  const showDiscovery = discoveryEnabled && !failure?.code?.startsWith("oauth");
-  const configured = configuredQ.data?.configured !== false;
+  const yahooConfigured = configuredQ.data?.configured === true;
+  const yahooConfigKnown = configuredQ.data != null;
+  const showDiscovery =
+    yahooConfigured && discoveryEnabled && !failure?.code?.startsWith("oauth");
 
   return (
     <div className="mx-auto max-w-3xl space-y-6" data-connect-provider="yahoo">
@@ -298,14 +300,26 @@ export function ConnectYahoo() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {pendingQ.data?.hasPendingAuth || oauthSuccess ? (
+          {!yahooConfigKnown || configuredQ.isLoading ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking Yahoo availability…
+            </div>
+          ) : !yahooConfigured ? (
+            <p className="text-sm text-muted-foreground" data-yahoo-auth="not_configured">
+              Yahoo OAuth is not configured on this environment yet. Set{" "}
+              <code className="text-xs">YAHOO_CLIENT_ID</code> and{" "}
+              <code className="text-xs">YAHOO_CLIENT_SECRET</code>, and register the callback URL{" "}
+              <code className="text-xs">/api/yahoo/oauth/callback</code> on your Yahoo developer app.
+            </p>
+          ) : pendingQ.data?.hasPendingAuth || oauthSuccess ? (
             <p className="text-sm text-muted-foreground" data-yahoo-auth="ready">
               Yahoo is authorized. Select leagues below to import.
             </p>
           ) : (
             <Button
               onClick={() => void startOAuth()}
-              disabled={!configured || authUrlQ.isLoading || !authUrlQ.data?.url}
+              disabled={authUrlQ.isLoading || !authUrlQ.data?.url}
             >
               {authUrlQ.isLoading ? (
                 <>
