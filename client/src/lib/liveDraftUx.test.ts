@@ -66,6 +66,7 @@ describe("RFSN-024 liveDraftUx status phases", () => {
     };
     expect(resolveLiveDraftUiPhase(s)).toBe("waiting");
     expect(liveDraftStatusLines(s)[0]).toBe("Waiting for ESPN Mirror");
+    expect(liveDraftStatusLines(s).join(" ")).toMatch(/extension injects Board Mirror/i);
   });
 
   it("espn-mirror connected labels Connected to ESPN Mirror", () => {

@@ -52,6 +52,8 @@ type Args = {
   commentaryEnabled?: boolean;
   /** When true, arm extension observer. */
   armExtension?: boolean;
+  /** Booth session id (run-suffixed). Overrides provider draftId on notify. */
+  notifyDraftId?: string | null;
   /** Shared board projection — idempotent NormalizedPickBatch (may include reconnect baseline). */
   onNormalizedBatch?: (batch: NormalizedPickBatch) => void;
   /** Fired when FantasyPros starts a new draft session (board must reset). */
@@ -82,6 +84,7 @@ export function useFantasyProsMockDraftMonitor({
   seatTeamIdByPos,
   draftPace = "broadcast",
   armExtension = true,
+  notifyDraftId = null,
   onNormalizedBatch,
   onSessionReset,
 }: Args): FantasyProsMockMonitorStatus {
@@ -94,12 +97,16 @@ export function useFantasyProsMockDraftMonitor({
   const resetMut = _trpc.rfsnBroadcast.resetLiveSession.useMutation();
   const notifyMutRef = useRef(notifyMut);
   const resetMutRef = useRef(resetMut);
+  const notifyDraftIdRef = useRef(notifyDraftId);
   useEffect(() => {
     notifyMutRef.current = notifyMut;
   }, [notifyMut]);
   useEffect(() => {
     resetMutRef.current = resetMut;
   }, [resetMut]);
+  useEffect(() => {
+    notifyDraftIdRef.current = notifyDraftId;
+  }, [notifyDraftId]);
   const onNormalizedBatchRef = useRef(onNormalizedBatch);
   useEffect(() => {
     onNormalizedBatchRef.current = onNormalizedBatch;
@@ -301,11 +308,17 @@ export function useFantasyProsMockDraftMonitor({
 
       let lastPick: FantasyProsLockedPick | null = null;
       for (const event of observed.batch?.picks ?? []) {
-        const request = toNotifyLockedPickRequest(event, {
-          teamCount: teamCountResolved,
-          draftComplete: Boolean(event.metadata?.draftCompletePick),
-          draftPace: pace,
-        });
+        const request = toNotifyLockedPickRequest(
+          {
+            ...event,
+            draftId: notifyDraftIdRef.current?.trim() || event.draftId,
+          },
+          {
+            teamCount: teamCountResolved,
+            draftComplete: Boolean(event.metadata?.draftCompletePick),
+            draftPace: pace,
+          },
+        );
         try {
           await notifyMutRef.current.mutateAsync(request);
           lastPick = mapped.find((p) => p.overallPick === event.overallPick) ?? lastPick;

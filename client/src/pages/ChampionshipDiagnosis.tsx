@@ -1,11 +1,11 @@
 import { useMemo, type ReactNode } from "react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { V1 } from "@/lib/v1Copy";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { PlayoffPositionTruthPanel } from "@/components/PlayoffPositionTruthPanel";
 import {
@@ -123,18 +123,14 @@ export function ChampionshipDiagnosis() {
     { staleTime: 60_000, enabled: leagueKeyReady && showPlayoffPanel },
   );
 
-  const checkout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
+    description:
+      "Rivals Pro unlocks readiness scoring, positional gaps vs champions, playoff truth, path analysis, and your ranked action plan.",
   });
   const startCheckout = () => {
     if (typeof window === "undefined") return;
-    checkout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   const upgradeGate = (diagnosisGated || pathGated) ? (
@@ -148,7 +144,7 @@ export function ChampionshipDiagnosis() {
       }
       ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
       onUnlock={startCheckout}
-      pending={checkout.isPending}
+      pending={false}
     />
   ) : null;
 
@@ -427,6 +423,8 @@ export function ChampionshipDiagnosis() {
   );
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell
       minHeight="screen"
       width="diagnosis"
@@ -523,6 +521,7 @@ export function ChampionshipDiagnosis() {
         </>
       )}
     </IntelPageShell>
+    </>
   );
 }
 

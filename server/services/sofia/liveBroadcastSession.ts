@@ -44,6 +44,8 @@ type DraftSession = {
   payload: PublicLiveBroadcastPayload;
   lastProcessedPickId: string | null;
   wrapUpEventId: string | null;
+  /** Fingerprint of locked board used for the stored wrap-up / Draft Night Show. */
+  wrapUpBoardFingerprint: string | null;
 };
 
 const sessions = new Map<string, DraftSession>();
@@ -63,6 +65,7 @@ export function getOrCreateLiveSession(leagueId: string, draftId: string): Draft
       state: "waiting_for_draft",
       lastProcessedPickId: null,
       wrapUpEventId: null,
+      wrapUpBoardFingerprint: null,
       payload: {
         schemaVersion: 1,
         sessionState: "waiting_for_draft",
@@ -115,9 +118,39 @@ export function hasWrapUpBeenProcessed(leagueId: string, draftId: string): boole
   return Boolean(s?.wrapUpEventId);
 }
 
-export function markWrapUpProcessed(leagueId: string, draftId: string, eventId: string): void {
+export function getWrapUpBoardFingerprint(
+  leagueId: string,
+  draftId: string,
+): string | null {
+  return sessions.get(sessionKey(leagueId, draftId))?.wrapUpBoardFingerprint ?? null;
+}
+
+export function markWrapUpProcessed(
+  leagueId: string,
+  draftId: string,
+  eventId: string,
+  boardFingerprint?: string | null,
+): void {
   const s = getOrCreateLiveSession(leagueId, draftId);
   s.wrapUpEventId = eventId;
+  if (boardFingerprint != null) {
+    s.wrapUpBoardFingerprint = boardFingerprint;
+  }
+}
+
+/** Clear wrap-up gate so a new board under the same draftId can regenerate. */
+export function clearWrapUpProcessed(leagueId: string, draftId: string): void {
+  const s = sessions.get(sessionKey(leagueId, draftId));
+  if (!s) return;
+  s.wrapUpEventId = null;
+  s.wrapUpBoardFingerprint = null;
+  if (s.payload) {
+    s.payload = {
+      ...s.payload,
+      draftNightShow: null,
+      draftComplete: false,
+    };
+  }
 }
 
 export function resetLiveSessionsForTests(): void {

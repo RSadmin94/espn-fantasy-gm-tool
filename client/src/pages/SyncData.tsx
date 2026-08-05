@@ -8,10 +8,12 @@ import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { fetchEspnSeasonBundleBrowserOrExtension } from "@/lib/espnApi";
+import { isEspnSyncProvider } from "@/lib/leagueProvider";
 import { cn } from "@/lib/utils";
 import { V1 } from "@/lib/v1Copy";
 import { useProductOnboarding } from "@/components/onboarding";
 import { EspnConnectorCtaRow, EspnConnectorGuide } from "@/components/connect";
+import { SyncDataNonEspnNotice } from "@/pages/SyncDataNonEspnNotice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -313,10 +315,40 @@ function trpcLikeErrorMessage(err: Error | { message: string } | null | undefine
   return typeof nested === "string" && nested.trim() ? nested : err.message;
 }
 
+/**
+ * Provider gate: ESPN mounts the existing sync center; other providers never
+ * load ESPN queries, Connector guides, or GMWR capture actions.
+ */
 export function SyncData() {
+  const { provider, isLoading } = useLeagueContext();
+  const { authLoaded, userLoaded, isSignedIn, activeQ } = useLeagueActiveGate();
+
+  if (
+    !authLoaded ||
+    !userLoaded ||
+    provider == null ||
+    (isSignedIn && activeQ.isLoading && activeQ.data == null) ||
+    (isSignedIn && isLoading && provider === "espn" && activeQ.data == null)
+  ) {
+    return (
+      <div className="mx-auto flex max-w-3xl items-center gap-2 py-12 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading league…
+      </div>
+    );
+  }
+
+  if (isEspnSyncProvider(provider)) {
+    return <SyncDataEspnCenter />;
+  }
+
+  return <SyncDataNonEspnNotice provider={provider} />;
+}
+
+function SyncDataEspnCenter() {
   const [searchParams] = useSearchParams();
   const { getToken } = useAuth();
-  const { leagueId, isConnected } = useLeagueContext();
+  const { leagueId, isConnected, provider } = useLeagueContext();
   const { leagueContextKey, authLoaded, userLoaded, isSignedIn } = useLeagueActiveGate();
   const leagueKeyReady =
     Boolean(authLoaded && userLoaded && isSignedIn && !leagueContextKey.startsWith("__"));
@@ -1392,7 +1424,7 @@ export function SyncData() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6" data-sync-provider={provider ?? "espn"}>
       {/* Header — League Synchronization Center */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">League Synchronization Center</h1>

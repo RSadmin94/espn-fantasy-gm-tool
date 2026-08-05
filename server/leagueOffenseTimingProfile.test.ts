@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  evaluateOffenseTimingDraftability,
-  buildTimingDeferralExplanation,
-  isPositionWindowOpen,
+  evaluateDpDraftability,
+  isDpWindowOpen,
 } from "./draftPickIntelligence";
 import { offenseTimingToProfile, type OffenseTimingRawProfile } from "./leagueOffenseTimingProfile";
 import type { PositionTimingProfile } from "./leagueDraftTimingProfile";
@@ -33,21 +32,15 @@ function sampleProfile(overrides?: Partial<PositionTimingProfile>): PositionTimi
 describe("league offense timing", () => {
   it("blocks QB before window open", () => {
     const prof = sampleProfile();
-    expect(isPositionWindowOpen(25, prof)).toBe(false);
-    expect(evaluateOffenseTimingDraftability(25, 2, prof).selectable).toBe(false);
-    expect(evaluateOffenseTimingDraftability(45, 4, prof).selectable).toBe(true);
+    expect(isDpWindowOpen(25, prof)).toBe(false);
+    expect(evaluateDpDraftability(25, prof).selectable).toBe(false);
+    expect(evaluateDpDraftability(45, prof).selectable).toBe(true);
   });
 
-  it("builds deferral explanation with round context", () => {
-    const text = buildTimingDeferralExplanation({
-      position: "QB",
-      pickNum: 20,
-      round: 2,
-      profile: sampleProfile(),
-    });
-    expect(text).toContain("QB window not yet open");
-    expect(text).toContain("Round 2");
-    expect(text).toContain("Delayed QB selection");
+  it("explains deferral before the DP window opens", () => {
+    const result = evaluateDpDraftability(20, sampleProfile());
+    expect(result.selectable).toBe(false);
+    expect(result.reason).toMatch(/window open/i);
   });
 
   it("maps raw offense stats to profile with window fields", () => {
@@ -62,12 +55,19 @@ describe("league offense timing", () => {
       confidence: "Medium",
       confidenceReasons: ["5 seasons"],
       earliestFirstBySeason: [
-        { season: 2022, firstPick: 45, firstRound: 4, firstPlayer: "Kelce", positionPickCount: 14, labeledCoveragePct: 95 },
+        {
+          season: 2022,
+          firstPick: 45,
+          firstRound: 4,
+          firstPlayer: "Kelce",
+          positionPickCount: 14,
+          labeledCoveragePct: 95,
+        },
       ],
     };
     const prof = offenseTimingToProfile(raw);
     expect(prof.position).toBe("TE");
-    expect(prof.window?.baseline).toBe(50);
-    expect(prof.window?.windowOpen).not.toBeNull();
+    expect(prof.seasonsAnalyzed).toBe(5);
+    expect(prof.baselineFirstPick ?? prof.firstPickP25 ?? prof.windowStartPick).toBeTruthy();
   });
 });

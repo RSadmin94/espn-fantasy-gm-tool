@@ -5,7 +5,6 @@
 
 import { computeOwnerDraftMetrics, type DraftNightPickInput } from "../../../shared/draftNightGrading";
 import type { MockPickLike } from "../draftMoments/draftMomentReceiptService";
-import { makeShadowReceiptContext } from "../sofia/shadowDraftSources";
 import { normName } from "../draftMoments/draftMomentReceiptService";
 import type { HistoricalContext } from "./historicalContext";
 import { passesAirRule } from "./historicalContext";
@@ -137,6 +136,8 @@ function buildPressureCandidates(
 
 /**
  * Build the Draft Night Show from locked picks + league context snapshot.
+ * Uses only pick ADP + live `adpByName` — never seed shadow/sample story ADP
+ * (that fabricated Mahomes/Olave sleeper/reach awards across unrelated drafts).
  */
 export function buildDraftNightShowFromPicks(args: {
   leagueId: string;
@@ -146,12 +147,14 @@ export function buildDraftNightShowFromPicks(args: {
   snapshot: LeagueContextSnapshot;
   adpByName?: Map<string, number>;
 }): DraftNightShowPayload {
-  const shadow = makeShadowReceiptContext().adpByName;
-  const adp = new Map(shadow);
+  const adp = new Map<string, number>();
   if (args.adpByName) {
-    for (const [k, v] of args.adpByName) adp.set(k, v);
+    for (const [k, v] of args.adpByName) {
+      if (v != null && Number.isFinite(Number(v))) adp.set(k, Number(v));
+    }
   }
   const inputs = picksToInputs(args.picks, adp);
+  const adpAvailable = inputs.some((p) => p.adp != null && Number.isFinite(Number(p.adp)));
   const owners = computeOwnerDraftMetrics(inputs);
   const evidenceByOwner = collectEvidenceForOwners(
     args.leagueId,
@@ -161,7 +164,12 @@ export function buildDraftNightShowFromPicks(args: {
     args.snapshot,
   );
   const pressureCandidates = buildPressureCandidates(owners, args.snapshot);
-  const show = buildDraftNightShow({ owners, evidenceByOwner, pressureCandidates });
+  const show = buildDraftNightShow({
+    owners,
+    evidenceByOwner,
+    pressureCandidates,
+    adpAvailable,
+  });
 
   return {
     ...show,

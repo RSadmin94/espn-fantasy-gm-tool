@@ -25,6 +25,13 @@ const PROVIDERS = [
     href: "/import/sleeper-workbook",
     icon: FileSpreadsheet,
   },
+  {
+    id: "yahoo",
+    title: "Yahoo Fantasy",
+    description: "Authorize Yahoo OAuth — discover and import your Yahoo leagues.",
+    href: "/connect/yahoo",
+    icon: Plug,
+  },
 ] as const;
 
 export function ProviderConnectCards({ atLimit }: { atLimit?: boolean }) {
@@ -36,7 +43,7 @@ export function ProviderConnectCards({ atLimit }: { atLimit?: boolean }) {
           {CONNECTED_LEAGUE_COPY.providerIntro}
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-3">
+      <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {PROVIDERS.map((p) => {
           const Icon = p.icon;
           const body = (

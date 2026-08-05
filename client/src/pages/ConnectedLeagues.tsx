@@ -25,6 +25,7 @@ function providerLabel(provider: string): string {
   if (provider === "espn") return "ESPN";
   if (provider === "sleeper") return "Sleeper API";
   if (provider === "sleeper_workbook") return "Sleeper Workbook";
+  if (provider === "yahoo") return "Yahoo";
   return provider;
 }
 
@@ -119,7 +120,8 @@ export function ConnectedLeagues() {
             <div>
               <p className="font-medium text-foreground">No leagues connected yet</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Connect ESPN, Sleeper, or upload a Sleeper workbook to import your league history.
+                Connect ESPN, Sleeper, Yahoo, or upload a Sleeper workbook to import your league
+                history.
               </p>
             </div>
             <Button asChild>
@@ -243,7 +245,11 @@ export function ConnectedLeagues() {
                         to={
                           league.provider === "sleeper"
                             ? "/connect/sleeper"
-                            : `/select-team/espn/${league.leagueId}`
+                            : league.provider === "sleeper_workbook"
+                              ? "/import/sleeper-workbook"
+                              : league.provider === "yahoo"
+                                ? "/connect/yahoo"
+                                : `/select-team/espn/${league.leagueId}`
                         }
                       >
                         Select my team

@@ -63,7 +63,8 @@ describe("Draft V2 — Commit 6 route ownership", () => {
     expect(warRoom).toContain("scrollToSection");
     expect(warRoom).toContain("dwr-mock");
     expect(warRoom).toContain("LiveDraftControlPanel");
-    expect(warRoom).not.toContain("ESPN Live");
+    // UI copy must not brand a dedicated "ESPN Live" control; comments may still say ESPN Live.
+    expect(warRoom).not.toMatch(/["'`]ESPN Live["'`]/);
   });
 
   it("Mock Draft reuses War Room engine — not Draft Reality Simulator", () => {

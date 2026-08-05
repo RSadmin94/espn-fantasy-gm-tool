@@ -263,9 +263,12 @@ export function buildDraftNightShow(args: {
   owners: readonly OwnerDraftMetrics[];
   evidenceByOwner: Map<string, HistoricalContext[]>;
   pressureCandidates: readonly PressureCandidate[];
+  /** When false, suppress ADP-based awards instead of fabricating from shadow ADP. */
+  adpAvailable?: boolean;
 }): DraftNightShowResult {
   const suppressed: DraftNightShowResult["suppressed"] = [];
   const awards: DraftNightAward[] = [];
+  const adpAvailable = args.adpAvailable !== false;
 
   const winnerEv =
     args.owners[0] != null
@@ -275,25 +278,30 @@ export function buildDraftNightShow(args: {
   if (winner) awards.push(winner);
   else suppressed.push({ awardType: "winner_of_the_night", reason: "Insufficient grade separation or sample." });
 
-  // Mistake: attach evidence for the mistaken owner after selection
-  const mistakeProbe = selectBiggestMistake(args.owners, []);
-  if (mistakeProbe) {
-    const ev = args.evidenceByOwner.get(mistakeProbe.ownerName.trim().toLowerCase()) ?? [];
-    const mistake = selectBiggestMistake(args.owners, ev);
-    if (mistake) awards.push(mistake);
-    else suppressed.push({ awardType: "biggest_mistake", reason: "No catastrophic draft mistake detected." });
+  if (!adpAvailable) {
+    suppressed.push({ awardType: "biggest_mistake", reason: "ADP unavailable" });
+    suppressed.push({ awardType: "sleeper_value", reason: "ADP unavailable" });
   } else {
-    suppressed.push({ awardType: "biggest_mistake", reason: "No catastrophic draft mistake detected." });
-  }
+    // Mistake: attach evidence for the mistaken owner after selection
+    const mistakeProbe = selectBiggestMistake(args.owners, []);
+    if (mistakeProbe) {
+      const ev = args.evidenceByOwner.get(mistakeProbe.ownerName.trim().toLowerCase()) ?? [];
+      const mistake = selectBiggestMistake(args.owners, ev);
+      if (mistake) awards.push(mistake);
+      else suppressed.push({ awardType: "biggest_mistake", reason: "No catastrophic draft mistake detected." });
+    } else {
+      suppressed.push({ awardType: "biggest_mistake", reason: "No catastrophic draft mistake detected." });
+    }
 
-  const sleeperProbe = selectSleeperValue(args.owners, []);
-  if (sleeperProbe) {
-    const ev = args.evidenceByOwner.get(sleeperProbe.ownerName.trim().toLowerCase()) ?? [];
-    const sleeper = selectSleeperValue(args.owners, ev);
-    if (sleeper) awards.push(sleeper);
-    else suppressed.push({ awardType: "sleeper_value", reason: "No clear sleeper value above heat threshold." });
-  } else {
-    suppressed.push({ awardType: "sleeper_value", reason: "No clear sleeper value above heat threshold." });
+    const sleeperProbe = selectSleeperValue(args.owners, []);
+    if (sleeperProbe) {
+      const ev = args.evidenceByOwner.get(sleeperProbe.ownerName.trim().toLowerCase()) ?? [];
+      const sleeper = selectSleeperValue(args.owners, ev);
+      if (sleeper) awards.push(sleeper);
+      else suppressed.push({ awardType: "sleeper_value", reason: "No clear sleeper value above heat threshold." });
+    } else {
+      suppressed.push({ awardType: "sleeper_value", reason: "No clear sleeper value above heat threshold." });
+    }
   }
 
   const pressure = selectUnderIntensePressure(args.pressureCandidates, args.evidenceByOwner);

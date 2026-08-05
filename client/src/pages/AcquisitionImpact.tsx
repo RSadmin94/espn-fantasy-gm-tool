@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
   CinematicMetaPill,
   CinematicPageHeader,
@@ -96,18 +96,14 @@ export function AcquisitionImpact() {
   const data = (leagueKeyReady ? q.data : undefined) as AcqResult | undefined;
   const f = data?.focal;
   const gated = Boolean((data as any)?.gated);
-  const checkout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
+    description:
+      "Your own dashboard above is free — the who. Rivals Pro explains why some managers consistently add value and how the rest of the league compares.",
   });
   const startCheckout = () => {
     if (typeof window === "undefined") return;
-    checkout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   useEffect(() => {
@@ -115,6 +111,8 @@ export function AcquisitionImpact() {
   }, [data]);
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell
       minHeight="screen"
       width="wide"
@@ -205,7 +203,7 @@ export function AcquisitionImpact() {
                 description="Your own dashboard above is free — the who. Rivals Pro explains why some managers consistently add value and how the rest of the league compares."
                 ctaLabel={COMMERCIAL.upgradeCtaUnderstandWhy}
                 onUnlock={startCheckout}
-                pending={checkout.isPending}
+                pending={false}
               />
             )}
             {!gated && (<>
@@ -263,6 +261,7 @@ export function AcquisitionImpact() {
         </>
       )}
     </IntelPageShell>
+    </>
   );
 }
 

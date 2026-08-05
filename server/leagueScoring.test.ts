@@ -132,9 +132,9 @@ describe("getScoringBreakdown", () => {
 
   it("includes reception row with correct value", () => {
     const rows = getScoringBreakdown(halfPPRSettings);
-    const recRow = rows.find((r) => r.stat.toLowerCase() === "reception");
+    const recRow = rows.find((r) => /reception/i.test(r.stat));
     expect(recRow).toBeDefined();
-    expect(recRow!.points).toContain("0.5");
+    expect(recRow!.points).toMatch(/0\.5/);
   });
 
   it("includes passing TD row", () => {

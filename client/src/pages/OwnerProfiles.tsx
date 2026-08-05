@@ -52,6 +52,7 @@ import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/Riva
 import { ActivityDnaCard } from "@/components/ActivityDnaCard";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
   Collapsible,
   CollapsibleContent,
@@ -906,14 +907,9 @@ function ProfilePanel({
   const gated = selfLens ? false : Boolean(p?.gated);
   const profileLocked = selfLens ? false : Boolean(p?.locked);
   const draftUnlocked = !gated;
-  const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: "Unlock scouting",
+    description: "Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals.",
   });
   const scoutLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
   const scoutSnapSeen = useRef(false);
@@ -923,7 +919,7 @@ function ProfilePanel({
   const startScoutCheckout = () => {
     if (typeof window === "undefined") return;
     scoutLog.mutate({ eventType: "cta_click", featureName: "owner_profile_unlock_clicked" });
-    scoutCheckout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   useEffect(() => {
@@ -1030,7 +1026,7 @@ function ProfilePanel({
           title={`${headerDisplayName}'s Opponent Scout Report`}
           blurb="Scout how this manager drafts, trades, and builds rosters — unlock Rivals Pro for the full scouting report."
           onUnlock={startScoutCheckout}
-          pending={scoutCheckout.isPending}
+          pending={false}
         />
       </IntelPanel>
     );
@@ -1184,6 +1180,8 @@ function ProfilePanel({
   };
 
   return (
+    <>
+    {upgradeDialog}
     <div className="space-y-4" data-owner-profiles-mode={mode}>
       {/* ── 1. Executive Summary ───────────────────────────────────────────── */}
       <IntelPanel id="dossier-summary" variant="warm" className="scroll-mt-24 overflow-hidden" style={{ borderTop: "3px solid #f5c65a" }}>
@@ -1315,7 +1313,7 @@ function ProfilePanel({
       <IntelPanel id="dossier-gm" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
         <DossierSectionHeader icon={<Dna className="h-4 w-4" />} title={lens.sectionGm} />
         {gated ? (
-          <ScoutingLock title="GM Profile" blurb="Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals Pro." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+          <ScoutingLock title="GM Profile" blurb="Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals Pro." onUnlock={startScoutCheckout} pending={false} />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1368,7 +1366,7 @@ function ProfilePanel({
         </div>
 
       {!draftUnlocked && (
-        <ScoutingLock title="Draft DNA" blurb="See exactly how this manager drafts - round-by-round tendencies, position bias, reaches and value - so you can predict and counter their board." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+        <ScoutingLock title="Draft DNA" blurb="See exactly how this manager drafts - round-by-round tendencies, position bias, reaches and value - so you can predict and counter their board." onUnlock={startScoutCheckout} pending={false} />
       )}
       {draftUnlocked && (
         <div className="space-y-4">
@@ -1576,7 +1574,7 @@ function ProfilePanel({
           </ProfileShellCard>
 
           {gated ? (
-            <ScoutingLock title="Keeper DNA" blurb="Keeper rate, average keeper round, and protected positions." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+            <ScoutingLock title="Keeper DNA" blurb="Keeper rate, average keeper round, and protected positions." onUnlock={startScoutCheckout} pending={false} />
           ) : (
             <ProfileShellCard title={lens.keeperTitle}>
               <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
@@ -1643,7 +1641,7 @@ function ProfilePanel({
           />
         </IntelPanel>
       ) : (
-        <ScoutingLock title="Trading Profile" blurb="Trade history, completed trade intelligence, and acquisition impact." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+        <ScoutingLock title="Trading Profile" blurb="Trade history, completed trade intelligence, and acquisition impact." onUnlock={startScoutCheckout} pending={false} />
       )}
 
       {/* ── 5. Matchup / Rivalry History ───────────────────────────────────── */}
@@ -1796,7 +1794,7 @@ function ProfilePanel({
         )}
         </IntelPanel>
       ) : (
-        <ScoutingLock title="Matchup Intelligence" blurb="Head-to-head records, nemesis tags, and opponent tendencies." onUnlock={startScoutCheckout} pending={scoutCheckout.isPending} />
+        <ScoutingLock title="Matchup Intelligence" blurb="Head-to-head records, nemesis tags, and opponent tendencies." onUnlock={startScoutCheckout} pending={false} />
       )}
 
       {/* ── 6. Rivalries ───────────────────────────────────────────────────── */}
@@ -1997,6 +1995,7 @@ function ProfilePanel({
       </Collapsible>
 
     </div>
+    </>
   );
 }
 
@@ -2060,16 +2059,13 @@ export function OwnerProfiles({
   });
   // Scout directory paywall banner only — never on My GM self lens.
   const listGated = mode === "scout" && Boolean(listQ.data?.gated);
-  const scoutCheckout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (r) => {
-      if (r?.url) window.open(r.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => toast.error(err.message || "Could not start checkout. Please try again."),
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: "Unlock scouting",
+    description: "Draft DNA, trade tendencies, activity patterns, and matchup intel unlock with Rivals.",
   });
   const startScoutCheckout = () => {
     if (typeof window === "undefined") return;
-    scoutCheckout.mutate({ origin: window.location.origin });
+    openUpgrade();
   };
 
   const [selectedOwnerKey, setSelectedOwnerKey] = useState<string | null>(null);
@@ -2316,6 +2312,8 @@ export function OwnerProfiles({
   }
 
   return (
+    <>
+    {upgradeDialog}
     <IntelPageShell bleed minHeight="full" background="cinematic-owner" padding="default" className="text-zinc-100" data-owner-profiles-mode={mode}>
       <CinematicPageHeader
         eyebrowMono={pageEyebrow}
@@ -2459,5 +2457,6 @@ export function OwnerProfiles({
         </div>
       </div>
     </IntelPageShell>
+    </>
   );
 }

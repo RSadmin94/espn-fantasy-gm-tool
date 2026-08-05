@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Navigate, useLocation } from "react-router";
 import { trpc } from "@/lib/trpc";
 
@@ -54,14 +53,4 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>;
-}
-
-/** Scroll to team-selection help when redirected with ?step=team */
-export function useConnectTeamStepHighlight() {
-  const location = useLocation();
-  useEffect(() => {
-    if (new URLSearchParams(location.search).get("step") !== "team") return;
-    const el = document.getElementById("team-selection-help");
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [location.search]);
 }

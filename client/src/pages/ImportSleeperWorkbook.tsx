@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { ConnectedLeagueLimitBanner, useConnectedLeagueLimits } from "@/components/connect";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { AlertCircle, CheckCircle2, Loader2, Upload } from "lucide-react";
+
+type WorkbookTeam = {
+  teamId: number;
+  ownerId: string | null;
+  ownerKey: string | null;
+  ownerName: string;
+  teamName: string;
+};
 
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -25,20 +34,50 @@ function readFileAsBase64(file: File): Promise<string> {
 }
 
 export function ImportSleeperWorkbook() {
+  const utils = trpc.useUtils();
   const { atLimit } = useConnectedLeagueLimits();
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [importedLeagueId, setImportedLeagueId] = useState<string | null>(null);
+  const [importedTeams, setImportedTeams] = useState<WorkbookTeam[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null);
 
   const previewMutation = trpc.providers.previewSleeperWorkbook.useMutation({
     onError: (err) => setActionError(err.message),
   });
 
   const importMutation = trpc.providers.importSleeperWorkbook.useMutation({
-    onSuccess: () => {
+    onSuccess: async (data) => {
       setActionError(null);
-      setSaveMessage("Workbook imported successfully.");
+      setSaveMessage(
+        data.success
+          ? "Workbook imported. Select your team to finish setup."
+          : "Workbook import finished with errors.",
+      );
+      setImportedLeagueId(data.league.leagueId);
+      setImportedTeams(data.teams ?? []);
+      setSelectedTeamId(null);
+      await Promise.all([
+        utils.providers.getMyLeagues.invalidate(),
+        utils.league.getConnectedLeagueManagement.invalidate(),
+        utils.league.getActive.invalidate(),
+        utils.league.getConnectionLimits.invalidate(),
+      ]);
+    },
+    onError: (err) => setActionError(err.message),
+  });
+
+  const selectTeamMutation = trpc.providers.selectSleeperWorkbookTeam.useMutation({
+    onSuccess: async () => {
+      setSaveMessage("Your team is saved. Opening Connected Leagues…");
+      await Promise.all([
+        utils.providers.getMyLeagues.invalidate(),
+        utils.league.getConnectedLeagueManagement.invalidate(),
+        utils.league.getActive.invalidate(),
+        utils.league.getConnectionLimits.invalidate(),
+      ]);
     },
     onError: (err) => setActionError(err.message),
   });
@@ -46,6 +85,9 @@ export function ImportSleeperWorkbook() {
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     setActionError(null);
     setSaveMessage(null);
+    setImportedLeagueId(null);
+    setImportedTeams([]);
+    setSelectedTeamId(null);
     previewMutation.reset();
     importMutation.reset();
 
@@ -88,10 +130,20 @@ export function ImportSleeperWorkbook() {
     importMutation.mutate({ fileBase64 });
   }
 
+  function handleSaveTeam() {
+    if (!importedLeagueId || selectedTeamId == null) return;
+    const team = importedTeams.find((t) => t.teamId === selectedTeamId);
+    selectTeamMutation.mutate({
+      leagueId: importedLeagueId,
+      teamId: selectedTeamId,
+      ownerName: team?.ownerName,
+    });
+  }
+
   const preview = previewMutation.data;
 
   return (
-    <div className="mx-auto max-w-xl space-y-6 p-6">
+    <div className="mx-auto max-w-xl space-y-6 p-6" data-connect-provider="sleeper_workbook">
       <div>
         <h1 className="text-2xl font-semibold">Import Sleeper Workbook</h1>
         <p className="text-sm text-muted-foreground">
@@ -209,6 +261,55 @@ export function ImportSleeperWorkbook() {
                 </ul>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {importedTeams.length > 0 && importedLeagueId && (
+        <Card data-workbook-team-select>
+          <CardHeader>
+            <CardTitle>Select your team</CardTitle>
+            <CardDescription>
+              Choose the franchise you manage so Rivalries and Owner views focus on you.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ul className="space-y-2">
+              {importedTeams.map((team) => (
+                <li key={team.teamId}>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 hover:bg-muted/40">
+                    <input
+                      type="radio"
+                      name="workbook-team"
+                      checked={selectedTeamId === team.teamId}
+                      onChange={() => setSelectedTeamId(team.teamId)}
+                    />
+                    <span>
+                      <span className="font-medium">{team.teamName}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{team.ownerName}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={handleSaveTeam}
+                disabled={selectedTeamId == null || selectTeamMutation.isPending}
+              >
+                {selectTeamMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving…
+                  </>
+                ) : (
+                  "Save my team"
+                )}
+              </Button>
+              <Button asChild variant="secondary">
+                <Link to="/connected-leagues">Connected Leagues</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}

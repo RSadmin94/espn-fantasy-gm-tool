@@ -4,6 +4,7 @@ import { useClerk, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
 import { COMMERCIAL } from "@/lib/commercialCopy";
+import { BILLING_COPY, type CheckoutInterval } from "@/lib/billingInterval";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -313,7 +314,7 @@ function SubscriptionSection() {
   });
 
   const sub = subQ.data;
-  const [billingInterval, setBillingInterval] = useState<"month" | "year">("year");
+  const [billingInterval, setBillingInterval] = useState<CheckoutInterval>("annual");
 
   const statusConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
     active:    { label: "Active",    className: "border-lime-500/20 bg-lime-500/10 text-lime-400", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -324,6 +325,11 @@ function SubscriptionSection() {
   };
 
   const cfg = statusConfig[sub?.status ?? "inactive"] ?? statusConfig.inactive;
+
+  const startIntervalCheckout = (interval: CheckoutInterval) => {
+    setBillingInterval(interval);
+    checkoutMutation.mutate({ origin: window.location.origin, interval });
+  };
 
   return (
     <Card>
@@ -386,51 +392,74 @@ function SubscriptionSection() {
 
             {/* Plan interval choice (only when upgrading) */}
             {!sub.hasAccess && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBillingInterval("year")}
-                  className={cn(
-                    "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-                    billingInterval === "year"
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                      : "border-border/60 bg-muted/20 hover:border-primary/40",
-                  )}
-                >
-                  <div className="font-bold text-foreground">Annual</div>
-                  <div className="text-muted-foreground">{COMMERCIAL.rivalsAnnualPriceLabel}</div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBillingInterval("month")}
-                  className={cn(
-                    "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
-                    billingInterval === "month"
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                      : "border-border/60 bg-muted/20 hover:border-primary/40",
-                  )}
-                >
-                  <div className="font-bold text-foreground">Monthly</div>
-                  <div className="text-muted-foreground">{COMMERCIAL.rivalsMonthlyPriceLabel}</div>
-                </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval("annual")}
+                    aria-pressed={billingInterval === "annual"}
+                    className={cn(
+                      "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                      billingInterval === "annual"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/40"
+                        : "border-border/60 bg-muted/20 hover:border-primary/40",
+                    )}
+                  >
+                    <div className="font-bold text-foreground">{BILLING_COPY.annualLabel}</div>
+                    <div className="text-muted-foreground">{BILLING_COPY.annualPriceLabel}</div>
+                    <div className="mt-0.5 text-[10px] font-semibold text-primary">
+                      {BILLING_COPY.annualEquivalentLabel} · {BILLING_COPY.annualSavingsLabel}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBillingInterval("monthly")}
+                    aria-pressed={billingInterval === "monthly"}
+                    className={cn(
+                      "flex-1 rounded-lg border px-3 py-2 text-left text-xs transition-colors",
+                      billingInterval === "monthly"
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/40"
+                        : "border-border/60 bg-muted/20 hover:border-primary/40",
+                    )}
+                  >
+                    <div className="font-bold text-foreground">{BILLING_COPY.monthlyLabel}</div>
+                    <div className="text-muted-foreground">{BILLING_COPY.monthlyPriceLabel}</div>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={checkoutMutation.isPending}
+                    onClick={() => startIntervalCheckout("annual")}
+                  >
+                    {checkoutMutation.isPending && billingInterval === "annual"
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <ExternalLink className="h-3.5 w-3.5" />}
+                    {checkoutMutation.isPending && billingInterval === "annual"
+                      ? COMMERCIAL.upgradeCtaPending
+                      : BILLING_COPY.annualCta}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    disabled={checkoutMutation.isPending}
+                    onClick={() => startIntervalCheckout("monthly")}
+                  >
+                    {checkoutMutation.isPending && billingInterval === "monthly"
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <ExternalLink className="h-3.5 w-3.5" />}
+                    {checkoutMutation.isPending && billingInterval === "monthly"
+                      ? COMMERCIAL.upgradeCtaPending
+                      : BILLING_COPY.monthlyCta}
+                  </Button>
+                </div>
               </div>
             )}
 
             {/* Actions */}
             <div className="flex flex-wrap gap-2">
-              {!sub.hasAccess && (
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={checkoutMutation.isPending}
-                  onClick={() => checkoutMutation.mutate({ origin: window.location.origin, interval: billingInterval })}
-                >
-                  {checkoutMutation.isPending
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <ExternalLink className="h-3.5 w-3.5" />}
-                  {checkoutMutation.isPending ? COMMERCIAL.upgradeCtaPending : COMMERCIAL.upgradeCta}
-                </Button>
-              )}
               {sub.status === "active" && (
                 <Button
                   variant="outline"

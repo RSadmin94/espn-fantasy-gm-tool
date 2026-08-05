@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
+import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { IntelPanel } from "@/components/layout";
@@ -1601,14 +1601,9 @@ export function RivalryDossierPanel({
     { enabled: leagueKeyReady && queryKey.length > 0, staleTime: 60_000 },
   );
 
-  const dossierCheckout = trpc.billing.createCheckoutSession.useMutation({
-    onSuccess: (res) => {
-      if (res?.url) window.open(res.url, "_blank", "noopener,noreferrer");
-      else toast.error("Checkout did not return a link. Try again or contact support.");
-    },
-    onError: (err) => {
-      toast.error(err.message || "Could not start checkout. Please try again.");
-    },
+  const { openUpgrade, upgradeDialog } = useUpgradeDialog({
+    title: COMMERCIAL.upgradeCtaUnderstandWhy,
+    description: "Unlock the full rivalry dossier — head-to-head receipts, streaks, and every scar between these two owners.",
   });
   const dossierLog = (trpc as any).usageMonitor.logUIEvent.useMutation();
 
@@ -1656,17 +1651,20 @@ export function RivalryDossierPanel({
     const startDossierCheckout = () => {
       if (typeof window === "undefined") return;
       dossierLog.mutate({ eventType: "cta_click", featureName: "rivalry_dossier_unlock_clicked" });
-      dossierCheckout.mutate({ origin: window.location.origin });
+      openUpgrade();
     };
     return (
+      <>
+      {upgradeDialog}
       <GatedRivalryDossierTeaser
         focalOwnerKey={queryKey}
         opponentOwnerKey={teaserOpponentKey}
         leagueContextKey={leagueContextKey}
         leagueKeyReady={leagueKeyReady}
         onUnlock={startDossierCheckout}
-        checkoutPending={dossierCheckout.isPending}
+        checkoutPending={false}
       />
+      </>
     );
   }
 

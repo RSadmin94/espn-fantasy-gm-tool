@@ -2,9 +2,19 @@ import { useMemo } from "react";
 import { useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import {
+  normalizeLeagueProvider,
+  type LeagueProviderKind,
+} from "@/lib/leagueProvider";
+import { resolveCanonicalMyTeam } from "@/lib/resolveCanonicalMyTeam";
 
 export type LeagueContext = {
   leagueId: string;
+  /**
+   * Active league provider from `league.getActive`.
+   * `null` while auth/active is unresolved; never invents `"espn"`.
+   */
+  provider: LeagueProviderKind | null;
   /** Client-only React Query cache salt; ESPN league id when `getActive` has loaded. */
   leagueContextKey: string;
   season: number;
@@ -49,32 +59,6 @@ function buildOwnerMatchClues(
   return clues.filter(Boolean) as string[];
 }
 
-function resolveMyTeam(
-  teams: Array<{ teamId: number; teamName: string; owners: string | unknown }>,
-  clues: string[]
-): { teamId: number; teamName: string; ownerName: string } | null {
-  const clean = clues.map((c) => c.trim().toLowerCase()).filter((c) => c.length >= 2);
-  if (!clean.length) return null;
-  for (const t of teams) {
-    const raw =
-      typeof t.owners === "string"
-        ? t.owners
-        : Array.isArray(t.owners)
-          ? (t.owners as unknown[]).map(String).join(";")
-          : "";
-    const segments = raw.split(";").map((s) => s.trim()).filter(Boolean);
-    for (const seg of segments) {
-      const low = seg.toLowerCase();
-      for (const clue of clean) {
-        if (low === clue || low.includes(clue) || clue.includes(low)) {
-          return { teamId: t.teamId, teamName: t.teamName, ownerName: seg };
-        }
-      }
-    }
-  }
-  return null;
-}
-
 /**
  * League + season context derived from existing tRPC procedures (`league.*`, `espn.*`).
  * Intended as the shared foundation for GM War Room features.
@@ -93,10 +77,27 @@ export function useLeagueContext(): LeagueContext {
     refetchOnMount: false,
   });
 
+  const provider = useMemo((): LeagueProviderKind | null => {
+    if (!authLoaded || !userLoaded) return null;
+    if (!isSignedIn) return null;
+    if (activeQ.isLoading && activeQ.data == null) return null;
+    if (activeQ.data == null) return "unknown";
+    return normalizeLeagueProvider(activeQ.data.provider) ?? "unknown";
+  }, [
+    authLoaded,
+    userLoaded,
+    isSignedIn,
+    activeQ.isLoading,
+    activeQ.data,
+    activeQ.data?.provider,
+  ]);
+
+  const espnContextEnabled = provider === "espn";
+
   const cachedQ = trpc.espn.cachedSeasons.useQuery(
     { activeLeagueKey: leagueContextKey },
     {
-      enabled: authLoaded && userLoaded,
+      enabled: authLoaded && userLoaded && espnContextEnabled,
       staleTime: 5 * 60_000,
       refetchOnMount: false,
     }
@@ -110,19 +111,19 @@ export function useLeagueContext(): LeagueContext {
     return new Date().getFullYear();
   }, [cachedQ.isFetched, cachedQ.data]);
 
-  const cacheReady = !cachedQ.isLoading;
+  const cacheReady = !espnContextEnabled || !cachedQ.isLoading;
 
   const settingsQ = trpc.espn.settings.useQuery(
     { season, activeLeagueKey: leagueContextKey },
-    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
+    { enabled: espnContextEnabled && cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const teamsQ = trpc.espn.teams.useQuery(
     { season, activeLeagueKey: leagueContextKey },
-    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
+    { enabled: espnContextEnabled && cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
   const draftQ = trpc.espn.draftOrder.useQuery(
     { season, activeLeagueKey: leagueContextKey },
-    { enabled: cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
+    { enabled: espnContextEnabled && cacheReady, staleTime: 10 * 60_000, refetchOnMount: false }
   );
 
   const settings = settingsQ.data as
@@ -150,7 +151,31 @@ export function useLeagueContext(): LeagueContext {
     () => buildOwnerMatchClues(userLoaded ? user : null),
     [user, userLoaded]
   );
-  const my = useMemo(() => resolveMyTeam(teams, clues), [teams, clues]);
+
+  const activeConnection = useMemo(() => {
+    const activeLeagueId = activeQ.data?.leagueId?.trim() ?? "";
+    const activeProvider = normalizeLeagueProvider(activeQ.data?.provider);
+    const rows = leaguesQ.data ?? [];
+    if (!activeLeagueId || !activeProvider) return null;
+    return (
+      rows.find(
+        (r) =>
+          r.leagueId === activeLeagueId &&
+          normalizeLeagueProvider(r.provider) === activeProvider,
+      ) ?? null
+    );
+  }, [activeQ.data?.leagueId, activeQ.data?.provider, leaguesQ.data]);
+
+  const my = useMemo(
+    () =>
+      resolveCanonicalMyTeam({
+        provider,
+        connection: activeConnection,
+        espnTeams: teams,
+        ownerClues: clues,
+      }),
+    [provider, activeConnection, teams, clues],
+  );
 
   const leagueId = useMemo(() => {
     const fromActive = activeQ.data?.leagueId?.trim();
@@ -169,7 +194,9 @@ export function useLeagueContext(): LeagueContext {
   const isLoading = useMemo(() => {
     if (!authLoaded || !userLoaded) return true;
     if (authLoaded && userLoaded && !isSignedIn) return false;
-    if (activeQ.isLoading || leaguesQ.isLoading || cachedQ.isLoading) return true;
+    if (activeQ.isLoading || leaguesQ.isLoading) return true;
+    if (!espnContextEnabled) return false;
+    if (cachedQ.isLoading) return true;
     if (!cacheReady) return true;
     if (settingsQ.isLoading || settingsQ.isFetching) return true;
     if (teamsQ.isLoading || teamsQ.isFetching) return true;
@@ -181,6 +208,7 @@ export function useLeagueContext(): LeagueContext {
     isSignedIn,
     activeQ.isLoading,
     leaguesQ.isLoading,
+    espnContextEnabled,
     cachedQ.isLoading,
     cacheReady,
     settingsQ.isLoading,
@@ -194,6 +222,7 @@ export function useLeagueContext(): LeagueContext {
   return useMemo(
     () => ({
       leagueId,
+      provider,
       leagueContextKey,
       season,
       teamCount: Number(settings?.size ?? 0) || 0,
@@ -210,6 +239,7 @@ export function useLeagueContext(): LeagueContext {
     }),
     [
       leagueId,
+      provider,
       leagueContextKey,
       season,
       settings?.size,

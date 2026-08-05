@@ -64,9 +64,52 @@ function buildEspnCookieHeader(swid, espnS2) {
 }
 
 /** Cookies scoped to GM War Room (host cookies only for this URL). */
-async function getWarRoomCookieHeaderString() {
-  const rows = await chrome.cookies.getAll({ url: `${WAR_ROOM_ORIGIN}/` });
+async function getWarRoomCookieHeaderString(origin) {
+  const base = String(origin || WAR_ROOM_ORIGIN).replace(/\/+$/, "");
+  const rows = await chrome.cookies.getAll({ url: `${base}/` });
   return rows.map((c) => `${c.name}=${c.value}`).join("; ");
+}
+
+/**
+ * Which copy of the app a connect request may save to, or null if it may not save at all.
+ *
+ * Only the asking page's own origin is consulted, so a local or preview build saves to itself
+ * instead of production. An origin we did not ship returns null and the request is refused —
+ * falling back to production would post one user's ESPN session from a page we do not control.
+ *
+ * The message is deliberately not a parameter: a destination named in the payload can never
+ * outrank the origin Chrome attributes to the sender.
+ */
+function resolveWarRoomOrigin(sender) {
+  const raw =
+    (sender && typeof sender.origin === "string" && sender.origin) ||
+    (sender && sender.tab && typeof sender.tab.url === "string" ? sender.tab.url : "");
+  if (!raw) return null;
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const isLoopback =
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    (host === "localhost" || host === "127.0.0.1");
+  const isKnownSite =
+    url.protocol === "https:" &&
+    (host === "fantasyfootballrivals.com" ||
+      host.endsWith(".fantasyfootballrivals.com") ||
+      host === "gmwarroom.online" ||
+      host.endsWith(".gmwarroom.online"));
+
+  return isLoopback || isKnownSite ? url.origin : null;
+}
+
+function buildSaveCredentialsUrl(origin) {
+  const base = String(origin || WAR_ROOM_ORIGIN).replace(/\/+$/, "");
+  return `${base}/api/trpc/espn.saveCredentials`;
 }
 
 function hasTrpcError(json) {
@@ -377,7 +420,7 @@ async function discoverLeaguesWithEspnCookie(espnCookieHeader, swid) {
   }
 }
 
-async function applySaveCredentialsCookieRule(cookieHeader) {
+async function applySaveCredentialsCookieRule(cookieHeader, saveUrl) {
   await chrome.declarativeNetRequest.updateSessionRules({
     removeRuleIds: [DNR_SAVE_COOKIE_RULE_ID],
     addRules: [
@@ -389,7 +432,7 @@ async function applySaveCredentialsCookieRule(cookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: cookieHeader }],
         },
         condition: {
-          urlFilter: `${TRPC_SAVE_URL}*`,
+          urlFilter: `${saveUrl || TRPC_SAVE_URL}*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -473,6 +516,8 @@ const MSG_LEAGUE_HISTORY_MEDALS = "GMWR_LEAGUE_HISTORY_MEDALS";
 /** Page (gmwarroom) → background: credentialed GET to fantasy.espn.com for browser-session sync. */
 const MSG_PAGE_ESPN_FETCH = "GMWR_PAGE_ESPN_FETCH";
 const MSG_CAPTURE_WEEKLY_STATS = "GMWR_CAPTURE_WEEKLY_STATS";
+/** Page (gmwarroom) → background: deterministic connect — cookies → discover → saveCredentials. */
+const MSG_CONNECT_ESPN = "GMWR_CONNECT_ESPN";
 
 /** RFSN-030C — FantasyPros solo mock connector (extension relay). */
 const MSG_FP_MOCK_ARM = "GMWR_FP_MOCK_ARM";
@@ -672,6 +717,27 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       config: espnBmConnectorState.config,
     })
     .catch(() => {});
+});
+
+/**
+ * When the last ESPN fantasy tab closes, tell War Room immediately so
+ * "Connected to ESPN Mirror" cannot stick on a dead transport.
+ */
+chrome.tabs.onRemoved.addListener((_tabId, _removeInfo) => {
+  if (!espnBmConnectorState.armed) return;
+  void (async () => {
+    const tabs = await chrome.tabs.query({});
+    const espnTabs = tabs.filter((tab) => isEspnFantasyTabUrl(tab.url || "")).length;
+    await broadcastToFfrTabs({
+      type: MSG_ESPN_BM_STATUS,
+      protocolVersion: 1,
+      provider: "espn-live",
+      status: espnTabs > 0 ? "waiting_for_espn_mirror" : "waiting_for_espn_tab",
+      espnTabs,
+      sessionNonce: espnBmConnectorState.sessionNonce,
+      reason: espnTabs > 0 ? null : "espn_tab_closed",
+    });
+  })().catch(() => {});
 });
 
 function trpcResultJson(parsed) {
@@ -2497,14 +2563,15 @@ async function openOrFocusPostConnectTab() {
 /**
  * POST saveCredentials. Cookie header is applied via DNR (SW fetch forbids Cookie).
  */
-async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoomCookieHeader }) {
+async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoomCookieHeader, saveUrl }) {
   const json = { swid, espnS2, leagueId: String(leagueId).trim() };
   if (leagueName && String(leagueName).trim()) json.leagueName = String(leagueName).trim();
   const body = JSON.stringify({ json });
+  const targetUrl = saveUrl || TRPC_SAVE_URL;
 
-  await applySaveCredentialsCookieRule(warRoomCookieHeader);
+  await applySaveCredentialsCookieRule(warRoomCookieHeader, targetUrl);
   try {
-    const res = await fetch(TRPC_SAVE_URL, {
+    const res = await fetch(targetUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
@@ -2530,7 +2597,11 @@ async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoom
     if (hasTrpcError(parsed)) {
       return { ok: false, status, error: safeErrorSummary(status, parsed) };
     }
-    console.info("[GMWR] saveCredentials OK", { leagueId: json.leagueId, httpStatus: status });
+    console.info("[GMWR] saveCredentials OK", {
+      leagueId: json.leagueId,
+      httpStatus: status,
+      savedTo: targetUrl,
+    });
     return { ok: true, status };
   } finally {
     await removeSaveCredentialsCookieRule();
@@ -2538,7 +2609,7 @@ async function postSaveCredentials({ swid, espnS2, leagueId, leagueName, warRoom
 }
 
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const t = message?.type;
 
   // ── RFSN-030C FantasyPros solo mock relay ─────────────────────────────────
@@ -2788,6 +2859,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     (async () => {
       expireEspnBmSessionIfStale();
       const r = await broadcastToEspnFantasyTabs({ type: MSG_ESPN_BM_PING });
+      if (espnBmConnectorState.armed && r.tabCount === 0) {
+        await broadcastToFfrTabs({
+          type: MSG_ESPN_BM_STATUS,
+          protocolVersion: 1,
+          provider: "espn-live",
+          status: "waiting_for_espn_tab",
+          espnTabs: 0,
+          sessionNonce: espnBmConnectorState.sessionNonce,
+          reason: "espn_tab_absent",
+        });
+      }
       sendResponse({
         ok: true,
         extensionPresent: true,
@@ -3033,6 +3115,167 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     })().catch((e) => {
       const msg = e instanceof Error ? e.message : String(e);
       sendResponse({ ok: false, status: 0, error: msg, result: null, bodyText: "" });
+    });
+    return true;
+  }
+
+  // ─── Deterministic ESPN connect: read cookies → discover leagues → saveCredentials.
+  //     Every exit reports a stage so the page can render one specific next action. ───
+  if (t === MSG_CONNECT_ESPN) {
+    const connectStartedAt = Date.now();
+    const since = () => Date.now() - connectStartedAt;
+
+    (async () => {
+      const probe = message?.probe === true;
+      const requestedLeagueId = String(message?.leagueId || "").trim();
+      const requestedLeagueName = String(message?.leagueName || "").trim();
+
+      // Settled before anything ESPN is touched: a page we did not ship learns nothing about the
+      // user's ESPN session, not even whether they have one.
+      const warRoomOrigin = resolveWarRoomOrigin(sender);
+      if (!warRoomOrigin) {
+        console.info("[GMWR] connect ESPN", {
+          stage: "blocked_origin",
+          requestOrigin: String(sender?.origin || sender?.tab?.url || "").slice(0, 200),
+        });
+        sendResponse({
+          ok: false,
+          stage: "error",
+          error: "This page is not allowed to connect an ESPN account.",
+          elapsedMs: since(),
+        });
+        return;
+      }
+      const saveUrl = buildSaveCredentialsUrl(warRoomOrigin);
+
+      const { swid, espnS2 } = await getEspnCookieValues();
+      if (!swid || !espnS2) {
+        console.info("[GMWR] connect ESPN", { stage: "espn_signed_out", probe });
+        sendResponse({
+          ok: false,
+          stage: "espn_signed_out",
+          espnSignedIn: false,
+          savedTo: warRoomOrigin,
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      if (probe) {
+        sendResponse({
+          ok: true,
+          stage: "ready",
+          espnSignedIn: true,
+          savedTo: warRoomOrigin,
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      const warRoomCookieHeader = await getWarRoomCookieHeaderString(warRoomOrigin);
+      if (!warRoomCookieHeader) {
+        console.info("[GMWR] connect ESPN", {
+          stage: "save_failed",
+          reason: "no_war_room_session",
+          warRoomOrigin,
+        });
+        sendResponse({
+          ok: false,
+          stage: "save_failed",
+          espnSignedIn: true,
+          httpStatus: 401,
+          savedTo: warRoomOrigin,
+          error: `Fantasy Football Rivals session not found. Sign in at ${warRoomOrigin} in this browser, then try again.`,
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      let chosenId = requestedLeagueId;
+      let chosenName = requestedLeagueName;
+
+      if (!chosenId) {
+        const discovered = await discoverLeaguesWithEspnCookie(
+          buildEspnCookieHeader(swid, espnS2),
+          swid,
+        );
+        const leagues = Array.isArray(discovered?.leagues) ? discovered.leagues : [];
+        if (leagues.length === 0) {
+          console.info("[GMWR] connect ESPN", { stage: "no_leagues", httpStatus: discovered?.httpStatus ?? null });
+          sendResponse({
+            ok: false,
+            stage: "no_leagues",
+            espnSignedIn: true,
+            leagues: [],
+            savedTo: warRoomOrigin,
+            httpStatus: discovered?.httpStatus ?? null,
+            error: discovered?.error || null,
+            elapsedMs: since(),
+          });
+          return;
+        }
+        if (leagues.length > 1) {
+          console.info("[GMWR] connect ESPN", { stage: "choose", leagueCount: leagues.length });
+          sendResponse({
+            ok: true,
+            stage: "choose",
+            espnSignedIn: true,
+            leagues: leagues.map((L) => ({
+              id: String(L?.id ?? "").trim(),
+              name: String(L?.name ?? "").trim(),
+            })),
+            savedTo: warRoomOrigin,
+            elapsedMs: since(),
+          });
+          return;
+        }
+        chosenId = String(leagues[0]?.id ?? "").trim();
+        chosenName = String(leagues[0]?.name ?? "").trim();
+      }
+
+      const saved = await postSaveCredentials({
+        swid,
+        espnS2,
+        leagueId: chosenId,
+        leagueName: chosenName,
+        warRoomCookieHeader,
+        saveUrl,
+      });
+      if (!saved.ok) {
+        console.info("[GMWR] connect ESPN", {
+          stage: "save_failed",
+          leagueId: chosenId,
+          httpStatus: saved.status ?? null,
+          warRoomOrigin,
+        });
+        sendResponse({
+          ok: false,
+          stage: "save_failed",
+          espnSignedIn: true,
+          leagueId: chosenId,
+          httpStatus: saved.status ?? null,
+          savedTo: warRoomOrigin,
+          error: saved.error || "Save failed.",
+          elapsedMs: since(),
+        });
+        return;
+      }
+
+      console.info("[GMWR] connect ESPN", { stage: "connected", leagueId: chosenId, warRoomOrigin });
+      sendResponse({
+        ok: true,
+        stage: "connected",
+        espnSignedIn: true,
+        leagueId: chosenId,
+        leagueName: chosenName,
+        httpStatus: saved.status ?? 200,
+        savedTo: warRoomOrigin,
+        elapsedMs: since(),
+      });
+    })().catch((e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.info("[GMWR] connect ESPN failed", { error: msg });
+      sendResponse({ ok: false, stage: "error", error: msg, elapsedMs: since() });
     });
     return true;
   }

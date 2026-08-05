@@ -20,6 +20,10 @@ import {
   planFromPriceId,
   type BillingInterval,
 } from "./stripe/products";
+import {
+  toCheckoutIntervalWire,
+  toStripeBillingInterval,
+} from "./stripe/checkoutInterval";
 import { resolveStripePriceId } from "./stripe/resolveCheckoutPrice";
 import { getDb } from "./db";
 import { users } from "../drizzle/schema";
@@ -28,7 +32,8 @@ import { recordFunnelEvent } from "./funnelService";
 
 const checkoutInput = z.object({
   origin: z.string().url(),
-  interval: z.enum(["month", "year"]).default("year"),
+  /** Preferred wire values: monthly | annual. Legacy month | year still accepted. */
+  interval: z.enum(["monthly", "annual", "month", "year"]).default("annual"),
   /** @deprecated V1 always checks out Rivals; ignored if present */
   plan: z.literal("rivals").optional(),
 });
@@ -69,17 +74,20 @@ export const billingRouter = router({
       if (!userRow) throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
 
       const customerId = await ensureStripeCustomer(userId, userRow);
-      const interval = input.interval;
+      const stripeInterval = toStripeBillingInterval(input.interval);
+      const wireInterval = toCheckoutIntervalWire(input.interval);
 
       const priceId =
-        resolveConfiguredPriceId(interval) ?? (await resolveStripePriceId(stripe, interval));
+        resolveConfiguredPriceId(stripeInterval) ??
+        (await resolveStripePriceId(stripe, stripeInterval));
       if (!priceId) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `No active Rivals ${interval} price configured. Run pnpm stripe:setup-products.`,
+          message: `No active Rivals ${wireInterval} price configured. Run pnpm stripe:setup-products.`,
         });
       }
 
+      // One Price only — never put monthly and annual in the same line_items array.
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         mode: "subscription",
@@ -97,7 +105,7 @@ export const billingRouter = router({
             app: "fantasy_football_rivals",
             brand: STRIPE_BRAND.appName,
             plan: "rivals",
-            interval,
+            interval: stripeInterval,
           },
         },
         metadata: {
@@ -106,7 +114,7 @@ export const billingRouter = router({
           customer_name: userRow.name ?? "",
           product: "fantasy_football_rivals",
           plan: "rivals",
-          interval,
+          interval: stripeInterval,
           price_id: priceId,
         },
       });
@@ -118,10 +126,15 @@ export const billingRouter = router({
       await recordFunnelEvent({
         userId,
         event: "checkout_opened",
-        metadata: { plan: "rivals", interval, stripeSessionId: session.id },
+        metadata: {
+          plan: "rivals",
+          interval: wireInterval,
+          priceId,
+          stripeSessionId: session.id,
+        },
       });
 
-      return { url: session.url };
+      return { url: session.url, priceId, interval: wireInterval };
     }),
 
   getSubscriptionStatus: protectedProcedure.query(async ({ ctx }) => {
