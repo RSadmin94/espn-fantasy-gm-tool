@@ -24,6 +24,7 @@ import { checkRateLimit, recordUsage } from "./rateLimiter";
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
   season: z.number().optional(),
+  activeLeagueKey: z.string().optional(),
 });
 
 export function registerAdvisorStreamRoute(app: Express) {
@@ -54,10 +55,18 @@ export function registerAdvisorStreamRoute(app: Express) {
       res.status(429).json({ error: rl.reason ?? "Rate limit exceeded" });
       return;
     }
-    const { message, season: rawSeason } = parsed.data;
+    const { message, season: rawSeason, activeLeagueKey } = parsed.data;
     const season = rawSeason ?? 2025;
 
-    const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: user.id } }, null, undefined);
+    const requestedLid =
+      activeLeagueKey && !activeLeagueKey.startsWith("__")
+        ? activeLeagueKey.trim().slice(0, 32)
+        : null;
+    const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+      { user: { id: user.id } },
+      requestedLid,
+      undefined,
+    );
     const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
 
     // --- SSE headers ---

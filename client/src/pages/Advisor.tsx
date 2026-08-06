@@ -583,7 +583,9 @@ export function Advisor() {
               </Button>
             </div>
             <p className="mt-1.5 text-center text-xs text-muted-foreground">
-              Responses use real {season} season data &middot; Requires active subscription
+              Responses use the active league’s recorded data
+              {season ? <> &middot; LLM context prefers {season}</> : null}
+              {" "}&middot; Requires active subscription
             </p>
           </div>
         </CardContent>

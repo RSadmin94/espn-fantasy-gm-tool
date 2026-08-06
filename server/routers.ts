@@ -10558,10 +10558,19 @@ Provide:
         activeLeagueKey: z.string().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        void input.activeLeagueKey;
         const userId = ctx.user.id;
         const season = input.season ?? 2025;
-        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: userId } }, null, undefined);
+        // Honor the client-selected league (withLeagueSalt). Do not pass `season` into
+        // league resolution — historical margin analytics need the full matchup corpus.
+        const requestedLid =
+          input.activeLeagueKey && !input.activeLeagueKey.startsWith("__")
+            ? input.activeLeagueKey.trim().slice(0, 32)
+            : null;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+          { user: { id: userId } },
+          requestedLid,
+          undefined,
+        );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         // Rate limit check
         const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
@@ -10620,8 +10629,15 @@ Provide:
     history: protectedProcedure
       .input(z.object({ season: z.number().optional(), activeLeagueKey: z.string().optional() }))
       .query(async ({ ctx, input }) => {
-        void input.activeLeagueKey;
-        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const requestedLid =
+          input.activeLeagueKey && !input.activeLeagueKey.startsWith("__")
+            ? input.activeLeagueKey.trim().slice(0, 32)
+            : null;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          requestedLid,
+          undefined,
+        );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         return getChatHistory(ctx.user.id, input.season, chatLeagueId);
       }),
@@ -10629,8 +10645,15 @@ Provide:
     clearHistory: protectedProcedure
       .input(z.object({ activeLeagueKey: z.string().optional() }).optional())
       .mutation(async ({ ctx, input }) => {
-        void input?.activeLeagueKey;
-        const { leagueId: resolvedLid } = await resolveActiveLeagueId({ user: { id: ctx.user.id } }, null, undefined);
+        const requestedLid =
+          input?.activeLeagueKey && !input.activeLeagueKey.startsWith("__")
+            ? input.activeLeagueKey.trim().slice(0, 32)
+            : null;
+        const { leagueId: resolvedLid } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          requestedLid,
+          undefined,
+        );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         await clearChatHistory(ctx.user.id, chatLeagueId);
         return { success: true };
