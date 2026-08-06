@@ -50,7 +50,12 @@ import {
 } from "@/components/layout";
 import { RivalryDossierPanel, type RivalryPickerOption } from "@/components/RivalryDossierPanel";
 import { ActivityDnaCard } from "@/components/ActivityDnaCard";
-import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
+import {
+  buildCurrentSeasonOwnerKeys,
+  buildCurrentSeasonOwnerNames,
+  buildDefaultRivalryEligibleOwnerKeys,
+} from "@/lib/rivalryOwnerEligibility";
+import { separateActiveHistoricalRivalHighlights } from "@/lib/rivalryHighlightSelection";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
@@ -630,19 +635,6 @@ function resolveOpponentOwnerKey(name: string, pickers: RivalryPickerOption[]): 
   return hit?.ownerKey ?? "";
 }
 
-function pickRivalryHighlights(intel: any[]) {
-  if (!intel.length) return { topRival: null as any, biggestThreat: null as any };
-  const byGames = [...intel].sort((a, b) => num(b.games) - num(a.games));
-  const nemesis = intel.filter((r) => r.tag === "Nemesis").sort((a, b) => num(b.games) - num(a.games))[0];
-  const rival = intel.find((r) => r.tag === "Rival");
-  const topRival = nemesis ?? rival ?? byGames[0] ?? null;
-  const biggestThreat =
-    nemesis ??
-    [...intel].filter((r) => num(r.games) >= 3).sort((a, b) => num(a.winPct) - num(b.winPct))[0] ??
-    null;
-  return { topRival, biggestThreat };
-}
-
 function DossierSectionHeader({
   icon,
   title,
@@ -858,6 +850,8 @@ function ProfilePanel({
   dossierPickerOptions,
   dossierActiveSeason,
   rivalryEligibleOwnerKeysForDossier,
+  currentSeasonOwnerKeysForDossier,
+  currentSeasonOwnerNamesForDossier,
   leagueContextKey,
   leagueKeyReady,
 }: {
@@ -872,6 +866,10 @@ function ProfilePanel({
   dossierPickerOptions: RivalryPickerOption[];
   dossierActiveSeason: number;
   rivalryEligibleOwnerKeysForDossier: string[];
+  /** Strict current-season franchise keys (RFSN-047). */
+  currentSeasonOwnerKeysForDossier: string[];
+  /** Lowercased current-season owner display names (RFSN-047). */
+  currentSeasonOwnerNamesForDossier: string[];
   leagueContextKey: string;
   leagueKeyReady: boolean;
 }) {
@@ -1155,7 +1153,13 @@ function ProfilePanel({
       : null;
   const currentSeasonRow = seasonRecords.length > 0 ? (seasonRecords as any[])[seasonRecords.length - 1] : null;
   const draftStyle = str((draft as Record<string, unknown>).draftStyleBadge ?? "");
-  const { topRival, biggestThreat } = pickRivalryHighlights(intel);
+  const { historicalRival, currentRival, biggestThreat, historicalIsActive } =
+    separateActiveHistoricalRivalHighlights({
+      intel: intel as any[],
+      currentSeasonOwnerKeys: new Set(currentSeasonOwnerKeysForDossier),
+      currentSeasonOwnerNames: new Set(currentSeasonOwnerNamesForDossier),
+      resolveOwnerKey: (name) => resolveOpponentOwnerKey(name, dossierPickerOptions),
+    });
   const selfTendencies = selfLens
     ? buildSelfIdentityTendencies({
         draftStyle: draftStyle || undefined,
@@ -1801,19 +1805,22 @@ function ProfilePanel({
       {!gated ? (
         <IntelPanel id="dossier-rivalries" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
           <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title={lens.sectionRivalries} accent="#f472b6" />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.topRivalLabel}</div>
-              {topRival ? (
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.historicalRivalLabel}</div>
+              {historicalRival ? (
                 <>
-                  <div className="mt-1 text-lg font-bold text-zinc-100">{topRival.opponentOwner}</div>
+                  <div className="mt-1 text-lg font-bold text-zinc-100">{historicalRival.opponentOwner}</div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {num(topRival.wins)}–{num(topRival.losses)}
-                    {num(topRival.ties) > 0 ? `–${num(topRival.ties)}` : ""} · {pct(num(topRival.winPct))} · {num(topRival.games)} games
+                    {num(historicalRival.wins)}–{num(historicalRival.losses)}
+                    {num(historicalRival.ties) > 0 ? `–${num(historicalRival.ties)}` : ""} · {pct(num(historicalRival.winPct))} · {num(historicalRival.games)} games
                   </div>
-                  {topRival.tag ? (
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                    {historicalIsActive ? lens.historicalActiveCue : lens.historicalRetiredCue}
+                  </div>
+                  {historicalRival.tag ? (
                     <div className="mt-2">
-                      <MatchupTag tag={topRival.tag} mode={mode} />
+                      <MatchupTag tag={historicalRival.tag} mode={mode} />
                     </div>
                   ) : null}
                 </>
@@ -1824,6 +1831,28 @@ function ProfilePanel({
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
+              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.currentRivalLabel}</div>
+              {currentRival ? (
+                <>
+                  <div className="mt-1 text-lg font-bold text-zinc-100">{currentRival.opponentOwner}</div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {num(currentRival.wins)}–{num(currentRival.losses)}
+                    {num(currentRival.ties) > 0 ? `–${num(currentRival.ties)}` : ""} · {pct(num(currentRival.winPct))} · {num(currentRival.games)} games
+                  </div>
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                    {lens.historicalActiveCue}
+                  </div>
+                  {currentRival.tag ? (
+                    <div className="mt-2">
+                      <MatchupTag tag={currentRival.tag} mode={mode} />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-zinc-500">{lens.currentRivalEmpty}</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3 sm:col-span-2 lg:col-span-1">
               <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.toughestLabel}</div>
               {biggestThreat ? (
                 <>
@@ -1839,22 +1868,34 @@ function ProfilePanel({
                   ) : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">No tough H2H profile yet.</p>
+                <p className="mt-2 text-sm text-zinc-500">{lens.toughestEmpty}</p>
               )}
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            {topRival ? (
+            {historicalRival ? (
               <button
                 type="button"
-                onClick={() => openRivalryDocumentary(topRival.opponentOwner)}
+                onClick={() => openRivalryDocumentary(historicalRival.opponentOwner)}
                 className="inline-flex items-center gap-2 rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"
               >
                 <Clapperboard className="h-3.5 w-3.5" aria-hidden />
-                {lens.openRivalriesCta} · {topRival.opponentOwner}
+                {lens.openRivalriesCta} · {historicalRival.opponentOwner}
               </button>
             ) : null}
-            {biggestThreat && biggestThreat.opponentOwner !== topRival?.opponentOwner ? (
+            {currentRival && currentRival.opponentOwner !== historicalRival?.opponentOwner ? (
+              <button
+                type="button"
+                onClick={() => openRivalryDocumentary(currentRival.opponentOwner)}
+                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-xs font-semibold text-zinc-300 transition-colors hover:bg-white/[0.06]"
+              >
+                <Clapperboard className="h-3.5 w-3.5" aria-hidden />
+                {lens.openRivalriesCta} · {currentRival.opponentOwner}
+              </button>
+            ) : null}
+            {biggestThreat &&
+            biggestThreat.opponentOwner !== historicalRival?.opponentOwner &&
+            biggestThreat.opponentOwner !== currentRival?.opponentOwner ? (
               <button
                 type="button"
                 onClick={() => openRivalryDocumentary(biggestThreat.opponentOwner)}
@@ -2121,6 +2162,29 @@ export function OwnerProfiles({
         ownerKey: o.ownerKey,
         seasons: Array.isArray(o.seasons) ? o.seasons : [],
         championships: typeof o.championships === "number" ? o.championships : 0,
+      })),
+      dossierActiveSeason,
+    );
+  }, [ownerListHydrated, listQ.data?.allOwners, dossierActiveSeason]);
+
+  const currentSeasonOwnerKeysForDossier = useMemo(() => {
+    const all = ownerListHydrated ? (listQ.data?.allOwners ?? []) : [];
+    return buildCurrentSeasonOwnerKeys(
+      all.map((o: { ownerKey: string; seasons?: number[] }) => ({
+        ownerKey: o.ownerKey,
+        seasons: Array.isArray(o.seasons) ? o.seasons : [],
+        championships: 0,
+      })),
+      dossierActiveSeason,
+    );
+  }, [ownerListHydrated, listQ.data?.allOwners, dossierActiveSeason]);
+
+  const currentSeasonOwnerNamesForDossier = useMemo(() => {
+    const all = ownerListHydrated ? (listQ.data?.allOwners ?? []) : [];
+    return buildCurrentSeasonOwnerNames(
+      all.map((o: { ownerName?: string; seasons?: number[] }) => ({
+        ownerName: o.ownerName,
+        seasons: Array.isArray(o.seasons) ? o.seasons : [],
       })),
       dossierActiveSeason,
     );
@@ -2435,6 +2499,8 @@ export function OwnerProfiles({
               dossierPickerOptions={dossierPickerOptions}
               dossierActiveSeason={dossierActiveSeason}
               rivalryEligibleOwnerKeysForDossier={rivalryEligibleOwnerKeysForDossier}
+              currentSeasonOwnerKeysForDossier={currentSeasonOwnerKeysForDossier}
+              currentSeasonOwnerNamesForDossier={currentSeasonOwnerNamesForDossier}
               leagueContextKey={leagueContextKey}
               leagueKeyReady={leagueKeyReady}
             />
