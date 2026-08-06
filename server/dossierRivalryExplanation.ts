@@ -35,6 +35,32 @@ export type DossierExplanationBullet = {
   receiptIds: string[];
 };
 
+/** Single evidence package for the whole card (header + Why). RFSN-048C. */
+export type DossierRivalryEvidence = {
+  source: "h2hAuthority" | "none";
+  /** Human scope for the primary record (never blends RS+playoffs unlabeled). */
+  scopeLabel: string;
+  startSeason: number | null;
+  endSeason: number | null;
+  includesRegularSeason: boolean;
+  includesPlayoffs: boolean;
+  wins: number;
+  losses: number;
+  ties: number;
+  meetings: number;
+  effectivePct: number;
+  /** Primary record line, e.g. `7–10 · 17 meetings`. */
+  recordLine: string;
+  /** Coverage for primary record, e.g. `2011–2025 · regular-season recorded meetings`. */
+  coverageLabel: string | null;
+  playoffWins: number;
+  playoffLosses: number;
+  playoffTies: number;
+  playoffMeetings: number;
+  /** Labeled secondary line when playoff meetings exist. */
+  playoffRecordLine: string | null;
+};
+
 export type DossierRivalryExplanation = {
   cardKind: DossierCardKind;
   opponentOwnerKey: string;
@@ -44,9 +70,12 @@ export type DossierRivalryExplanation = {
   bullets: DossierExplanationBullet[];
   /** Machine-readable provenance for UI/debug. */
   provenance: string[];
+  /** @deprecated Prefer evidence.coverageLabel — kept for older clients. */
   coverageQualifier: string | null;
   /** True only when activeThreat card reused Advisor biggestThreat.reason. */
   matchedAdvisorThreat: boolean;
+  /** Canonical W/L/T + scope for header and Why (RFSN-048C). */
+  evidence: DossierRivalryEvidence;
 };
 
 export type DossierCardRequest = {
@@ -93,14 +122,83 @@ function effectivePct(wins: number, losses: number, ties: number, games: number)
 function coverageQualifierFromH2H(h2h: H2HResult): string | null {
   const games = h2h.career.games;
   if (games <= 0 && h2h.playoffs.games <= 0) return null;
-  const seasons = h2h.meetings.map((m) => m.season).filter((s) => s > 0);
-  if (seasons.length === 0) {
-    return games > 0 ? `across ${games} recorded meetings` : null;
+  const seasons = h2h.meetings
+    .filter((m) => !m.isPlayoff)
+    .map((m) => m.season)
+    .filter((s) => s > 0);
+  // Primary record is regular-season career — coverage follows RS meetings when present.
+  const rsSeasons =
+    seasons.length > 0
+      ? seasons
+      : h2h.meetings.map((m) => m.season).filter((s) => s > 0);
+  if (rsSeasons.length === 0) {
+    return games > 0 ? `across ${games} recorded regular-season meetings` : null;
   }
-  const min = Math.min(...seasons);
-  const max = Math.max(...seasons);
-  if (min === max) return `in ${min} recorded history`;
-  return `across ${games} recorded meetings (${min}–${max})`;
+  const min = Math.min(...rsSeasons);
+  const max = Math.max(...rsSeasons);
+  if (min === max) return `${min} · regular-season recorded meetings`;
+  return `${min}–${max} · regular-season recorded meetings`;
+}
+
+function buildEvidenceFromH2H(h2h: H2HResult | null): DossierRivalryEvidence {
+  if (!h2h || h2h.career.games <= 0) {
+    return {
+      source: "none",
+      scopeLabel: "No recorded head-to-head package",
+      startSeason: null,
+      endSeason: null,
+      includesRegularSeason: false,
+      includesPlayoffs: false,
+      wins: 0,
+      losses: 0,
+      ties: 0,
+      meetings: 0,
+      effectivePct: 0,
+      recordLine: "—",
+      coverageLabel: null,
+      playoffWins: 0,
+      playoffLosses: 0,
+      playoffTies: 0,
+      playoffMeetings: 0,
+      playoffRecordLine: null,
+    };
+  }
+
+  const { wins, losses, ties, games } = h2h.career;
+  const rsSeasons = h2h.meetings
+    .filter((m) => !m.isPlayoff)
+    .map((m) => m.season)
+    .filter((s) => s > 0);
+  const startSeason = rsSeasons.length ? Math.min(...rsSeasons) : null;
+  const endSeason = rsSeasons.length ? Math.max(...rsSeasons) : null;
+  const meetingsWord = games === 1 ? "1 meeting" : `${games} meetings`;
+  const coverageLabel = coverageQualifierFromH2H(h2h);
+  const po = h2h.playoffs;
+  const playoffRecordLine =
+    po.games > 0
+      ? `Playoffs: ${formatRecord(po.wins, po.losses, po.ties)} · ${po.games} meeting${po.games === 1 ? "" : "s"}`
+      : null;
+
+  return {
+    source: "h2hAuthority",
+    scopeLabel: "Regular-season recorded meetings (H2H Authority)",
+    startSeason,
+    endSeason,
+    includesRegularSeason: true,
+    includesPlayoffs: false, // primary record excludes playoffs
+    wins,
+    losses,
+    ties,
+    meetings: games,
+    effectivePct: effectivePct(wins, losses, ties, games),
+    recordLine: `${formatRecord(wins, losses, ties)} · ${meetingsWord}`,
+    coverageLabel,
+    playoffWins: po.wins,
+    playoffLosses: po.losses,
+    playoffTies: po.ties,
+    playoffMeetings: po.games,
+    playoffRecordLine,
+  };
 }
 
 function lastMeetingBullet(h2h: H2HResult): DossierExplanationBullet | null {
@@ -188,12 +286,14 @@ export function assembleDossierRivalryExplanation(args: {
 
   const provenance = new Set<string>();
   const bullets: DossierExplanationBullet[] = [];
-  const qualifier = h2h ? coverageQualifierFromH2H(h2h) : null;
+  const evidence = buildEvidenceFromH2H(h2h);
+  const qualifier = evidence.coverageLabel;
 
   const coldOpen = statements.find((s) => s.block === "coldOpen") ?? null;
   if (coldOpen) provenance.add("rivalryNarrativeTemplates.coldOpen");
   if (story) provenance.add("rivalryStoryAuthority");
   if (h2h) provenance.add("h2hAuthority");
+  if (evidence.source === "h2hAuthority") provenance.add("h2hAuthority.careerEvidence");
 
   let headline: string | null = null;
   if (story?.headline?.key) {
@@ -218,11 +318,17 @@ export function assembleDossierRivalryExplanation(args: {
     provenance.add("h2hAuthority.fallbackReason");
   }
 
-  // Verified statement bullets (exclude cold open — used as reason)
+  // Verified statement bullets — skip CAREER_RECORD (duplicates header evidence package).
   for (const s of statements.filter((x) => x.block !== "coldOpen")) {
     if (bullets.length >= 3) break;
+    if (s.statementKey === "CAREER_RECORD") continue;
+    // Relabel playoff statement for clarity when present
+    const text =
+      s.statementKey === "PLAYOFF_RECORD" && evidence.playoffRecordLine
+        ? evidence.playoffRecordLine
+        : s.text;
     bullets.push({
-      text: s.text,
+      text,
       factKeys: [...s.factKeys],
       receiptIds: [...s.receiptIds],
     });
@@ -251,6 +357,19 @@ export function assembleDossierRivalryExplanation(args: {
     provenance.add("rivalryService.playoffEliminations");
   }
 
+  // Ensure labeled playoff secondary appears when we skipped statements but playoffs exist
+  if (
+    evidence.playoffRecordLine &&
+    bullets.length < 3 &&
+    !bullets.some((b) => /^Playoffs:/i.test(b.text))
+  ) {
+    bullets.push({
+      text: evidence.playoffRecordLine,
+      factKeys: ["PLAYOFF_MEETING"],
+      receiptIds: [],
+    });
+  }
+
   if (h2h && bullets.length < 3) {
     const streak = streakBullet(h2h);
     if (streak && !bullets.some((b) => /streak/i.test(b.text))) {
@@ -260,18 +379,6 @@ export function assembleDossierRivalryExplanation(args: {
   if (h2h && bullets.length < 3) {
     const last = lastMeetingBullet(h2h);
     if (last) bullets.push(last);
-  }
-
-  // Career volume bullet if still thin
-  if (h2h && h2h.career.games > 0 && bullets.length < 3) {
-    const alreadyCareer = bullets.some((b) => /Career:|recorded meetings/i.test(b.text));
-    if (!alreadyCareer) {
-      bullets.push({
-        text: `${h2h.career.games} recorded meetings (${formatRecord(h2h.career.wins, h2h.career.losses, h2h.career.ties)})`,
-        factKeys: [],
-        receiptIds: [],
-      });
-    }
   }
 
   return {
@@ -284,6 +391,7 @@ export function assembleDossierRivalryExplanation(args: {
     provenance: [...provenance],
     coverageQualifier: qualifier,
     matchedAdvisorThreat,
+    evidence,
   };
 }
 
