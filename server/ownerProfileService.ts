@@ -1504,10 +1504,16 @@ export async function buildOwnerProfilePayload(args: {
 
     matchupIntel = [...h2h.entries()]
       .map(([opponentOwner, agg]) => {
-        const wp = agg.games > 0 ? Number(((agg.wins / agg.games) * 100).toFixed(1)) : 0;
+        // RFSN-048 — tie-aware result % (wins + 0.5×ties) / games. Matches career snapshot math.
+        // Prior formula was wins/games, which treated ties like losses (e.g. 1–1–2 → 25%).
+        const wp =
+          agg.games > 0
+            ? Number((((agg.wins + 0.5 * agg.ties) / agg.games) * 100).toFixed(1))
+            : 0;
         let tag = "Normal";
         if (agg.games >= 3) {
           if (wp >= 75) tag = "Punching Bag";
+          // Historical Nemesis remains broader (games ≥ 3). Active dossier cards apply a stricter gate client-side.
           else if (wp <= 25) tag = "Nemesis";
           else if (agg.games >= 5 && Math.abs(wp - 50) <= 12) tag = "Rival";
           else if (wp > 55) tag = "Favorable";

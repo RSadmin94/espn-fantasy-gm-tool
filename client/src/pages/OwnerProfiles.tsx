@@ -55,7 +55,17 @@ import {
   buildCurrentSeasonOwnerNames,
   buildDefaultRivalryEligibleOwnerKeys,
 } from "@/lib/rivalryOwnerEligibility";
-import { separateActiveHistoricalRivalHighlights } from "@/lib/rivalryHighlightSelection";
+import {
+  activeDisplayTag,
+  separateActiveHistoricalRivalHighlights,
+} from "@/lib/rivalryHighlightSelection";
+import {
+  explanationForCard,
+  formatRivalStoryRecordLine,
+  selectExplanationBullets,
+  truncateExplanationReason,
+  type DossierRivalryExplanationView,
+} from "@/lib/rivalryStoryEngine";
 import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import {
@@ -635,6 +645,43 @@ function resolveOpponentOwnerKey(name: string, pickers: RivalryPickerOption[]): 
   return hit?.ownerKey ?? "";
 }
 
+function RivalWhyBlock({
+  explanation,
+}: {
+  explanation: DossierRivalryExplanationView | null;
+}) {
+  if (!explanation) return null;
+  const reason = truncateExplanationReason(explanation.reason);
+  const bullets = selectExplanationBullets(explanation.bullets, 3);
+  if (!reason && bullets.length === 0) return null;
+  return (
+    <div className="mt-3 border-t border-white/[0.06] pt-2.5">
+      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Why?</div>
+      {explanation.headline ? (
+        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+          {explanation.headline}
+        </div>
+      ) : null}
+      {reason ? <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-300">{reason}</p> : null}
+      {bullets.length > 0 ? (
+        <ul className="mt-1.5 space-y-1">
+          {bullets.map((b) => (
+            <li key={b.text} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400">
+              <span className="shrink-0 text-zinc-600" aria-hidden>
+                •
+              </span>
+              <span>{b.text}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {explanation.coverageQualifier ? (
+        <p className="mt-1.5 text-[10px] text-zinc-600">{explanation.coverageQualifier}</p>
+      ) : null}
+    </div>
+  );
+}
+
 function DossierSectionHeader({
   icon,
   title,
@@ -977,6 +1024,77 @@ function ProfilePanel({
     ),
   );
 
+  // RFSN-048B — hooks must run before any early return
+  const intelForRivalryCards = Array.isArray(p?.matchupIntel) ? (p.matchupIntel as any[]) : [];
+  const {
+    historicalRival,
+    currentRival,
+    biggestThreat,
+    historicalIsActive,
+  } = useMemo(
+    () =>
+      separateActiveHistoricalRivalHighlights({
+        intel: intelForRivalryCards,
+        currentSeasonOwnerKeys: new Set(currentSeasonOwnerKeysForDossier),
+        currentSeasonOwnerNames: new Set(currentSeasonOwnerNamesForDossier),
+        resolveOwnerKey: (name) => resolveOpponentOwnerKey(name, dossierPickerOptions),
+      }),
+    [
+      intelForRivalryCards,
+      currentSeasonOwnerKeysForDossier,
+      currentSeasonOwnerNamesForDossier,
+      dossierPickerOptions,
+    ],
+  );
+
+  const dossierExplanationCards = useMemo(() => {
+    const cards: Array<{
+      cardKind: "historical" | "currentRival" | "activeThreat";
+      opponentOwnerKey: string;
+      opponentOwnerName: string;
+    }> = [];
+    const pushCard = (
+      cardKind: "historical" | "currentRival" | "activeThreat",
+      row: { opponentOwner?: string } | null,
+    ) => {
+      if (!row?.opponentOwner) return;
+      const key = resolveOpponentOwnerKey(String(row.opponentOwner), dossierPickerOptions);
+      if (!key) return;
+      cards.push({
+        cardKind,
+        opponentOwnerKey: key,
+        opponentOwnerName: String(row.opponentOwner),
+      });
+    };
+    pushCard("historical", historicalRival);
+    pushCard("currentRival", currentRival);
+    pushCard("activeThreat", biggestThreat);
+    return cards;
+  }, [historicalRival, currentRival, biggestThreat, dossierPickerOptions]);
+
+  const dossierExplanationsQ = (trpc as any).rivalryStory.dossierCardExplanations.useQuery(
+    withLeagueSalt(
+      {
+        leagueId: leagueContextKey,
+        focalOwnerKey: profileLookupKey,
+        cards: dossierExplanationCards,
+      },
+      leagueContextKey,
+    ),
+    {
+      enabled:
+        leagueKeyReady &&
+        !!profileLookupKey.trim() &&
+        !!leagueContextKey &&
+        dossierExplanationCards.length > 0 &&
+        !gated,
+      staleTime: 60_000,
+    },
+  );
+  const dossierExplanations = (dossierExplanationsQ.data ?? null) as
+    | DossierRivalryExplanationView[]
+    | null;
+
   if (q.isPending || q.isLoading) return (
     <SectionLoading message="Loading profile…" className="justify-center py-20" />
   );
@@ -1153,13 +1271,27 @@ function ProfilePanel({
       : null;
   const currentSeasonRow = seasonRecords.length > 0 ? (seasonRecords as any[])[seasonRecords.length - 1] : null;
   const draftStyle = str((draft as Record<string, unknown>).draftStyleBadge ?? "");
-  const { historicalRival, currentRival, biggestThreat, historicalIsActive } =
-    separateActiveHistoricalRivalHighlights({
-      intel: intel as any[],
-      currentSeasonOwnerKeys: new Set(currentSeasonOwnerKeysForDossier),
-      currentSeasonOwnerNames: new Set(currentSeasonOwnerNamesForDossier),
-      resolveOwnerKey: (name) => resolveOpponentOwnerKey(name, dossierPickerOptions),
-    });
+  const historicalStory = explanationForCard(
+    dossierExplanations,
+    "historical",
+    historicalRival
+      ? resolveOpponentOwnerKey(String(historicalRival.opponentOwner), dossierPickerOptions)
+      : null,
+  );
+  const currentRivalStory = explanationForCard(
+    dossierExplanations,
+    "currentRival",
+    currentRival
+      ? resolveOpponentOwnerKey(String(currentRival.opponentOwner), dossierPickerOptions)
+      : null,
+  );
+  const threatStory = explanationForCard(
+    dossierExplanations,
+    "activeThreat",
+    biggestThreat
+      ? resolveOpponentOwnerKey(String(biggestThreat.opponentOwner), dossierPickerOptions)
+      : null,
+  );
   const selfTendencies = selfLens
     ? buildSelfIdentityTendencies({
         draftStyle: draftStyle || undefined,
@@ -1811,18 +1943,14 @@ function ProfilePanel({
               {historicalRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{historicalRival.opponentOwner}</div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {num(historicalRival.wins)}–{num(historicalRival.losses)}
-                    {num(historicalRival.ties) > 0 ? `–${num(historicalRival.ties)}` : ""} · {pct(num(historicalRival.winPct))} · {num(historicalRival.games)} games
-                  </div>
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
                     {historicalIsActive ? lens.historicalActiveCue : lens.historicalRetiredCue}
                   </div>
-                  {historicalRival.tag ? (
-                    <div className="mt-2">
-                      <MatchupTag tag={historicalRival.tag} mode={mode} />
-                    </div>
-                  ) : null}
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {formatRivalStoryRecordLine(historicalRival)}
+                    {historicalRival.tag ? ` · ${matchupTagLabel(String(historicalRival.tag), mode)}` : ""}
+                  </div>
+                  {historicalStory ? <RivalWhyBlock explanation={historicalStory} /> : null}
                 </>
               ) : (
                 <p className="mt-2 text-sm text-zinc-500">
@@ -1835,18 +1963,16 @@ function ProfilePanel({
               {currentRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{currentRival.opponentOwner}</div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {num(currentRival.wins)}–{num(currentRival.losses)}
-                    {num(currentRival.ties) > 0 ? `–${num(currentRival.ties)}` : ""} · {pct(num(currentRival.winPct))} · {num(currentRival.games)} games
-                  </div>
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
                     {lens.historicalActiveCue}
                   </div>
-                  {currentRival.tag ? (
+                  <div className="mt-1 text-xs text-zinc-500">{formatRivalStoryRecordLine(currentRival)}</div>
+                  {activeDisplayTag(currentRival) ? (
                     <div className="mt-2">
-                      <MatchupTag tag={currentRival.tag} mode={mode} />
+                      <MatchupTag tag={activeDisplayTag(currentRival)!} mode={mode} />
                     </div>
                   ) : null}
+                  {currentRivalStory ? <RivalWhyBlock explanation={currentRivalStory} /> : null}
                 </>
               ) : (
                 <p className="mt-2 text-sm text-zinc-500">{lens.currentRivalEmpty}</p>
@@ -1857,15 +1983,16 @@ function ProfilePanel({
               {biggestThreat ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{biggestThreat.opponentOwner}</div>
-                  <div className="mt-1 text-xs text-zinc-500">
-                    {num(biggestThreat.wins)}–{num(biggestThreat.losses)}
-                    {num(biggestThreat.ties) > 0 ? `–${num(biggestThreat.ties)}` : ""} · {pct(num(biggestThreat.winPct))} · {num(biggestThreat.games)} games
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                    {lens.historicalActiveCue}
                   </div>
-                  {biggestThreat.tag ? (
+                  <div className="mt-1 text-xs text-zinc-500">{formatRivalStoryRecordLine(biggestThreat)}</div>
+                  {activeDisplayTag(biggestThreat) ? (
                     <div className="mt-2">
-                      <MatchupTag tag={biggestThreat.tag} mode={mode} />
+                      <MatchupTag tag={activeDisplayTag(biggestThreat)!} mode={mode} />
                     </div>
                   ) : null}
+                  {threatStory ? <RivalWhyBlock explanation={threatStory} /> : null}
                 </>
               ) : (
                 <p className="mt-2 text-sm text-zinc-500">{lens.toughestEmpty}</p>
