@@ -86,7 +86,12 @@ describe("RFSN-048B assembleDossierRivalryExplanation", () => {
     expect(out.reason).toMatch(/historical nemesis/i);
     expect(out.headline).toBe("Historical nemesis");
     expect(out.provenance).toContain("rivalryNarrativeTemplates.coldOpen");
-    expect(out.bullets.some((b) => /Career: 0–7/.test(b.text))).toBe(true);
+    expect(out.evidence.source).toBe("h2hAuthority");
+    expect(out.evidence.recordLine).toBe("0–7 · 7 meetings");
+    expect(out.evidence.wins).toBe(0);
+    expect(out.evidence.losses).toBe(7);
+    expect(out.evidence.meetings).toBe(7);
+    expect(out.bullets.every((b) => !/^Career:/i.test(b.text))).toBe(true);
     expect(out.matchedAdvisorThreat).toBe(false);
   });
 
@@ -180,13 +185,110 @@ describe("RFSN-048B assembleDossierRivalryExplanation", () => {
       statements: [],
       h2h: emptyH2H({
         career: { wins: 10, losses: 10, ties: 0, games: 20 },
-        meetings: [{ season: 2021 } as any, { season: 2025 } as any],
+        meetings: [
+          { season: 2021, isPlayoff: false } as any,
+          { season: 2025, isPlayoff: false } as any,
+        ],
       }),
       loreSentence: null,
       advisorThreatReason: null,
       advisorThreatMatched: false,
       rivalryPlayoffEliminations: null,
     });
-    expect(out.coverageQualifier).toMatch(/2021–2025|recorded meetings/);
+    expect(out.coverageQualifier).toMatch(/2021–2025/);
+    expect(out.coverageQualifier).toMatch(/regular-season/i);
+    expect(out.evidence.recordLine).toBe("10–10 · 20 meetings");
+  });
+
+  it("RFSN-048C: Vince/Bruce/Demetri evidence packages have no contradictory totals", () => {
+    const vince = assembleDossierRivalryExplanation({
+      cardKind: "historical",
+      opponentOwnerKey: "id:vince",
+      opponentOwnerName: "Vince Sellers",
+      story: null,
+      statements: [
+        {
+          statementKey: "CAREER_RECORD",
+          block: "taleOfTape",
+          priority: 50,
+          text: "Career: 0–4.",
+          receiptIds: [],
+          factKeys: [],
+          confidence: 0.9,
+        },
+        {
+          statementKey: "PLAYOFF_RECORD",
+          block: "taleOfTape",
+          priority: 40,
+          text: "Playoffs: 1–0.",
+          receiptIds: [],
+          factKeys: ["PLAYOFF_MEETING"],
+          confidence: 0.9,
+        },
+      ],
+      h2h: emptyH2H({
+        career: { wins: 0, losses: 4, ties: 0, games: 4 },
+        playoffs: { wins: 1, losses: 0, ties: 0, games: 1 },
+        meetings: [
+          { season: 2021, isPlayoff: false } as any,
+          { season: 2023, isPlayoff: false } as any,
+          { season: 2021, isPlayoff: true } as any,
+        ],
+      }),
+      loreSentence: null,
+      advisorThreatReason: null,
+      advisorThreatMatched: false,
+      rivalryPlayoffEliminations: null,
+    });
+    expect(vince.evidence.recordLine).toBe("0–4 · 4 meetings");
+    expect(vince.bullets.every((b) => !b.text.includes("0–7"))).toBe(true);
+    expect(vince.bullets.some((b) => /^Playoffs:/i.test(b.text))).toBe(true);
+    expect(vince.evidence.playoffRecordLine).toMatch(/Playoffs: 1–0/);
+
+    const bruce = assembleDossierRivalryExplanation({
+      cardKind: "currentRival",
+      opponentOwnerKey: "id:bruce",
+      opponentOwnerName: "Bruce Edwards",
+      story: null,
+      statements: [],
+      h2h: emptyH2H({
+        career: { wins: 7, losses: 10, ties: 0, games: 17 },
+        playoffs: { wins: 0, losses: 2, ties: 0, games: 2 },
+        meetings: [
+          { season: 2011, isPlayoff: false } as any,
+          { season: 2025, isPlayoff: false } as any,
+        ],
+      }),
+      loreSentence: null,
+      advisorThreatReason: null,
+      advisorThreatMatched: false,
+      rivalryPlayoffEliminations: null,
+    });
+    expect(bruce.evidence.recordLine).toBe("7–10 · 17 meetings");
+    expect(bruce.evidence.coverageLabel).toMatch(/2011–2025/);
+    expect(bruce.bullets.every((b) => !b.text.includes("27–27"))).toBe(true);
+
+    const demetri = assembleDossierRivalryExplanation({
+      cardKind: "activeThreat",
+      opponentOwnerKey: "id:demetri",
+      opponentOwnerName: "Demetri Clark",
+      story: null,
+      statements: [],
+      h2h: emptyH2H({
+        career: { wins: 3, losses: 15, ties: 0, games: 18 },
+        meetings: [
+          { season: 2010, isPlayoff: false } as any,
+          { season: 2025, isPlayoff: false } as any,
+        ],
+      }),
+      loreSentence: null,
+      advisorThreatReason: "Someone Else knocked you out.",
+      advisorThreatMatched: false,
+      rivalryPlayoffEliminations: null,
+    });
+    expect(demetri.evidence.recordLine).toBe("3–15 · 18 meetings");
+    expect(demetri.evidence.recordLine).not.toContain("19–32");
+    expect(demetri.matchedAdvisorThreat).toBe(false);
+    expect(demetri.reason).not.toMatch(/Someone Else/);
   });
 });

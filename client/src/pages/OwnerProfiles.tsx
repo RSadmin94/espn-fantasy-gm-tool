@@ -61,7 +61,9 @@ import {
 } from "@/lib/rivalryHighlightSelection";
 import {
   explanationForCard,
-  formatRivalStoryRecordLine,
+  filterBulletsAgainstHeaderRecord,
+  formatCardCoverageLabel,
+  formatCardRecordLine,
   selectExplanationBullets,
   truncateExplanationReason,
   type DossierRivalryExplanationView,
@@ -652,7 +654,10 @@ function RivalWhyBlock({
 }) {
   if (!explanation) return null;
   const reason = truncateExplanationReason(explanation.reason);
-  const bullets = selectExplanationBullets(explanation.bullets, 3);
+  const bullets = filterBulletsAgainstHeaderRecord(
+    selectExplanationBullets(explanation.bullets, 3),
+    explanation.evidence,
+  );
   if (!reason && bullets.length === 0) return null;
   return (
     <div className="mt-3 border-t border-white/[0.06] pt-2.5">
@@ -674,9 +679,6 @@ function RivalWhyBlock({
             </li>
           ))}
         </ul>
-      ) : null}
-      {explanation.coverageQualifier ? (
-        <p className="mt-1.5 text-[10px] text-zinc-600">{explanation.coverageQualifier}</p>
       ) : null}
     </div>
   );
@@ -1947,9 +1949,12 @@ function ProfilePanel({
                     {historicalIsActive ? lens.historicalActiveCue : lens.historicalRetiredCue}
                   </div>
                   <div className="mt-1 text-xs text-zinc-500">
-                    {formatRivalStoryRecordLine(historicalRival)}
-                    {historicalRival.tag ? ` · ${matchupTagLabel(String(historicalRival.tag), mode)}` : ""}
+                    {formatCardRecordLine(historicalStory, historicalRival) ?? "Record loading…"}
+                    {historicalRival.tag && !historicalStory?.evidence ? ` · ${matchupTagLabel(String(historicalRival.tag), mode)}` : ""}
                   </div>
+                  {formatCardCoverageLabel(historicalStory) ? (
+                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(historicalStory)}</div>
+                  ) : null}
                   {historicalStory ? <RivalWhyBlock explanation={historicalStory} /> : null}
                 </>
               ) : (
@@ -1966,8 +1971,13 @@ function ProfilePanel({
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
                     {lens.historicalActiveCue}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">{formatRivalStoryRecordLine(currentRival)}</div>
-                  {activeDisplayTag(currentRival) ? (
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {formatCardRecordLine(currentRivalStory, currentRival) ?? "Record loading…"}
+                  </div>
+                  {formatCardCoverageLabel(currentRivalStory) ? (
+                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(currentRivalStory)}</div>
+                  ) : null}
+                  {activeDisplayTag(currentRival) && !currentRivalStory?.evidence ? (
                     <div className="mt-2">
                       <MatchupTag tag={activeDisplayTag(currentRival)!} mode={mode} />
                     </div>
@@ -1986,8 +1996,13 @@ function ProfilePanel({
                   <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
                     {lens.historicalActiveCue}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">{formatRivalStoryRecordLine(biggestThreat)}</div>
-                  {activeDisplayTag(biggestThreat) ? (
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {formatCardRecordLine(threatStory, biggestThreat) ?? "Record loading…"}
+                  </div>
+                  {formatCardCoverageLabel(threatStory) ? (
+                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(threatStory)}</div>
+                  ) : null}
+                  {activeDisplayTag(biggestThreat) && !threatStory?.evidence ? (
                     <div className="mt-2">
                       <MatchupTag tag={activeDisplayTag(biggestThreat)!} mode={mode} />
                     </div>

@@ -1,8 +1,9 @@
 /**
- * RFSN-048B — Presentation-only formatting for Owner Dossier rivalry cards.
+ * RFSN-048B/C — Presentation-only formatting for Owner Dossier rivalry cards.
  *
- * Does NOT invent rivalry narratives, playoff claims, streaks, or eliminations.
- * Displays verified explanation payloads from `rivalryStory.dossierCardExplanations`.
+ * Does NOT invent rivalry narratives. Displays verified explanation payloads
+ * from `rivalryStory.dossierCardExplanations`, including the canonical evidence
+ * package so header and Why never disagree (RFSN-048C).
  */
 import type { MatchupIntelHighlightRow } from "@/lib/rivalryHighlightSelection";
 
@@ -19,6 +20,27 @@ export type DossierExplanationBullet = {
   receiptIds?: string[];
 };
 
+export type DossierRivalryEvidenceView = {
+  source: "h2hAuthority" | "none" | string;
+  scopeLabel: string;
+  startSeason: number | null;
+  endSeason: number | null;
+  includesRegularSeason: boolean;
+  includesPlayoffs: boolean;
+  wins: number;
+  losses: number;
+  ties: number;
+  meetings: number;
+  effectivePct: number;
+  recordLine: string;
+  coverageLabel: string | null;
+  playoffWins?: number;
+  playoffLosses?: number;
+  playoffTies?: number;
+  playoffMeetings?: number;
+  playoffRecordLine: string | null;
+};
+
 export type DossierRivalryExplanationView = {
   cardKind: DossierCardKind;
   opponentOwnerKey: string;
@@ -29,6 +51,7 @@ export type DossierRivalryExplanationView = {
   provenance: string[];
   coverageQualifier: string | null;
   matchedAdvisorThreat: boolean;
+  evidence?: DossierRivalryEvidenceView | null;
 };
 
 function wl(row: MatchupIntelHighlightRow) {
@@ -45,11 +68,35 @@ function formatRecord(row: MatchupIntelHighlightRow): string {
   return ties > 0 ? `${wins}–${losses}–${ties}` : `${wins}–${losses}`;
 }
 
-/** Record line for cards: `27–27–2 · 56 meetings`. */
+/** Fallback only when authority evidence is unavailable. */
 export function formatRivalStoryRecordLine(row: MatchupIntelHighlightRow): string {
   const { games } = wl(row);
   const meetings = games === 1 ? "1 meeting" : `${games} meetings`;
   return `${formatRecord(row)} · ${meetings}`;
+}
+
+/** Prefer authority evidence record; never mix with matchupIntel totals. */
+export function formatCardRecordLine(
+  explanation: DossierRivalryExplanationView | null | undefined,
+  fallbackRow?: MatchupIntelHighlightRow | null,
+): string | null {
+  const ev = explanation?.evidence;
+  if (ev && ev.source === "h2hAuthority" && ev.meetings > 0 && ev.recordLine) {
+    return ev.recordLine;
+  }
+  if (fallbackRow && (!explanation || explanation.evidence?.source === "none")) {
+    // Explicit fallback scope — only when authority package is missing
+    return `${formatRivalStoryRecordLine(fallbackRow)} (matchup intel)`;
+  }
+  return ev?.recordLine && ev.recordLine !== "—" ? ev.recordLine : null;
+}
+
+export function formatCardCoverageLabel(
+  explanation: DossierRivalryExplanationView | null | undefined,
+): string | null {
+  const ev = explanation?.evidence;
+  if (ev?.coverageLabel) return ev.coverageLabel;
+  return explanation?.coverageQualifier ?? null;
 }
 
 /** Truncate reason for card density — no semantic rewriting. */
@@ -76,6 +123,28 @@ export function selectExplanationBullets(
     }));
 }
 
+/**
+ * Drop bullets that restate the primary header record (RFSN-048C).
+ * Playoff / last-five / streak lines stay.
+ */
+export function filterBulletsAgainstHeaderRecord(
+  bullets: DossierExplanationBullet[],
+  evidence: DossierRivalryEvidenceView | null | undefined,
+): DossierExplanationBullet[] {
+  if (!evidence || evidence.meetings <= 0) return bullets;
+  const primary = `${evidence.wins}–${evidence.losses}`;
+  const primaryTied =
+    evidence.ties > 0 ? `${evidence.wins}–${evidence.losses}–${evidence.ties}` : primary;
+  return bullets.filter((b) => {
+    const t = b.text;
+    if (/^Career:/i.test(t)) return false;
+    if (t.includes(primaryTied) && /recorded meetings/i.test(t) && !/^Playoffs:/i.test(t)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export function explanationForCard(
   explanations: DossierRivalryExplanationView[] | null | undefined,
   cardKind: DossierCardKind,
@@ -92,4 +161,13 @@ export function explanationForCard(
     matches[0] ??
     null
   );
+}
+
+/** Assert header record string is consistent with evidence (for tests). */
+export function headerMatchesEvidence(
+  recordLine: string | null,
+  evidence: DossierRivalryEvidenceView | null | undefined,
+): boolean {
+  if (!recordLine || !evidence || evidence.source !== "h2hAuthority") return false;
+  return recordLine === evidence.recordLine;
 }
