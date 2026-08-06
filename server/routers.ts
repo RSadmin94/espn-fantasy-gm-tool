@@ -10566,6 +10566,22 @@ Provide:
         // Rate limit check
         const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
+        await addChatMessage(userId, "user", input.message, season, chatLeagueId);
+
+        // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
+        {
+          const { tryMatchupMarginToolAnswer } = await import("./matchupMarginTool");
+          const marginAnswer = await tryMatchupMarginToolAnswer({
+            leagueId: chatLeagueId,
+            message: input.message,
+          });
+          if (marginAnswer) {
+            await addChatMessage(userId, "assistant", marginAnswer.answer, season, chatLeagueId);
+            recordUsage({ userId, callType: "advisor", tokensUsed: 0 });
+            return { message: marginAnswer.answer, tool: marginAnswer.toolName };
+          }
+        }
+
         const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
         const gmMemory = await getUserMemory(userId);
         let gmMemoryBlock: string | undefined;
@@ -10588,7 +10604,6 @@ Provide:
           { role: "user", content: input.message },
         ];
 
-        await addChatMessage(userId, "user", input.message, season, chatLeagueId);
         const response = await invokeLLM({
           messages,
           callType: "advisor",

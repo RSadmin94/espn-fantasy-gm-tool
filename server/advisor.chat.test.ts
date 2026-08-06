@@ -88,6 +88,30 @@ describe("advisor.chat", () => {
     const caller = appRouter.createCaller(anonCtx);
     await expect(caller.advisor.chat({ message: "Who should I start?", season: 2025 })).rejects.toThrow();
   });
+
+  it("RFSN-049: selects deterministic matchup margin tool and skips LLM", async () => {
+    const { invokeLLM } = await import("./_core/llm");
+    const toolMod = await import("./matchupMarginTool");
+    const spy = vi.spyOn(toolMod, "tryMatchupMarginToolAnswer").mockResolvedValue({
+      selected: true,
+      toolName: "query_matchup_margins",
+      query: { metric: "losses_by_margin", marginExact: 1 },
+      analytics: {} as never,
+      answer:
+        "Bruce Edwards has the most one-point losses: 6 across 214 recorded regular-season games from 2011–2025. Here, “one-point loss” means a final margin from 0.50 to 1.49 points.",
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.advisor.chat({
+      message: "Who has the most one-point losses?",
+      season: 2025,
+    });
+    expect(result.message).toContain("Bruce Edwards");
+    expect((result as { tool?: string }).tool).toBe("query_matchup_margins");
+    expect(invokeLLM).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
 });
 
 describe("advisor.history", () => {

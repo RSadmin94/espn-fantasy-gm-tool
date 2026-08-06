@@ -72,6 +72,25 @@ export function registerAdvisorStreamRoute(app: Express) {
     };
 
     try {
+      // Persist the user message before answering
+      await addChatMessage(user.id, "user", message, season, chatLeagueId);
+
+      // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
+      {
+        const { tryMatchupMarginToolAnswer } = await import("./matchupMarginTool");
+        const marginAnswer = await tryMatchupMarginToolAnswer({
+          leagueId: chatLeagueId,
+          message,
+        });
+        if (marginAnswer) {
+          sendEvent({ delta: marginAnswer.answer, tool: marginAnswer.toolName });
+          await addChatMessage(user.id, "assistant", marginAnswer.answer, season, chatLeagueId);
+          recordUsage({ userId: user.id, callType: "advisor", tokensUsed: 0 });
+          sendEvent({ done: true });
+          return;
+        }
+      }
+
       // Fetch GM memory and build memory block
       const gmMem = await getUserMemory(user.id);
       let gmMemoryBlock: string | undefined;
@@ -94,9 +113,6 @@ export function registerAdvisorStreamRoute(app: Express) {
         gmMemoryBlock,
         leagueId: chatLeagueId,
       });
-
-      // Persist the user message before streaming
-      await addChatMessage(user.id, "user", message, season, chatLeagueId);
 
       // Stream the response
       let fullResponse = "";
