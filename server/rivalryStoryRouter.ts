@@ -230,4 +230,36 @@ export const rivalryStoryRouter = router({
         entitled,
       );
     }),
+
+  /**
+   * RFSN-048B — Owner Dossier rivalry card explanations.
+   * Reuses documentary / lore / biggestThreat / H2H authorities (no new narrative engine).
+   */
+  dossierCardExplanations: protectedProcedure
+    .input(
+      leagueIdInput.extend({
+        focalOwnerKey: ownerKeyInput,
+        cards: z
+          .array(
+            z.object({
+              cardKind: z.enum(["historical", "currentRival", "activeThreat"]),
+              opponentOwnerKey: ownerKeyInput,
+              opponentOwnerName: z.string().min(1).max(120).optional(),
+            }),
+          )
+          .min(1)
+          .max(3),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      await assertUserLeagueAccess(ctx.user.id, input.leagueId);
+      await assertDatabase();
+      const { buildDossierRivalryExplanations } = await import("./dossierRivalryExplanation");
+      return buildDossierRivalryExplanations({
+        leagueId: input.leagueId,
+        userId: ctx.user.id,
+        focalOwnerKey: input.focalOwnerKey,
+        cards: input.cards,
+      });
+    }),
 });
