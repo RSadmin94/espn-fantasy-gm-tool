@@ -34,7 +34,7 @@ describe("RFSN-023 — GM Identity Lens Separation", () => {
 
   it("keeps rivalry H2H and does not invent a second profile component", () => {
     expect(owners).toContain("dossier-rivalries");
-    expect(owners).toContain("pickRivalryHighlights");
+    expect(owners).toContain("separateActiveHistoricalRivalHighlights");
     expect(owners).toContain("ownerProfilesLens");
   });
 });

@@ -20,6 +20,9 @@ describe("RFSN-023 / RFSN-027B ownerProfilesLens", () => {
     expect(scout.sectionHighlights).toBe("Their Legacy");
     expect(scout.toughestLabel).toBe("Biggest threat");
     expect(self.toughestLabel).not.toBe("Biggest threat");
+    expect(scout.historicalRivalLabel).toMatch(/historical/i);
+    expect(scout.currentRivalLabel).toMatch(/current/i);
+    expect(self.currentRivalEmpty).toMatch(/active rival/i);
   });
 
   it("self draft labels do not share a single Draft DNA home", () => {
