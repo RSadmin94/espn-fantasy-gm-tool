@@ -10577,6 +10577,10 @@ Provide:
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
         await addChatMessage(userId, "user", input.message, season, chatLeagueId);
 
+        const { classifyAdvisorQuestion } = await import("./advisorQuestionClassify");
+        const classification = classifyAdvisorQuestion(input.message);
+        const startedAt = Date.now();
+
         // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
         {
           const { tryMatchupMarginToolAnswer } = await import("./matchupMarginTool");
@@ -10587,7 +10591,21 @@ Provide:
           if (marginAnswer) {
             await addChatMessage(userId, "assistant", marginAnswer.answer, season, chatLeagueId);
             recordUsage({ userId, callType: "advisor", tokensUsed: 0 });
-            return { message: marginAnswer.answer, tool: marginAnswer.toolName };
+            return {
+              message: marginAnswer.answer,
+              tool: marginAnswer.toolName,
+              meta: {
+                classification,
+                systemChars: 0,
+                systemApproxTok: 0,
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0,
+                model: null,
+                llmInvoked: false,
+                latencyMs: Date.now() - startedAt,
+              },
+            };
           }
         }
 
@@ -10623,7 +10641,22 @@ Provide:
         await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
         // Record usage for rate limiter
         recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
-        return { message: assistantMessage };
+        const systemChars = leagueContext.length;
+        const { ENV } = await import("./_core/env");
+        return {
+          message: assistantMessage,
+          meta: {
+            classification,
+            systemChars,
+            systemApproxTok: Math.ceil(systemChars / 4),
+            promptTokens: response.usage?.prompt_tokens ?? 0,
+            completionTokens: response.usage?.completion_tokens ?? 0,
+            totalTokens: response.usage?.total_tokens ?? 0,
+            model: response.model ?? (ENV.openaiModel || "gpt-4o"),
+            llmInvoked: true,
+            latencyMs: Date.now() - startedAt,
+          },
+        };
       }),
 
     history: protectedProcedure

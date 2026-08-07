@@ -7,6 +7,8 @@ import { resetRateLimiter } from "./rateLimiter";
 vi.mock("./_core/llm", () => ({
   invokeLLM: vi.fn().mockResolvedValue({
     choices: [{ message: { content: "Mock AI response: Start Ja'Marr Chase." } }],
+    model: "gpt-4o",
+    usage: { prompt_tokens: 1200, completion_tokens: 80, total_tokens: 1280 },
   }),
 }));
 
@@ -109,8 +111,24 @@ describe("advisor.chat", () => {
     });
     expect(result.message).toContain("Bruce Edwards");
     expect((result as { tool?: string }).tool).toBe("query_matchup_margins");
+    expect((result as { meta?: { llmInvoked?: boolean } }).meta?.llmInvoked).toBe(false);
     expect(invokeLLM).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+
+  it("RFSN-049B: returns runtime telemetry meta for LLM answers", async () => {
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.advisor.chat({
+      message: "Who should I start at WR2?",
+      season: 2025,
+    });
+    const meta = (result as { meta?: Record<string, unknown> }).meta;
+    expect(meta).toBeTruthy();
+    expect(meta?.classification).toBe("START_SIT");
+    expect(meta?.llmInvoked).toBe(true);
+    expect(meta?.promptTokens).toBe(1200);
+    expect(meta?.model).toBe("gpt-4o");
   });
 });
 
