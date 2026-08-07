@@ -10605,7 +10605,7 @@ Provide:
           if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
           if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
         }
-        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId, input.message);
         const history = await getChatHistory(userId, season, chatLeagueId);
         const messages: Message[] = [
           { role: "system", content: leagueContext },

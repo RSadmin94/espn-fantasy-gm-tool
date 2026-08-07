@@ -35,6 +35,7 @@ import {
   resolveLeaguePromptContext,
   buildLeaguePromptContext,
 } from "./leaguePromptContext";
+import { gatesForAdvisorMessage, type AdvisorContextGates } from "./advisorQuestionClassify";
 
 async function getAdvisorSeasonData(season: number, userId?: number) {
   const { leagueId: lid } = await resolveActiveLeagueId(
@@ -49,18 +50,25 @@ async function getAdvisorSeasonData(season: number, userId?: number) {
 }
 
 /**
- * Build the full system-prompt context string for the GM Advisor.
- * Used by advisor.chat and the streaming SSE handler so prompt context stays in one place.
+ * Build the system-prompt context string for the GM Advisor.
+ * Used by advisor.chat and the streaming SSE handler so the context logic lives in one place.
+ *
+ * Expensive history blocks (career / trophy / etc.) are gated by a lightweight question
+ * classifier when `userMessage` is provided. Persona + standings always attach.
+ * Omitting `userMessage` preserves the pre-trim "full bag" (GENERAL_FULL) behavior.
  *
  * @param season  ESPN season year (e.g. 2025)
  * @param gmMemoryBlock  Optional pre-built GM memory block to inject
  * @param userId  Authenticated user — resolves correct league cache
+ * @param userMessage  Current user question — used only for context gating
  */
 export async function buildAdvisorSystemPrompt(
   season: number,
   gmMemoryBlock?: string,
-  userId?: number
+  userId?: number,
+  userMessage?: string,
 ): Promise<string> {
+  const gates: AdvisorContextGates = gatesForAdvisorMessage(userMessage);
   const promptCtx = await resolveLeaguePromptContext(userId, season);
   const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
   const leagueIdRef = promptCtx.leagueId?.trim()
@@ -132,7 +140,7 @@ Rules: Always reference actual team names, owner names, and player names when pr
       leagueContext += `  ${t.rankFinal}. ${t.teamName} (${t.owners}) W:${t.wins} L:${t.losses} PF:${Number(t.pointsFor || 0).toFixed(1)}\n`;
     }
     // Analytics snapshot
-    if (allPlayers.length > 0) {
+    if (gates.includeAnalytics && allPlayers.length > 0) {
       const vorpResults = calcVORP(allPlayers);
       const scarcityResults = calcPositionalScarcity(allPlayers, []);
       const rosterGaps = calcRosterGaps(allPlayers);
@@ -164,7 +172,9 @@ Rules: Always reference actual team names, owner names, and player names when pr
           leagueContext += `\n  ${g.ownerName}: weakest at ${g.weakestPosition}${avgStr}, overall grade ${g.overallGrade}`;
         }
       }
+    }
       // Injury intelligence
+      if (gates.includeInjuries && allPlayers.length > 0) {
       try {
         const injuryContext = await buildAdvisorInjuryContext(
           allPlayers.map((p: PlayerRow) => ({ playerId: p.playerId, playerName: p.playerName, position: p.position, teamId: p.teamId })),
@@ -174,8 +184,9 @@ Rules: Always reference actual team names, owner names, and player names when pr
       } catch {
         // Injury fetch failed — continue without it
       }
-    }
+      }
   // ── Full career history block (all cached seasons) ──────────────────────────
+  if (gates.includeCareerHistory || gates.includeTrophyHistory) {
   try {
     const { getAllCachedSeasons, getCachedView } = await import("./db");
     const allSeasons = (await getAllCachedSeasons(undefined, userId)).sort((a, b) => a - b);
@@ -296,6 +307,7 @@ Rules: Always reference actual team names, owner names, and player names when pr
           .filter(c => c.seasons >= 1)
           .sort((a, b) => b.championships - a.championships || b.wins - a.wins);
 
+        if (gates.includeCareerHistory) {
         leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth). 🏆× = ChampionshipAuthority (same as trophy block below); 🥈× = ESPN winners-bracket runner-up when available.`;
         for (const c of entries) {
           const winPct = (c.wins + c.losses) > 0 ? ((c.wins / (c.wins + c.losses)) * 100).toFixed(0) : '0';
@@ -320,8 +332,10 @@ Rules: Always reference actual team names, owner names, and player names when pr
         if (dominantPlayoff.length > 0) {
           leagueContext += `\nPLAYOFF MACHINES: ${dominantPlayoff.map(p => `${p.name} (${p.playoffAppearances}/${p.seasons} seasons)`).join(', ')} — consistently dangerous.`;
         }
+        }
 
         // ── Detailed trophy history (same `computeAllTrophyHistory` map as career 🏆) ──
+        if (gates.includeTrophyHistory) {
         try {
           const { buildLeagueTrophyLeaderboard } = await import('./championshipHistoryBuilder');
           if (advisorTrophyMap && advisorTrophyMap.size > 0) {
@@ -333,13 +347,16 @@ Rules: Always reference actual team names, owner names, and player names when pr
         } catch {
           // Trophy history unavailable — counts already shown above
         }
+        }
       }
     }
   } catch {
     // Career history unavailable — continue without it
   }
+  }
 
   // ── Enriched H2H context for current week's opponent ──────────────────────
+  if (gates.includeCurrentWeekH2h || gates.includeOpponentTrophy) {
   try {
     const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import("./h2hContextBuilder");
     const focalMemberId = await resolveRodMemberId(userId);
@@ -378,12 +395,15 @@ Rules: Always reference actual team names, owner names, and player names when pr
               const focalDisplayName = focalMember
                 ? `${focalMember.firstName || ""} ${focalMember.lastName || ""}`.trim() || (focalMember.displayName as string) || focalClause
                 : focalClause;
+              if (gates.includeCurrentWeekH2h) {
               const h2h = await computeRichH2H(focalMemberId, oppMemberId, focalDisplayName, oppName, userId);
               if (h2h.rsTotalGames > 0) {
                 leagueContext += `\n\n## THIS WEEK'S OPPONENT — H2H HISTORY vs ${oppName.toUpperCase()} (treat as ground truth):\n`;
                 leagueContext += buildH2HPromptBlock(h2h, `${focalDisplayName} vs ${oppName}`);
               }
+              }
               // Add opponent's trophy/prestige history
+              if (gates.includeOpponentTrophy) {
               try {
                 const { computeAllTrophyHistory, buildTrophyPromptBlock } = await import('./championshipHistoryBuilder');
                 const trophyMap = await computeAllTrophyHistory(undefined, userId);
@@ -395,6 +415,7 @@ Rules: Always reference actual team names, owner names, and player names when pr
               } catch {
                 // Trophy history unavailable
               }
+              }
             }
           }
         }
@@ -403,8 +424,10 @@ Rules: Always reference actual team names, owner names, and player names when pr
   } catch {
     // H2H context unavailable — continue without it
   }
+  }
 
   // League DNA behavioral intelligence
+  if (gates.includeDna) {
   try {
     const { calcLeagueDNA, buildDNAPromptBlock } = await import("./leagueDNA");
     const { buildManagerRawData } = await import("./dnaRouter");
@@ -417,7 +440,9 @@ Rules: Always reference actual team names, owner names, and player names when pr
   } catch {
     // DNA unavailable — continue without it
   }
+  }
     // Draft order and keeper data
+    if (gates.includeDraft) {
     try {
       // Derive the upcoming draft season without hardcoding any year:
       // If the active season is already the current calendar year or later, use it;
@@ -460,6 +485,7 @@ Rules: Always reference actual team names, owner names, and player names when pr
     } catch {
       // Draft order unavailable — continue without it
     }
+    }
   }
 
   return leagueContext;
@@ -476,7 +502,7 @@ export async function buildAdvisorMessages(opts: {
   leagueId: string;
 }): Promise<Message[]> {
   const { userId, season, userMessage, gmMemoryBlock, leagueId } = opts;
-  const systemPrompt = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId);
+  const systemPrompt = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId, userMessage);
   const history = await getChatHistory(userId, season, leagueId);
   return [
     { role: "system", content: systemPrompt },
