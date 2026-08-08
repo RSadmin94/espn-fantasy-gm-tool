@@ -18,7 +18,7 @@ const PAGEBG: CSSProperties = {
 };
 const PANEL =
   "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#19121d,#120d15)] shadow-[0_0_30px_-16px_rgba(0,0,0,0.7)]";
-const MONO = "font-mono text-[11px] uppercase tracking-[0.2em] text-white/40";
+const MONO = "font-mono text-[11px] uppercase tracking-[0.2em] text-white/55";
 
 function CTA({ label, onClick, className }: { label: string; onClick: () => void; className?: string }) {
   return (

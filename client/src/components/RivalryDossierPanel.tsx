@@ -46,7 +46,7 @@ import {
 
 // ── theme (matches Command Dashboard / Rivalry Center) ───────────────────────
 const TEXT = "#f3f8ff";
-const MUTED = "#8b97a8";
+const MUTED = "var(--color-muted-foreground)";
 const GOLD = "#f5c518";
 const ACCENT = "#a3e635";
 const GREEN = "#a3e635";

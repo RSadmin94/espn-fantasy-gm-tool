@@ -7,3 +7,5 @@ dist/
 node_modules/
 .cursor/
 agent-transcripts/
+marketing-assets/
+audit-artifacts/

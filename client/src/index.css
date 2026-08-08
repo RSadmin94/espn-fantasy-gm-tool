@@ -1,7 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
-@custom-variant dark (&:is(.dark *));
+/* Theme is selected via <html data-theme="…"> in ThemeContext, not a class. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /*
  * Fantasy Football Rivals brand theme
@@ -54,10 +56,17 @@
   --radius-intel: 0.9375rem;
   --radius-intel-sub: 0.625rem;
 
-  /* Readable minimums — prefer these over raw text-[10px] / text-[11px] */
+  /*
+   * Readable minimums — prefer these over raw text-[10px] / text-[11px].
+   * Line heights are paired here so Tailwind generates the complete utility;
+   * do not re-declare these class names in @layer utilities.
+   */
   --text-2xs: 0.6875rem;   /* 11px — smallest labels */
+  --text-2xs--line-height: 1.3;
   --text-label: 0.75rem;   /* 12px — table headers, kicker */
+  --text-label--line-height: 1.35;
   --text-caption: 0.8125rem; /* 13px — secondary body */
+  --text-caption--line-height: 1.4;
 
   /* Intel page backgrounds (replaces duplicated PAGEBG constants) */
   --color-intel-page-from: oklch(0.12 0.015 300);
@@ -80,6 +89,9 @@
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    /* Baseline leading for any text whose size utility carries none
+       (all `text-[Npx]` arbitrary sizes fall into this case). */
+    line-height: 1.5;
     /* Ambient brand glow — one subtle purple wash at top, fixed to viewport */
     background-image:
       radial-gradient(
@@ -155,18 +167,6 @@
     box-shadow: 0 0 28px -14px rgba(0, 0, 0, 0.65);
   }
 
-  .text-2xs {
-    font-size: var(--text-2xs);
-    line-height: 1.3;
-  }
-  .text-label {
-    font-size: var(--text-label);
-    line-height: 1.35;
-  }
-  .text-caption {
-    font-size: var(--text-caption);
-    line-height: 1.4;
-  }
   .shadow-intel-marketing {
     box-shadow: 0 0 30px -16px rgba(0, 0, 0, 0.7);
   }

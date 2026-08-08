@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { Zap, Repeat2, Trophy, Newspaper, Users, Flame, Star, Activity, ChevronRight, RefreshCw } from "lucide-react";
 
-const GOLD="#f5c518", TEAL="#a3e635", MUTED="#8b97a8", RED="#ef4444", ORANGE="#f7902f", GREEN="#a3e635", BLUE="#8b5cf6", TEXT="#f3f8ff", ACCENT="#a3e635";
+const GOLD="#f5c518", TEAL="#a3e635", MUTED="var(--color-muted-foreground)", RED="#ef4444", ORANGE="#f7902f", GREEN="#a3e635", BLUE="#8b5cf6", TEXT="#f3f8ff", ACCENT="#a3e635";
 const PANEL: React.CSSProperties = { background:"linear-gradient(180deg,#1b131f,#140e17)", border:"1px solid rgba(255,255,255,.07)", borderRadius:15 };
 const SUB: React.CSSProperties = { background:"rgba(255,255,255,.03)", border:"1px solid rgba(255,255,255,.06)", borderRadius:10 };
 const PAGEBG: React.CSSProperties = { background:"radial-gradient(circle at 80% -10%,rgba(139,92,246,.20),transparent 42%),linear-gradient(180deg,#0e0a10,#080609)", color:TEXT };
