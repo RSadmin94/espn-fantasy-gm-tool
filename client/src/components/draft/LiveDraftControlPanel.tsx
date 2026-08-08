@@ -126,7 +126,7 @@ function InlineMetric({
       className="inline-flex items-baseline gap-1.5 min-w-0"
       data-live-metric={testId ?? label.toLowerCase()}
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-500 shrink-0">
+      <span className="text-[9px] font-bold uppercase tracking-wider text-ink-secondary shrink-0">
         {label}
       </span>
       <span className="truncate text-[11px] font-semibold text-zinc-100 tabular-nums">
@@ -226,7 +226,7 @@ export function LiveDraftControlPanel({
                 : "Waiting for league connection"}
           </span>
           {status.lastPollAt ? (
-            <span className="text-[10px] text-zinc-500 tabular-nums">
+            <span className="text-[10px] text-ink-secondary tabular-nums">
               Updated {new Date(status.lastPollAt).toLocaleTimeString()}
             </span>
           ) : null}
@@ -293,13 +293,13 @@ export function LiveDraftControlPanel({
 
       {/* Diagnostics — collapsed; board driver, source radios, errors, detail lines */}
       <details className="group mt-1 border-t border-emerald-500/10 pt-0.5" data-live-advanced>
-        <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-zinc-500 hover:text-zinc-300 select-none">
+        <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-ink-secondary hover:text-zinc-300 select-none">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
           Advanced
         </summary>
         <div className="mt-1 space-y-1 pb-0.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-live-source-picker>
-            <span className="text-[9px] uppercase tracking-wider text-zinc-500">Draft source</span>
+            <span className="text-[9px] uppercase tracking-wider text-ink-secondary">Draft source</span>
             {catalog.map((entry) => {
               const controlId: DraftControlSource =
                 entry.id === "espn-live"
@@ -338,14 +338,14 @@ export function LiveDraftControlPanel({
                   />
                   {entry.label}
                   {!entry.available ? (
-                    <span className="text-[9px] uppercase text-zinc-600">Soon</span>
+                    <span className="text-[9px] uppercase text-ink-tertiary">Soon</span>
                   ) : null}
                 </label>
               );
             })}
           </div>
 
-          <p className="text-[10px] text-zinc-500 leading-snug" data-live-board-driver>
+          <p className="text-[10px] text-ink-secondary leading-snug" data-live-board-driver>
             {isEspn
               ? status.transportKind === "espn-mirror"
                 ? "Board driver: ESPN Mirror (bookmarklet) → extension transport → shared Draft Engine."
@@ -360,7 +360,7 @@ export function LiveDraftControlPanel({
               <div
                 key={`${i}:${line}`}
                 className={cn(
-                  i === 0 ? "text-[10px] font-semibold text-zinc-300" : "text-[10px] text-zinc-500",
+                  i === 0 ? "text-[10px] font-semibold text-zinc-300" : "text-[10px] text-ink-secondary",
                 )}
               >
                 {line}
@@ -369,7 +369,7 @@ export function LiveDraftControlPanel({
           </div>
 
           {status.active && (
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-zinc-500 tabular-nums">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink-secondary tabular-nums">
               <span>
                 Picks locked {status.lockedCount}
                 {status.notifiedCount > 0 ? ` · covered ${status.notifiedCount}` : ""}

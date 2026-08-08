@@ -36,9 +36,9 @@ function unwrapMaybe<T>(m: MaybeAvail<T> | undefined | null): T | null {
 function UnavailableBlock({ title }: { title: string }) {
   return (
     <IntelPanel variant="profile" className="p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">{title}</p>
       <p className="mt-2 text-lg font-semibold text-zinc-300">Unavailable</p>
-      <p className="mt-1 text-xs text-zinc-600">Data not yet imported.</p>
+      <p className="mt-1 text-xs text-ink-tertiary">Data not yet imported.</p>
     </IntelPanel>
   );
 }
@@ -68,7 +68,7 @@ function ArchiveSectionHeader({
   accent?: string;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">
+    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-ink-secondary">
       <span style={{ color: accent }}>{icon}</span>
       {title}
     </div>
@@ -248,7 +248,7 @@ function RivalryPairWithDossier({
 
   return (
     <GoldGlowCard className="p-6">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">{title}</p>
       <div className="mt-4 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
         <div className="text-center">
           <p className="text-lg font-bold text-zinc-100">{displayA}</p>
@@ -262,41 +262,41 @@ function RivalryPairWithDossier({
       </div>
       <div className="mt-6 grid grid-cols-3 gap-2 border-t border-white/[0.06] pt-4 text-center text-xs">
         <div>
-          <p className="text-zinc-600">{metricLabel}</p>
+          <p className="text-ink-tertiary">{metricLabel}</p>
           <p className="mt-1 font-semibold tabular-nums text-zinc-200">{metricValue}</p>
         </div>
         <div>
-          <p className="text-zinc-600">Win %</p>
+          <p className="text-ink-tertiary">Win %</p>
           <p className="mt-1 text-zinc-400">
             {dossierQ.isLoading ? (
-              <span className="text-zinc-600">…</span>
+              <span className="text-ink-tertiary">…</span>
             ) : hasH2h && row ? (
               <span className="font-semibold tabular-nums text-zinc-200">{row.winPct.toFixed(1)}%</span>
             ) : (
-              <span className="text-zinc-500">{joinMsg}</span>
+              <span className="text-ink-secondary">{joinMsg}</span>
             )}
           </p>
         </div>
         <div>
-          <p className="text-zinc-600">Record</p>
+          <p className="text-ink-tertiary">Record</p>
           <p className="mt-1 text-zinc-400">
             {dossierQ.isLoading ? (
-              <span className="text-zinc-600">…</span>
+              <span className="text-ink-tertiary">…</span>
             ) : hasH2h && row ? (
               <span className="font-semibold tabular-nums text-zinc-200">
                 {row.wins}-{row.losses}
                 {row.ties > 0 ? `-${row.ties}` : ""}{" "}
-                <span className="font-normal text-zinc-600">(focal: {displayA})</span>
+                <span className="font-normal text-ink-tertiary">(focal: {displayA})</span>
               </span>
             ) : (
-              <span className="text-zinc-500">{joinMsg}</span>
+              <span className="text-ink-secondary">{joinMsg}</span>
             )}
           </p>
         </div>
       </div>
-      {sub ? <p className="mt-3 text-center text-xs text-zinc-500">{sub}</p> : null}
+      {sub ? <p className="mt-3 text-center text-xs text-ink-secondary">{sub}</p> : null}
       {hasH2h ? (
-        <p className="mt-3 text-center text-[10px] text-zinc-600">
+        <p className="mt-3 text-center text-[10px] text-ink-tertiary">
           Win % and record from completed regular-season gmMatchups (Rivalry Dossier), focal {displayA}.
         </p>
       ) : null}
@@ -307,7 +307,7 @@ function RivalryPairWithDossier({
 function ClosestChampionshipCard({ hasPlayoffGmMatchups }: { hasPlayoffGmMatchups: boolean }) {
   return (
     <GoldGlowCard className="p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Closest championship</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Closest championship</p>
       {hasPlayoffGmMatchups ? (
         <p className="mt-3 text-sm leading-relaxed text-zinc-400">
           Playoff matchups are present in <code className="text-[11px] text-zinc-300">gmMatchups</code>. Smallest championship
@@ -371,9 +371,9 @@ function TradeHighlightCard({
   if (!trade) return null;
   return (
     <GoldGlowCard className="p-5">
-      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">{title}</p>
       <p className="mt-2 text-sm font-semibold text-zinc-100">{tradeOwnersLine(trade)}</p>
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1 text-xs text-ink-secondary">
         {trade.season} · {formatTradeProcessedDate(trade.processedDate)}
       </p>
       <p className="mt-3 text-lg font-bold tabular-nums text-amber-200">+{Math.round(trade.margin)} value</p>
@@ -425,7 +425,7 @@ function NotoriousTradesSection({
           <ArrowLeftRight className="h-4 w-4 text-amber-400/90" aria-hidden />
           <h3 className="text-sm font-extrabold uppercase tracking-[0.16em] text-zinc-100">Notorious Trades</h3>
         </div>
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{seasonLabel} season coverage</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">{seasonLabel} season coverage</span>
       </div>
       <div className="p-4 sm:p-5">
         {reportQ.isLoading ? (
@@ -457,7 +457,7 @@ function NotoriousTradesSection({
             <div className="grid gap-3 sm:grid-cols-2">
               {report?.mostActivePair ? (
                 <GoldGlowCard className="p-5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Most active trading pair</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Most active trading pair</p>
                   <p className="mt-2 text-sm font-semibold text-zinc-100">
                     {report.mostActivePair.ownerAName} vs {report.mostActivePair.ownerBName}
                   </p>
@@ -466,7 +466,7 @@ function NotoriousTradesSection({
               ) : null}
               {report?.mostSuccessfulOwner ? (
                 <GoldGlowCard className="p-5">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Most successful trader</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Most successful trader</p>
                   <p className="mt-2 text-sm font-semibold text-zinc-100">{report.mostSuccessfulOwner.ownerName}</p>
                   <p className="mt-2 text-lg font-bold tabular-nums text-amber-200">
                     {report.mostSuccessfulOwner.wins} wins · +{report.mostSuccessfulOwner.netValue} net value
@@ -476,7 +476,7 @@ function NotoriousTradesSection({
             </div>
 
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">Top trades by value margin</p>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Top trades by value margin</p>
               <div className="space-y-2">
                 {ranked.map((trade: any) => (
                   <div
@@ -489,7 +489,7 @@ function NotoriousTradesSection({
                         {trade.verdictLabel}
                       </span>
                     </div>
-                    <p className="mt-1 text-zinc-500">
+                    <p className="mt-1 text-ink-secondary">
                       {trade.season} · {formatTradeProcessedDate(trade.processedDate)} · +{Math.round(trade.margin)} value ·{" "}
                       {tradeWinnerName(trade)}
                     </p>
@@ -771,27 +771,27 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
           />
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">League age</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">League age</div>
               <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">{leagueAge} seasons</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Seasons in coverage</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Seasons in coverage</div>
               <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">{totalSeasonsTouched}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Championships awarded</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Championships awarded</div>
               <div className="mt-1 text-xl font-extrabold tabular-nums text-amber-200">{totalTitles}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Active owners</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Active owners</div>
               <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">{activeOwnersCount}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Total RS games</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Total RS games</div>
               <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">{totalGames}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 sm:col-span-2 lg:col-span-1">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Historical coverage</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Historical coverage</div>
               <div className="mt-1 text-sm font-semibold text-zinc-200">
                 {seasonsSpan.length > 0 ? `${seasonsSpan[0]}–${seasonsSpan[seasonsSpan.length - 1]}` : "—"}
               </div>
@@ -803,7 +803,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
               <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-400/90">Hall of Fame summary</p>
-                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-ink-secondary">
                     {coLeaders.length > 1 ? "Co-leaders" : "Top leader"}
                   </p>
                   <p className="mt-1 text-2xl font-bold text-zinc-50 sm:text-3xl">{coLeaders.map((c) => c.displayName).join(" & ")}</p>
@@ -813,9 +813,9 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                     </span>
                     {coLeaders.length === 1 && leaderStats ? (
                       <>
-                        <span className="text-zinc-600">·</span>
+                        <span className="text-ink-tertiary">·</span>
                         <span className="tabular-nums">{leaderStats.winPct.toFixed(1)}% reg. season wins</span>
-                        <span className="text-zinc-600">·</span>
+                        <span className="text-ink-tertiary">·</span>
                         <span>{leaderStats.seasonsActive} seasons active</span>
                       </>
                     ) : null}
@@ -844,7 +844,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
         <ArchiveSectionHeader icon={<Trophy className="h-4 w-4" />} title="Hall of Fame" accent="#f5c65a" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {lb.length === 0 ? (
-            <p className="col-span-full text-center text-sm text-zinc-500">No resolved champions yet.</p>
+            <p className="col-span-full text-center text-sm text-ink-secondary">No resolved champions yet.</p>
           ) : (
             lb.slice(0, 10).map((row) => (
               <GoldGlowCard key={row.ownerKey} className="p-5">
@@ -863,7 +863,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                       <p key={y} className="text-sm tabular-nums text-zinc-300">{y}</p>
                     ))
                   ) : (
-                    <p className="text-sm text-zinc-600">—</p>
+                    <p className="text-sm text-ink-tertiary">—</p>
                   )}
                 </div>
               </GoldGlowCard>
@@ -876,12 +876,12 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
       <IntelPanel id="archive-championships" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
         <ArchiveSectionHeader icon={<Crown className="h-4 w-4" />} title="Championship History" accent="#c4b5fd" />
         {championshipHistory.length === 0 ? (
-          <p className="text-sm text-zinc-500">No championship history on file yet.</p>
+          <p className="text-sm text-ink-secondary">No championship history on file yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/[0.08] text-left text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                <tr className="border-b border-white/[0.08] text-left text-[10px] font-bold uppercase tracking-wide text-ink-secondary">
                   <th className="py-2 pr-3">Season</th>
                   <th className="py-2 pr-3">Champion</th>
                   <th className="py-2 pr-3">Runner-up</th>
@@ -894,7 +894,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                     <td className="py-2 pr-3 font-semibold tabular-nums text-zinc-200">{h.season}</td>
                     <td className="py-2 pr-3 text-zinc-100">{h.resolvedChampionDisplay ?? "—"}</td>
                     <td className="py-2 pr-3 text-zinc-400">{h.resolvedRunnerUpDisplay ?? "—"}</td>
-                    <td className="py-2 text-zinc-500">{h.resolvedThirdDisplay ?? "—"}</td>
+                    <td className="py-2 text-ink-secondary">{h.resolvedThirdDisplay ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -919,7 +919,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
         ) : (
           <div className="space-y-8">
             <div>
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Career</p>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Career</p>
               <div className="grid gap-3 md:grid-cols-2">
                 {mostGames ? (
                   <RivalryPairWithDossier
@@ -962,7 +962,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                 ) : null}
                 {longDom ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Longest dominance streak</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Longest dominance streak</p>
                     <p className="mt-2 text-sm font-semibold text-zinc-100">
                       {longDom.dominantDisplay} over {longDom.opponentDisplay}
                     </p>
@@ -972,29 +972,29 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
               </div>
             </div>
             <div>
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Single season</p>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Single season</p>
               <div className="grid gap-3 md:grid-cols-2">
                 {hiSeasonPf ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Highest season PF</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Highest season PF</p>
                     <p className="mt-2 text-3xl font-bold tabular-nums text-amber-200">{hiSeasonPf.pointsFor.toFixed(1)}</p>
                     <p className="mt-2 text-sm font-medium text-zinc-200">{hiSeasonPf.displayName}</p>
-                    <p className="mt-1 text-xs text-zinc-600">{hiSeasonPf.season} · {hiSeasonPf.games} RS games</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{hiSeasonPf.season} · {hiSeasonPf.games} RS games</p>
                   </GoldGlowCard>
                 ) : (
                   <UnavailableBlock title="Highest season PF" />
                 )}
                 {loSeasonPf ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Lowest season PF</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Lowest season PF</p>
                     <p className="mt-2 text-3xl font-bold tabular-nums text-zinc-200">{loSeasonPf.pointsFor.toFixed(1)}</p>
                     <p className="mt-2 text-sm font-medium text-zinc-200">{loSeasonPf.displayName}</p>
-                    <p className="mt-1 text-xs text-zinc-600">{loSeasonPf.season} · {loSeasonPf.games} RS games</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{loSeasonPf.season} · {loSeasonPf.games} RS games</p>
                   </GoldGlowCard>
                 ) : null}
                 {bestRs ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Best regular season record</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Best regular season record</p>
                     <p className="mt-2 text-xl font-bold text-zinc-50">{bestRs.displayName}</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {bestRs.wins}–{bestRs.losses}{bestRs.ties ? `–${bestRs.ties}` : ""} · {bestRs.winPct.toFixed(1)}% · {bestRs.season}
@@ -1003,7 +1003,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                 ) : null}
                 {worstRs ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Worst regular season record</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Worst regular season record</p>
                     <p className="mt-2 text-xl font-bold text-zinc-50">{worstRs.displayName}</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {worstRs.wins}–{worstRs.losses}{worstRs.ties ? `–${worstRs.ties}` : ""} · {worstRs.winPct.toFixed(1)}% · {worstRs.season}
@@ -1013,70 +1013,70 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
               </div>
             </div>
             <div>
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Weekly</p>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Weekly</p>
               <div className="grid gap-3 md:grid-cols-2">
                 {hiWeek ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Highest single week</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Highest single week</p>
                     <p className="mt-2 text-3xl font-bold tabular-nums text-amber-200">{hiWeek.score.toFixed(1)} pts</p>
                     <p className="mt-2 text-sm text-zinc-400">{hiWeek.label}</p>
-                    <p className="mt-1 text-xs text-zinc-600">{hiWeek.season} · week {hiWeek.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{hiWeek.season} · week {hiWeek.week}</p>
                   </GoldGlowCard>
                 ) : (
                   <UnavailableBlock title="Highest single week" />
                 )}
                 {loWeek ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Lowest single week</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Lowest single week</p>
                     <p className="mt-2 text-3xl font-bold tabular-nums text-zinc-200">{loWeek.score.toFixed(1)} pts</p>
                     <p className="mt-2 text-sm text-zinc-400">{loWeek.label}</p>
-                    <p className="mt-1 text-xs text-zinc-600">{loWeek.season} · week {loWeek.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{loWeek.season} · week {loWeek.week}</p>
                   </GoldGlowCard>
                 ) : null}
                 {blowout ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Largest blowout</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Largest blowout</p>
                     <p className="mt-2 text-2xl font-bold tabular-nums text-amber-200">{blowout.margin.toFixed(1)} pt margin</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {blowout.winnerLabel} {blowout.winnerScore} — {blowout.loserScore} {blowout.loserLabel}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-600">{blowout.season} · week {blowout.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{blowout.season} · week {blowout.week}</p>
                   </GoldGlowCard>
                 ) : null}
                 {closestGame ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Closest game</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Closest game</p>
                     <p className="mt-2 text-2xl font-bold tabular-nums text-zinc-200">{closestGame.margin.toFixed(1)} pt margin</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {closestGame.homeLabel} {closestGame.homeScore} — {closestGame.awayScore} {closestGame.awayLabel}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-600">{closestGame.season} · week {closestGame.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{closestGame.season} · week {closestGame.week}</p>
                   </GoldGlowCard>
                 ) : null}
                 {hiCombined ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Highest combined score</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Highest combined score</p>
                     <p className="mt-2 text-2xl font-bold tabular-nums text-amber-200">{hiCombined.combined.toFixed(1)} pts</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {hiCombined.homeLabel} {hiCombined.homeScore} + {hiCombined.awayLabel} {hiCombined.awayScore}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-600">{hiCombined.season} · week {hiCombined.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{hiCombined.season} · week {hiCombined.week}</p>
                   </GoldGlowCard>
                 ) : null}
                 {loCombined ? (
                   <GoldGlowCard className="p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Lowest combined score</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Lowest combined score</p>
                     <p className="mt-2 text-2xl font-bold tabular-nums text-zinc-200">{loCombined.combined.toFixed(1)} pts</p>
                     <p className="mt-2 text-sm text-zinc-300">
                       {loCombined.homeLabel} {loCombined.homeScore} + {loCombined.awayLabel} {loCombined.awayScore}
                     </p>
-                    <p className="mt-1 text-xs text-zinc-600">{loCombined.season} · week {loCombined.week}</p>
+                    <p className="mt-1 text-xs text-ink-tertiary">{loCombined.season} · week {loCombined.week}</p>
                   </GoldGlowCard>
                 ) : null}
               </div>
             </div>
             <div>
-              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Playoff</p>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Playoff</p>
               <ClosestChampionshipCard hasPlayoffGmMatchups={hasPlayoffGmMatchups} />
             </div>
           </div>
@@ -1091,34 +1091,34 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
           <Link to="/league/standings/power-rankings" className="shrink-0 text-sm font-semibold text-sky-300 hover:text-sky-200">{V1.features.powerRankings} →</Link>
         </div>
         {dynastyTimeline.length === 0 ? (
-          <p className="text-sm text-zinc-500">No resolved championship seasons yet.</p>
+          <p className="text-sm text-ink-secondary">No resolved championship seasons yet.</p>
         ) : (
           <div className="relative mb-8 space-y-0 border-l border-white/[0.08] pl-4">
             {dynastyTimeline.map((h) => (
               <div key={h.season} className="relative pb-4 last:pb-0">
                 <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-[#a3e635]/80 ring-2 ring-[#110c14]" aria-hidden />
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{h.season}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{h.season}</div>
                 <div className="text-sm font-semibold text-zinc-100">🏆 {h.resolvedChampionDisplay}</div>
                 {h.resolvedRunnerUpDisplay ? (
-                  <div className="text-xs text-zinc-500">Runner-up · {h.resolvedRunnerUpDisplay}</div>
+                  <div className="text-xs text-ink-secondary">Runner-up · {h.resolvedRunnerUpDisplay}</div>
                 ) : null}
               </div>
             ))}
           </div>
         )}
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">All-time owner legacy</p>
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">All-time owner legacy</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.ownerRecords.length === 0 ? (
-            <p className="col-span-full text-center text-sm text-zinc-500">No owner rows.</p>
+            <p className="col-span-full text-center text-sm text-ink-secondary">No owner rows.</p>
           ) : (
             data.ownerRecords.slice(0, 12).map((row, idx) => (
               <IntelPanel key={row.ownerKey} variant="profile" className="relative overflow-hidden p-5">
                 <span className="absolute right-3 top-3 text-4xl font-black tabular-nums text-white/[0.04]">{idx + 1}</span>
                 <p className="text-lg font-bold text-zinc-50">{row.displayName}</p>
                 <div className="mt-3 space-y-2 text-sm text-zinc-400">
-                  <p><span className="text-zinc-600">Titles</span> <span className="font-semibold text-amber-200/90">{row.titles}</span></p>
-                  <p><span className="text-zinc-600">Regular Season Win %</span> <span className="tabular-nums text-zinc-200">{row.winPct.toFixed(1)}%</span></p>
-                  <p><span className="text-zinc-600">Seasons</span> <span className="tabular-nums text-zinc-200">{row.seasonsActive}</span></p>
+                  <p><span className="text-ink-tertiary">Titles</span> <span className="font-semibold text-amber-200/90">{row.titles}</span></p>
+                  <p><span className="text-ink-tertiary">Regular Season Win %</span> <span className="tabular-nums text-zinc-200">{row.winPct.toFixed(1)}%</span></p>
+                  <p><span className="text-ink-tertiary">Seasons</span> <span className="tabular-nums text-zinc-200">{row.seasonsActive}</span></p>
                 </div>
               </IntelPanel>
             ))
@@ -1164,15 +1164,15 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
       <IntelPanel id="archive-milestones" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
         <ArchiveSectionHeader icon={<History className="h-4 w-4" />} title="Historic Milestones" accent="#fbbf24" />
         {historicMilestones.length === 0 ? (
-          <p className="text-sm text-zinc-500">No milestones derivable from current archives yet.</p>
+          <p className="text-sm text-ink-secondary">No milestones derivable from current archives yet.</p>
         ) : (
           <div className="relative space-y-0 border-l border-white/[0.08] pl-4">
             {historicMilestones.map((ev, i) => (
               <div key={`${ev.season}-${ev.label}-${i}`} className="relative pb-4 last:pb-0">
                 <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-[#fbbf24]/80 ring-2 ring-[#110c14]" aria-hidden />
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{ev.season}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{ev.season}</div>
                 <div className="text-sm font-semibold text-zinc-100">{ev.label}</div>
-                <div className="text-xs text-zinc-500">{ev.detail}</div>
+                <div className="text-xs text-ink-secondary">{ev.detail}</div>
               </div>
             ))}
           </div>
@@ -1190,23 +1190,23 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
       {/* ── 8. The Graveyard ─────────────────────────────── */}
       <IntelPanel id="archive-graveyard" variant="profile" className="scroll-mt-24 overflow-hidden p-4 sm:p-6">
         <ArchiveSectionHeader icon={<Skull className="h-4 w-4" />} title="The Graveyard" accent="#94a3b8" />
-        <p className="mb-4 -mt-1 max-w-2xl text-sm text-zinc-500">
+        <p className="mb-4 -mt-1 max-w-2xl text-sm text-ink-secondary">
           Owners who lasted less than two seasons. They came, they lost, they left.
         </p>
         {cemetery.length === 0 ? (
-          <p className="text-sm text-zinc-500">No short-timers — everyone who joined stuck around.</p>
+          <p className="text-sm text-ink-secondary">No short-timers — everyone who joined stuck around.</p>
         ) : (
           <div className="rounded-2xl border border-white/[0.06] bg-[linear-gradient(180deg,#1b131f,#140e17)] px-5 pt-8 pb-4">
             <div className="grid grid-cols-2 gap-x-5 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
               {cemetery.map((g, i) => (
                 <div key={g.name + i} className="flex flex-col items-center">
                   <div className="relative flex w-full max-w-[170px] flex-col items-center rounded-t-[80px] rounded-b-md border border-zinc-700/60 bg-[linear-gradient(180deg,#3a4150,#281d2e)] px-4 pt-7 pb-6 text-center shadow-[inset_0_2px_12px_rgba(0,0,0,.45),0_10px_20px_-12px_rgba(0,0,0,.8)]">
-                    <span className="text-[10px] font-bold tracking-[0.35em] text-zinc-500">R . I . P</span>
+                    <span className="text-[10px] font-bold tracking-[0.35em] text-ink-secondary">R . I . P</span>
                     <span className="my-2 block h-px w-10 bg-white/15" />
-                    <Skull className="mb-2 h-5 w-5 text-zinc-500" />
+                    <Skull className="mb-2 h-5 w-5 text-ink-secondary" />
                     <span className="font-serif text-[15px] font-bold leading-tight text-zinc-200">{g.name}</span>
                     <span className="mt-1.5 text-xs tabular-nums text-zinc-400">{g.years.length ? g.years.join(" - ") : "Unknown"}</span>
-                    <span className="mt-2 text-[9px] italic text-zinc-600">gone too soon</span>
+                    <span className="mt-2 text-[9px] italic text-ink-tertiary">gone too soon</span>
                   </div>
                   <span className="h-3 w-[88%] max-w-[150px] rounded-b-sm bg-[linear-gradient(180deg,#1f1624,#16101a)] shadow-[0_6px_8px_-6px_rgba(0,0,0,.9)]" />
                   <span className="mb-6 h-1.5 w-[96%] max-w-[160px] rounded-full bg-lime-900/30 blur-[1px]" />
@@ -1219,9 +1219,9 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
 
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <IntelPanel variant="profile" className="overflow-hidden">
-          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-ink-tertiary transition-colors hover:bg-white/[0.03]">
             <span>Developer sections</span>
-            <ChevronDown className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", developerOpen && "rotate-180")} aria-hidden />
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", developerOpen && "rotate-180")} aria-hidden />
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-4 border-t border-white/[0.06] px-4 py-4">
@@ -1229,10 +1229,10 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
         <IntelPanel variant="profile" className="overflow-hidden">
         <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
           <span>Data Coverage &amp; Diagnostics</span>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", coverageOpen && "rotate-180")} />
+          <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", coverageOpen && "rotate-180")} />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="space-y-4 border-t border-white/[0.06] px-4 py-4 text-xs text-zinc-500">
+          <div className="space-y-4 border-t border-white/[0.06] px-4 py-4 text-xs text-ink-secondary">
             <p className="leading-relaxed text-zinc-400">
               Championships from <code className="text-[10px] text-zinc-300">league_medals</code> (team names → owners via{" "}
               <code className="text-[10px] text-zinc-300">gmTeams</code>). Owner W/L/T, single-game marks, rivalry indexes,
@@ -1268,7 +1268,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                 {diag.unmatchedThirdTeams.length}
                 {diag.unmatchedChampionTeams.length > 0 && (
                   <div className="mt-2 space-y-0.5 text-[10px] leading-snug text-amber-200/90">
-                    <span className="text-zinc-500">Sample champion labels not matched:</span>
+                    <span className="text-ink-secondary">Sample champion labels not matched:</span>
                     {diag.unmatchedChampionTeams.slice(0, 4).map((u) => (
                       <div key={`${u.season}-${u.teamName}`}>
                         {u.season}: <span className="text-zinc-300">{u.teamName}</span>
@@ -1287,7 +1287,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                 <div className="overflow-x-auto px-3 pb-3">
                   <table className="w-full font-mono text-[11px]">
                     <thead>
-                      <tr className="border-b border-white/[0.08] text-zinc-500">
+                      <tr className="border-b border-white/[0.08] text-ink-secondary">
                         <th className="py-1 text-left">Season</th>
                         <th className="py-1 text-right">Rows</th>
                         <th className="py-1 text-right">PO dedupe</th>
@@ -1331,7 +1331,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
               </button>
               {backfillNote && <span className="text-[11px] text-zinc-400">{backfillNote}</span>}
             </div>
-            <p className="text-[11px] text-zinc-600">
+            <p className="text-[11px] text-ink-tertiary">
               Routes <code className="text-[10px]">/ring-of-honor</code> and <code className="text-[10px]">/championships</code>{" "}
               redirect here.
             </p>
@@ -1353,15 +1353,15 @@ function RecordDump({ title, rec }: { title: string; rec: MaybeAvail<Record<stri
   if (!rec.available) {
     return (
       <IntelPanel variant="profile" className="p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
-        <p className="mt-1 text-xs text-zinc-600">Unavailable — {rec.reason}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">{title}</p>
+        <p className="mt-1 text-xs text-ink-tertiary">Unavailable — {rec.reason}</p>
       </IntelPanel>
     );
   }
   const o = rec.value;
   return (
     <IntelPanel variant="profile" className="p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">{title}</p>
       <p className="mt-1 font-mono text-[11px] text-zinc-300">
         {Object.entries(o)
           .map(([k, v]) => `${k}: ${typeof v === "number" ? (Number.isInteger(v) ? v : Number(v).toFixed(2)) : String(v)}`)

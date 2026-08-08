@@ -197,7 +197,7 @@ export function RfsnBroadcastPanel({
           <span
             className={cn(
               "text-[10px] font-black uppercase tracking-wider",
-              audioIsSpeaking ? "text-[#a3e635]" : "text-zinc-500",
+              audioIsSpeaking ? "text-[#a3e635]" : "text-ink-secondary",
             )}
             data-booth-audio-state
           >
@@ -205,7 +205,7 @@ export function RfsnBroadcastPanel({
           </span>
         </div>
         {!audioIsSpeaking && (
-          <p className="mt-1 text-[10px] text-zinc-500">
+          <p className="mt-1 text-[10px] text-ink-secondary">
             Silence is editorial — coverage fires on significant moments.
           </p>
         )}

@@ -77,19 +77,19 @@ export function LiveDraftWrapUp({
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-300">
         <div>
-          <span className="text-zinc-500">Top draft grade</span>
+          <span className="text-ink-secondary">Top draft grade</span>
           <p className="font-bold text-zinc-100">
             {top ? `${top.teamName} (${top.grade?.letter})` : "—"}
           </p>
         </div>
         <div>
-          <span className="text-zinc-500">Best value</span>
+          <span className="text-ink-secondary">Best value</span>
           <p className="font-bold text-zinc-100">
             {bestValue ? `${bestValue.name} (+${bestValue.delta.toFixed(0)} vs ADP, ${bestValue.team})` : "—"}
           </p>
         </div>
         <div>
-          <span className="text-zinc-500">Biggest reach</span>
+          <span className="text-ink-secondary">Biggest reach</span>
           <p className="font-bold text-zinc-100">
             {biggestReach
               ? `${biggestReach.name} (${biggestReach.reachDelta.toFixed(0)} picks early, ${biggestReach.team})`
@@ -97,13 +97,13 @@ export function LiveDraftWrapUp({
           </p>
         </div>
         <div>
-          <span className="text-zinc-500">Notable position volume</span>
+          <span className="text-ink-secondary">Notable position volume</span>
           <p className="font-bold text-zinc-100">
             {notableRun ? `${notableRun[1]} ${notableRun[0]}s drafted league-wide` : "—"}
           </p>
         </div>
       </div>
-      <p className="text-[11px] text-zinc-500">
+      <p className="text-[11px] text-ink-secondary">
         RFSN terminal wrap-up commentary generates in the booth when the final pick locks.
       </p>
     </section>

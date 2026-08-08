@@ -181,7 +181,7 @@ function warRoomKvsForPlayer(keeperPredictions: any[] | undefined, teamId: numbe
 function kvsRecStyle(kvs: number) {
   if (kvs >= 150) return { label: "Keep", cls: "bg-lime-500/15 text-lime-300 border-lime-500/30" };
   if (kvs >= 100) return { label: "Consider", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
-  return { label: "Pass", cls: "bg-zinc-800/60 text-zinc-500 border-zinc-700/40" };
+  return { label: "Pass", cls: "bg-zinc-800/60 text-ink-secondary border-zinc-700/40" };
 }
 
 function slotOrder(slot: string | undefined) {

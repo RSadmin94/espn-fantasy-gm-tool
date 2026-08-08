@@ -1253,10 +1253,10 @@ function RivalryDocumentaryExperience({
 
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <div className="border-t border-white/[0.06] bg-black/10">
-          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-ink-tertiary transition-colors hover:bg-white/[0.03]">
             <span>Documentary debug</span>
             <ChevronDown
-              className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", developerOpen && "rotate-180")}
+              className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", developerOpen && "rotate-180")}
               aria-hidden
             />
           </CollapsibleTrigger>

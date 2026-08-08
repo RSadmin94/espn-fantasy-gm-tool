@@ -99,7 +99,7 @@ export function FantasyProsMockControlPanel({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
         <div>
-          <span className="text-zinc-500">Status </span>
+          <span className="text-ink-secondary">Status </span>
           <span
             className={cn(
               "font-bold uppercase tracking-wider",
@@ -116,11 +116,11 @@ export function FantasyProsMockControlPanel({
         {active && (
           <>
             <div>
-              <span className="text-zinc-500">Picks received </span>
+              <span className="text-ink-secondary">Picks received </span>
               <span className="text-zinc-200 tabular-nums">{status.notifiedCount}</span>
             </div>
             <div>
-              <span className="text-zinc-500">Last pick </span>
+              <span className="text-ink-secondary">Last pick </span>
               <span className="text-zinc-200">
                 {status.lastIngestedPick != null
                   ? `#${status.lastIngestedPick}${status.lastPlayerName ? ` · ${status.lastPlayerName}` : ""}`
@@ -174,7 +174,7 @@ export function FantasyProsMockControlPanel({
         </div>
       )}
 
-      <p className="text-[10px] text-zinc-600 leading-snug">
+      <p className="text-[10px] text-ink-tertiary leading-snug">
         Open the{" "}
         <a
           className="text-sky-400 underline"
@@ -193,10 +193,10 @@ export function FantasyProsMockControlPanel({
         onToggle={(e) => setDiagnosticsOpen((e.target as HTMLDetailsElement).open)}
         data-fp-diagnostics
       >
-        <summary className="cursor-pointer text-[10px] uppercase tracking-wider text-zinc-500 select-none">
+        <summary className="cursor-pointer text-[10px] uppercase tracking-wider text-ink-secondary select-none">
           Diagnostics
         </summary>
-        <div className="mt-1.5 space-y-0.5 text-[10px] text-zinc-500 font-mono">
+        <div className="mt-1.5 space-y-0.5 text-[10px] text-ink-secondary font-mono">
           <div>extension: {status.extensionPresent ? "detected" : "missing"}</div>
           <div>connector: {status.connectorStatus}</div>
           <div>draftId: {status.draftId || "—"}</div>

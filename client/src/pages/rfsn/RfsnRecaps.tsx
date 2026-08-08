@@ -90,7 +90,7 @@ export function RfsnRecaps() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-16 text-sm text-zinc-500">
+        <div className="flex items-center gap-2 py-16 text-sm text-ink-secondary">
           <Loader2 className="h-4 w-4 animate-spin text-lime-400" /> Loading recaps…
         </div>
       ) : error ? (
@@ -103,7 +103,7 @@ export function RfsnRecaps() {
         </div>
       ) : weeks.length === 0 ? (
         <div className="rounded-[15px] border border-white/[0.07] bg-white/[0.02] px-5 py-12 text-center">
-          <CalendarDays className="mx-auto mb-3 h-8 w-8 text-zinc-600" />
+          <CalendarDays className="mx-auto mb-3 h-8 w-8 text-ink-tertiary" />
           <p className="text-sm font-semibold text-zinc-300">No weekly recaps yet</p>
           <p className="mx-auto mt-2 max-w-md text-xs text-[#8b97a8]">
             Matchup recaps appear after completed weeks sync. Feature stories and live draft coverage
@@ -144,7 +144,7 @@ export function RfsnRecaps() {
           </div>
 
           {reports.length === 0 ? (
-            <p className="py-8 text-center text-sm text-zinc-500">
+            <p className="py-8 text-center text-sm text-ink-secondary">
               No completed matchup reports for this week.
             </p>
           ) : (
@@ -163,7 +163,7 @@ export function RfsnRecaps() {
                     <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">{r.shortRecap}</p>
                   ) : null}
                   {r.winner && r.loser ? (
-                    <p className="mt-2 text-xs tabular-nums text-zinc-500">
+                    <p className="mt-2 text-xs tabular-nums text-ink-secondary">
                       <span className="font-semibold text-zinc-300">{r.winner.name}</span>{" "}
                       {r.winner.score.toFixed(2)} — {r.loser.score.toFixed(2)}{" "}
                       <span className="text-zinc-400">{r.loser.name}</span>

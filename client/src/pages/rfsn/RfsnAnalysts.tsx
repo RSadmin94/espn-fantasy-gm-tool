@@ -105,7 +105,7 @@ export function RfsnAnalysts() {
                 Open Live coverage <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             ) : (
-              <p className="text-xs text-zinc-600">
+              <p className="text-xs text-ink-tertiary">
                 Live access is unavailable for this league session — written Wire and Stories remain
                 open.
               </p>
