@@ -238,9 +238,11 @@ const CENSUS_SRC = `(() => {
     if (el.getAttribute("aria-hidden") === "true") decorative = true;
     if (/\\bsr-only\\b|\\banimate-pulse\\b/.test(clsFull)) decorative = true;
     if (cs.verticalAlign === "super" || fontSize < 9) decorative = true;
-    if (text.length <= 2 && /^[·•—–|™®©✓×▼▲▸‹›]$/.test(text)) decorative = true;
+    if (text.length <= 2 && /^[·•—–|™®©✓×▼▲▸‹›→←↔]$/.test(text)) decorative = true;
+    if (fgRaw[3] < 0.15 || op < 0.15) decorative = true;
     if (/\\bbadge\\b/i.test(clsFull) && fontSize < 11 && text.length <= 12) decorative = true;
     if (fontSize <= 9 && text.length <= 4 && (cs.textTransform === "uppercase" || /uppercase/.test(clsFull))) decorative = true;
+    if (/absolute/.test(clsFull) && fontSize >= 24 && fgRaw[3] < 0.2) decorative = true;
 
     out.push({
       text: text.slice(0, 70),
