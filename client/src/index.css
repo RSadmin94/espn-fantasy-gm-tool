@@ -25,14 +25,16 @@
   --color-muted-foreground: oklch(0.64 0.030 300);
 
   /*
-   * Intentional text hierarchy for dark surfaces (RFSN-051B).
-   * Prefer these over text-zinc-500/600/700, which fail AA on the app background.
+   * Intentional text hierarchy for dark surfaces (RFSN-051B/C).
+   * Prefer these over text-zinc-500/600/700 and text-white/NN opacity utilities.
    *   ink-secondary ≈ 7.6:1 on body — secondary informational copy
-   *   ink-tertiary  ≈ 5.1:1 on body / 4.6:1 on muted panels — tertiary metadata
+   *   ink-tertiary  ≈ 5.5:1 on body / ≥4.9:1 on muted panels — tertiary metadata
+   *   nav-kicker    ≈ 8.5:1 — sidebar group labels (solid purple, never alpha)
    * Decorative/disabled chrome may use ink-tertiary; leave muted-foreground alone.
    */
   --color-ink-secondary: oklch(0.70 0.022 300);
-  --color-ink-tertiary: oklch(0.60 0.025 300);
+  --color-ink-tertiary: oklch(0.62 0.025 300);
+  --color-nav-kicker: oklch(0.74 0.12 295);
   --color-accent: oklch(0.25 0.040 300);
   --color-accent-foreground: oklch(0.95 0.01 300);
   --color-destructive: oklch(0.58 0.22 25);
