@@ -12,7 +12,7 @@ const CYAN = "#22d3ee";
 const RISK = "#f87171";
 const WARN = "#fb923c";
 const TEXT = "#eaf1fb";
-const MUTED = "#8b97a8";
+const MUTED = "var(--color-muted-foreground)";
 
 /* match Command Dashboard panel system */
 const PANEL: any = { background: "linear-gradient(180deg,#1f1624,#18111c)", border: "1px solid rgba(255,255,255,.07)", borderRadius: 15 };

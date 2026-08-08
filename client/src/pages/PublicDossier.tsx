@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 const GOLD = "#f5c518";
 const LIME = "#a3e635";
-const MUTED = "#8b97a8";
+const MUTED = "var(--color-muted-foreground)";
 const LINE = "rgba(255,255,255,0.08)";
 const RED = "#f87171";
 
