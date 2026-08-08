@@ -315,10 +315,9 @@ function SidebarGroupTitle({ title, isFirst }: { title: string; isFirst?: boolea
   return (
     <div
       className={cn(
-        "px-3 pb-1.5 text-2xs font-bold uppercase tracking-[0.2em]",
+        "px-3 pb-1.5 text-2xs font-bold uppercase tracking-[0.2em] text-nav-kicker",
         isFirst ? "pt-0" : "pt-4"
       )}
-      style={{ color: "oklch(0.62 0.16 295 / 0.70)" }}
     >
       {title}
     </div>

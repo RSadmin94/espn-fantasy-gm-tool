@@ -106,6 +106,7 @@ type TextNode = {
   opacity: number;
   contrast: number;
   isLarge: boolean;
+  meaningful: boolean;
   w: number;
   h: number;
 };
@@ -232,10 +233,19 @@ const CENSUS_SRC = `(() => {
     var lh = parseFloat(cs.lineHeight);
     if (isNaN(lh)) lh = fontSize * 1.2;
 
+    var clsFull = el.getAttribute("class") || "";
+    var decorative = false;
+    if (el.getAttribute("aria-hidden") === "true") decorative = true;
+    if (/\\bsr-only\\b|\\banimate-pulse\\b/.test(clsFull)) decorative = true;
+    if (cs.verticalAlign === "super" || fontSize < 9) decorative = true;
+    if (text.length <= 2 && /^[·•—–|™®©✓×▼▲▸‹›]$/.test(text)) decorative = true;
+    if (/\\bbadge\\b/i.test(clsFull) && fontSize < 11 && text.length <= 12) decorative = true;
+    if (fontSize <= 9 && text.length <= 4 && (cs.textTransform === "uppercase" || /uppercase/.test(clsFull))) decorative = true;
+
     out.push({
       text: text.slice(0, 70),
       tag: tag,
-      cls: (el.getAttribute("class") || "").slice(0, 220),
+      cls: clsFull.slice(0, 220),
       fontSize: Math.round(fontSize * 100) / 100,
       fontWeight: fontWeight,
       fontFamily: cs.fontFamily.split(",")[0].replace(/["']/g, ""),
@@ -246,6 +256,7 @@ const CENSUS_SRC = `(() => {
       opacity: Math.round(op * 100) / 100,
       contrast: Math.round(contrast * 100) / 100,
       isLarge: isLarge,
+      meaningful: !decorative,
       w: Math.round(rect.width),
       h: Math.round(rect.height)
     });
@@ -358,6 +369,7 @@ async function main() {
       const nodes = (await page.evaluate(CENSUS_SRC)) as unknown as TextNode[];
 
       const tiny = nodes.filter((n) => n.fontSize < 12);
+      const tinyMeaningful = tiny.filter((n) => n.meaningful);
       const small = nodes.filter((n) => n.fontSize >= 12 && n.fontSize < 14);
       const lowContrast = nodes.filter(
         (n) => (n.isLarge ? n.contrast < 3 : n.contrast < 4.5),
@@ -376,13 +388,14 @@ async function main() {
         settleHistory: stability.history,
         totalTextNodes: nodes.length,
         tinyCount: tiny.length,
+        tinyMeaningfulCount: tinyMeaningful.length,
         smallCount: small.length,
         lowContrastCount: lowContrast.length,
         severeContrastCount: severe.length,
         nodes,
       });
       console.log(
-        `${route.group.padEnd(8)} ${route.path.padEnd(38)} nodes=${String(nodes.length).padStart(4)} <12px=${String(tiny.length).padStart(3)} 12-14px=${String(small.length).padStart(3)} contrast<4.5=${String(lowContrast.length).padStart(3)} severe=${String(severe.length).padStart(3)} ${stability.settled ? "settled" : `UNSETTLED [${stability.history.join(",")}]`}${url.includes(route.path) ? "" : `  [redirected → ${url.replace(BASE, "")}]`}`,
+        `${route.group.padEnd(8)} ${route.path.padEnd(38)} nodes=${String(nodes.length).padStart(4)} <12px=${String(tiny.length).padStart(3)} meaningful=${String(tinyMeaningful.length).padStart(3)} contrast<4.5=${String(lowContrast.length).padStart(3)} severe=${String(severe.length).padStart(3)} ${stability.settled ? "settled" : `UNSETTLED [${stability.history.join(",")}]`}${url.includes(route.path) ? "" : `  [redirected → ${url.replace(BASE, "")}]`}`,
       );
     } catch (e) {
       console.log(`ERROR ${route.path}: ${String(e).slice(0, 160)}`);
