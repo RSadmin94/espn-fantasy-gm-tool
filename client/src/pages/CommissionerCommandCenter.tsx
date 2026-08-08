@@ -1171,7 +1171,7 @@ export function CommissionerCommandCenter() {
                       </div>
                     ))}
                 </div>
-                <p className="mt-3 text-[12px] text-white/20">Trade window scores (0–100). Higher = more likely to accept offers.</p>
+                <p className="mt-3 text-[12px] text-ink-tertiary">Trade window scores (0–100). Higher = more likely to accept offers.</p>
               </div>
             ) : null}
 
@@ -1179,7 +1179,7 @@ export function CommissionerCommandCenter() {
         </section>
 
         {/* Footer note */}
-        <p className="px-1 text-[12px] text-white/20">
+        <p className="px-1 text-[12px] text-ink-tertiary">
           Commissioner Command Center v1 — All data computed deterministically from real league history. No estimates. No fabrications.
         </p>
 

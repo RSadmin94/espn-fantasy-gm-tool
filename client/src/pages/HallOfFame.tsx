@@ -1113,7 +1113,7 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
           ) : (
             data.ownerRecords.slice(0, 12).map((row, idx) => (
               <IntelPanel key={row.ownerKey} variant="profile" className="relative overflow-hidden p-5">
-                <span className="absolute right-3 top-3 text-4xl font-black tabular-nums text-white/[0.04]">{idx + 1}</span>
+                <span aria-hidden="true" className="absolute right-3 top-3 text-4xl font-black tabular-nums text-white/[0.04]">{idx + 1}</span>
                 <p className="text-lg font-bold text-zinc-50">{row.displayName}</p>
                 <div className="mt-3 space-y-2 text-sm text-zinc-400">
                   <p><span className="text-ink-tertiary">Titles</span> <span className="font-semibold text-amber-200/90">{row.titles}</span></p>

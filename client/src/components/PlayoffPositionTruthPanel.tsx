@@ -34,7 +34,7 @@ function InfoTip({ text }: { text: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" aria-label="More info" className="inline-flex align-middle text-white/30 transition hover:text-white/60">
+        <button type="button" aria-label="More info" className="inline-flex align-middle text-ink-tertiary transition hover:text-ink-secondary">
           <HelpCircle className="h-3 w-3" />
         </button>
       </TooltipTrigger>
@@ -60,12 +60,12 @@ function HeroStat({
     accent === "lime" ? "text-lime-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300" : "text-white/90";
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center">
-      <div className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-white/40">
+      <div className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
         {label}
         <InfoTip text={tip} />
       </div>
       <div className={cn("text-[28px] font-black tabular-nums leading-none", accentClass)}>{fmt(value)}</div>
-      <div className="mt-1 text-[10px] text-white/30">pts/game</div>
+      <div className="mt-1 text-[10px] text-ink-tertiary">pts/game</div>
     </div>
   );
 }
@@ -81,7 +81,7 @@ function PositionCard({ row }: { row: PosSplit }) {
             {row.verdict}
           </span>
         ) : row.confidence === "low-sample" ? (
-          <span className="text-[11px] text-white/35">{row.confidence}</span>
+          <span className="text-[11px] text-ink-tertiary">{row.confidence}</span>
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -91,10 +91,10 @@ function PositionCard({ row }: { row: PosSplit }) {
         <MetricCell label="Champ playoff" value={fmt(row.championPlayoffAvg)} tip="Average starter points/game at this position when league champions played in the playoffs." />
       </div>
       <div className="mt-3 flex flex-wrap gap-4 border-t border-white/[0.06] pt-3 text-[12px] tabular-nums">
-        <span className="text-white/45">
+        <span className="text-ink-tertiary">
           vs regular <span className="font-bold text-white/80">{fmtDelta(row.vsOwnRegular)}</span>
         </span>
-        <span className="text-white/45">
+        <span className="text-ink-tertiary">
           vs champ <span className="font-bold text-white/80">{fmtDelta(row.vsChampionFull)}</span>
         </span>
       </div>
@@ -105,7 +105,7 @@ function PositionCard({ row }: { row: PosSplit }) {
 function MetricCell({ label, value, tip }: { label: string; value: string; tip: string }) {
   return (
     <div>
-      <div className="mb-0.5 flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/35">
+      <div className="mb-0.5 flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
         {label}
         <InfoTip text={tip} />
       </div>
@@ -121,7 +121,7 @@ function PanelShell({ icon, title, subtitle, children }: { icon: ReactNode; titl
         <span className="text-orange-400">{icon}</span>
         <div>
           <h2 className="text-[20px] font-extrabold leading-tight tracking-tight">{title}</h2>
-          {subtitle && <p className="text-[13px] text-white/45">{subtitle}</p>}
+          {subtitle && <p className="text-[13px] text-ink-secondary">{subtitle}</p>}
         </div>
       </div>
       {children}
@@ -143,7 +143,7 @@ export function PlayoffPositionTruthPanel({
       <PanelShell icon={<Flame className="h-5 w-5" />} title="Playoff Position Truth" subtitle="Why your playoff lineup won or lost vs championship teams">
         <SectionLoading
           message="Reading playoff film…"
-          className="justify-center py-10 text-white/45 [&_svg]:text-orange-400"
+          className="justify-center py-10 text-ink-secondary [&_svg]:text-orange-400"
         />
       </PanelShell>
     );
@@ -214,7 +214,7 @@ export function PlayoffPositionTruthPanel({
         ))}
       </div>
 
-      {data.note && <p className="mt-4 text-[11px] leading-relaxed text-white/30">{data.note}</p>}
+      {data.note && <p className="mt-4 text-[11px] leading-relaxed text-ink-secondary">{data.note}</p>}
     </PanelShell>
   );
 }

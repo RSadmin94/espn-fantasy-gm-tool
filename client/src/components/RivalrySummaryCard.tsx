@@ -44,7 +44,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
 
   if (!ready || (q.isLoading && !data)) {
     return (
-      <div className={cn(shell, "flex items-center gap-2 text-[13px] text-white/45", className)}>
+      <div className={cn(shell, "flex items-center gap-2 text-[13px] text-ink-secondary", className)}>
         <Loader2 className="h-4 w-4 animate-spin" /> Loading rivalry…
       </div>
     );
@@ -52,7 +52,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
   if (!top) {
     return (
       <div className={cn(shell, className)}>
-        <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">
+        <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-tertiary">
           <Swords className="h-4 w-4" /> {title}
         </div>
         <p className="text-[13px] text-white/55">No rivalry data yet.</p>
@@ -66,7 +66,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
   return (
     <div className={cn(shell, className)}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">
+        <span className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-tertiary">
           <Swords className="h-4 w-4" /> {title}
         </span>
         <div className="flex items-center gap-2">
@@ -91,12 +91,12 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
       <div className="flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[18px] font-black text-white/90">{top.rivalName}</p>
-          <p className="text-[12px] text-white/45">Top Rival</p>
+          <p className="text-[12px] text-ink-tertiary">Top Rival</p>
         </div>
         {typeof top.rivalryScore === "number" && (
           <div className="text-right">
             <div className="text-[20px] font-black tabular-nums text-violet-300">{top.rivalryScore}</div>
-            <div className="text-[10px] uppercase tracking-wide text-white/40">Rivalry Score</div>
+            <div className="text-[10px] uppercase tracking-wide text-ink-tertiary">Rivalry Score</div>
           </div>
         )}
       </div>
