@@ -35,7 +35,10 @@ import {
   resolveLeaguePromptContext,
   buildLeaguePromptContext,
 } from "./leaguePromptContext";
-import { gatesForAdvisorMessage, type AdvisorContextGates } from "./advisorQuestionClassify";
+import {
+  gatesForAdvisorMessageAsync,
+  type AdvisorContextGates,
+} from "./advisorQuestionClassify";
 
 async function getAdvisorSeasonData(season: number, userId?: number) {
   const { leagueId: lid } = await resolveActiveLeagueId(
@@ -68,7 +71,11 @@ export async function buildAdvisorSystemPrompt(
   userId?: number,
   userMessage?: string,
 ): Promise<string> {
-  const gates: AdvisorContextGates = gatesForAdvisorMessage(userMessage);
+  const gates: AdvisorContextGates = await gatesForAdvisorMessageAsync(
+    userMessage,
+    userId,
+    season,
+  );
   const promptCtx = await resolveLeaguePromptContext(userId, season);
   const { leagueDescriptor, historyClause, focalClause } = buildLeaguePromptContext(promptCtx);
   const leagueIdRef = promptCtx.leagueId?.trim()
@@ -303,12 +310,38 @@ Rules: Always reference actual team names, owner names, and player names when pr
       }
 
       if (careerMap.size > 0) {
-        const entries = Array.from(careerMap.values())
-          .filter(c => c.seasons >= 1)
+        let entryPairs = Array.from(careerMap.entries()).filter(([, c]) => c.seasons >= 1);
+        // OWNER_COMPARISON: keep focal + named rivals only (not the full league roster of careers)
+        if (gates.careerMemberIdFilter && gates.careerMemberIdFilter.length > 0) {
+          const allow = new Set(gates.careerMemberIdFilter.map((id) => id.trim()));
+          try {
+            const { resolveRodMemberId } = await import("./h2hContextBuilder");
+            const focalId = await resolveRodMemberId(userId);
+            if (focalId) allow.add(focalId.trim());
+          } catch {
+            /* ignore */
+          }
+          const filtered = entryPairs.filter(([memberId]) => {
+            const bare = memberId.replace(/^\{|\}$/g, "");
+            return (
+              allow.has(memberId) ||
+              allow.has(bare) ||
+              allow.has(`{${bare}}`) ||
+              [...allow].some((a) => a.replace(/^\{|\}$/g, "") === bare)
+            );
+          });
+          if (filtered.length > 0) entryPairs = filtered;
+        }
+        const entries = entryPairs
+          .map(([, c]) => c)
           .sort((a, b) => b.championships - a.championships || b.wins - a.wins);
 
         if (gates.includeCareerHistory) {
-        leagueContext += `\n\n## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth). 🏆× = ChampionshipAuthority (same as trophy block below); 🥈× = ESPN winners-bracket runner-up when available.`;
+        const careerLabel =
+          gates.category === "OWNER_COMPARISON"
+            ? `## CAREER HISTORY — FOCAL + NAMED OWNER(S) (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth)`
+            : `## CAREER HISTORY (${allSeasons[0]}–${allSeasons[allSeasons.length - 1]}, ${allSeasons.length} seasons — treat as ground truth). 🏆× = ChampionshipAuthority (same as trophy block below); 🥈× = ESPN winners-bracket runner-up when available.`;
+        leagueContext += `\n\n${careerLabel}`;
         for (const c of entries) {
           const winPct = (c.wins + c.losses) > 0 ? ((c.wins / (c.wins + c.losses)) * 100).toFixed(0) : '0';
           const champStr = c.championships > 0 ? ` 🏆×${c.championships}` : '';
@@ -424,6 +457,39 @@ Rules: Always reference actual team names, owner names, and player names when pr
   } catch {
     // H2H context unavailable — continue without it
   }
+  }
+
+  // ── Named-owner H2H for OWNER_COMPARISON (focused rivalry measuring stick) ──
+  if (gates.includeNamedOwnerH2h && gates.matchedOwners.length > 0) {
+    try {
+      const { resolveRodMemberId, computeRichH2H, buildH2HPromptBlock } = await import(
+        "./h2hContextBuilder"
+      );
+      const focalMemberId = await resolveRodMemberId(userId);
+      if (focalMemberId) {
+        for (const owner of gates.matchedOwners) {
+          if (!owner.memberId || owner.memberId === focalMemberId) continue;
+          const h2h = await computeRichH2H(
+            focalMemberId,
+            owner.memberId,
+            focalClause,
+            owner.displayName,
+            userId,
+          );
+          if (h2h.rsTotalGames > 0) {
+            leagueContext += `\n\n## NAMED OWNER COMPARISON — H2H vs ${owner.displayName.toUpperCase()} (treat as ground truth):\n`;
+            leagueContext += buildH2HPromptBlock(
+              h2h,
+              `${focalClause} vs ${owner.displayName}`,
+            );
+          } else {
+            leagueContext += `\n\n## NAMED OWNER COMPARISON — ${owner.displayName}: no recorded H2H games in cache; use standings/roster/DNA below for the comparison.\n`;
+          }
+        }
+      }
+    } catch {
+      // Named-owner H2H unavailable — continue without it
+    }
   }
 
   // League DNA behavioral intelligence

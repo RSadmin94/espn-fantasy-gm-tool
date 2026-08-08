@@ -10577,8 +10577,14 @@ Provide:
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
         await addChatMessage(userId, "user", input.message, season, chatLeagueId);
 
-        const { classifyAdvisorQuestion } = await import("./advisorQuestionClassify");
-        const classification = classifyAdvisorQuestion(input.message);
+        const {
+          classifyAdvisorQuestionDetailed,
+          listAdvisorOwnerAliases,
+        } = await import("./advisorQuestionClassify");
+        const ownerAliases = await listAdvisorOwnerAliases(userId, season);
+        const classification = classifyAdvisorQuestionDetailed(input.message, {
+          ownerAliases,
+        }).category;
         const startedAt = Date.now();
 
         // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
