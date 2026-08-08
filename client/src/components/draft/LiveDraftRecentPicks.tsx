@@ -44,7 +44,7 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
       </div>
 
       {picks.length === 0 ? (
-        <p className="text-[11px] text-zinc-500 italic" data-live-draft-timeline-empty>
+        <p className="text-[11px] text-ink-secondary italic" data-live-draft-timeline-empty>
           Waiting for live draft activity
         </p>
       ) : (
@@ -62,7 +62,7 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
               data-pick={p.pickNumber}
               data-last-pick={p.isLast ? "true" : undefined}
             >
-              <span className="text-zinc-600 tabular-nums w-10 shrink-0">
+              <span className="text-ink-tertiary tabular-nums w-10 shrink-0">
                 {p.round}.{String(p.pickNumber).padStart(2, "0")}
               </span>
               <span className="text-zinc-400 truncate max-w-[5.5rem] shrink-0">{p.ownerName}</span>

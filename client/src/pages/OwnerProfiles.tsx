@@ -99,7 +99,7 @@ function Badge({ children, color = "default" }: { children: ReactNode; color?: "
 function StatRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-3 border-b border-white/[0.06] py-2 last:border-0 text-sm">
-      <span className="text-zinc-500">{label}</span>
+      <span className="text-ink-secondary">{label}</span>
       <span className="font-medium text-right text-zinc-100">{value}</span>
     </div>
   );
@@ -138,7 +138,7 @@ function Section({ title, icon, children, defaultOpen = true }: {
         className="flex w-full items-center gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-3 text-left transition-colors hover:bg-white/[0.04]">
         <span className="text-[#a3e635]">{icon}</span>
         <span className="text-[15px] font-extrabold tracking-tight text-[#f3f8ff] flex-1">{title}</span>
-        {open ? <ChevronDown className="h-4 w-4 text-zinc-500" /> : <ChevronRight className="h-4 w-4 text-zinc-500" />}
+        {open ? <ChevronDown className="h-4 w-4 text-ink-secondary" /> : <ChevronRight className="h-4 w-4 text-ink-secondary" />}
       </button>
       {open && <div className="px-4 py-3">{children}</div>}
     </IntelPanel>
@@ -209,7 +209,7 @@ function OwnerTradeHistoryCard({
     <ProfileShellCard
       title="Trade History"
       right={
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
           {dossierActiveSeason} season
         </span>
       }
@@ -229,14 +229,14 @@ function OwnerTradeHistoryCard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Trade record</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Trade record</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-zinc-100">
                 {hist.wins}–{hist.losses}{hist.ties > 0 ? `–${hist.ties}` : ""}
               </div>
-              <div className="mt-1 text-xs text-zinc-500">{hist.tradeCount} completed trade{hist.tradeCount === 1 ? "" : "s"}</div>
+              <div className="mt-1 text-xs text-ink-secondary">{hist.tradeCount} completed trade{hist.tradeCount === 1 ? "" : "s"}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Net value</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Net value</div>
               <div
                 className={cn(
                   "mt-1 text-lg font-bold tabular-nums",
@@ -246,7 +246,7 @@ function OwnerTradeHistoryCard({
                 {hist.netValue > 0 ? "+" : ""}
                 {hist.netValue}
               </div>
-              <div className="mt-1 text-xs text-zinc-500">
+              <div className="mt-1 text-xs text-ink-secondary">
                 Pick {hist.pickOnlyCount} · Player {hist.playerOnlyCount} · Mixed {hist.mixedCount}
               </div>
             </div>
@@ -276,7 +276,7 @@ function OwnerTradeHistoryCard({
           )}
 
           <div>
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-zinc-500">Recent completed trades</p>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Recent completed trades</p>
             <div className="space-y-2">
               {(hist.recentTrades ?? hist.trades ?? []).map((entry: any) => {
                 const trade = entry.trade;
@@ -314,7 +314,7 @@ function OwnerTradeHistoryCard({
                         {sent.length ? sent.join(", ") : "—"}
                       </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-ink-secondary">
                       <span>
                         Margin:{" "}
                         <span className="font-semibold tabular-nums text-zinc-300">
@@ -402,7 +402,7 @@ function ScoutingLock({ title, blurb, onUnlock, pending }: { title: string; blur
       <Crosshair className="mx-auto mb-3 h-8 w-8 text-[#a3e635]" aria-hidden />
       <h3 className="text-xl font-black tracking-tight text-zinc-50 sm:text-2xl">{title}</h3>
       <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-zinc-400">{blurb}</p>
-      <p className="mx-auto mt-3 max-w-md text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+      <p className="mx-auto mt-3 max-w-md text-[11px] uppercase tracking-[0.14em] text-ink-secondary">
         Draft tendencies - Keeper strategy - Activity DNA - Matchup intel - Scouting report - Owner comparison
       </p>
       <button type="button" onClick={onUnlock} disabled={pending}
@@ -451,7 +451,7 @@ function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: 
         </div>
       </div>
       {!isLocked ? (
-        <div className="mt-2 flex gap-3 text-xs text-zinc-500">
+        <div className="mt-2 flex gap-3 text-xs text-ink-secondary">
           {!isPreview && (
             <>
               <span>{num(o.totalWins)}–{num(o.totalLosses)}</span>
@@ -461,7 +461,7 @@ function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: 
           <span>{Array.isArray(o.seasons) ? o.seasons.length : 0} season{(Array.isArray(o.seasons) ? o.seasons.length : 0) !== 1 ? "s" : ""}</span>
         </div>
       ) : (
-        <p className="mt-2 text-xs text-zinc-500">Unlock Rivals Pro to scout this manager.</p>
+        <p className="mt-2 text-xs text-ink-secondary">Unlock Rivals Pro to scout this manager.</p>
       )}
       </IntelPanel>
     </button>
@@ -498,7 +498,7 @@ function CompareCell({ tone, children }: { tone: "win" | "lose" | "tie"; childre
       className={cn(
         "rounded-md border px-3 py-2 text-sm tabular-nums",
         tone === "win" && "border-lime-500/30 bg-lime-500/10 text-zinc-100",
-        tone === "lose" && "border-white/[0.06] bg-white/[0.02] text-zinc-500",
+        tone === "lose" && "border-white/[0.06] bg-white/[0.02] text-ink-secondary",
         tone === "tie" && "border-white/[0.08] bg-white/[0.03] text-zinc-200",
       )}
     >
@@ -555,7 +555,7 @@ function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefi
   const accent = DYN_BADGE_ACCENT[row.badge.key] ?? "#94a3b8";
   const bar = (label: string, value: number, color: string) => (
     <div className="flex items-center gap-2">
-      <span className="w-9 shrink-0 text-[10px] font-bold uppercase tracking-wider text-zinc-500">{label}</span>
+      <span className="w-9 shrink-0 text-[10px] font-bold uppercase tracking-wider text-ink-secondary">{label}</span>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
         <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, num(value)))}%`, background: color }} />
       </div>
@@ -574,7 +574,7 @@ function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefi
             {row.badge.icon}
           </div>
           <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">Dynasty Identity</div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Dynasty Identity</div>
             <div className="text-sm font-bold tracking-tight" style={{ color: accent }}>{row.badge.label}</div>
             <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">{row.badge.explanation}</p>
           </div>
@@ -661,9 +661,9 @@ function RivalWhyBlock({
   if (!reason && bullets.length === 0) return null;
   return (
     <div className="mt-3 border-t border-white/[0.06] pt-2.5">
-      <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Why?</div>
+      <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Why?</div>
       {explanation.headline ? (
-        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
           {explanation.headline}
         </div>
       ) : null}
@@ -672,7 +672,7 @@ function RivalWhyBlock({
         <ul className="mt-1.5 space-y-1">
           {bullets.map((b) => (
             <li key={b.text} className="flex gap-1.5 text-[11px] leading-snug text-zinc-400">
-              <span className="shrink-0 text-zinc-600" aria-hidden>
+              <span className="shrink-0 text-ink-tertiary" aria-hidden>
                 •
               </span>
               <span>{b.text}</span>
@@ -694,7 +694,7 @@ function DossierSectionHeader({
   accent?: string;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-zinc-500">
+    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-ink-secondary">
       <span style={{ color: accent }}>{icon}</span>
       {title}
     </div>
@@ -783,11 +783,11 @@ function CompareOwnersPanel({
     <IntelPanel id="dossier-compare" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
       <DossierSectionHeader icon={<GitCompare className="h-4 w-4" />} title={`Compare · ${headerDisplayName} vs ${compareWith}`} accent="#c4b5fd" />
       {compareWith && !peer && isLoadingComparison ? (
-        <SectionLoading message="Loading comparison…" className="justify-center py-10 text-zinc-500" />
+        <SectionLoading message="Loading comparison…" className="justify-center py-10 text-ink-secondary" />
       ) : peer ? (
         <div className="overflow-x-auto p-4">
           <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
-            <div className="py-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">Metric</div>
+            <div className="py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">Metric</div>
             <div
               className="truncate py-2 text-[10px] font-semibold uppercase tracking-wide text-lime-400/90"
               title={headerDisplayName}
@@ -858,7 +858,7 @@ function CompareOwnersPanel({
                 const tones = rowTones(row.w);
                 return (
                   <Fragment key={row.label}>
-                    <div className="flex items-center border-b border-white/[0.06] py-2 pr-1 text-xs leading-snug text-zinc-500">
+                    <div className="flex items-center border-b border-white/[0.06] py-2 pr-1 text-xs leading-snug text-ink-secondary">
                       {row.label}
                     </div>
                     <div className="border-b border-white/[0.06] py-1">
@@ -877,13 +877,13 @@ function CompareOwnersPanel({
             })()}
           </div>
           {(!h2h || h2h.games === 0) && (
-            <p className="mt-3 text-xs text-zinc-500">
+            <p className="mt-3 text-xs text-ink-secondary">
               No regular-season head-to-head matchups on file for this pair.
             </p>
           )}
         </div>
       ) : compareWith ? (
-        <p className="text-sm text-zinc-500">Could not load comparison for that owner.</p>
+        <p className="text-sm text-ink-secondary">Could not load comparison for that owner.</p>
       ) : null}
     </IntelPanel>
   );
@@ -1343,7 +1343,7 @@ function ProfilePanel({
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 className="text-2xl font-extrabold tracking-tight text-zinc-50 md:text-3xl">{headerDisplayName}</h2>
-                <p className="mt-1 text-sm text-zinc-500">{str(snap.currentTeam)}</p>
+                <p className="mt-1 text-sm text-ink-secondary">{str(snap.currentTeam)}</p>
               </div>
               <div className="flex flex-wrap justify-end gap-1.5">
                 {champSeasons.length > 0 && <Badge color="gold">🏆 {champSeasons.length}× Champ</Badge>}
@@ -1353,40 +1353,40 @@ function ProfilePanel({
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Legacy rank</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Legacy rank</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {legacyRank != null ? `#${legacyRank}` : "—"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Intelligence score</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Intelligence score</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {intelligenceScore != null ? intelligenceScore : "—"}
                   {intelligenceScore != null && (
-                    <span className="text-sm font-semibold text-zinc-500"> / 100</span>
+                    <span className="text-sm font-semibold text-ink-secondary"> / 100</span>
                   )}
                 </div>
-                <div className="mt-0.5 text-[11px] text-zinc-500">
+                <div className="mt-0.5 text-[11px] text-ink-secondary">
                   {intelligenceScore != null ? "Relative to league leader" : "Not enough data"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Overall record</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Overall record</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {num(snap.totalWins)}–{num(snap.totalLosses)}
                   {num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""}
                 </div>
-                <div className="mt-0.5 text-[11px] text-zinc-500">{pct(num(snap.winPct))} win · RS matchups</div>
+                <div className="mt-0.5 text-[11px] text-ink-secondary">{pct(num(snap.winPct))} win · RS matchups</div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 sm:col-span-2 lg:col-span-3">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Current season snapshot</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Current season snapshot</div>
                 <div className="mt-1 text-sm font-semibold text-zinc-100">
                   {currentSeasonRow
                     ? `${currentSeasonRow.season} · ${str(currentSeasonRow.teamName)} · ${currentSeasonRow.wins}–${currentSeasonRow.losses}${num(currentSeasonRow.ties) ? `–${num(currentSeasonRow.ties)}` : ""}`
                     : "—"}
                 </div>
                 {currentSeasonRow?.playoffSeed != null ? (
-                  <div className="mt-0.5 text-[11px] text-zinc-500">Playoff seed: {currentSeasonRow.playoffSeed}</div>
+                  <div className="mt-0.5 text-[11px] text-ink-secondary">Playoff seed: {currentSeasonRow.playoffSeed}</div>
                 ) : null}
               </div>
             </div>
@@ -1456,7 +1456,7 @@ function ProfilePanel({
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.dnaEyebrow}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{lens.dnaEyebrow}</p>
                 {selfLens ? (
                   <>
                     <p className="mt-2 text-lg font-extrabold tracking-tight text-zinc-50">
@@ -1475,7 +1475,7 @@ function ProfilePanel({
                         </ul>
                       </div>
                     ) : (
-                      <p className="mt-2 text-sm text-zinc-500">Not enough draft history yet for identity bullets.</p>
+                      <p className="mt-2 text-sm text-ink-secondary">Not enough draft history yet for identity bullets.</p>
                     )}
                   </>
                 ) : (
@@ -1483,7 +1483,7 @@ function ProfilePanel({
                 )}
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.draftDnaEyebrow}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{lens.draftDnaEyebrow}</p>
                 <StatRow label="Draft style" value={draftStyle || "—"} />
                 <StatRow label="Open-draft picks" value={num(draft.totalPicks)} />
                 <StatRow label="Top positions" value={mostDraftedPos.slice(0, 3).join(" › ") || "—"} />
@@ -1510,10 +1510,10 @@ function ProfilePanel({
         <div className="space-y-4">
           <ProfileShellCard title={lens.tendenciesByRoundTitle}>
             {draftSeasonsCovered.length > 0 && (
-              <p className="mb-3 text-[11px] text-zinc-500">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>
+              <p className="mb-3 text-[11px] text-ink-secondary">Drafts analyzed: <span className="font-semibold text-zinc-300">{draftSeasonsCovered[0]}{draftSeasonsCovered.length > 1 ? `-${draftSeasonsCovered[draftSeasonsCovered.length - 1]}` : ""}</span> ({draftSeasonsCovered.length} season{draftSeasonsCovered.length === 1 ? "" : "s"})</p>
             )}
             {effectiveByRound.length === 0 ? (
-              <p className="text-sm text-zinc-500">No draft history yet.</p>
+              <p className="text-sm text-ink-secondary">No draft history yet.</p>
             ) : (
               <div className="space-y-2">
                 {effectiveByRound.map((r: any) => {
@@ -1525,14 +1525,14 @@ function ProfilePanel({
                         <div className="min-w-0 flex-1">
                           <div className="text-sm leading-tight">
                             <span className={cn("font-bold", POS_TEXT[pu] ?? "text-zinc-200")}>{pu === "UNK" ? "Mixed" : pu}</span>
-                            <span className="text-zinc-500"> in </span>
+                            <span className="text-ink-secondary"> in </span>
                             <span className="font-semibold text-zinc-100">{r.topCount} of {r.seasons}</span>
-                            <span className="text-zinc-500"> {r.seasons === 1 ? "year" : "years"}</span>
+                            <span className="text-ink-secondary"> {r.seasons === 1 ? "year" : "years"}</span>
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {(r.picks ?? []).map((pk: any, i: number) => (
                               <span key={i} className="inline-flex items-center gap-1 rounded border border-white/[0.07] bg-white/[0.03] px-1.5 py-0.5 text-[10px]">
-                                <span className="tabular-nums text-zinc-500">{pk.season}</span>
+                                <span className="tabular-nums text-ink-secondary">{pk.season}</span>
                                 <span className={cn("font-bold", POS_TEXT[String(pk.position || "UNK").toUpperCase()] ?? "text-zinc-300")}>{String(pk.position || "UNK").toUpperCase()}</span>
                                 <span className="max-w-[130px] truncate text-zinc-400">{pk.playerName}</span>
                                 {pk.isKeeper && <span className="font-bold text-amber-400/90">K</span>}
@@ -1572,7 +1572,7 @@ function ProfilePanel({
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">No position share data.</p>
+                <p className="text-sm text-ink-secondary">No position share data.</p>
               )}
             </ProfileShellCard>
 
@@ -1581,7 +1581,7 @@ function ProfilePanel({
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[240px] text-left text-sm">
                     <thead>
-                      <tr className="border-b border-white/[0.08] text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                      <tr className="border-b border-white/[0.08] text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">
                         <th className="py-2 pr-2">Position</th>
                         <th className="py-2 pr-2">Avg round</th>
                         <th className="py-2 text-right">Share</th>
@@ -1606,7 +1606,7 @@ function ProfilePanel({
                   </table>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">No average-round data.</p>
+                <p className="text-sm text-ink-secondary">No average-round data.</p>
               )}
             </ProfileShellCard>
           </div>
@@ -1644,12 +1644,12 @@ function ProfilePanel({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">No early-round (1–3) pick breakdown.</p>
+                <p className="text-sm text-ink-secondary">No early-round (1–3) pick breakdown.</p>
               )}
             </ProfileShellCard>
 
             <div className="flex flex-col gap-3">
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-zinc-500">{lens.draftInsightsTitle}</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-secondary">{lens.draftInsightsTitle}</h3>
               <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.04] p-3 sm:flex sm:gap-3">
                 <div className="mx-auto mb-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-500/15 sm:mx-0 sm:mb-0">
                   <Crosshair className="h-5 w-5 text-amber-300" aria-hidden />
@@ -1731,12 +1731,12 @@ function ProfilePanel({
               </div>
               {lastYearKeepers.length > 0 ? (
                 <div className="mt-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Most recent keeper / retained</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-secondary">Most recent keeper / retained</p>
                   <div className="flex flex-wrap gap-2">
                     {lastYearKeepers.map((k: any, i: number) => (
                       <span key={i} className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-xs">
                         <span className="font-semibold text-zinc-100">{k.playerName}</span>
-                        <span className="text-zinc-500">{k.position} · Rd {k.round}</span>
+                        <span className="text-ink-secondary">{k.position} · Rd {k.round}</span>
                       </span>
                     ))}
                   </div>
@@ -1755,17 +1755,17 @@ function ProfilePanel({
           {acqFocal ? (
             <div className="mb-4 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Acquisition impact</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Acquisition impact</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-lime-300">{num(acqFocal.acquisitionImpactScore)}</div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Points per start</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Points per start</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">
                   {acqFocal.pointsPerStart != null ? num(acqFocal.pointsPerStart).toFixed(1) : "—"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">Qualified seasons</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">Qualified seasons</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">{num(acqFocal.qualifiedSeasons)}</div>
               </div>
             </div>
@@ -1786,7 +1786,7 @@ function ProfilePanel({
       {!gated ? (
         <IntelPanel id="dossier-matchups" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
           <DossierSectionHeader icon={<Swords className="h-4 w-4" />} title={lens.sectionMatchups} accent="#c4b5fd" />
-            <p className="mb-3 text-[11px] text-zinc-500">
+            <p className="mb-3 text-[11px] text-ink-secondary">
             {lens.matchupIntelCaption}
           </p>
           {intel.length === 0 ? (
@@ -1941,41 +1941,41 @@ function ProfilePanel({
           <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title={lens.sectionRivalries} accent="#f472b6" />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.historicalRivalLabel}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{lens.historicalRivalLabel}</div>
               {historicalRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{historicalRival.opponentOwner}</div>
-                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
                     {historicalIsActive ? lens.historicalActiveCue : lens.historicalRetiredCue}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-ink-secondary">
                     {formatCardRecordLine(historicalStory, historicalRival) ?? "Record loading…"}
                     {historicalRival.tag && !historicalStory?.evidence ? ` · ${matchupTagLabel(String(historicalRival.tag), mode)}` : ""}
                   </div>
                   {formatCardCoverageLabel(historicalStory) ? (
-                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(historicalStory)}</div>
+                    <div className="mt-0.5 text-[10px] text-ink-tertiary">{formatCardCoverageLabel(historicalStory)}</div>
                   ) : null}
                   {historicalStory ? <RivalWhyBlock explanation={historicalStory} /> : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">
+                <p className="mt-2 text-sm text-ink-secondary">
                   {lens.rivalriesEmpty}
                 </p>
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.currentRivalLabel}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{lens.currentRivalLabel}</div>
               {currentRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{currentRival.opponentOwner}</div>
-                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
                     {lens.historicalActiveCue}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-ink-secondary">
                     {formatCardRecordLine(currentRivalStory, currentRival) ?? "Record loading…"}
                   </div>
                   {formatCardCoverageLabel(currentRivalStory) ? (
-                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(currentRivalStory)}</div>
+                    <div className="mt-0.5 text-[10px] text-ink-tertiary">{formatCardCoverageLabel(currentRivalStory)}</div>
                   ) : null}
                   {activeDisplayTag(currentRival) && !currentRivalStory?.evidence ? (
                     <div className="mt-2">
@@ -1985,22 +1985,22 @@ function ProfilePanel({
                   {currentRivalStory ? <RivalWhyBlock explanation={currentRivalStory} /> : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">{lens.currentRivalEmpty}</p>
+                <p className="mt-2 text-sm text-ink-secondary">{lens.currentRivalEmpty}</p>
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3 sm:col-span-2 lg:col-span-1">
-              <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{lens.toughestLabel}</div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{lens.toughestLabel}</div>
               {biggestThreat ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{biggestThreat.opponentOwner}</div>
-                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-600">
+                  <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
                     {lens.historicalActiveCue}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-500">
+                  <div className="mt-1 text-xs text-ink-secondary">
                     {formatCardRecordLine(threatStory, biggestThreat) ?? "Record loading…"}
                   </div>
                   {formatCardCoverageLabel(threatStory) ? (
-                    <div className="mt-0.5 text-[10px] text-zinc-600">{formatCardCoverageLabel(threatStory)}</div>
+                    <div className="mt-0.5 text-[10px] text-ink-tertiary">{formatCardCoverageLabel(threatStory)}</div>
                   ) : null}
                   {activeDisplayTag(biggestThreat) && !threatStory?.evidence ? (
                     <div className="mt-2">
@@ -2010,7 +2010,7 @@ function ProfilePanel({
                   {threatStory ? <RivalWhyBlock explanation={threatStory} /> : null}
                 </>
               ) : (
-                <p className="mt-2 text-sm text-zinc-500">{lens.toughestEmpty}</p>
+                <p className="mt-2 text-sm text-ink-secondary">{lens.toughestEmpty}</p>
               )}
             </div>
           </div>
@@ -2066,15 +2066,15 @@ function ProfilePanel({
       <IntelPanel id="dossier-highlights" variant="warm" className="scroll-mt-24 overflow-hidden p-4 sm:p-5">
         <DossierSectionHeader icon={<History className="h-4 w-4" />} title={lens.sectionHighlights} accent="#f5c65a" />
         {careerTimeline.length === 0 ? (
-          <p className="text-sm text-zinc-500">No career highlights on file yet.</p>
+          <p className="text-sm text-ink-secondary">No career highlights on file yet.</p>
         ) : (
           <div className="relative space-y-0 border-l border-white/[0.08] pl-4">
             {[...careerTimeline].reverse().map((ev, i) => (
               <div key={`${ev.season}-${ev.label}-${i}`} className="relative pb-4 last:pb-0">
                 <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-[#f5c65a]/80 ring-2 ring-[#110c14]" aria-hidden />
-                <div className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">{ev.season}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">{ev.season}</div>
                 <div className="text-sm font-semibold text-zinc-100">{ev.label}</div>
-                <div className="text-xs text-zinc-500">{ev.detail}</div>
+                <div className="text-xs text-ink-secondary">{ev.detail}</div>
               </div>
             ))}
           </div>
@@ -2084,10 +2084,10 @@ function ProfilePanel({
       {/* ── 8. Developer ─────────────────────────────────────────────────────── */}
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <IntelPanel variant="warm" className="overflow-hidden">
-          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-zinc-600 transition-colors hover:bg-white/[0.03]">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-ink-tertiary transition-colors hover:bg-white/[0.03]">
             <span>Developer sections</span>
             <ChevronDown
-              className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", developerOpen && "rotate-180")}
+              className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", developerOpen && "rotate-180")}
               aria-hidden
             />
           </CollapsibleTrigger>
@@ -2098,29 +2098,29 @@ function ProfilePanel({
                   <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-sm font-semibold text-zinc-300 transition-colors hover:bg-white/[0.03]">
                     <span>Data source & diagnostics</span>
                     <ChevronDown
-                      className={cn("h-4 w-4 shrink-0 text-zinc-500 transition-transform", dataSourceOpen && "rotate-180")}
+                      className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", dataSourceOpen && "rotate-180")}
                       aria-hidden
                     />
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="space-y-4 border-t border-white/[0.06] px-4 py-4">
-                      <div className="space-y-1 text-[11px] font-mono text-zinc-500">
+                      <div className="space-y-1 text-[11px] font-mono text-ink-secondary">
                         <div>
-                          <span className="text-zinc-600">selectedOwnerKey:</span>{" "}
+                          <span className="text-ink-tertiary">selectedOwnerKey:</span>{" "}
                           <span className="text-zinc-200">{profileLookupKey}</span>
                         </div>
                         <div>
-                          <span className="text-zinc-600">returned ownerKey:</span>{" "}
+                          <span className="text-ink-tertiary">returned ownerKey:</span>{" "}
                           <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.ownerKey ?? "—")}</span>
                         </div>
                         <div>
-                          <span className="text-zinc-600">serviceVersion:</span>{" "}
+                          <span className="text-ink-tertiary">serviceVersion:</span>{" "}
                           <span className="text-zinc-200">{str((p.dataSourceDiagnostics as any)?.serviceVersion ?? "—")}</span>
                         </div>
                       </div>
 
                       {hasProfileResolutionDiag ? (
-                        <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-xs text-zinc-500">
+                        <div className="space-y-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-3 text-xs text-ink-secondary">
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/90">Profile resolution</p>
                           {unSeas.length > 0 && (
                             <div>
@@ -2166,7 +2166,7 @@ function ProfilePanel({
                           )}
                         </div>
                       ) : (
-                        <p className="text-xs text-zinc-600">No profile resolution diagnostics for this owner.</p>
+                        <p className="text-xs text-ink-tertiary">No profile resolution diagnostics for this owner.</p>
                       )}
                     </div>
                   </CollapsibleContent>
@@ -2569,7 +2569,7 @@ export function OwnerProfiles({
               const remaining = Number((listQ.data as any)?.lockedOwners ?? Math.max(0, totalOwners - rows.length));
               return (
                 <>
-                  <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">You</div>
+                  <div className="px-1 pb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-secondary">You</div>
                   {viewerRow && renderCard(viewerRow, "gated-you")}
                   {rivalRow && (
                     <>
@@ -2596,14 +2596,14 @@ export function OwnerProfiles({
           {graveyard.length > 0 && (
             <div className="mt-4">
               <button type="button" onClick={() => setShowGraveyard(v => !v)}
-                className="flex w-full items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-zinc-500 transition-colors hover:bg-white/[0.04]">
+                className="flex w-full items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-xs text-ink-secondary transition-colors hover:bg-white/[0.04]">
                 <Skull className="h-3.5 w-3.5" />
                 <span className="flex-1 text-left font-semibold">The Graveyard ({graveyard.length})</span>
                 {showGraveyard ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
               {showGraveyard && (
                 <div className="mt-1.5 space-y-1.5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] p-3">
-              <p className="mb-2 text-[10px] italic text-zinc-600">
+              <p className="mb-2 text-[10px] italic text-ink-tertiary">
                 One-season owners. They came, they lost, they left.
               </p>
                   {graveyard.map((o: any, gi: number) => (
@@ -2618,7 +2618,7 @@ export function OwnerProfiles({
                           : "border-white/[0.06] text-zinc-400 hover:bg-white/[0.04]",
                       )}>
                       <span className="font-medium">{o.ownerName}</span>
-                      <span className="ml-2 text-zinc-600">{Array.isArray(o.seasons) ? o.seasons[0] : ""}</span>
+                      <span className="ml-2 text-ink-tertiary">{Array.isArray(o.seasons) ? o.seasons[0] : ""}</span>
                     </button>
                   ))}
                 </div>

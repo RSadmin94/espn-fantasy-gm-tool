@@ -83,7 +83,7 @@ function fmtSavings(s: number | null): string {
   return s > 0 ? `+${s}` : String(s);
 }
 function savingsColor(s: number | null): string {
-  if (s == null) return "text-zinc-600";
+  if (s == null) return "text-ink-tertiary";
   if (s >= 3) return "text-lime-400";
   if (s >= 1) return "text-amber-400";
   if (s === 0) return "text-zinc-400";
@@ -116,7 +116,7 @@ function KeeperDNA({ pool, ownerFilter }: { pool: KeeperPoolRow[]; ownerFilter: 
         </div>
         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">Your Keeper DNA</h3>
       </div>
-      <p className="mb-4 text-[11px] text-zinc-500">Insights from your historical keeper patterns.</p>
+      <p className="mb-4 text-[11px] text-ink-secondary">Insights from your historical keeper patterns.</p>
 
       <div className="space-y-3">
         {[
@@ -319,7 +319,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
     const slotsTxt = typeof slots === "number" && Number.isFinite(slots) ? String(slots) : "0";
     return (
       <div className="mx-auto max-w-lg px-6 py-16 text-center">
-        <Info className="mx-auto mb-4 h-10 w-10 text-zinc-500" />
+        <Info className="mx-auto mb-4 h-10 w-10 text-ink-secondary" />
         <h1 className="text-xl font-bold text-zinc-100">Keeper tools unavailable</h1>
         <p className="mt-3 text-sm leading-relaxed text-zinc-400">
           This league is configured as a redraft league.
@@ -346,7 +346,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
         <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
         <p className="text-lg font-semibold text-zinc-100">No draft data found</p>
         <p className="mt-1 text-sm text-zinc-400">{hintMsg ?? errorMsg}</p>
-        <p className="mt-4 text-xs text-zinc-500">
+        <p className="mt-4 text-xs text-ink-secondary">
           Open the extension popup → Import Historical League Data → <strong>FULL IMPORT</strong>
         </p>
       </div>
@@ -367,11 +367,11 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
             <p className="mt-1 text-sm text-zinc-400">
               Value vs. draft cost — real ADP and market value, joined to each keeper
             </p>
-            <p className="mt-0.5 text-xs text-zinc-600">
+            <p className="mt-0.5 text-xs text-ink-tertiary">
               {valuations.length} eligible players across {owners.length} teams{teamCount > 0 && owners.length < teamCount ? ` · ${teamCount - owners.length} team(s) need roster sync` : ""} · {draftYear - 1} season draft history
             </p>
             {manualLimit != null && (
-              <p className="mt-0.5 text-xs text-zinc-500">
+              <p className="mt-0.5 text-xs text-ink-secondary">
                 Manual keepers: up to <span className="font-semibold text-zinc-300">{manualLimit}</span> per team
                 {ownerFilter !== "all" && (() => {
                   const ok = valuations.find((v) => v.ownerName === ownerFilter)?.ownerKey;
@@ -388,7 +388,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
         {/* ── Filter bar ───────────────────────────────────────────────── */}
         <div className="mb-6 flex flex-wrap items-center gap-4 rounded-xl border border-zinc-800 bg-[#140e17] px-5 py-4">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Owner:</span>
+            <span className="text-xs font-semibold text-ink-secondary uppercase tracking-wide">Owner:</span>
             <Select value={ownerFilter} onValueChange={setOwnerFilter}>
               <SelectTrigger className="h-8 w-44 border-zinc-700 bg-zinc-800 text-xs text-zinc-200">
                 <SelectValue placeholder="All Owners" />
@@ -401,7 +401,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Position:</span>
+            <span className="text-xs font-semibold text-ink-secondary uppercase tracking-wide">Position:</span>
             <Select value={posFilter} onValueChange={setPosFilter}>
               <SelectTrigger className="h-8 w-28 border-zinc-700 bg-zinc-800 text-xs text-zinc-200">
                 <SelectValue placeholder="All Pos" />
@@ -414,7 +414,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">Max Keepers:</span>
+            <span className="text-xs font-semibold text-ink-secondary uppercase tracking-wide">Max Keepers:</span>
             <Select value={maxKeepers} onValueChange={setMaxKeepers}>
               <SelectTrigger className="h-8 w-24 border-zinc-700 bg-zinc-800 text-xs text-zinc-200">
                 <SelectValue placeholder="No limit" />
@@ -426,7 +426,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
             </Select>
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5 text-[10px] text-zinc-600">
+          <div className="ml-auto flex items-center gap-1.5 text-[10px] text-ink-tertiary">
             <Info className="h-3 w-3" />
             Savings = keeper round − ADP round · ranked best value first
           </div>
@@ -445,7 +445,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                     : "No players match the current filters."}
                 </p>
                 {ownerFilter !== "all" && !owners.includes(ownerFilter) && (
-                  <p className="mt-2 text-xs text-zinc-600">
+                  <p className="mt-2 text-xs text-ink-tertiary">
                     This team's current roster hasn't been synced yet. Run a Full Sync from the extension to populate their players.
                   </p>
                 )}
@@ -455,14 +455,14 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800 bg-zinc-900/60">
-                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Keep</th>
-                      <th className="px-4 py-3 text-left  text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Player</th>
-                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Keeper Cost</th>
-                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">ADP</th>
-                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">ADP Rd</th>
-                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Savings</th>
-                      <th className="px-4 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Recommendation</th>
-                      <th className="px-4 py-3 text-left  text-[12px] font-semibold uppercase tracking-wider text-zinc-500">Why</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Keep</th>
+                      <th className="px-4 py-3 text-left  text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Player</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Keeper Cost</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">ADP</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">ADP Rd</th>
+                      <th className="px-3 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Savings</th>
+                      <th className="px-4 py-3 text-center text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Recommendation</th>
+                      <th className="px-4 py-3 text-left  text-[12px] font-semibold uppercase tracking-wider text-ink-secondary">Why</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -507,7 +507,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                                     isSel
                                       ? "border-lime-600 bg-lime-600/20 text-lime-300 hover:bg-lime-600/30"
                                       : disabled
-                                        ? "cursor-not-allowed border-zinc-800 bg-zinc-900/40 text-zinc-600"
+                                        ? "cursor-not-allowed border-zinc-800 bg-zinc-900/40 text-ink-tertiary"
                                         : "border-zinc-700 bg-zinc-800/40 text-zinc-300 hover:bg-zinc-700/50",
                                   )}
                                 >
@@ -542,8 +542,8 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                                 <div className="font-semibold text-zinc-100">{v.playerName}</div>
                                 <div className="flex items-center gap-2 text-[12px]">
                                   <span className={posStyle}>{v.position || "—"}</span>
-                                  <span className="text-zinc-600">{v.nflTeam || ""}</span>
-                                  <span className="text-zinc-500">· {v.ownerName}</span>
+                                  <span className="text-ink-tertiary">{v.nflTeam || ""}</span>
+                                  <span className="text-ink-secondary">· {v.ownerName}</span>
                                 </div>
                               </div>
                             </div>
@@ -590,8 +590,8 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
 
             {/* Table footer */}
             <div className="flex items-center gap-2 border-t border-zinc-800/60 px-4 py-2.5">
-              <Info className="h-3.5 w-3.5 shrink-0 text-zinc-600" />
-              <p className="text-[12px] text-zinc-600">
+              <Info className="h-3.5 w-3.5 shrink-0 text-ink-tertiary" />
+              <p className="text-[12px] text-ink-tertiary">
                 Recommendations come from one server-side valuation: real ESPN ADP vs. keeper round cost, with market value from the shared engine. Players with no ADP (e.g. IDP) show no savings rather than an estimate.
               </p>
             </div>
@@ -602,7 +602,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
             <KeeperDNA pool={pool} ownerFilter={ownerFilter} />
             <AIInsight valuations={valuations} ownerFilter={ownerFilter} />
 
-            <div className="rounded-xl border border-zinc-800 bg-[#140e17] p-4 text-xs text-zinc-500 space-y-1.5">
+            <div className="rounded-xl border border-zinc-800 bg-[#140e17] p-4 text-xs text-ink-secondary space-y-1.5">
               <p className="font-semibold uppercase tracking-wide text-zinc-400">League Rules</p>
               <p>Max keeper duration: <span className="text-zinc-300">2 consecutive years</span></p>
               <p>FA pickup cost: <span className="text-zinc-300">Round 7</span></p>

@@ -68,10 +68,10 @@ function ArticleBody({ body }: { body: string }) {
           return <h3 key={i} className="text-zinc-100 font-black text-base mt-4">{line.slice(2, -2)}</h3>;
         }
         if (line.startsWith("*") && line.endsWith("*") && !line.startsWith("**")) {
-          return <p key={i} className="text-zinc-500 italic text-xs">{line.slice(1, -1)}</p>;
+          return <p key={i} className="text-ink-secondary italic text-xs">{line.slice(1, -1)}</p>;
         }
         if (line.startsWith("**Evidence:")) {
-          return <p key={i} className="text-[10px] text-zinc-600 border-t border-zinc-800 pt-2 mt-3">{line.replace(/\*\*/g,"")}</p>;
+          return <p key={i} className="text-[10px] text-ink-tertiary border-t border-zinc-800 pt-2 mt-3">{line.replace(/\*\*/g,"")}</p>;
         }
         return <p key={i} className="text-sm leading-relaxed">{line}</p>;
       })}
@@ -108,18 +108,18 @@ function ArticleCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
             <span className={cn("text-[9px] font-black uppercase tracking-widest", cfg.color)}>{cfg.label}</span>
-            <span className="text-zinc-700 text-[9px]">· {article.season}</span>
+            <span className="text-ink-tertiary text-[9px]">· {article.season}</span>
             {article.isPredicted && (
               <span className="text-[8px] font-bold uppercase text-amber-500 bg-amber-500/10 border border-amber-500/20 px-1 rounded">PREDICTED</span>
             )}
           </div>
           <h3 className="font-bold text-zinc-100 text-sm leading-snug group-hover:text-white line-clamp-2">{article.headline}</h3>
-          {preview && <p className="text-zinc-500 text-[11px] mt-1.5 leading-relaxed line-clamp-2">{preview}…</p>}
+          {preview && <p className="text-ink-secondary text-[11px] mt-1.5 leading-relaxed line-clamp-2">{preview}…</p>}
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] text-zinc-600">{displayByline(article.byline, brand, staffByline)}</span>
-            <span className="text-zinc-700">·</span>
-            <span className="text-[10px] text-zinc-700">{new Date(article.createdAt).toLocaleDateString()}</span>
-            <ChevronRight className="h-3 w-3 text-zinc-700 ml-auto group-hover:text-zinc-400 transition-colors" />
+            <span className="text-[10px] text-ink-tertiary">{displayByline(article.byline, brand, staffByline)}</span>
+            <span className="text-ink-tertiary">·</span>
+            <span className="text-[10px] text-ink-tertiary">{new Date(article.createdAt).toLocaleDateString()}</span>
+            <ChevronRight className="h-3 w-3 text-ink-tertiary ml-auto group-hover:text-zinc-400 transition-colors" />
           </div>
         </div>
       </div>
@@ -148,7 +148,7 @@ function ArticleReader({
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950/95 backdrop-blur overflow-y-auto">
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <button onClick={onClose} className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-6">
+        <button onClick={onClose} className="flex items-center gap-2 text-xs text-ink-secondary hover:text-zinc-300 transition-colors mb-6">
           {copy.backLabel}
         </button>
 
@@ -158,14 +158,14 @@ function ArticleReader({
               <Icon className={cn("h-3.5 w-3.5", cfg.color)} />
             </div>
             <span className={cn("text-[10px] font-black uppercase tracking-widest", cfg.color)}>{cfg.label}</span>
-            <span className="text-zinc-600 text-[10px]">· {displayLeague} · Season {article.season}</span>
+            <span className="text-ink-tertiary text-[10px]">· {displayLeague} · Season {article.season}</span>
             {article.isPredicted && (
               <span className="text-[9px] font-bold uppercase text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">PREDICTED — NOT OFFICIAL</span>
             )}
           </div>
           <h1 className="text-2xl font-black text-white leading-tight mb-2">{article.headline}</h1>
           {article.subheadline && <p className="text-zinc-400 text-sm italic">{article.subheadline}</p>}
-          <div className="flex items-center gap-3 mt-3 text-[11px] text-zinc-600">
+          <div className="flex items-center gap-3 mt-3 text-[11px] text-ink-tertiary">
             <span>{displayByline(article.byline, brand, copy.staffByline)}</span>
             <span>·</span>
             <span>{new Date(article.createdAt).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</span>
@@ -175,8 +175,8 @@ function ArticleReader({
         <ArticleBody body={article.body} />
 
         <div className="mt-8 p-3 rounded-lg border border-zinc-800/40 bg-zinc-900/20 flex items-start gap-2">
-          <AlertCircle className="h-3.5 w-3.5 text-zinc-600 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-zinc-600 leading-relaxed">
+          <AlertCircle className="h-3.5 w-3.5 text-ink-tertiary shrink-0 mt-0.5" />
+          <p className="text-[10px] text-ink-tertiary leading-relaxed">
             Generated by {copy.aiBrand} AI from verified database records. All scores, records, and standings are sourced directly from the {displayLeague} database. No statistics were fabricated.
             {article.isPredicted && " Keeper predictions are estimated from historical data and are NOT official decisions."}
           </p>
@@ -521,7 +521,7 @@ export function LeagueWireNewsroom({
             <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
               <Radio className="h-3.5 w-3.5 text-[#a3e635] animate-pulse" />
               <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
-              <span className="text-[10px] text-zinc-600">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
+              <span className="text-[10px] text-ink-tertiary">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-px bg-white/[0.06]">
               {(wireReports as any[]).filter(r => r.winner).map((r: any) => (
@@ -529,14 +529,14 @@ export function LeagueWireNewsroom({
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
-                      <div className="text-[10px] text-zinc-600 truncate max-w-[140px]">{r.loser?.name}</div>
+                      <div className="text-[10px] text-ink-tertiary truncate max-w-[140px]">{r.loser?.name}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-black text-lime-400 tabular-nums">{r.winner.score.toFixed(2)}</div>
-                      <div className="text-xs text-zinc-600 tabular-nums">{r.loser?.score.toFixed(2)}</div>
+                      <div className="text-xs text-ink-tertiary tabular-nums">{r.loser?.score.toFixed(2)}</div>
                     </div>
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-1.5 line-clamp-1">{r.shortRecap?.split(".")[0]}.</p>
+                  <p className="text-[10px] text-ink-secondary mt-1.5 line-clamp-1">{r.shortRecap?.split(".")[0]}.</p>
                 </div>
               ))}
             </div>
@@ -544,17 +544,17 @@ export function LeagueWireNewsroom({
         )}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-16 gap-2 text-zinc-500 text-sm">
+          <div className="flex items-center justify-center py-16 gap-2 text-ink-secondary text-sm">
             <Loader2 className="h-4 w-4 animate-spin text-[#a3e635]" />
             Loading articles…
           </div>
         ) : (displayArticles as Article[]).length === 0 ? (
           <div className="text-center py-20 space-y-4">
-            <FileText className="h-8 w-8 text-zinc-700 mx-auto" />
+            <FileText className="h-8 w-8 text-ink-tertiary mx-auto" />
             <p className="text-zinc-400 font-semibold">
               {view === "archive" && selectedSeason ? `No articles for ${selectedSeason} yet` : "No articles yet"}
             </p>
-            <p className="text-zinc-600 text-sm">{copy.emptyHelp}</p>
+            <p className="text-ink-tertiary text-sm">{copy.emptyHelp}</p>
           </div>
         ) : (
           <div>
@@ -563,7 +563,7 @@ export function LeagueWireNewsroom({
                 {view === "archive" && selectedSeason ? `${selectedSeason} Season Archive` : "Latest Stories"}
               </h2>
               <div className="flex-1 h-px bg-zinc-800/60" />
-              <span className="text-[10px] text-zinc-600">{(displayArticles as Article[]).length} articles</span>
+              <span className="text-[10px] text-ink-tertiary">{(displayArticles as Article[]).length} articles</span>
             </div>
 
             {(() => {
@@ -587,11 +587,11 @@ export function LeagueWireNewsroom({
                       <p className="text-zinc-400 text-sm leading-relaxed line-clamp-3">
                         {champArticle.body.replace(/\*\*/g,"").replace(/\*/g,"").split("\n").filter(l => l.trim()).slice(3,5).join(" ").slice(0, 250)}…
                       </p>
-                      <div className="flex items-center gap-2 mt-3 text-[10px] text-zinc-600">
+                      <div className="flex items-center gap-2 mt-3 text-[10px] text-ink-tertiary">
                         <span>{displayByline(champArticle.byline, brand, copy.staffByline)}</span>
                         <span>·</span>
                         <span>{new Date(champArticle.createdAt).toLocaleDateString()}</span>
-                        <ChevronRight className="h-3 w-3 ml-auto text-zinc-700 group-hover:text-amber-400 transition-colors" />
+                        <ChevronRight className="h-3 w-3 ml-auto text-ink-tertiary group-hover:text-amber-400 transition-colors" />
                       </div>
                     </button>
                   )}
@@ -618,13 +618,13 @@ export function LeagueWireNewsroom({
         {view === "feed" && (seasons as number[]).length > 0 && (
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Archive className="h-3.5 w-3.5 text-zinc-500" />
-              <span className="text-xs font-black uppercase tracking-wider text-zinc-500">Historical Archive</span>
+              <Archive className="h-3.5 w-3.5 text-ink-secondary" />
+              <span className="text-xs font-black uppercase tracking-wider text-ink-secondary">Historical Archive</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(seasons as number[]).map(s => (
                 <button key={s} onClick={() => { setView("archive"); setSelectedSeason(s); }}
-                  className="px-2.5 py-1 rounded text-xs font-bold border border-zinc-800 text-zinc-600 hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+                  className="px-2.5 py-1 rounded text-xs font-bold border border-zinc-800 text-ink-tertiary hover:border-amber-500/40 hover:text-amber-400 transition-colors">
                   {s}
                 </button>
               ))}

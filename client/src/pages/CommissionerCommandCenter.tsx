@@ -62,7 +62,7 @@ function heatColor(label: string): string {
   if (label === "Burning" || label === "RISING THREAT") return "text-orange-400";
   if (label === "Heated" || label === "DANGEROUS") return "text-amber-300";
   if (label === "Simmering" || label === "NEUTRAL") return "text-lime-400";
-  return "text-zinc-500";
+  return "text-ink-secondary";
 }
 
 function heatBg(label: string): string {
@@ -550,7 +550,7 @@ export function CommissionerCommandCenter() {
             {dnaQ.isLoading ? <LoadingCard /> : leastActive ? (
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-zinc-500" />
+                  <TrendingDown className="h-4 w-4 text-ink-secondary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Least Active Owner</span>
                 </div>
                 <p className="text-lg font-bold text-white/95">{leastActive.ownerName}</p>
@@ -564,7 +564,7 @@ export function CommissionerCommandCenter() {
             ) : mostActive ? (
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-zinc-500" />
+                  <TrendingDown className="h-4 w-4 text-ink-secondary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Least Active Owner</span>
                 </div>
                 <p className="text-lg font-bold text-white/95">Insufficient Activity Data</p>
@@ -730,7 +730,7 @@ export function CommissionerCommandCenter() {
             ) : (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-zinc-600" />
+                  <Sparkles className="h-4 w-4 text-ink-tertiary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Hottest Storyline</span>
                 </div>
                 <p className="text-sm text-white/30">No storylines generated yet. Refresh to compute.</p>
@@ -741,13 +741,13 @@ export function CommissionerCommandCenter() {
             {standingsQ.isLoading ? <LoadingCard /> : droughtOwner ? (
               <div className={CARD}>
                 <div className="mb-3 flex items-center gap-2">
-                  <Skull className="h-4 w-4 text-zinc-500" />
+                  <Skull className="h-4 w-4 text-ink-secondary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Longest Championship Drought</span>
                 </div>
                 <p className="text-xl font-bold text-white/90">{droughtOwner.displayName}</p>
                 <p className="mt-2 text-[28px] font-black tabular-nums text-zinc-400">
                   {droughtOwner.seasons.length}
-                  <span className="text-[14px] font-normal text-zinc-600 ml-1">seasons</span>
+                  <span className="text-[14px] font-normal text-ink-tertiary ml-1">seasons</span>
                 </p>
                 <p className="mt-1 text-[12px] text-white/30">Without a championship. Still chasing.</p>
               </div>
@@ -837,7 +837,7 @@ export function CommissionerCommandCenter() {
             ) : fearQ.isError || fearEntries.length === 0 ? (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-zinc-600" />
+                  <TrendingUp className="h-4 w-4 text-ink-tertiary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Rising Contender</span>
                 </div>
                 <p className="text-sm text-white/30">Run a Fear Index refresh to populate.</p>
@@ -859,7 +859,7 @@ export function CommissionerCommandCenter() {
             ) : (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4 text-zinc-600" />
+                  <TrendingDown className="h-4 w-4 text-ink-tertiary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Regression</span>
                 </div>
                 <p className="text-sm text-white/30">
@@ -1059,7 +1059,7 @@ export function CommissionerCommandCenter() {
             ) : (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-zinc-600" />
+                  <Flame className="h-4 w-4 text-ink-tertiary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Biggest Threat</span>
                 </div>
                 <p className="text-sm text-white/30">Run Fear Index refresh to populate.</p>
@@ -1113,7 +1113,7 @@ export function CommissionerCommandCenter() {
             ) : (
               <div className={CARD}>
                 <div className="mb-2 flex items-center gap-2">
-                  <Target className="h-4 w-4 text-zinc-600" />
+                  <Target className="h-4 w-4 text-ink-tertiary" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-white/40">Most Exploitable</span>
                 </div>
                 <p className="text-sm text-white/30">Fear Index data needed.</p>

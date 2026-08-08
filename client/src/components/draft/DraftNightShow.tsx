@@ -61,23 +61,23 @@ function AwardBlock({ award }: { award: DraftNightAward }) {
       </h4>
       <dl className="grid gap-1 text-[11px] text-zinc-300">
         <div>
-          <dt className="text-zinc-500 inline">Owner: </dt>
+          <dt className="text-ink-secondary inline">Owner: </dt>
           <dd className="inline font-bold text-zinc-100">{award.ownerName}</dd>
         </div>
         {award.awardType === "winner_of_the_night" && (
           <div>
-            <dt className="text-zinc-500 inline">Grade: </dt>
+            <dt className="text-ink-secondary inline">Grade: </dt>
             <dd className="inline font-bold text-zinc-100">{award.metrics.draftGrade}</dd>
           </div>
         )}
         {award.awardType === "biggest_mistake" && (
           <>
             <div>
-              <dt className="text-zinc-500 inline">Decision: </dt>
+              <dt className="text-ink-secondary inline">Decision: </dt>
               <dd className="inline">{award.decision ?? award.fact}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 inline">Impact: </dt>
+              <dt className="text-ink-secondary inline">Impact: </dt>
               <dd className="inline">{award.impact ?? "—"}</dd>
             </div>
           </>
@@ -85,31 +85,31 @@ function AwardBlock({ award }: { award: DraftNightAward }) {
         {award.awardType === "sleeper_value" && (
           <>
             <div>
-              <dt className="text-zinc-500 inline">Player: </dt>
+              <dt className="text-ink-secondary inline">Player: </dt>
               <dd className="inline font-bold text-zinc-100">{award.playerName ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-zinc-500 inline">Value: </dt>
+              <dt className="text-ink-secondary inline">Value: </dt>
               <dd className="inline">{award.fact}</dd>
             </div>
           </>
         )}
         {award.awardType === "under_intense_pressure" && (
           <div>
-            <dt className="text-zinc-500 inline">Reason: </dt>
+            <dt className="text-ink-secondary inline">Reason: </dt>
             <dd className="inline">{award.fact}</dd>
           </div>
         )}
         {(award.awardType === "winner_of_the_night" ||
           award.awardType === "sleeper_value") && (
           <div>
-            <dt className="text-zinc-500 inline">Why: </dt>
+            <dt className="text-ink-secondary inline">Why: </dt>
             <dd className="inline">{award.fact}</dd>
           </div>
         )}
         {award.evidence.length > 0 && (
           <div>
-            <dt className="text-zinc-500">Evidence:</dt>
+            <dt className="text-ink-secondary">Evidence:</dt>
             <dd className="mt-0.5 space-y-0.5">
               {award.evidence.slice(0, 3).map((e, i) => (
                 <p key={i} className="text-zinc-400">
@@ -119,7 +119,7 @@ function AwardBlock({ award }: { award: DraftNightAward }) {
             </dd>
           </div>
         )}
-        <p className="text-[10px] text-zinc-600 pt-0.5">
+        <p className="text-[10px] text-ink-tertiary pt-0.5">
           Persona lead: {award.persona} · conf {(award.confidence * 100).toFixed(0)}% · heat{" "}
           {Math.round(award.narrativeHeat)}
         </p>
@@ -144,7 +144,7 @@ function SuppressedBlock({
       <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400">
         {meta.emoji} {meta.label}
       </h4>
-      <p className="mt-1 text-[11px] text-zinc-500">{reason}</p>
+      <p className="mt-1 text-[11px] text-ink-secondary">{reason}</p>
     </article>
   );
 }
@@ -172,7 +172,7 @@ export function DraftNightShow({ show, analystRecap, className }: DraftNightShow
         <h3 className="text-sm font-black uppercase tracking-wider text-violet-200">
           Draft Night Show
         </h3>
-        <p className="text-[11px] text-zinc-500">
+        <p className="text-[11px] text-ink-secondary">
           {show.totalPicks} picks · {show.teamCount} teams · evidence-gated awards
         </p>
       </header>
@@ -191,7 +191,7 @@ export function DraftNightShow({ show, analystRecap, className }: DraftNightShow
           Final RFSN Summary
         </h4>
         <p className="text-[11px] text-zinc-300 leading-relaxed">{recap}</p>
-        <p className="text-[10px] text-zinc-600">Top analyst recap — booth audio uses the existing wrap-up pipeline.</p>
+        <p className="text-[10px] text-ink-tertiary">Top analyst recap — booth audio uses the existing wrap-up pipeline.</p>
       </footer>
     </section>
   );

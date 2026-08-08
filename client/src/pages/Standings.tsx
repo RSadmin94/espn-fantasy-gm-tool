@@ -512,7 +512,7 @@ export function Standings({
                       <td
                         className={cn(
                           "px-2 py-2.5 text-right font-mono text-xs font-bold tabular-nums",
-                          diff.zero && "text-zinc-500",
+                          diff.zero && "text-ink-secondary",
                           !diff.zero && diff.positive && "text-lime-400",
                           !diff.zero && !diff.positive && "text-red-400"
                         )}

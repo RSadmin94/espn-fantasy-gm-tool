@@ -152,13 +152,13 @@ export function LeagueSettings() {
       {/* 1b. Scoring Validation Report */}
       {s && (s as any).scoringValidation && (
         <details className="rounded-lg border border-zinc-700/50 bg-zinc-900/30">
-          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-zinc-500 hover:text-zinc-300">
+          <summary className="cursor-pointer px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-secondary hover:text-zinc-300">
             Scoring Validation Report (Cache → Displayed)
           </summary>
           <div className="overflow-x-auto px-4 pb-3">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-zinc-800 text-left text-zinc-600">
+                <tr className="border-b border-zinc-800 text-left text-ink-tertiary">
                   <th className="py-1.5 pr-4">Stat</th>
                   <th className="py-1.5 pr-4">statId</th>
                   <th className="py-1.5 pr-4">Cache Value</th>
@@ -170,7 +170,7 @@ export function LeagueSettings() {
                 {((s as any).scoringValidation as Array<{statId:number;label:string;cached:number|null;displayed:number;status:string}>).map((row) => (
                   <tr key={row.statId} className="border-b border-zinc-800/40">
                     <td className="py-1.5 pr-4 text-zinc-300 font-medium">{row.label}</td>
-                    <td className="py-1.5 pr-4 text-zinc-500 font-mono">{row.statId}</td>
+                    <td className="py-1.5 pr-4 text-ink-secondary font-mono">{row.statId}</td>
                     <td className="py-1.5 pr-4 font-mono text-zinc-300">{row.cached !== null ? row.cached : <span className="text-amber-400">missing</span>}</td>
                     <td className="py-1.5 pr-4 font-mono text-zinc-100 font-bold">{row.displayed}</td>
                     <td className="py-1.5">

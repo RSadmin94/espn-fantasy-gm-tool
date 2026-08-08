@@ -114,7 +114,7 @@ function DynBar({ value, pos }: { value: number; pos: string }) {
       <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
       </div>
-      <span className={cn("text-xs font-bold tabular-nums w-6 text-right", value >= 75 ? "text-lime-400" : value >= 55 ? "text-amber-400" : "text-zinc-500")}>
+      <span className={cn("text-xs font-bold tabular-nums w-6 text-right", value >= 75 ? "text-lime-400" : value >= 55 ? "text-amber-400" : "text-ink-secondary")}>
         {value}
       </span>
     </div>
@@ -140,7 +140,7 @@ function InsightCard({ type, title, body, tag }: { type: InsightType; title: str
           <Icon className="h-3 w-3" />
           {title}
         </div>
-        {tag && <span className="text-[9px] font-bold uppercase text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">{tag}</span>}
+        {tag && <span className="text-[9px] font-bold uppercase text-ink-tertiary bg-zinc-800 px-1.5 py-0.5 rounded">{tag}</span>}
       </div>
       <p className="text-xs text-zinc-400 leading-relaxed">{body}</p>
     </div>
@@ -253,7 +253,7 @@ export function PlayerDatabase() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-xl font-black tracking-tight text-white">Player Database</h1>
-            <p className="text-xs text-zinc-500 mt-0.5">All players tracked across your league history &amp; dynasty rankings</p>
+            <p className="text-xs text-ink-secondary mt-0.5">All players tracked across your league history &amp; dynasty rankings</p>
           </div>
           {/* Summary stat cards */}
           <div className="flex items-center gap-3">
@@ -264,7 +264,7 @@ export function PlayerDatabase() {
             ].map(s => (
               <div key={s.label} className="text-center min-w-[60px] px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
                 <div className="text-lg font-black text-white tabular-nums">{s.value}</div>
-                <div className="text-[9px] font-bold uppercase tracking-widest text-zinc-500 mt-0.5">{s.label}</div>
+                <div className="text-[9px] font-bold uppercase tracking-widest text-ink-secondary mt-0.5">{s.label}</div>
               </div>
             ))}
           </div>
@@ -280,11 +280,11 @@ export function PlayerDatabase() {
                 "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
                 tab === i
                   ? "border-lime-400 text-lime-400"
-                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  : "border-transparent text-ink-secondary hover:text-zinc-300"
               )}
             >
               {t}
-              {i > 0 && <span className="ml-1.5 text-[9px] text-zinc-600 normal-case tracking-normal">Soon</span>}
+              {i > 0 && <span className="ml-1.5 text-[9px] text-ink-tertiary normal-case tracking-normal">Soon</span>}
             </button>
           ))}
           <button
@@ -297,7 +297,7 @@ export function PlayerDatabase() {
             {syncSleeperMut.isPending ? "Syncing Sleeper…" : "Sync Sleeper Headshots"}
           </button>
           {sleeperCoverageQ.data && (
-            <span className="text-[10px] text-zinc-600 tabular-nums" title="withBoth / withEspnId">
+            <span className="text-[10px] text-ink-tertiary tabular-nums" title="withBoth / withEspnId">
               Sleeper {sleeperCoverageQ.data.withBoth}/{sleeperCoverageQ.data.withEspnId}
               {sleeperCoverageQ.data.coveragePercent != null
                 ? ` (${sleeperCoverageQ.data.coveragePercent}%)`
@@ -305,7 +305,7 @@ export function PlayerDatabase() {
             </span>
           )}
           <span
-            className="text-[10px] text-zinc-600 tabular-nums"
+            className="text-[10px] text-ink-tertiary tabular-nums"
             title="Shared compact identity lookup (bundled; not a live Sleeper fetch)"
           >
             Identity v{getPlayerIdentityArtifact().v} · {getPlayerIdentityArtifact().includedPlayerCount} ·{" "}
@@ -319,7 +319,7 @@ export function PlayerDatabase() {
                 : ""}
             </span>
           )}
-          <button onClick={() => refetch()} className="ml-auto text-zinc-600 hover:text-zinc-300 p-1.5 transition-colors">
+          <button onClick={() => refetch()} className="ml-auto text-ink-tertiary hover:text-zinc-300 p-1.5 transition-colors">
             <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin text-lime-400")} />
           </button>
         </div>
@@ -329,7 +329,7 @@ export function PlayerDatabase() {
       <div className="px-6 py-3 flex items-center gap-3 bg-zinc-900/30 border-b border-zinc-800/40 flex-wrap">
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-secondary pointer-events-none" />
           <input
             type="text" value={search} onChange={e => handleSearch(e.target.value)}
             placeholder="Search players, teams, positions…"
@@ -337,7 +337,7 @@ export function PlayerDatabase() {
           />
           {search && (
             <button onClick={() => { setSearch(""); setQ(""); setPage(0); }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-base leading-none">×</button>
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-secondary hover:text-zinc-300 text-base leading-none">×</button>
           )}
         </div>
 
@@ -354,7 +354,7 @@ export function PlayerDatabase() {
                     ? p === "ALL"
                       ? "bg-zinc-100 text-zinc-900 border-zinc-100"
                       : cn(cfg?.pill ?? "bg-zinc-700 text-zinc-200 border-zinc-600")
-                    : "bg-transparent text-zinc-500 border-zinc-700/60 hover:border-zinc-600 hover:text-zinc-300"
+                    : "bg-transparent text-ink-secondary border-zinc-700/60 hover:border-zinc-600 hover:text-zinc-300"
                 )}>
                 {p}
               </button>
@@ -400,7 +400,7 @@ export function PlayerDatabase() {
                   ? "36px 1fr 80px 100px 130px 80px 72px 76px 100px"
                   : "36px 1fr 80px 100px 130px 80px 72px 76px",
               }}>
-              <div className="text-[10px] font-semibold text-zinc-600 uppercase">#</div>
+              <div className="text-[10px] font-semibold text-ink-tertiary uppercase">#</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">NFL Team</div>
@@ -409,15 +409,15 @@ export function PlayerDatabase() {
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
               {showDraftSlotCols && (
-                <div className="text-[10px] font-semibold text-zinc-500 uppercase leading-tight text-right pr-1">
-                  Open / Board<br /><span className="text-zinc-600 font-normal">(active league)</span>
+                <div className="text-[10px] font-semibold text-ink-secondary uppercase leading-tight text-right pr-1">
+                  Open / Board<br /><span className="text-ink-tertiary font-normal">(active league)</span>
                 </div>
               )}
             </div>
           </div>
 
           {isLoading && (
-            <div className="flex items-center justify-center gap-2 py-20 text-zinc-500 text-sm">
+            <div className="flex items-center justify-center gap-2 py-20 text-ink-secondary text-sm">
               <RefreshCw className="h-4 w-4 animate-spin text-lime-400" /> Loading…
             </div>
           )}
@@ -426,7 +426,7 @@ export function PlayerDatabase() {
             <div className="py-24 text-center space-y-3">
               <div className="text-4xl">🏈</div>
               <p className="text-zinc-300 font-semibold">No players found</p>
-              <p className="text-zinc-600 text-xs">
+              <p className="text-ink-tertiary text-xs">
                 {total === 0 ? "Run POPULATE PLAYER REGISTRY in the Chrome extension." : "Try adjusting filters."}
               </p>
             </div>
@@ -451,7 +451,7 @@ export function PlayerDatabase() {
                   }}
                 >
                   {/* # */}
-                  <div className="text-zinc-600 text-xs tabular-nums font-mono">{page * PAGE_SIZE + i + 1}</div>
+                  <div className="text-ink-tertiary text-xs tabular-nums font-mono">{page * PAGE_SIZE + i + 1}</div>
 
                   {/* Player */}
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -481,7 +481,7 @@ export function PlayerDatabase() {
                   </div>
 
                   {/* Team */}
-                  <div className="text-xs text-zinc-400 font-medium">{p.currentNflTeam ?? <span className="text-zinc-600 italic text-[10px]">Free Agent</span>}</div>
+                  <div className="text-xs text-zinc-400 font-medium">{p.currentNflTeam ?? <span className="text-ink-tertiary italic text-[10px]">Free Agent</span>}</div>
 
                   {/* Dynasty value bar */}
                   <div className="pr-2"><DynBar value={p.dynastyValue} pos={p.position} /></div>
@@ -493,29 +493,29 @@ export function PlayerDatabase() {
                         <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shadow shadow-lime-400/60" />Active
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-zinc-600">Inactive</span>
+                      <span className="text-[10px] font-bold text-ink-tertiary">Inactive</span>
                     )}
                   </div>
 
                   {/* First yr */}
-                  <div className="text-xs tabular-nums text-zinc-500 font-medium">{p.firstSeasonSeen ?? "—"}</div>
+                  <div className="text-xs tabular-nums text-ink-secondary font-medium">{p.firstSeasonSeen ?? "—"}</div>
                   {/* AVG Pick */}
-                  <div className="text-xs tabular-nums font-semibold text-zinc-300">{p.avgPick != null ? Number(p.avgPick).toFixed(1) : <span className="text-zinc-600">{"\u2014"}</span>}</div>
+                  <div className="text-xs tabular-nums font-semibold text-zinc-300">{p.avgPick != null ? Number(p.avgPick).toFixed(1) : <span className="text-ink-tertiary">{"\u2014"}</span>}</div>
                   {showDraftSlotCols && (
                     <div className="text-[10px] tabular-nums text-zinc-400 text-right leading-tight pr-1">
                       {p.openDraftSelections != null && p.draftBoardSlots != null ? (
                         <>
                           <span className="text-lime-400/90 font-semibold">{p.openDraftSelections}</span>
-                          <span className="text-zinc-600"> / </span>
+                          <span className="text-ink-tertiary"> / </span>
                           <span>{p.draftBoardSlots}</span>
                           {(p.keeperSlots > 0 || p.retainedSlots > 0) && (
-                            <div className="text-[9px] text-zinc-600 mt-0.5">
+                            <div className="text-[9px] text-ink-tertiary mt-0.5">
                               K{p.keeperSlots ?? 0} · R{p.retainedSlots ?? 0}
                             </div>
                           )}
                         </>
                       ) : (
-                        <span className="text-zinc-600">{"\u2014"}</span>
+                        <span className="text-ink-tertiary">{"\u2014"}</span>
                       )}
                     </div>
                   )}
@@ -528,7 +528,7 @@ export function PlayerDatabase() {
 
           {/* Pagination */}
           {total > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/40 text-xs text-zinc-500 sticky bottom-0 bg-zinc-900/95 backdrop-blur">
+            <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/40 text-xs text-ink-secondary sticky bottom-0 bg-zinc-900/95 backdrop-blur">
               <span>Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of <span className="text-zinc-300 font-semibold">{total.toLocaleString()}</span></span>
               <div className="flex items-center gap-1">
                 <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
@@ -559,7 +559,7 @@ export function PlayerDatabase() {
               <Sparkles className="h-4 w-4 text-lime-400" />
               <span className="text-xs font-black uppercase tracking-widest text-zinc-300">AI Database Insights</span>
             </div>
-            <p className="text-[10px] text-zinc-600 mt-1">Analysis based on your registry data</p>
+            <p className="text-[10px] text-ink-tertiary mt-1">Analysis based on your registry data</p>
           </div>
 
           <div className="p-3 space-y-2.5 flex-1">
@@ -596,20 +596,20 @@ export function PlayerDatabase() {
 
             {/* Position distribution */}
             <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-2.5">Position Distribution</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-ink-secondary mb-2.5">Position Distribution</div>
               <div className="space-y-1.5">
                 {posDistEntries.map(([pos, cnt]) => {
                   const cfg = POS_CFG[pos];
                   return (
                     <div key={pos} className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold w-8 text-right text-zinc-500">{pos === "DEF" ? "D/ST" : pos}</span>
+                      <span className="text-[10px] font-bold w-8 text-right text-ink-secondary">{pos === "DEF" ? "D/ST" : pos}</span>
                       <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={cn("h-full rounded-full", cfg?.bar ?? "bg-zinc-600")}
                           style={{ width: `${(cnt / maxPosCnt) * 100}%` }}
                         />
                       </div>
-                      <span className="text-[10px] tabular-nums text-zinc-600 w-5 text-right">{cnt}</span>
+                      <span className="text-[10px] tabular-nums text-ink-tertiary w-5 text-right">{cnt}</span>
                     </div>
                   );
                 })}
@@ -625,7 +625,7 @@ export function PlayerDatabase() {
               ].map(s => (
                 <div key={s.lbl}>
                   <div className="text-base font-black text-zinc-100 tabular-nums">{s.val}</div>
-                  <div className="text-[9px] text-zinc-600 font-semibold uppercase tracking-wide mt-0.5">{s.lbl}</div>
+                  <div className="text-[9px] text-ink-tertiary font-semibold uppercase tracking-wide mt-0.5">{s.lbl}</div>
                 </div>
               ))}
             </div>

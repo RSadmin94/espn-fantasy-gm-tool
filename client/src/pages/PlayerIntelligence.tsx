@@ -81,7 +81,7 @@ function SearchRow({ r, onSelect }: { r: any; onSelect: () => void }) {
       <PosPill pos={r.position} />
       <div className="flex-1 min-w-0">
         <div className="font-medium text-sm text-zinc-100 truncate">{r.playerName}</div>
-        <div className="text-xs text-zinc-500">
+        <div className="text-xs text-ink-secondary">
           {r.seasons} season{r.seasons !== 1 ? "s" : ""} · {r.keeperCount > 0 ? `Kept ${r.keeperCount}×` : "Never kept"} · Last: {r.lastSeason}
         </div>
       </div>
@@ -97,7 +97,7 @@ function SectionTitle({ icon, children, sub }: { icon: React.ReactNode; children
     <div className="mb-3 flex items-center gap-2">
       <span className="text-zinc-400">{icon}</span>
       <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">{children}</span>
-      {sub && <span className="ml-auto text-[10px] text-zinc-600">{sub}</span>}
+      {sub && <span className="ml-auto text-[10px] text-ink-tertiary">{sub}</span>}
     </div>
   );
 }
@@ -105,7 +105,7 @@ function SectionTitle({ icon, children, sub }: { icon: React.ReactNode; children
 // ── No data placeholder ────────────────────────────────────────────────────────
 
 function Empty({ msg }: { msg: string }) {
-  return <div className="py-4 text-center text-xs text-zinc-600">{msg}</div>;
+  return <div className="py-4 text-center text-xs text-ink-tertiary">{msg}</div>;
 }
 
 // ── Search view ────────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
 
       {/* Search box */}
       <div className="relative mb-2">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-secondary" />
         <input
           type="text"
           value={query}
@@ -145,7 +145,7 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
           autoFocus
         />
         {query && (
-          <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+          <button type="button" onClick={() => setQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-secondary hover:text-zinc-300">
             <X className="h-4 w-4" />
           </button>
         )}
@@ -155,12 +155,12 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
       {qDebounced && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900/80 overflow-hidden">
           {(!leagueKeyReady || searchQ.isLoading) && (
-            <div className="flex items-center gap-2 px-4 py-4 text-sm text-zinc-500">
+            <div className="flex items-center gap-2 px-4 py-4 text-sm text-ink-secondary">
               <Loader2 className="h-4 w-4 animate-spin" /> Searching…
             </div>
           )}
           {leagueKeyReady && !searchQ.isLoading && results.length === 0 && (
-            <div className="px-4 py-4 text-sm text-zinc-500">
+            <div className="px-4 py-4 text-sm text-ink-secondary">
               No players found for "{qDebounced}" in this league's draft history.
             </div>
           )}
@@ -173,10 +173,10 @@ function SearchView({ onSelect }: { onSelect: (name: string) => void }) {
       {/* League icons / quick access */}
       {!qDebounced && (
         <div className="mt-8">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-secondary">
             Start typing to search players in this league's draft history
           </p>
-          <p className="text-xs text-zinc-600">
+          <p className="text-xs text-ink-tertiary">
             Sources: gmDraftPicks · gmSeasonRosters · gmTransactions · leagueMedals
           </p>
         </div>
@@ -220,7 +220,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
       <button type="button" onClick={onBack} className="mb-4 flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-200">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
-      <p className="text-sm text-zinc-500">No data found for "{playerName}".</p>
+      <p className="text-sm text-ink-secondary">No data found for "{playerName}".</p>
     </div>
   );
 
@@ -250,7 +250,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl font-bold text-zinc-50">{playerName}</h2>
               <PosPill pos={d.position} />
-              {d.nflTeam && <span className="text-sm text-zinc-500">{d.nflTeam}</span>}
+              {d.nflTeam && <span className="text-sm text-ink-secondary">{d.nflTeam}</span>}
             </div>
             <div className="mt-1 flex flex-wrap gap-1.5">
               {d.champSeasons?.length > 0 && <Tag color="amber"><Trophy className="h-2.5 w-2.5" /> {d.champSeasons.length} championship{d.champSeasons.length > 1 ? "s" : ""}</Tag>}
@@ -267,7 +267,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
             ].map(s => (
               <div key={s.lbl} className="rounded-lg bg-zinc-800/60 px-3 py-2">
                 <div className="text-lg font-bold text-zinc-100">{s.val}</div>
-                <div className="text-[10px] uppercase tracking-wide text-zinc-500">{s.lbl}</div>
+                <div className="text-[10px] uppercase tracking-wide text-ink-secondary">{s.lbl}</div>
               </div>
             ))}
           </div>
@@ -279,7 +279,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
         <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-900/80 p-5">
           <SectionTitle icon={<BookOpen className="h-4 w-4" />}>League story</SectionTitle>
           <p className="text-sm leading-relaxed text-zinc-300 italic">{d.story}</p>
-          <p className="mt-2 text-[10px] text-zinc-600">Auto-generated from draft, trade, keeper, and medal data · No AI</p>
+          <p className="mt-2 text-[10px] text-ink-tertiary">Auto-generated from draft, trade, keeper, and medal data · No AI</p>
         </div>
       )}
 
@@ -294,7 +294,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
               "flex-shrink-0 px-4 py-2.5 text-xs font-medium transition-colors",
               activeTab === t.id
                 ? "bg-zinc-800 text-zinc-100 rounded-lg"
-                : "text-zinc-500 hover:text-zinc-300"
+                : "text-ink-secondary hover:text-zinc-300"
             )}
           >
             {t.label}
@@ -324,7 +324,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                           <div className="text-sm font-medium text-zinc-100">
                             {row.season} · <span className="text-zinc-300">{row.ownerName}</span>
                           </div>
-                          <div className="text-xs text-zinc-500">
+                          <div className="text-xs text-ink-secondary">
                             {row.teamName && row.teamName !== row.ownerName ? `${row.teamName} · ` : ""}
                             {row.acquisitionType || "Roster"}
                             {row.nflTeam ? ` · ${row.nflTeam}` : ""}
@@ -355,7 +355,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                 <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
                   <colgroup><col style={{width:"60px"}}/><col style={{width:"120px"}}/><col style={{width:"70px"}}/><col style={{width:"60px"}}/><col style={{width:"80px"}}/><col /></colgroup>
                   <thead>
-                    <tr className="border-b border-zinc-700 text-zinc-500">
+                    <tr className="border-b border-zinc-700 text-ink-secondary">
                       <th className="pb-2 text-left">Season</th>
                       <th className="pb-2 text-left">Owner</th>
                       <th className="pb-2 text-center">Round</th>
@@ -370,11 +370,11 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                         <td className="py-2 text-zinc-300 font-medium">{row.season}</td>
                         <td className="py-2 text-zinc-200 truncate">{row.ownerName || "—"}</td>
                         <td className="py-2 text-center text-zinc-300">Rd {row.round}</td>
-                        <td className="py-2 text-center text-zinc-500">{row.pick > 0 ? `${row.round}.${String(row.pick).padStart(2,"0")}` : `#${row.overallPick}`}</td>
+                        <td className="py-2 text-center text-ink-secondary">{row.pick > 0 ? `${row.round}.${String(row.pick).padStart(2,"0")}` : `#${row.overallPick}`}</td>
                         <td className="py-2 text-center">
                           {row.isKeeper ? <Tag color="blue">Keeper</Tag> : <Tag color="zinc">Draft</Tag>}
                         </td>
-                        <td className="py-2 text-zinc-600">
+                        <td className="py-2 text-ink-tertiary">
                           {row.isChampionSeason ? "Championship season" : ""}
                         </td>
                       </tr>
@@ -396,12 +396,12 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
               <div className="space-y-2">
                 {d.tradeHistory.map((row: any, i: number) => (
                   <div key={i} className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-800/30 px-4 py-3 text-sm">
-                    <span className="text-zinc-500 text-xs font-medium w-12 shrink-0">{row.season}</span>
+                    <span className="text-ink-secondary text-xs font-medium w-12 shrink-0">{row.season}</span>
                     <span className="flex-1 text-zinc-200 truncate">{row.fromOwner}</span>
                     <ArrowRightLeft className="h-3.5 w-3.5 shrink-0 text-red-400" />
                     <span className="flex-1 text-zinc-200 truncate">{row.toOwner}</span>
                     {row.processedDate && (
-                      <span className="text-zinc-600 text-[10px] shrink-0">
+                      <span className="text-ink-tertiary text-[10px] shrink-0">
                         {new Date(row.processedDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     )}
@@ -423,7 +423,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                 <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
                   <colgroup><col style={{width:"70px"}}/><col/><col style={{width:"80px"}}/></colgroup>
                   <thead>
-                    <tr className="border-b border-zinc-700 text-zinc-500">
+                    <tr className="border-b border-zinc-700 text-ink-secondary">
                       <th className="pb-2 text-left">Season</th>
                       <th className="pb-2 text-left">Owner</th>
                       <th className="pb-2 text-center">Round kept</th>
@@ -494,7 +494,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                       </div>
                       <div>
                         <div className="text-sm font-medium text-zinc-100">{r.ownerName}</div>
-                        <div className="text-xs text-zinc-500">
+                        <div className="text-xs text-ink-secondary">
                           {r.seasons.join(", ")}
                         </div>
                       </div>

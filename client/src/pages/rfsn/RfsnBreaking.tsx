@@ -71,12 +71,12 @@ export function RfsnBreaking() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-16 text-sm text-zinc-500">
+        <div className="flex items-center gap-2 py-16 text-sm text-ink-secondary">
           <Loader2 className="h-4 w-4 animate-spin text-lime-400" /> Checking the desk…
         </div>
       ) : !hasContent ? (
         <div className="rounded-[15px] border border-white/[0.07] bg-white/[0.02] px-5 py-12 text-center">
-          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-zinc-600" />
+          <AlertCircle className="mx-auto mb-3 h-8 w-8 text-ink-tertiary" />
           <p className="text-sm font-semibold text-zinc-300">Nothing breaking right now</p>
           <p className="mx-auto mt-2 max-w-md text-xs text-[#8b97a8]">
             Live breaking graphics appear during an active RFSN draft broadcast. Featured newsroom

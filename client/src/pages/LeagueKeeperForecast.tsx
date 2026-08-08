@@ -72,7 +72,7 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
             <p className="text-sm text-zinc-400">
               A reasonable estimate of what each owner is likely to keep before real selections exist.
             </p>
-            <p className="mt-0.5 text-xs text-zinc-600">
+            <p className="mt-0.5 text-xs text-ink-tertiary">
               Manual selections and ESPN-confirmed keepers always override the forecast.
             </p>
           </div>
@@ -103,13 +103,13 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
               <span className="rounded px-2 py-1 font-bold uppercase tracking-wider border border-lime-600 bg-lime-600/15 text-lime-300">{counts.MANUAL} Manual</span>
               <span className="rounded px-2 py-1 font-bold uppercase tracking-wider border border-cyan-600 bg-cyan-600/15 text-cyan-300">{counts.CONFIRMED} Confirmed</span>
               <span className="rounded px-2 py-1 font-bold uppercase tracking-wider border border-amber-600 bg-amber-600/15 text-amber-300">{counts.PREDICTED} Predicted</span>
-              <span className="ml-auto text-zinc-600">{rows.length} owners · one forecast each</span>
+              <span className="ml-auto text-ink-tertiary">{rows.length} owners · one forecast each</span>
             </div>
 
             <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/30">
               <table className="w-full text-left text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-800 text-[12px] uppercase tracking-wider text-zinc-500">
+                  <tr className="border-b border-zinc-800 text-[12px] uppercase tracking-wider text-ink-secondary">
                     <th className="px-4 py-3 font-semibold">Owner</th>
                     <th className="px-4 py-3 font-semibold">Keeper</th>
                     <th className="px-3 py-3 font-semibold">Pos</th>
@@ -131,7 +131,7 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
                       <td className="px-3 py-3 text-center text-zinc-300">Rd {r.keeperRound}</td>
                       <td className="px-3 py-3 text-center">
                         {r.roundsSaved == null ? (
-                          <span className="text-zinc-600">—</span>
+                          <span className="text-ink-tertiary">—</span>
                         ) : (
                           <span className={cn("font-bold", r.roundsSaved > 0 ? "text-emerald-400" : r.roundsSaved < 0 ? "text-rose-400" : "text-zinc-400")}>
                             {r.roundsSaved > 0 ? `+${r.roundsSaved}` : r.roundsSaved}
@@ -150,7 +150,7 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
               </table>
             </div>
 
-            <p className="mt-3 flex items-center gap-1.5 text-xs text-zinc-600">
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-tertiary">
               <Info className="h-3.5 w-3.5 shrink-0" />
               Predicted keepers are the highest-value player on each roster (75% display confidence). They feed Draft After Keepers until a real keeper is set.
             </p>

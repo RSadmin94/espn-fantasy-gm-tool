@@ -93,7 +93,7 @@ export function RfsnHome() {
           </div>
           <div className="p-5 md:p-6">
             {loading ? (
-              <div className="flex items-center gap-2 py-10 text-sm text-zinc-500">
+              <div className="flex items-center gap-2 py-10 text-sm text-ink-secondary">
                 <Loader2 className="h-4 w-4 animate-spin text-lime-400" />
                 Loading RFSN coverage…
               </div>
@@ -108,7 +108,7 @@ export function RfsnHome() {
                 )}
                 <p className="text-sm text-zinc-400 leading-relaxed">{articleExcerpt(featured.body)}</p>
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <span className="text-[10px] text-zinc-600">
+                  <span className="text-[10px] text-ink-tertiary">
                     {new Date(featured.createdAt).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
@@ -126,7 +126,7 @@ export function RfsnHome() {
             ) : (
               <div className="py-8 space-y-3 max-w-xl">
                 <div className="flex items-start gap-2 text-zinc-400">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-zinc-600" />
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-ink-tertiary" />
                   <p className="text-sm">
                     No generated stories yet — RFSN News stays useful year-round with weekly wire reports and your league archive.
                   </p>
@@ -150,12 +150,12 @@ export function RfsnHome() {
                 <Newspaper className="h-4 w-4 text-[#a3e635]" />
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#8b97a8]">Latest from RFSN</h3>
               </div>
-              <Link to={RFSN_ROUTES.stories} className="text-[10px] font-bold text-zinc-500 hover:text-zinc-300">
+              <Link to={RFSN_ROUTES.stories} className="text-[10px] font-bold text-ink-secondary hover:text-zinc-300">
                 All stories →
               </Link>
             </div>
             {loading ? (
-              <p className="text-sm text-zinc-500">Loading headlines…</p>
+              <p className="text-sm text-ink-secondary">Loading headlines…</p>
             ) : latestStories.length > 0 ? (
               <ul className="space-y-1">
                 {latestStories.map((story) => (
@@ -165,23 +165,23 @@ export function RfsnHome() {
                       className="group flex items-start justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-white/[0.03] border border-transparent hover:border-white/[0.08]"
                     >
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-500">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">
                           {articleTypeLabel(story.articleType)}
                         </p>
                         <p className="text-sm font-semibold text-zinc-100 group-hover:text-white line-clamp-2 mt-0.5">
                           {story.headline}
                         </p>
-                        <p className="text-[10px] text-zinc-600 mt-1">
+                        <p className="text-[10px] text-ink-tertiary mt-1">
                           {story.season} · {new Date(story.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-zinc-700 group-hover:text-lime-400" />
+                      <ChevronRight className="h-4 w-4 shrink-0 text-ink-tertiary group-hover:text-lime-400" />
                     </Link>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-zinc-500">Headlines appear here as stories are generated.</p>
+              <p className="text-sm text-ink-secondary">Headlines appear here as stories are generated.</p>
             )}
           </section>
 
@@ -211,11 +211,11 @@ export function RfsnHome() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-xs text-zinc-500 mt-2">Weekly reports load after synced matchups.</p>
+                    <p className="text-xs text-ink-secondary mt-2">Weekly reports load after synced matchups.</p>
                   )}
                 </>
               ) : (
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-ink-secondary">
                   Offseason — weekly matchup reports return when the season kicks off.
                 </p>
               )}
@@ -227,7 +227,7 @@ export function RfsnHome() {
               </Link>
               <Link
                 to={RFSN_ROUTES.stories}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-300"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-ink-secondary hover:text-zinc-300"
               >
                 League stories <ArrowRight className="h-3.5 w-3.5" />
               </Link>
@@ -247,7 +247,7 @@ export function RfsnHome() {
                         to={RFSN_ROUTES.newsArticle(story.id)}
                         className="text-sm text-zinc-300 hover:text-white line-clamp-2"
                       >
-                        <span className="text-[10px] text-zinc-600 mr-2">{story.season}</span>
+                        <span className="text-[10px] text-ink-tertiary mr-2">{story.season}</span>
                         {story.headline}
                       </Link>
                     </li>
@@ -259,14 +259,14 @@ export function RfsnHome() {
                     <Link
                       key={s}
                       to={`${RFSN_ROUTES.stories}?view=archive`}
-                      className="px-2 py-1 rounded text-xs font-bold border border-zinc-800 text-zinc-500 hover:border-amber-500/40 hover:text-amber-400"
+                      className="px-2 py-1 rounded text-xs font-bold border border-zinc-800 text-ink-secondary hover:border-amber-500/40 hover:text-amber-400"
                     >
                       {s}
                     </Link>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">Season archives appear as stories are generated.</p>
+                <p className="text-sm text-ink-secondary">Season archives appear as stories are generated.</p>
               )}
             </section>
 
@@ -296,7 +296,7 @@ export function RfsnHome() {
               )}
               <Link
                 to={RFSN_ROUTES.analysts}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-zinc-500 hover:text-zinc-300"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-ink-secondary hover:text-zinc-300"
               >
                 Meet the analysts <ArrowRight className="h-3.5 w-3.5" />
               </Link>
