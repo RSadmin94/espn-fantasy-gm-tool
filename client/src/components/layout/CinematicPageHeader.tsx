@@ -179,7 +179,7 @@ export function CinematicMetaPill({
   return (
     <span
       className={cn(
-        "rounded-full border px-3 py-1 text-[11px] font-semibold",
+        "rounded-full border px-3 py-1 text-label font-semibold",
         toneClasses[tone],
         className,
       )}

@@ -48,7 +48,7 @@ type PastChampion = {
 const PERSONALITY = new Set(["The Trade Shark", "The Chaos Agent", "The Hothead"]);
 
 function YouTag() {
-  return <span className="ml-2 align-middle rounded px-1.5 py-0.5 text-[10px] font-black" style={{ background: LIME, color: "#0b0809" }}>YOU</span>;
+  return <span className="ml-2 align-middle rounded px-1.5 py-0.5 text-label font-black" style={{ background: LIME, color: "#0b0809" }}>YOU</span>;
 }
 function ChooseTeamCTA() {
   return (
@@ -83,7 +83,7 @@ function Headliner({ m }: { m: CastMember }) {
     >
       <Crown className="absolute right-3 top-3 h-7 w-7 opacity-30" style={{ color: GOLD }} />
       {display.eyebrowText && (
-        <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{display.eyebrowText}</div>
+        <div className="text-label font-black uppercase tracking-[0.2em]" style={{ color: GOLD }}>{display.eyebrowText}</div>
       )}
       <div className="mt-1 text-2xl font-black leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
       {display.championLabel && (
@@ -106,7 +106,7 @@ function PersonaCard({ m }: { m: CastMember }) {
       className="block rounded-xl p-4 transition-opacity hover:opacity-95"
       style={{ background: "rgba(163,230,53,.05)", border: `1px solid ${LIME}33` }}
     >
-      <div className="text-[11px] font-black uppercase tracking-[0.2em]" style={{ color: LIME }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
+      <div className="text-label font-black uppercase tracking-[0.2em]" style={{ color: LIME }}>{m.archetype}{m.identityRank ? ` · #${m.identityRank.rank}/${m.identityRank.of}` : ""}</div>
       <div className="mt-1 text-lg font-black leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
       <div className="mt-1 text-xs leading-snug" style={{ color: MUTED }}>{m.archetypeReceipt}</div>
     </Link>
@@ -120,9 +120,9 @@ function WildCard({ m }: { m: CastMember }) {
       className="block rounded-lg p-3 transition-opacity hover:opacity-95"
       style={{ background: "rgba(196,181,253,.05)", border: `1px solid ${VIOLET}33` }}
     >
-      <div className="text-[10px] font-black uppercase tracking-[0.18em]" style={{ color: VIOLET }}>{m.archetype}</div>
+      <div className="text-2xs font-semibold uppercase tracking-[0.18em]" style={{ color: VIOLET }}>{m.archetype}</div>
       <div className="mt-0.5 text-base font-bold leading-tight">{m.ownerName}{m.isYou && <YouTag />}</div>
-      <div className="mt-1 text-[11px] leading-snug" style={{ color: MUTED }}>{m.archetypeReceipt}</div>
+      <div className="mt-1 text-label leading-snug" style={{ color: MUTED }}>{m.archetypeReceipt}</div>
     </Link>
   );
 }
@@ -136,7 +136,14 @@ export function TheCast() {
   const needsOwnerSelection = ready && !!profileQ.data && profileQ.data.isSetupComplete === false;
   const utils = (trpc as any).useUtils();
   const myLeaguesQ = (trpc as any).league.getMyLeagues.useQuery(undefined, { enabled: ready && needsOwnerSelection, staleTime: 30_000 });
-  const switchLeague = (trpc as any).league.setActive.useMutation({ onSuccess: async () => { await utils.invalidate(); } });
+  // Salted queries re-key themselves off `getActive`, so only that refetch blocks the switch;
+  // the blanket invalidation runs behind it for whatever cannot re-key.
+  const switchLeague = (trpc as any).league.setActive.useMutation({
+    onSuccess: async () => {
+      await utils.league.getActive.refetch();
+      void utils.invalidate();
+    },
+  });
   const createReceipt = (trpc as any).dna.createReceipt.useMutation();
   const [copied, setCopied] = useState(false);
   const shareMyReceipt = async () => {
@@ -165,7 +172,7 @@ export function TheCast() {
       <div style={PAGEBG} className="min-h-screen">
         <div className="mx-auto max-w-xl px-5 py-12">
           <div className="text-center">
-            <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
+            <div className="text-label font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
             <h2 className="mt-3 text-lg font-bold tracking-wide" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{activeName}</h2>
             <h1 className="mt-1 text-5xl font-black tracking-tight md:text-7xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
             <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>Active league</div>
@@ -219,14 +226,14 @@ export function TheCast() {
     <div style={PAGEBG} className="min-h-screen">
       <div className="mx-auto max-w-4xl px-5 py-10">
         <div className="text-center">
-          <div className="text-[11px] font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
+          <div className="text-label font-bold uppercase tracking-[0.4em]" style={{ color: GOLD }}>Fantasy Football Rivals</div>
           <h2 className="mt-3 text-xl font-bold tracking-wide" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>{data.leagueName}</h2>
           <h1 className="mt-1 text-6xl font-black tracking-tight md:text-8xl" style={{ textShadow: "0 2px 30px rgba(245,197,24,.25)" }}>THE CAST</h1>
           <div className="mt-3 text-xs uppercase tracking-[0.3em]" style={{ color: MUTED }}>{data.season} Season &middot; {data.cast.length} Managers</div>
           <button onClick={shareMyReceipt} disabled={createReceipt.isPending} className="mt-5 inline-flex items-center gap-2 rounded-[10px] px-5 py-2.5 text-sm font-extrabold transition hover:brightness-110 disabled:opacity-60" style={{ background: GOLD, color: "#0b0809" }}>
             <Share2 className="h-4 w-4" /> {createReceipt.isPending ? "Creating..." : copied ? "Link copied!" : "Share my Receipt"}
           </button>
-          {createReceipt.isError && <div className="mt-2 text-[11px]" style={{ color: "#f87171" }}>{String(createReceipt.error?.message ?? "Couldn't create link")}</div>}
+          {createReceipt.isError && <div className="mt-2 text-label" style={{ color: "#f87171" }}>{String(createReceipt.error?.message ?? "Couldn't create link")}</div>}
         </div>
 
 
@@ -264,16 +271,16 @@ export function TheCast() {
                     <Crown className="h-3.5 w-3.5 shrink-0" style={{ color: GOLD }} />
                     <span className="text-sm font-black leading-tight">{m.ownerName}</span>
                   </div>
-                  <div className="mt-0.5 text-[11px] font-black uppercase tracking-[0.18em]" style={{ color: GOLD }}>{m.championships > 1 ? `${m.championships}x Champion` : "Champion"}</div>
-                  <div className="text-[11px]" style={{ color: MUTED }}>{m.championshipYears.join(", ")}</div>
+                  <div className="mt-0.5 text-label font-black uppercase tracking-[0.18em]" style={{ color: GOLD }}>{m.championships > 1 ? `${m.championships}x Champion` : "Champion"}</div>
+                  <div className="text-label" style={{ color: MUTED }}>{m.championshipYears.join(", ")}</div>
                 </Link>
               ))}
             </div>
-            <p className="mt-2 text-[11px]" style={{ color: MUTED }}>No longer in the league - their banners stay up.</p>
+            <p className="mt-2 text-label" style={{ color: MUTED }}>No longer in the league - their banners stay up.</p>
           </div>
         )}
 
-        <div className="mt-12 text-center text-[11px]" style={{ color: MUTED }}>Generated {now} &middot; gmwarroom.online</div>
+        <div className="mt-12 text-center text-label" style={{ color: MUTED }}>Generated {now} &middot; gmwarroom.online</div>
       </div>
     </div>
   );

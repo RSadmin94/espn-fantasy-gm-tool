@@ -126,7 +126,7 @@ const POS_CFG: Record<string, { pill: string }> = {
 
 function PosPill({ pos }: { pos: string }) {
   const c = POS_CFG[pos] ?? POS_CFG["?"];
-  return <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border uppercase", c.pill)}>{pos}</span>;
+  return <span className={cn("inline-flex items-center px-1.5 py-1 rounded text-2xs font-semibold border uppercase tracking-wide", c.pill)}>{pos}</span>;
 }
 
 function ConfBar({ value, small }: { value: number; small?: boolean }) {
@@ -137,7 +137,7 @@ function ConfBar({ value, small }: { value: number; small?: boolean }) {
       <div className={cn("flex-1 bg-zinc-800 rounded-full overflow-hidden", small ? "h-1" : "h-1.5")}>
         <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
       </div>
-      <span className={cn("font-bold tabular-nums w-7 text-right", small ? "text-[10px]" : "text-[11px]", text)}>{value}%</span>
+      <span className={cn("font-semibold tabular-nums w-8 text-right text-label", text)}>{value}%</span>
     </div>
   );
 }
@@ -146,7 +146,7 @@ function EvidenceList({ items }: { items: string[] }) {
   return (
     <ul className="space-y-0.5 mt-1.5">
       {items.map((e, i) => (
-        <li key={i} className="flex items-start gap-1.5 text-[11px] text-ink-secondary">
+        <li key={i} className="flex items-start gap-1.5 text-label text-ink-secondary leading-snug">
           <span className="text-violet-600 shrink-0 mt-0.5">→</span>{e}
         </li>
       ))}
@@ -173,7 +173,7 @@ function Section({ id, title, icon, badge, children, defaultOpen = true, accent 
           <Icon className="h-5 w-5 text-lime-400" />
           <span className="font-extrabold tracking-tight text-zinc-50 text-[20px]">{title}</span>
           {badge !== undefined && (
-            <span className="px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 text-[11px] font-bold">{badge}</span>
+            <span className="px-2 py-1 rounded-full bg-white/[0.06] text-zinc-300 text-label font-semibold">{badge}</span>
           )}
         </div>
         {open ? <ChevronUp className="h-4 w-4 text-ink-tertiary" /> : <ChevronDown className="h-4 w-4 text-ink-tertiary" />}
@@ -194,9 +194,9 @@ function KeeperTierBadge({ recommendation, valueTier, roundSavings }: { recommen
               : "text-amber-300 bg-amber-500/15 border-amber-500/40"; // borderline / unrated
   return (
     <div className={cn("flex flex-col items-center px-2.5 py-1 rounded-lg border shrink-0", color)}>
-      <span className="text-[11px] font-black uppercase tracking-wide leading-none text-center">{recommendation || "Unrated"}</span>
+      <span className="text-2xs font-semibold uppercase tracking-wide leading-none text-center">{recommendation || "Unrated"}</span>
       {roundSavings != null && (
-        <span className="text-[10px] font-bold tabular-nums opacity-80 mt-0.5">{roundSavings > 0 ? `+${roundSavings}` : roundSavings} rd</span>
+        <span className="text-label font-semibold tabular-nums opacity-80 mt-0.5">{roundSavings > 0 ? `+${roundSavings}` : roundSavings} rd</span>
       )}
     </div>
   );
@@ -329,7 +329,7 @@ function ConfidenceDashboard({
 
   return (
     <div className="p-4 space-y-3">
-      <p className="text-[11px] text-ink-secondary px-0.5">
+      <p className="text-label text-ink-secondary px-0.5">
         Analyst briefing — tap a card for the full intelligence read below.
       </p>
       {decisionLines.length > 0 && (
@@ -337,7 +337,7 @@ function ConfidenceDashboard({
           className="rounded-xl border border-lime-500/20 bg-lime-500/5 px-3.5 py-3 space-y-2"
           data-briefing-decision-memo
         >
-          <div className="text-[10px] font-black uppercase tracking-wider text-lime-400">
+          <div className="text-2xs font-semibold uppercase tracking-wider text-lime-400">
             Tonight&apos;s read
           </div>
           {decisionLines.slice(0, 3).map((line) => (
@@ -368,12 +368,12 @@ function ConfidenceDashboard({
             >
               <div className="flex items-center gap-1.5">
                 <Icon className={cn("h-3 w-3 shrink-0", c.iconColor)} />
-                <span className={cn("text-[10px] font-black uppercase tracking-wider", c.iconColor)}>{c.label}</span>
+                <span className={cn("text-2xs font-semibold uppercase tracking-wider", c.iconColor)}>{c.label}</span>
               </div>
               <div className="font-black text-zinc-100 text-xs leading-snug line-clamp-3">{c.headline}</div>
-              <div className={cn("text-[11px] font-bold tabular-nums", c.iconColor)}>{c.signal}</div>
-              {c.hint ? <div className="text-[10px] text-ink-secondary line-clamp-2">{c.hint}</div> : null}
-              <div className={cn("text-[10px] font-bold pt-0.5", c.iconColor)}>{c.cta} →</div>
+              <div className={cn("text-label font-bold tabular-nums", c.iconColor)}>{c.signal}</div>
+              {c.hint ? <div className="text-label text-ink-secondary line-clamp-2">{c.hint}</div> : null}
+              <div className={cn("text-label font-bold pt-0.5", c.iconColor)}>{c.cta} →</div>
             </button>
           );
         })}
@@ -398,14 +398,14 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <span className="text-xs font-bold text-zinc-100">{k.teamName}</span>
-                <span className="text-[11px] text-ink-tertiary">· {k.ownerName}</span>
+                <span className="text-label text-ink-tertiary">· {k.ownerName}</span>
                 {k.status === "CONFIRMED"
-                  ? <span className="flex items-center gap-1 text-[11px] font-bold text-lime-400 bg-lime-500/10 border border-lime-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
+                  ? <span className="flex items-center gap-1 text-label font-bold text-lime-400 bg-lime-500/10 border border-lime-500/20 px-1.5 rounded"><CheckCircle className="h-2.5 w-2.5" />CONFIRMED</span>
                   : k.status === "HYPOTHETICAL"
-                    ? <span className="text-[11px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 rounded">HYPOTHETICAL</span>
-                    : <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
+                    ? <span className="text-label font-bold text-violet-400 bg-violet-500/10 border border-violet-500/20 px-1.5 rounded">HYPOTHETICAL</span>
+                    : <span className="text-label font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">PREDICTED</span>
                 }
-                <span className="text-[11px] text-ink-tertiary ml-auto tabular-nums">
+                <span className="text-label text-ink-tertiary ml-auto tabular-nums">
                   {k.keeperSlotRound != null ? <>Slot Rd {k.keeperSlotRound} · </> : null}
                   Cost Rd {k.keeperRound}
                 </span>
@@ -413,7 +413,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
               <div className="flex items-center gap-2">
                 <span className="font-black text-zinc-100 text-base">{k.predictedPlayer}</span>
                 <PosPill pos={k.position} />
-                {k.projectedPoints > 0 && <span className="text-[11px] text-ink-secondary">{k.projectedPoints.toFixed(0)} pts proj</span>}
+                {k.projectedPoints > 0 && <span className="text-label text-ink-secondary">{k.projectedPoints.toFixed(0)} pts proj</span>}
               </div>
             </div>
             {/* Keeper tier + Confidence */}
@@ -422,7 +422,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
                 <KeeperTierBadge recommendation={k.recommendation} valueTier={k.valueTier} roundSavings={k.roundSavings} />
               )}
               <div className="w-24">
-                <div className="text-[10px] text-ink-tertiary uppercase tracking-wider mb-1">Confidence</div>
+                <div className="text-label text-ink-tertiary uppercase tracking-wider mb-1">Confidence</div>
                 <ConfBar value={k.confidence} small />
               </div>
             </div>
@@ -430,7 +430,7 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
 
           {/* Keeper value breakdown (keeperValuationService) */}
           {k.roundSavings != null && (
-            <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-[11px]">
+            <div className="flex items-center gap-4 px-3 py-2 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-label">
               <div><span className="text-ink-tertiary">Keeper cost:</span> <span className="text-zinc-200 font-bold">Rd {k.keeperRound}</span></div>
               {k.adpRound != null && <div><span className="text-ink-tertiary">ADP value:</span> <span className="text-zinc-200 font-bold">Rd {k.adpRound}{k.adp != null ? ` (ADP ${k.adp})` : ""}</span></div>}
               <div><span className="text-ink-tertiary">Rounds saved:</span> <span className={cn("font-bold", k.roundSavings > 0 ? "text-lime-400" : k.roundSavings < 0 ? "text-amber-400" : "text-zinc-300")}>{k.roundSavings > 0 ? "+" : ""}{k.roundSavings}</span></div>
@@ -442,10 +442,10 @@ function KeeperSection({ predictions }: { predictions: any[] }) {
 
           {k.alternatives?.length > 0 && (
             <div>
-              <p className="text-[10px] text-ink-tertiary uppercase tracking-wider mb-1.5">Alternatives considered (by keeper value)</p>
+              <p className="text-label text-ink-tertiary uppercase tracking-wider mb-1.5">Alternatives considered (by keeper value)</p>
               <div className="flex flex-wrap gap-1.5">
                 {k.alternatives.map((a: any, j: number) => (
-                  <span key={j} className="flex items-center gap-1 text-[11px] text-ink-secondary bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded">
+                  <span key={j} className="flex items-center gap-1 text-label text-ink-secondary bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded">
                     {a.player} <PosPill pos={a.position} />
                     {a.roundSavings != null && <span className="text-ink-tertiary">{a.recommendation ?? ""}{` (${a.roundSavings > 0 ? "+" : ""}${a.roundSavings} rd)`}</span>}
                   </span>
@@ -478,8 +478,8 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
             className={cn("rounded-lg border p-2.5 text-left transition-all hover:scale-105",
               sel === n.teamId ? "border-violet-500/40 bg-violet-500/8 shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-700")}>
             <div className={cn("text-xl font-black tabular-nums", sel === n.teamId ? "text-violet-400" : "text-zinc-200")}>#{n.overallRank}</div>
-            <div className="text-[11px] font-bold text-zinc-300 leading-tight mt-0.5 truncate">{n.teamName}</div>
-            <div className="text-[10px] text-ink-tertiary mt-0.5">{n.projectedTotal?.toLocaleString()} pts</div>
+            <div className="text-label font-bold text-zinc-300 leading-tight mt-0.5 truncate">{n.teamName}</div>
+            <div className="text-label text-ink-tertiary mt-0.5">{n.projectedTotal?.toLocaleString()} pts</div>
             <div className="flex flex-wrap gap-0.5 mt-1.5">{n.draftPriority?.slice(0,3).map((p: string) => <PosPill key={p} pos={p} />)}</div>
           </button>
         ))}
@@ -491,7 +491,7 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
           <div className="border-t border-white/[0.06] p-5 grid sm:grid-cols-2 gap-4">
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] text-ink-secondary uppercase tracking-wider font-bold">Roster Needs</p>
+                <p className="text-label text-ink-secondary uppercase tracking-wider font-bold">Roster Needs</p>
                 <div className="flex gap-1">{t.draftPriority?.map((p: string) => <PosPill key={p} pos={p} />)}</div>
               </div>
               <div className="space-y-2">
@@ -501,27 +501,27 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
                     <div key={i} className={cn("rounded-lg border p-2.5", u.cls)}>
                       <div className="flex items-center gap-2">
                         <span>{u.icon}</span><span className="text-xs font-bold">{n.position}</span>
-                        <span className="text-[11px] ml-auto">{n.urgency}</span>
+                        <span className="text-label ml-auto">{n.urgency}</span>
                       </div>
-                      <p className="text-[11px] mt-1 opacity-80">Have {n.have}, need {n.need}. Best: {n.topPlayer}</p>
+                      <p className="text-label mt-1 opacity-80">Have {n.have}, need {n.need}. Best: {n.topPlayer}</p>
                       <EvidenceList items={n.evidence} />
                     </div>
                   );
                 })}
-                {!t.needs?.length && <p className="text-[11px] text-ink-tertiary">No critical needs identified.</p>}
+                {!t.needs?.length && <p className="text-label text-ink-tertiary">No critical needs identified.</p>}
               </div>
             </div>
             <div>
-              <p className="text-[11px] text-ink-secondary uppercase tracking-wider font-bold mb-2">Strengths</p>
+              <p className="text-label text-ink-secondary uppercase tracking-wider font-bold mb-2">Strengths</p>
               <div className="space-y-1.5">
                 {t.strengths?.map((s: any, i: number) => (
                   <div key={i} className="flex items-center gap-2 text-xs bg-zinc-900/60 rounded-lg border border-white/[0.06] px-3 py-2">
                     <PosPill pos={s.position} />
                     <span className="text-zinc-300 font-semibold">{s.count}× {s.position}</span>
-                    <span className="text-ink-secondary text-[11px] truncate ml-auto">{s.topPlayer}</span>
+                    <span className="text-ink-secondary text-label truncate ml-auto">{s.topPlayer}</span>
                   </div>
                 ))}
-                {!t.strengths?.length && <p className="text-[11px] text-ink-tertiary">No notable surplus positions.</p>}
+                {!t.strengths?.length && <p className="text-label text-ink-tertiary">No notable surplus positions.</p>}
               </div>
             </div>
           </div>
@@ -576,7 +576,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
       {topThreat && (
         <div className="px-4 pt-4 space-y-3" data-dna-threat-lead>
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
-            <div className="text-[10px] font-black uppercase tracking-wider text-amber-300/90 mb-2">
+            <div className="text-2xs font-semibold uppercase tracking-wider text-amber-300/90 mb-2">
               Historical Read
             </div>
             <p className="text-[15px] leading-snug text-zinc-100">
@@ -598,7 +598,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
           </div>
 
           <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-ink-secondary mb-2">
+            <div className="text-2xs font-semibold uppercase tracking-wider text-ink-secondary mb-2">
               Rival Threat Window
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -626,7 +626,7 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
                       <div className={cn("text-[20px] font-black leading-none", hot ? "text-violet-300" : "text-zinc-200")}>
                         {Math.round(Number(t.surpriseProbability || 0))}%
                       </div>
-                      <div className="text-[9px] uppercase tracking-wider text-ink-tertiary mt-1">surprise</div>
+                      <div className="text-2xs uppercase tracking-wider text-ink-tertiary mt-1">surprise</div>
                     </div>
                   </button>
                 );
@@ -646,14 +646,14 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
               className={cn("rounded-lg border p-3 text-left transition-all hover:scale-105 space-y-1.5",
                 sel === m.teamId ? "border-violet-500/40 bg-white/[0.04] shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-700")}>
               <div className="text-[12px] font-bold text-zinc-100 truncate">{m.ownerName?.split(" ")[0] ?? m.ownerName}</div>
-              <div className="text-[10px] text-ink-tertiary truncate">{m.teamName}</div>
-              <span className={cn("inline-block text-[10px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border", arc.cls)}>{arc.label}</span>
-              <div className="text-[11px] text-zinc-400">Draft behavior: {behavior}</div>
-              <div className="text-[11px] font-bold text-zinc-300 tabular-nums">
+              <div className="text-label text-ink-tertiary truncate">{m.teamName}</div>
+              <span className={cn("inline-block text-2xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border", arc.cls)}>{arc.label}</span>
+              <div className="text-label text-zinc-400">Draft behavior: {behavior}</div>
+              <div className="text-label font-bold text-zinc-300 tabular-nums">
                 {m.predictabilityScore}% predictability
               </div>
               <div className="flex items-center justify-between pt-0.5">
-                <span className="text-[10px] text-ink-tertiary">Likely</span>
+                <span className="text-label text-ink-tertiary">Likely</span>
                 <PosPill pos={m.mostLikelyPosition} />
               </div>
             </button>
@@ -670,43 +670,43 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
               <div>
                 <h3 className="font-bold text-zinc-100">{m.teamName}</h3>
                 <p className="text-xs text-ink-secondary">{m.ownerName}</p>
-                <p className="text-[11px] text-zinc-400 mt-1">
+                <p className="text-label text-zinc-400 mt-1">
                   {ownerArchetype(m).label} · Draft behavior: {draftBehaviorLabel(m)}
                 </p>
               </div>
               <div className="flex items-center gap-3">
                 <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className="text-lg font-black text-white">{m.predictabilityScore}%</div>
-                  <div className="text-[10px] text-ink-tertiary uppercase">Predictable</div>
+                  <div className="text-label text-ink-tertiary uppercase">Predictable</div>
                 </div>
                 <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className={cn("text-lg font-black", m.surpriseProbability >= 50 ? "text-violet-400" : "text-zinc-300")}>{m.surpriseProbability}%</div>
-                  <div className="text-[10px] text-ink-tertiary uppercase">Surprise</div>
+                  <div className="text-label text-ink-tertiary uppercase">Surprise</div>
                 </div>
                 <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <PosPill pos={m.mostLikelyPosition} />
-                  <div className="text-[10px] text-ink-tertiary uppercase mt-1">Likely Pick</div>
+                  <div className="text-label text-ink-tertiary uppercase mt-1">Likely Pick</div>
                 </div>
                 <div className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                   <div className={cn("text-sm font-black uppercase", CAPITAL_CFG[m.draftCapital as keyof typeof CAPITAL_CFG] ?? "text-zinc-400")}>
                     {m.draftCapital?.replace("_", " ")}
                   </div>
-                  <div className="text-[10px] text-ink-tertiary uppercase">Capital</div>
+                  <div className="text-label text-ink-tertiary uppercase">Capital</div>
                 </div>
               </div>
             </div>
 
             {/* Signals */}
             <div>
-              <p className="text-[11px] text-ink-secondary uppercase tracking-wider font-bold mb-2">Prediction Signals</p>
+              <p className="text-label text-ink-secondary uppercase tracking-wider font-bold mb-2">Prediction Signals</p>
               <div className="grid grid-cols-2 gap-2">
                 {m.signals?.map((s: any, i: number) => (
                   <div key={i} className={cn("rounded-lg border px-3 py-2 flex items-center justify-between gap-2", SIGNAL_CFG[s.impact as keyof typeof SIGNAL_CFG])}>
                     <div>
-                      <div className="text-[11px] font-bold">{s.label}</div>
-                      <div className="text-[10px] opacity-70">{s.value}</div>
+                      <div className="text-label font-bold">{s.label}</div>
+                      <div className="text-label opacity-70">{s.value}</div>
                     </div>
-                    <span className="text-[10px] font-black uppercase opacity-60 shrink-0">{s.impact}</span>
+                    <span className="text-2xs font-semibold uppercase opacity-60 shrink-0">{s.impact}</span>
                   </div>
                 ))}
               </div>
@@ -732,7 +732,7 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
     <div className="p-4 space-y-4">
       {acquired.length > 0 && (
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-violet-400 mb-2 flex items-center gap-1.5">
+          <p className="text-label font-black uppercase tracking-wider text-violet-400 mb-2 flex items-center gap-1.5">
             <ArrowUpRight className="h-3 w-3" /> Acquired Picks ({acquired.length})
           </p>
           <div className="space-y-1.5">
@@ -740,8 +740,8 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
               <div key={i} className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2">
                 <span className="text-xs font-bold text-violet-300">Rd {t.round}</span>
                 <span className="text-xs text-zinc-200">{t.teamName}</span>
-                <span className="text-[11px] text-ink-secondary">· {t.ownerName}</span>
-                <span className="text-[11px] text-violet-500 ml-auto">Pick #{t.pickNumber}</span>
+                <span className="text-label text-ink-secondary">· {t.ownerName}</span>
+                <span className="text-label text-violet-500 ml-auto">Pick #{t.pickNumber}</span>
               </div>
             ))}
           </div>
@@ -749,7 +749,7 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
       )}
       {tradedAway.length > 0 && (
         <div>
-          <p className="text-[11px] font-black uppercase tracking-wider text-violet-400 mb-2 flex items-center gap-1.5">
+          <p className="text-label font-black uppercase tracking-wider text-violet-400 mb-2 flex items-center gap-1.5">
             <ArrowDownRight className="h-3 w-3" /> Traded Away ({tradedAway.length})
           </p>
           <div className="space-y-1.5">
@@ -757,8 +757,8 @@ function TradedPicksBadge({ tradedPicks }: { tradedPicks: any[] }) {
               <div key={i} className="flex items-center gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 px-3 py-2">
                 <span className="text-xs font-bold text-violet-300">Rd {t.round}</span>
                 <span className="text-xs text-zinc-200">{t.teamName}</span>
-                <span className="text-[11px] text-ink-secondary">· {t.ownerName}</span>
-                <span className="text-[11px] text-violet-500 ml-auto">Missing pick</span>
+                <span className="text-label text-ink-secondary">· {t.ownerName}</span>
+                <span className="text-label text-violet-500 ml-auto">Missing pick</span>
               </div>
             ))}
           </div>
@@ -1709,14 +1709,14 @@ function LiveDraftEngine({
       {/* Secondary RFSN Local Mock chrome — pace / seed (actions live in control panel) */}
       {allowInternalSimPicks && (
       <div className="flex items-center gap-2 mb-3 flex-wrap" data-live-sim-controls>
-        <span className="text-[11px] text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
+        <span className="text-label text-zinc-400 tabular-nums border border-zinc-700/80 rounded px-2 py-0.5" title="Draft randomization seed">
           Seed {formatDraftSeed(draftSeed)}
         </span>
         <div className="flex items-center gap-1">
-          <span className="text-[10px] uppercase tracking-wider text-ink-secondary">Pace</span>
+          <span className="text-label uppercase tracking-wider text-ink-secondary">Pace</span>
           {PACE_OPTIONS.map((p) => (
             <button key={p.key} onClick={() => setPaceMs(p.ms)}
-              className={cn("px-2 py-0.5 rounded text-[11px] font-bold",
+              className={cn("px-2 py-0.5 rounded text-label font-bold",
                 paceMs === p.ms ? "bg-violet-600/30 text-violet-200" : "text-ink-secondary hover:text-zinc-300 border border-white/[0.06]")}>
               {p.label}
             </button>
@@ -1725,7 +1725,7 @@ function LiveDraftEngine({
         {idx > 0 && (
           <button onClick={replayCurrentSeed} className="px-3 py-1.5 rounded text-zinc-400 text-xs hover:text-zinc-200 border border-zinc-600">Replay same seed</button>
         )}
-        <span className="text-[11px] text-ink-secondary ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
+        <span className="text-label text-ink-secondary ml-auto">{manualTeamIds.size === 0 ? "Spectating — AI drafts everyone" : manualTeamIds.size >= teams.length ? "Fully manual — you pick every team" : `You control ${manualTeamIds.size} team${manualTeamIds.size > 1 ? "s" : ""}; AI drafts the rest`}</span>
       </div>
       )}
 
@@ -1804,18 +1804,18 @@ function LiveDraftEngine({
         <div className="lg:col-span-2">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Available</span>
-            <span className="text-[11px] text-ink-secondary">{available.length} players</span>
+            <span className="text-label text-ink-secondary">{available.length} players</span>
             <div className="flex gap-1 ml-auto">
               {SORTS.map(([k, lbl]) => (
-                <button key={k} onClick={() => setSort(k)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{lbl}</button>
+                <button key={k} onClick={() => setSort(k)} className={cn("px-2.5 py-1 rounded text-label font-semibold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{lbl}</button>
               ))}
             </div>
           </div>
           <div className="flex gap-1 mb-2 flex-wrap">
             {POSES.map(p => (
-              <button key={p} onClick={() => setPos(p)} className={cn("px-2 py-0.5 rounded text-[11px] font-bold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-400 hover:text-zinc-200 border border-white/[0.06]")}>{p}</button>
+              <button key={p} onClick={() => setPos(p)} className={cn("px-2.5 py-1 rounded text-label font-semibold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-400 hover:text-zinc-200 border border-white/[0.06]")}>{p}</button>
             ))}
-            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-[11px] bg-zinc-800 border border-zinc-700 rounded px-2 py-0.5 text-zinc-200 placeholder-zinc-600" />
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-label bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1 text-zinc-200 placeholder-zinc-600" />
           </div>
           <div className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.06] max-h-[min(560px,calc(100dvh-14rem))] overflow-auto">
             {available.length === 0 ? (
@@ -1837,16 +1837,16 @@ function LiveDraftEngine({
                     disabled={!awaitingUser}
                     onClick={() => allowInternalSimPicks && awaitingUser && userDraft(p)}
                     className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-left",
+                      "w-full flex items-center gap-2 px-3 py-2.5 text-left",
                       awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
                     )}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <PosPill pos={String(p.position ?? "?").toUpperCase()} />
-                        <span className="text-xs font-bold text-zinc-100 truncate">{p.name}</span>
+                        <span className="text-sm font-semibold text-zinc-100 truncate">{p.name}</span>
                       </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-ink-secondary">
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-label text-ink-secondary">
                         <span className={adpDisp.isReal ? "text-zinc-300 tabular-nums" : "text-ink-tertiary"}>
                           {adpDisp.label}
                         </span>
@@ -1871,7 +1871,7 @@ function LiveDraftEngine({
                       </div>
                     </div>
                     {allowInternalSimPicks && awaitingUser && (
-                      <span className="text-[10px] font-black text-violet-400 shrink-0">DRAFT</span>
+                      <span className="text-2xs font-semibold uppercase tracking-wide text-violet-400 shrink-0">DRAFT</span>
                     )}
                   </button>
                 );
@@ -1895,7 +1895,7 @@ function LiveDraftEngine({
             </span>
             {allowInternalSimPicks && (
               <>
-                <span className="text-[10px] text-ink-secondary">
+                <span className="text-label text-ink-secondary">
                   {manualTeamIds.size === 0
                     ? "Full AI draft"
                     : manualTeamIds.size >= teams.length
@@ -1904,7 +1904,7 @@ function LiveDraftEngine({
                 </span>
                 <button
                   onClick={resetTeamControls}
-                  className="ml-auto text-[10px] text-ink-secondary hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
+                  className="ml-auto text-label text-ink-secondary hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
                 >
                   Reset team controls
                 </button>
@@ -1932,11 +1932,11 @@ function LiveDraftEngine({
                       title="Manually control this team"
                     />
                     ) : null}
-                    <span className="text-[11px] font-black text-zinc-200 truncate">{t.teamName}</span>
+                    <span className="text-xs font-semibold text-zinc-200 truncate">{t.teamName}</span>
                     {grade && grade.letter !== "—" && (
                       <span
                         title={`Draft grade ${grade.letter} — ${grade.avgDelta >= 0 ? "+" : ""}${grade.avgDelta.toFixed(0)} avg value vs ADP, ${grade.strength.toFixed(0)}/100 avg talent`}
-                        className={cn("text-[10px] font-black px-1.5 rounded border shrink-0",
+                        className={cn("text-2xs font-semibold px-1.5 py-0.5 rounded border shrink-0",
                           grade.letter === "A" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" :
                           grade.letter === "B" ? "text-lime-300 bg-lime-500/15 border-lime-500/30" :
                           grade.letter === "C" ? "text-amber-300 bg-amber-500/15 border-amber-500/30" :
@@ -1945,18 +1945,18 @@ function LiveDraftEngine({
                         {grade.letter}
                       </span>
                     )}
-                    {isYou && <span className="text-[10px] font-black text-violet-300 bg-violet-500/15 px-1 rounded">YOU</span>}
-                    <span className="text-[10px] text-ink-tertiary ml-auto tabular-nums">{roster.length}</span>
+                    {isYou && <span className="text-2xs font-semibold uppercase tracking-wide text-violet-300 bg-violet-500/15 px-1.5 py-0.5 rounded">YOU</span>}
+                    <span className="text-label text-ink-tertiary ml-auto tabular-nums">{roster.length}</span>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {roster.map((r: any) => (
-                      <span key={r.pickNumber} className={cn("text-[10px] px-1.5 py-0.5 rounded border truncate max-w-[120px]",
+                      <span key={r.pickNumber} className={cn("text-label px-1.5 py-1 rounded border truncate max-w-[140px]",
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
                         <span className="text-ink-secondary">{r.position}</span> {String(r.name ?? "—").split(" ").slice(-1)[0]}
                       </span>
                     ))}
-                    {roster.length === 0 && <span className="text-[10px] text-ink-tertiary">—</span>}
+                    {roster.length === 0 && <span className="text-label text-ink-tertiary">—</span>}
                   </div>
                 </div>
               );
@@ -2188,7 +2188,7 @@ function MockDraftBoard({
         {/* Your team selector — Live Draft workspace */}
         {preferLiveDraft && (
         <div className="flex items-center gap-1.5 ml-auto">
-          <span className="text-[11px] text-ink-tertiary">Your team:</span>
+          <span className="text-label text-ink-tertiary">Your team:</span>
           <select className="text-xs bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-300"
             value={yourTeamId ?? ""} onChange={e => setYourTeamId(e.target.value ? Number(e.target.value) : null)}>
             <option value="">— Spectate —</option>
@@ -2215,7 +2215,7 @@ function MockDraftBoard({
             )}
             {liveIdx < picks.length && liveIdx > 0 && !myPick && <button onClick={skipSim} className="px-2 py-1 text-ink-secondary text-xs hover:text-zinc-300">⏩ Skip</button>}
             {(simState === "done" || liveIdx > 0) && <button onClick={resetSim} className="px-2 py-1 text-ink-secondary text-xs hover:text-zinc-300">↺ Reset</button>}
-            <span className="text-[11px] text-ink-tertiary tabular-nums">Pick {Math.min(liveIdx, picks.length)}/{picks.length}</span>
+            <span className="text-label text-ink-tertiary tabular-nums">Pick {Math.min(liveIdx, picks.length)}/{picks.length}</span>
           </div>
         )}
       </div>
@@ -2230,7 +2230,7 @@ function MockDraftBoard({
               ✓ Apply Overrides
             </button>
           </div>
-          <p className="text-[11px] text-ink-tertiary">Override the AI keeper predictions. Select a player from each team's roster to keep at the assigned round.</p>
+          <p className="text-label text-ink-tertiary">Override the AI keeper predictions. Select a player from each team's roster to keep at the assigned round.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {keeperTeams.map(kt => {
               const current = pendingOverrides.find(o => o.teamId === kt.teamId && o.keeperRound === kt.keeperSlotRound);
@@ -2238,10 +2238,10 @@ function MockDraftBoard({
                 <div key={`${kt.teamId}-${kt.keeperSlotRound}`} className="rounded-lg border border-white/[0.06] bg-white/[0.03] p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-zinc-200">{kt.teamName}</span>
-                    <span className="text-[11px] text-ink-tertiary tabular-nums">Slot Rd {kt.keeperSlotRound} · Cost Rd {kt.keeperCostRound}</span>
-                    {current && <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">OVERRIDE</span>}
+                    <span className="text-label text-ink-tertiary tabular-nums">Slot Rd {kt.keeperSlotRound} · Cost Rd {kt.keeperCostRound}</span>
+                    {current && <span className="text-label text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-1.5 rounded ml-auto">OVERRIDE</span>}
                   </div>
-                  <p className="text-[11px] text-ink-secondary">AI predicts: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
+                  <p className="text-label text-ink-secondary">AI predicts: <span className="text-zinc-300 font-semibold">{kt.currentPrediction}</span></p>
                   {/* Show roster from availablePool + current roster */}
                   <div className="flex gap-2">
                     <select
@@ -2327,10 +2327,10 @@ function MockDraftBoard({
                 className="text-left rounded-lg border border-zinc-700/60 bg-white/[0.04] hover:border-violet-500/40 hover:bg-violet-500/8 p-2 transition-all">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <PosPill pos={p.position} />
-                  <span className="text-[10px] font-bold text-ink-secondary">ADP {p.adp ?? p.rank}</span>
+                  <span className="text-label font-bold text-ink-secondary">ADP {p.adp ?? p.rank}</span>
                 </div>
                 <div className="text-xs font-bold text-zinc-200 leading-tight truncate">{p.name}</div>
-                <div className="text-[10px] text-ink-secondary">{p.projectedPoints.toFixed(0)} pts · Val {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
+                <div className="text-label text-ink-secondary">{p.projectedPoints.toFixed(0)} pts · Val {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
               </button>
             ))}
           </div>
@@ -2375,16 +2375,16 @@ function MockDraftBoard({
                 return (
                   <div className={cn("px-5 py-3 border-b border-white/[0.06]", simState === "running" ? "bg-violet-500/5" : "bg-zinc-900/20")}>
                     <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-[11px] text-ink-secondary">On the clock:</span>
+                      <span className="text-label text-ink-secondary">On the clock:</span>
                       <span className="font-black text-zinc-100">{cur?.ownerName}</span>
-                      <span className="text-ink-tertiary text-[11px]">{cur?.teamName}</span>
-                      <span className="text-[11px] text-ink-tertiary ml-auto">Pick {cur?.pickNumber} · Rd {cur?.round}</span>
+                      <span className="text-ink-tertiary text-label">{cur?.teamName}</span>
+                      <span className="text-label text-ink-tertiary ml-auto">Pick {cur?.pickNumber} · Rd {cur?.round}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1.5">
                       <span className="font-black text-xl text-white">{cur?.player}</span>
                       <PosPill pos={cur?.position} />
                       {cur?.projectedPoints > 0 && <span className="text-ink-secondary text-xs">{cur?.projectedPoints?.toFixed(0)} pts</span>}
-                      {cur?.isKeeperSlot && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER</span>}
+                      {cur?.isKeeperSlot && <span className="text-label font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER</span>}
                     </div>
                   </div>
                 );
@@ -2394,11 +2394,11 @@ function MockDraftBoard({
                   <div key={p.pickNumber} className={cn("flex items-center gap-3 px-5 py-2 hover:bg-zinc-800/20",
                     p.isKeeperSlot && "bg-amber-500/5",
                     p.pickNumber === liveIdx && "border-l-2 border-l-violet-500 bg-violet-500/5")}>
-                    <span className="text-[11px] text-ink-tertiary w-10 tabular-nums shrink-0">{p.round}.{String(p.roundPick).padStart(2,"0")}</span>
+                    <span className="text-label text-ink-tertiary w-10 tabular-nums shrink-0">{p.round}.{String(p.roundPick).padStart(2,"0")}</span>
                     <PosPill pos={p.position} />
                     <span className="text-sm font-bold text-zinc-200 flex-1 truncate">{p.player}</span>
-                    <span className="text-[11px] text-ink-secondary shrink-0 truncate max-w-[120px]">{p.ownerName}</span>
-                    {p.projectedPoints > 0 && <span className="text-[11px] text-ink-tertiary tabular-nums shrink-0">{p.projectedPoints?.toFixed(0)}</span>}
+                    <span className="text-label text-ink-secondary shrink-0 truncate max-w-[120px]">{p.ownerName}</span>
+                    {p.projectedPoints > 0 && <span className="text-label text-ink-tertiary tabular-nums shrink-0">{p.projectedPoints?.toFixed(0)}</span>}
                     <div className="w-12 shrink-0"><ConfBar value={p.confidence} small /></div>
                   </div>
                 ))}
@@ -2414,9 +2414,9 @@ function MockDraftBoard({
           {rounds.map(([round, rPicks]) => (
             <div key={round} className="border-b border-zinc-800/20">
               <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur px-4 py-1.5 flex items-center gap-2">
-                <span className="text-[11px] font-black uppercase tracking-wider text-ink-secondary">Round {round}</span>
+                <span className="text-label font-black uppercase tracking-wider text-ink-secondary">Round {round}</span>
                 <div className="flex-1 h-px bg-white/[0.03]" />
-                <span className="text-[10px] text-ink-tertiary">{rPicks.length} picks</span>
+                <span className="text-label text-ink-tertiary">{rPicks.length} picks</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-zinc-800/20">
                 {rPicks.map((p: any) => {
@@ -2433,18 +2433,18 @@ function MockDraftBoard({
                         expandPick === p.pickNumber && "ring-1 ring-violet-500/40"
                       )}>
                       <div className="flex items-center gap-1 mb-1 flex-wrap">
-                        <span className="text-[10px] text-ink-tertiary font-mono">{p.pickNumber}</span>
+                        <span className="text-label text-ink-tertiary font-mono">{p.pickNumber}</span>
                         <PosPill pos={p.position} />
-                        {p.isKeeperSlot && <span className="text-[10px] text-amber-400 font-bold">K</span>}
-                        {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[10px] text-violet-400 font-bold">T↑</span>}
-                        {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-[10px] text-violet-400 font-bold">YOU</span>}
+                        {p.isKeeperSlot && <span className="text-label text-amber-400 font-bold">K</span>}
+                        {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-label text-violet-400 font-bold">T↑</span>}
+                        {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-label text-violet-400 font-bold">YOU</span>}
                       </div>
-                      <div className="text-[11px] font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
-                      <div className="text-[10px] text-ink-secondary truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
+                      <div className="text-label font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
+                      <div className="text-label text-ink-secondary truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
                       {!p.isKeeperSlot && p.projectedPoints > 0 && (
                         <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[10px] text-ink-tertiary tabular-nums">{p.projectedPoints.toFixed(0)}</span>
-                          {adp && <span className="text-[10px] text-ink-tertiary">ADP {adp}</span>}
+                          <span className="text-label text-ink-tertiary tabular-nums">{p.projectedPoints.toFixed(0)}</span>
+                          {adp && <span className="text-label text-ink-tertiary">ADP {adp}</span>}
                         </div>
                       )}
                     </button>
@@ -2461,14 +2461,14 @@ function MockDraftBoard({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-black text-zinc-100 text-base">{pk.player}</span>
                       <PosPill pos={pk.position} />
-                      {pk.isKeeperSlot && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER SLOT</span>}
+                      {pk.isKeeperSlot && <span className="text-label font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 rounded">KEEPER SLOT</span>}
                       {pk.tradedPickContext && (
-                        <span className={cn("text-[10px] font-bold px-1.5 rounded border",
+                        <span className={cn("text-label font-bold px-1.5 rounded border",
                           pk.tradedPickContext.type === "ACQUIRED" ? "text-violet-400 bg-violet-500/10 border-violet-500/20" : "text-violet-400 bg-violet-500/10 border-violet-500/20")}>
                           {pk.tradedPickContext.type === "ACQUIRED" ? "↑ ACQUIRED PICK" : "↓ TRADED PICK"}
                         </span>
                       )}
-                      <div className="ml-auto flex items-center gap-3 text-[11px]">
+                      <div className="ml-auto flex items-center gap-3 text-label">
                         {adp != null && <span className="text-ink-secondary">ADP: <span className="text-zinc-300 font-bold">{adp}</span></span>}
                         {mv != null && <span className="text-ink-secondary">Market value: <span className={cn("font-bold", mv >= 70 ? "text-violet-400" : mv >= 45 ? "text-amber-400" : "text-zinc-400")}>{Math.round(mv)}/100</span></span>}
                         <span className="text-ink-tertiary">Pick {pk.pickNumber} · Rd {pk.round}</span>
@@ -2480,12 +2480,12 @@ function MockDraftBoard({
                     {pk.tradedPickContext && <EvidenceList items={pk.tradedPickContext.evidence} />}
                     {pk.alternatePicks?.length > 0 && (
                       <div>
-                        <p className="text-[10px] text-ink-tertiary uppercase tracking-wider mb-1">Alternates</p>
+                        <p className="text-label text-ink-tertiary uppercase tracking-wider mb-1">Alternates</p>
                         <div className="flex flex-wrap gap-1.5">
                           {pk.alternatePicks.map((a: any, j: number) => {
                             const aAdp = a.adp ?? availablePool.find(ap => ap.name === a.player)?.adp;
                             return (
-                              <span key={j} className="text-[11px] text-ink-secondary bg-white/[0.03] border border-white/[0.08] px-2 py-0.5 rounded">
+                              <span key={j} className="text-label text-ink-secondary bg-white/[0.03] border border-white/[0.08] px-2 py-0.5 rounded">
                                 {a.player} ({a.position}) · {a.projectedPoints?.toFixed(0)} pts{aAdp ? ` · ADP ${aAdp}` : ""}
                               </span>
                             );
@@ -2514,8 +2514,8 @@ function MockDraftBoard({
             return (
               <div className="px-4 py-3 bg-white/[0.03] flex items-center gap-4">
                 <span className="font-bold text-zinc-100 text-sm">{teams.find((t: any) => t.teamId === selTeam)?.teamName}</span>
-                <span className="text-[11px] text-ink-secondary">{tp.length} picks</span>
-                <span className="text-[11px] text-violet-400 ml-auto">Avg market value: {avgVal != null ? `${avgVal}/100` : "—"}</span>
+                <span className="text-label text-ink-secondary">{tp.length} picks</span>
+                <span className="text-label text-violet-400 ml-auto">Avg market value: {avgVal != null ? `${avgVal}/100` : "—"}</span>
               </div>
             );
           })()}
@@ -2527,22 +2527,22 @@ function MockDraftBoard({
                 p.isKeeperSlot && "bg-amber-500/5",
                 p.tradedPickContext?.type === "ACQUIRED" && "border-l-2 border-l-violet-500/60")}>
                 <div className="w-14 text-center shrink-0">
-                  <div className="text-[10px] text-ink-tertiary">Rd {p.round}</div>
-                  <div className="text-[11px] font-bold text-zinc-400">#{p.pickNumber}</div>
+                  <div className="text-label text-ink-tertiary">Rd {p.round}</div>
+                  <div className="text-label font-bold text-zinc-400">#{p.pickNumber}</div>
                 </div>
                 <PosPill pos={p.position} />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-zinc-200 truncate">{p.player}</div>
-                  <div className="text-[11px] text-ink-secondary truncate">{p.reasoning}</div>
+                  <div className="text-label text-ink-secondary truncate">{p.reasoning}</div>
                 </div>
                 <div className="shrink-0 text-right space-y-0.5">
                   {p.projectedPoints > 0 && <div className="text-xs tabular-nums text-zinc-400">{p.projectedPoints.toFixed(0)} pts</div>}
-                  {adp != null && <div className="text-[10px] text-ink-tertiary">ADP {adp}</div>}
-                  {mv != null && <div className={cn("text-[10px] font-bold", mv >= 70 ? "text-violet-400" : "text-ink-tertiary")}>{Math.round(mv)}/100</div>}
+                  {adp != null && <div className="text-label text-ink-tertiary">ADP {adp}</div>}
+                  {mv != null && <div className={cn("text-label font-bold", mv >= 70 ? "text-violet-400" : "text-ink-tertiary")}>{Math.round(mv)}/100</div>}
                 </div>
                 <div className="w-14 shrink-0"><ConfBar value={p.confidence} small /></div>
-                {p.isKeeperSlot && <span className="text-[10px] text-amber-400 font-bold shrink-0">KEEPER</span>}
-                {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-[10px] text-violet-400 font-bold shrink-0">TRADE↑</span>}
+                {p.isKeeperSlot && <span className="text-label text-amber-400 font-bold shrink-0">KEEPER</span>}
+                {p.tradedPickContext?.type === "ACQUIRED" && <span className="text-label text-violet-400 font-bold shrink-0">TRADE↑</span>}
               </div>
             );
           })}
@@ -2576,9 +2576,9 @@ function RunAlertsSection({ alerts }: { alerts: any[] }) {
                 <PosPill pos={a.position} />
               </div>
               <div className="flex items-center gap-2 ml-auto">
-                <span className="text-[11px] text-ink-secondary">{a.roundWindow}</span>
-                <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">{a.teamCount} teams</span>
-                <span className="text-[11px] text-ink-tertiary">Rd {a.expectedRound}</span>
+                <span className="text-label text-ink-secondary">{a.roundWindow}</span>
+                <span className="text-label font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">{a.teamCount} teams</span>
+                <span className="text-label text-ink-tertiary">Rd {a.expectedRound}</span>
               </div>
             </div>
             <ConfBar value={a.confidence} />
@@ -2587,18 +2587,18 @@ function RunAlertsSection({ alerts }: { alerts: any[] }) {
           {expanded === a.position && (
             <div className="mt-3 space-y-2">
               <div>
-                <p className="text-[10px] text-ink-tertiary uppercase tracking-wider mb-1">Affected Owners</p>
+                <p className="text-label text-ink-tertiary uppercase tracking-wider mb-1">Affected Owners</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(a.affectedOwners ?? []).map((o: string, j: number) => (
-                    <span key={j} className="text-[11px] text-zinc-300 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded">{o}</span>
+                    <span key={j} className="text-label text-zinc-300 bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded">{o}</span>
                   ))}
                 </div>
               </div>
               <div>
-                <p className="text-[10px] text-ink-tertiary uppercase tracking-wider mb-1">Mock Draft Triggers</p>
+                <p className="text-label text-ink-tertiary uppercase tracking-wider mb-1">Mock Draft Triggers</p>
                 <div className="space-y-0.5">
                   {(a.triggerPicks ?? []).map((tp: string, j: number) => (
-                    <div key={j} className="text-[11px] text-ink-secondary flex items-start gap-1.5">
+                    <div key={j} className="text-label text-ink-secondary flex items-start gap-1.5">
                       <span className="text-amber-600 shrink-0">→</span>{tp}
                     </div>
                   ))}
@@ -2639,14 +2639,14 @@ function ScarcitySection({ alerts }: { alerts: any[] }) {
               className={cn("rounded-xl border p-3 text-left transition-all hover:scale-105", SCARCITY_COLORS[urg] ?? SCARCITY_COLORS.LOW)}>
               <div className="flex items-center justify-between mb-1.5">
                 <PosPill pos={a.position} />
-                <span className="text-[10px] font-black uppercase">{a.urgency}</span>
+                <span className="text-2xs font-semibold uppercase">{a.urgency}</span>
               </div>
               <div className="text-xl font-black tabular-nums">{a.eliteSupply}</div>
-              <div className="text-[10px] opacity-70">elite available</div>
+              <div className="text-label opacity-70">elite available</div>
               <div className="mt-2 h-1 bg-black/30 rounded-full overflow-hidden">
                 <div className="h-full rounded-full bg-current opacity-70 transition-all" style={{ width: `${fillPct}%` }} />
               </div>
-              <div className="text-[10px] mt-1 opacity-60">Demand: {a.demandScore.toFixed(2)}</div>
+              <div className="text-label mt-1 opacity-60">Demand: {a.demandScore.toFixed(2)}</div>
             </button>
           );
         })}
@@ -2661,7 +2661,7 @@ function ScarcitySection({ alerts }: { alerts: any[] }) {
             <div className="flex items-center gap-2 flex-wrap">
               <PosPill pos={a.position} />
               <span className="font-bold text-zinc-100">{a.position} Scarcity Analysis</span>
-              <span className={cn("text-[10px] font-black uppercase px-2 py-0.5 rounded border ml-auto", SCARCITY_COLORS[a.urgency as keyof typeof SCARCITY_COLORS] ?? SCARCITY_COLORS.LOW)}>{a.urgency}</span>
+              <span className={cn("text-2xs font-semibold uppercase px-2 py-0.5 rounded border ml-auto", SCARCITY_COLORS[a.urgency as keyof typeof SCARCITY_COLORS] ?? SCARCITY_COLORS.LOW)}>{a.urgency}</span>
             </div>
             <div className="grid grid-cols-3 gap-3">
               {[
@@ -2671,19 +2671,19 @@ function ScarcitySection({ alerts }: { alerts: any[] }) {
               ].map(s => (
                 <div key={s.l} className="text-center bg-white/[0.03] rounded-lg p-2">
                   <div className="text-lg font-black text-white">{s.v}</div>
-                  <div className="text-[10px] text-ink-tertiary uppercase">{s.l}</div>
+                  <div className="text-label text-ink-tertiary uppercase">{s.l}</div>
                 </div>
               ))}
             </div>
             {/* Round-by-round remaining */}
             <div>
-              <p className="text-[10px] text-ink-secondary uppercase tracking-wider mb-1.5">Projected Remaining Supply by Round</p>
+              <p className="text-label text-ink-secondary uppercase tracking-wider mb-1.5">Projected Remaining Supply by Round</p>
               <div className="flex gap-1.5 flex-wrap">
                 {Object.entries(a.remainingAfterRound ?? {}).slice(0, 10).map(([rd, rem]: [string, any]) => (
                   <div key={rd} className={cn("text-center rounded px-2 py-1 min-w-[32px]",
                     rem <= 0 ? "bg-red-500/20 text-red-400" : rem <= 3 ? "bg-amber-500/20 text-amber-400" : "bg-white/[0.04] text-zinc-300")}>
                     <div className="text-xs font-black">{rem}</div>
-                    <div className="text-[10px] text-ink-tertiary">R{rd}</div>
+                    <div className="text-label text-ink-tertiary">R{rd}</div>
                   </div>
                 ))}
               </div>
@@ -2724,10 +2724,10 @@ function CompressionSection({ compression }: { compression: any[] }) {
                 </div>
                 <div className="w-28 shrink-0 flex items-center justify-between">
                   <span className={cn("text-xs font-black", cfg.color)}>{c.compressionPct}%</span>
-                  <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded border uppercase", cfg.bg, cfg.color)}>{c.effectiveTier}</span>
+                  <span className={cn("text-label font-bold px-1.5 py-0.5 rounded border uppercase", cfg.bg, cfg.color)}>{c.effectiveTier}</span>
                 </div>
               </div>
-              <div className="flex items-center gap-4 pl-10 text-[10px] text-ink-tertiary">
+              <div className="flex items-center gap-4 pl-10 text-label text-ink-tertiary">
                 <span>{c.keepersAtPosition} locked / {c.totalPoolSize} pool</span>
                 {c.draftInflation > 0 && <span className="text-amber-500">Draft {c.draftInflation} round(s) earlier</span>}
               </div>
@@ -2736,7 +2736,7 @@ function CompressionSection({ compression }: { compression: any[] }) {
           );
         })}
       </div>
-      <p className="text-[10px] text-ink-tertiary border-t border-white/[0.06] pt-2">
+      <p className="text-label text-ink-tertiary border-t border-white/[0.06] pt-2">
         Compression = % of position pool locked by keeper predictions. Higher compression = earlier draft urgency.
         Unknown-position keepers are estimated proportionally by round-1 draft rate.
       </p>
@@ -2779,7 +2779,7 @@ function DwrSectionNav({
             <button
               type="button"
               onClick={() => openAndScrollTo(onOpenSection, item.id)}
-              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+              className="rounded-lg px-3 py-1.5 text-label font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
             >
               {preferLiveDraft
                 ? (item.liveLabel ?? item.label)
@@ -2953,7 +2953,7 @@ export function DraftWarRoom({
                   className="text-center px-3 py-2 rounded-xl bg-black/30 border border-white/[0.07]"
                 >
                   <div className="text-lg font-black text-white">{s.v}</div>
-                  <div className="text-[10px] font-bold text-ink-tertiary uppercase tracking-widest">{s.l}</div>
+                  <div className="text-label font-bold text-ink-tertiary uppercase tracking-widest">{s.l}</div>
                 </div>
               ))}
               <button
@@ -2985,7 +2985,7 @@ export function DraftWarRoom({
                 <Zap className="h-4 w-4 text-amber-400" />
               </div>
               <h1 className="text-3xl font-black tracking-tight text-white">Draft War Room</h1>
-              <span className="text-[11px] font-bold uppercase tracking-widest text-ink-tertiary ml-1">{season} · v{APP_VERSION}</span>
+              <span className="text-label font-bold uppercase tracking-widest text-ink-tertiary ml-1">{season} · v{APP_VERSION}</span>
             </div>
             <p className="text-xs text-ink-secondary ml-10">
               League-specific behavioral prediction · {teamCount} teams · {totalPicks} picks · {maxRound} rounds
@@ -3010,7 +3010,7 @@ export function DraftWarRoom({
             {headerChips.map((s) => (
               <div key={s.l} className="text-center px-3.5 py-2.5 rounded-xl bg-[#1b131f] border border-white/[0.07]">
                 <div className="text-xl font-black text-white">{s.v}</div>
-                <div className="text-[10px] font-bold text-ink-tertiary uppercase tracking-widest">{s.l}</div>
+                <div className="text-label font-bold text-ink-tertiary uppercase tracking-widest">{s.l}</div>
               </div>
             ))}
             <button onClick={() => refetch()} className="p-2 text-ink-secondary hover:text-zinc-300 transition-colors">
@@ -3060,7 +3060,7 @@ export function DraftWarRoom({
         {/* Detailed analytics divider + section nav */}
         <div className="flex items-center gap-3 pt-1">
           <div className="h-px flex-1 bg-white/[0.08]" />
-          <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-ink-tertiary">Detailed Analytics</span>
+          <span className="text-label font-bold uppercase tracking-[0.22em] text-ink-tertiary">Detailed Analytics</span>
           <div className="h-px flex-1 bg-white/[0.08]" />
         </div>
 
@@ -3069,7 +3069,7 @@ export function DraftWarRoom({
         {/* Diagnostics hidden for clean UI */}
 
         {/* Disclaimer */}
-        <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-[11px] text-ink-secondary">
+        <div className="flex items-center gap-2 p-3 rounded-lg bg-zinc-900/60 border border-white/[0.06] text-label text-ink-secondary">
           <Info className="h-3.5 w-3.5 shrink-0 text-ink-tertiary" />
           {keepersOn ? (
             <span>

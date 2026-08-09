@@ -27,7 +27,7 @@ function BarRow({ label, pct, tone }: { label: string; pct: number | null; tone:
   const w = pct == null || !Number.isFinite(pct) ? 0 : Math.max(0, Math.min(100, pct));
   return (
     <div className="space-y-1">
-      <div className="flex justify-between gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
         <span>{label}</span>
         <span className="tabular-nums text-foreground">{pct == null ? "—" : `${Math.round(w)}%`}</span>
       </div>
@@ -48,7 +48,7 @@ export function DashboardLeagueHealthCard({
   if (isLoading) {
     return (
       <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.25)]">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
+        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
         <div className="mt-6 flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
@@ -59,7 +59,7 @@ export function DashboardLeagueHealthCard({
   if (!data) {
     return (
       <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.2)]">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
+        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
         <div className="mt-4 flex flex-1 flex-col justify-center text-sm text-muted-foreground">
           <p className="font-medium text-foreground">Not Yet Available</p>
           <p className="mt-1 text-xs text-muted-foreground">League overview could not be loaded.</p>
@@ -92,7 +92,7 @@ export function DashboardLeagueHealthCard({
     <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_32px_-12px_rgba(163,230,53,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
+          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
           <p className="mt-1 text-xs text-muted-foreground">Readiness &amp; coverage</p>
         </div>
         <div className="relative h-16 w-16 shrink-0">
@@ -106,7 +106,7 @@ export function DashboardLeagueHealthCard({
             <span className="text-lg font-black tabular-nums leading-none text-lime-300">
               {readiness != null ? readiness : "—"}
             </span>
-            <span className="text-[8px] font-bold uppercase tracking-wider text-muted-foreground">ready</span>
+            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">ready</span>
           </div>
         </div>
       </div>
@@ -116,12 +116,12 @@ export function DashboardLeagueHealthCard({
         <BarRow label="Matchup coverage" pct={matchupCoverage} tone="emerald" />
         <BarRow label="Owner resolution (2018+)" pct={ownerResolution} tone="emerald" />
         <div className="space-y-1">
-          <div className="flex justify-between gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span>Scoring accuracy</span>
             <span className="text-muted-foreground">Not Yet Available</span>
           </div>
           <div className="h-1.5 rounded-full bg-foreground/[0.04]" />
-          <p className="text-[9px] leading-snug text-muted-foreground">
+          <p className="text-2xs leading-snug text-muted-foreground">
             No league-wide scoring-accuracy series is exposed on this endpoint.
           </p>
         </div>
@@ -133,7 +133,7 @@ export function DashboardLeagueHealthCard({
       >
         Data health detail →
       </Link>
-      <p className="mt-1 text-[9px] text-muted-foreground">
+      <p className="mt-1 text-2xs text-muted-foreground">
         Score: {readiness ?? "—"}/100 · Matchup coverage: {matchupCoverage != null ? `${matchupCoverage}%` : "—"} · Source: dataHealth.leagueOverview
       </p>
     </div>

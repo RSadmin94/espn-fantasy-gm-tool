@@ -99,7 +99,7 @@ export function RfsnBreaking() {
             <section className="rounded-[15px] border border-red-500/30 bg-red-500/[0.06] overflow-hidden">
               <div className="flex items-center gap-2 border-b border-red-500/20 px-5 py-2">
                 <Radio className="h-3.5 w-3.5 text-red-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-red-300">
+                <span className="text-2xs font-semibold uppercase tracking-[0.25em] text-red-300">
                   Live desk
                 </span>
               </div>
@@ -122,12 +122,12 @@ export function RfsnBreaking() {
             <section className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
               <div className="flex items-center gap-2 border-b border-white/[0.06] px-5 py-2">
                 <Zap className="h-3.5 w-3.5 text-amber-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#8b97a8]">
+                <span className="text-2xs font-semibold uppercase tracking-[0.25em] text-[#8b97a8]">
                   Featured story
                 </span>
               </div>
               <div className="space-y-3 p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                <p className="text-2xs font-semibold uppercase tracking-widest text-amber-400">
                   {articleTypeLabel(featured.articleType)} · {featured.season}
                 </p>
                 <h3 className="text-xl font-black text-white">{featured.headline}</h3>

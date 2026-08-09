@@ -130,7 +130,7 @@ export function RfsnRecaps() {
                     type="button"
                     onClick={() => setSelected(w)}
                     className={cn(
-                      "rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors",
+                      "rounded-md border px-2.5 py-1 text-2xs font-semibold uppercase tracking-wider transition-colors",
                       isActive
                         ? "border-lime-400/50 bg-lime-400/10 text-lime-300"
                         : "border-white/[0.08] text-[#8b97a8] hover:border-white/20 hover:text-zinc-200",
@@ -154,7 +154,7 @@ export function RfsnRecaps() {
                   key={r.matchupId}
                   className="rounded-[15px] border border-white/[0.07] bg-white/[0.02] px-5 py-4"
                 >
-                  <p className="text-[10px] font-black uppercase tracking-widest text-lime-400/90">
+                  <p className="text-2xs font-semibold uppercase tracking-widest text-lime-400/90">
                     {r.season} · Week {r.week}
                     {r.gameType ? ` · ${r.gameType.replace(/_/g, " ")}` : ""}
                   </p>

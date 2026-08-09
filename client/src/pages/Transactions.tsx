@@ -622,7 +622,7 @@ function buildTradeSidesModel(
 
 function statusBadgeClasses(statusRaw: string | null): string {
   const n = normalizeStatusForMatch(statusRaw);
-  const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide";
+  const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-label font-semibold uppercase tracking-wide";
   if (n === "EXECUTED") return cn(base, "border-lime-500/40 bg-lime-500/15 text-lime-300");
   if (n === "PROPOSED" || n === "PENDING") return cn(base, "border-amber-500/40 bg-amber-500/15 text-amber-200");
   if (n === "CANCELED" || n === "CANCELLED") return cn(base, "border-red-500/40 bg-red-500/15 text-red-300");
@@ -646,10 +646,10 @@ function ReceivesPanel({ title, players, picks }: { title: string; players: Trad
   }
   return (
     <div className={cn("space-y-2.5 rounded-lg border border-violet-500/25 bg-violet-500/[0.06] p-3", "shadow-[0_0_14px_rgba(139,92,246,0.12)]")}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-violet-300/90">{title}</div>
+      <div className="text-label font-semibold uppercase tracking-wide text-violet-300/90">{title}</div>
       {hasPlayers && (
         <div>
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Players ({players.length})</div>
+          <div className="mb-1 text-label font-medium uppercase tracking-wide text-muted-foreground">Players ({players.length})</div>
           <ul className="space-y-1.5">
             {players.map(p => (
               <li key={p.key} className="text-sm leading-tight text-foreground">
@@ -662,7 +662,7 @@ function ReceivesPanel({ title, players, picks }: { title: string; players: Trad
       )}
       {hasPicks && (
         <div>
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Draft Picks ({picks.length})</div>
+          <div className="mb-1 text-label font-medium uppercase tracking-wide text-muted-foreground">Draft Picks ({picks.length})</div>
           <ul className="space-y-2">
             {picks.map(pk => (
               <li key={pk.key} className="text-sm leading-snug text-foreground">
@@ -671,8 +671,8 @@ function ReceivesPanel({ title, players, picks }: { title: string; players: Trad
                 {pk.rNotation || pk.overallText ? (
                   <div className="mt-0.5 flex flex-wrap items-baseline gap-x-1.5 pl-3.5">
                     {pk.rNotation && <span className="font-semibold tabular-nums tracking-tight text-violet-200">{pk.rNotation}</span>}
-                    {pk.rNotation && pk.overallText && <span className="text-[11px] text-muted-foreground">·</span>}
-                    {pk.overallText && <span className="text-[11px] text-muted-foreground">{pk.overallText}</span>}
+                    {pk.rNotation && pk.overallText && <span className="text-label text-muted-foreground">·</span>}
+                    {pk.overallText && <span className="text-label text-muted-foreground">{pk.overallText}</span>}
                   </div>
                 ) : null}
               </li>
@@ -712,7 +712,7 @@ function TeamHeaderBlock({ name, logoUrl }: { name: string; logoUrl?: string }) 
       {logoUrl ? (
         <img src={logoUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg border border-border/70 bg-background object-cover shadow-sm" />
       ) : (
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/25 text-[11px] font-bold uppercase text-muted-foreground">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/25 text-label font-bold uppercase text-muted-foreground">
           {name.trim().slice(0, 2) || "—"}
         </div>
       )}
@@ -870,7 +870,7 @@ function TradeAnalysisPanel({
               {winnerConfig.icon}
               {winnerConfig.label}
             </span>
-            <span className="ml-auto flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
+            <span className="ml-auto flex items-center gap-1 text-label font-medium text-muted-foreground">
               <Sparkles className="h-3 w-3" /> AI Trade Verdict
             </span>
           </div>
@@ -884,7 +884,7 @@ function TradeAnalysisPanel({
 
             {/* Why they won */}
             <div>
-              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 text-label font-semibold uppercase tracking-wide text-muted-foreground">
                 Trade breakdown
               </div>
               <p className="text-[13px] leading-relaxed text-foreground/80">
@@ -897,7 +897,7 @@ function TradeAnalysisPanel({
               <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-background/40 px-3 py-2.5">
                 <Globe className="mt-0.5 h-3.5 w-3.5 shrink-0 text-cyan-400" />
                 <div>
-                  <div className="mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-cyan-400/80">
+                  <div className="mb-0.5 text-label font-semibold uppercase tracking-wide text-cyan-400/80">
                     League impact
                   </div>
                   <p className="text-[13px] leading-relaxed text-foreground/75">
@@ -990,7 +990,7 @@ function TradeComparisonCard({
             <span className="font-semibold text-foreground">{sides.sideA.name}</span> traded with{" "}
             <span className="font-semibold text-foreground">{sides.sideB.name}</span>
           </p>
-          <p className="mt-0.5 text-center text-[11px] text-muted-foreground">
+          <p className="mt-0.5 text-center text-label text-muted-foreground">
             Status:{" "}
             <span className={cn(
               "font-medium",

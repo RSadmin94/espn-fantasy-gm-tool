@@ -30,7 +30,7 @@ export type RfsnAnalystBoothCardProps = {
 
 function RfsnBrandMark({ className }: { className?: string }) {
   return (
-    <span className={cn("text-[10px] font-black tracking-tight text-white/55", className)}>
+    <span className={cn("text-label font-black tracking-tight text-white/55", className)}>
       RFS<span className="text-red-500">N</span>
     </span>
   );
@@ -153,7 +153,7 @@ function FullBoothCard({
         <RfsnBrandMark />
         <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
           {liveIndicator && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-red-600 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-[0_0_12px_rgba(220,38,38,0.45)]">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-red-600 px-1.5 py-0.5 text-2xs font-black uppercase tracking-wider text-white shadow-[0_0_12px_rgba(220,38,38,0.45)]">
               <Radio className="h-2.5 w-2.5 rfsn-mic-live" aria-hidden />
               Live
             </span>
@@ -228,7 +228,7 @@ function FullBoothCard({
       <footer className="border-t border-white/[0.08] bg-gradient-to-r from-black/60 via-black/40 to-black/60 px-3 py-2">
         <p
           className={cn(
-            "text-[10px] font-black uppercase tracking-[0.24em]",
+            "text-label font-black uppercase tracking-[0.24em]",
             meta.segmentClass,
           )}
         >

@@ -89,7 +89,7 @@ export function RfsnHome() {
         <section className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
           <div className="rfsn-ticker-rule px-5 py-2 border-b border-white/[0.06] flex items-center gap-2">
             <Sparkles className="h-3.5 w-3.5 text-lime-400" />
-            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-[#8b97a8]">Featured Story</span>
+            <span className="text-2xs font-semibold uppercase tracking-[0.25em] text-[#8b97a8]">Featured Story</span>
           </div>
           <div className="p-5 md:p-6">
             {loading ? (
@@ -99,7 +99,7 @@ export function RfsnHome() {
               </div>
             ) : featured ? (
               <div className="max-w-3xl space-y-3">
-                <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                <p className="text-2xs font-semibold uppercase tracking-widest text-amber-400">
                   {articleTypeLabel(featured.articleType)} · {featured.season}
                 </p>
                 <h2 className="text-2xl md:text-3xl font-black text-white leading-tight">{featured.headline}</h2>
@@ -108,7 +108,7 @@ export function RfsnHome() {
                 )}
                 <p className="text-sm text-zinc-400 leading-relaxed">{articleExcerpt(featured.body)}</p>
                 <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <span className="text-[10px] text-ink-tertiary">
+                  <span className="text-label text-ink-tertiary">
                     {new Date(featured.createdAt).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
@@ -150,7 +150,7 @@ export function RfsnHome() {
                 <Newspaper className="h-4 w-4 text-[#a3e635]" />
                 <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#8b97a8]">Latest from RFSN</h3>
               </div>
-              <Link to={RFSN_ROUTES.stories} className="text-[10px] font-bold text-ink-secondary hover:text-zinc-300">
+              <Link to={RFSN_ROUTES.stories} className="text-label font-bold text-ink-secondary hover:text-zinc-300">
                 All stories →
               </Link>
             </div>
@@ -165,13 +165,13 @@ export function RfsnHome() {
                       className="group flex items-start justify-between gap-3 rounded-lg px-2 py-2.5 hover:bg-white/[0.03] border border-transparent hover:border-white/[0.08]"
                     >
                       <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-ink-secondary">
+                        <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
                           {articleTypeLabel(story.articleType)}
                         </p>
                         <p className="text-sm font-semibold text-zinc-100 group-hover:text-white line-clamp-2 mt-0.5">
                           {story.headline}
                         </p>
-                        <p className="text-[10px] text-ink-tertiary mt-1">
+                        <p className="text-label text-ink-tertiary mt-1">
                           {story.season} · {new Date(story.createdAt).toLocaleDateString()}
                         </p>
                       </div>
@@ -200,7 +200,7 @@ export function RfsnHome() {
                   {wireReports.filter((r) => r.winner).length > 0 ? (
                     <ul className="mt-3 space-y-2">
                       {wireReports.filter((r) => r.winner).slice(0, 3).map((r) => (
-                        <li key={r.matchupId} className="text-[11px] text-zinc-400 border-l-2 border-lime-500/40 pl-2">
+                        <li key={r.matchupId} className="text-label text-zinc-400 border-l-2 border-lime-500/40 pl-2">
                           <span className="text-zinc-200 font-semibold">{r.winner!.name}</span>
                           {" "}def.{" "}
                           <span>{r.loser?.name}</span>
@@ -247,7 +247,7 @@ export function RfsnHome() {
                         to={RFSN_ROUTES.newsArticle(story.id)}
                         className="text-sm text-zinc-300 hover:text-white line-clamp-2"
                       >
-                        <span className="text-[10px] text-ink-tertiary mr-2">{story.season}</span>
+                        <span className="text-label text-ink-tertiary mr-2">{story.season}</span>
                         {story.headline}
                       </Link>
                     </li>

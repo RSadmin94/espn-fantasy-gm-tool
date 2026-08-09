@@ -71,7 +71,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
         </span>
         <div className="flex items-center gap-2">
           {top.heatLabel && (
-            <span className={cn("flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-bold", HEAT_TONE[top.heatLabel] ?? HEAT_TONE.Cold)}>
+            <span className={cn("flex items-center gap-1 rounded-full border px-2 py-0.5 text-label font-bold", HEAT_TONE[top.heatLabel] ?? HEAT_TONE.Cold)}>
               <Flame className="h-3 w-3" /> {top.heatLabel}
             </span>
           )}
@@ -96,7 +96,7 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
         {typeof top.rivalryScore === "number" && (
           <div className="text-right">
             <div className="text-[20px] font-black tabular-nums text-violet-300">{top.rivalryScore}</div>
-            <div className="text-[10px] uppercase tracking-wide text-ink-tertiary">Rivalry Score</div>
+            <div className="text-label uppercase tracking-wide text-ink-tertiary">Rivalry Score</div>
           </div>
         )}
       </div>

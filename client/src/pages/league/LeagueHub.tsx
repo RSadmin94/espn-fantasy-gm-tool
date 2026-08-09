@@ -92,7 +92,7 @@ export function LeagueHub() {
         className="mb-5"
         meta={
           leagueName ? (
-            <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full border border-border px-2.5 py-0.5 text-label font-bold uppercase tracking-wider text-muted-foreground">
               {leagueName}
             </span>
           ) : null
@@ -112,15 +112,15 @@ export function LeagueHub() {
           </h2>
           <IntelPanel variant="card" className="grid gap-3 px-4 py-4 sm:grid-cols-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Name</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Name</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{leagueName ?? "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Coverage</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Coverage</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{seasonSpanDisplay ?? "—"}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">League age</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">League age</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {leagueAge != null ? `${leagueAge} seasons` : "—"}
               </p>
@@ -134,7 +134,7 @@ export function LeagueHub() {
             <p className="mt-1 text-2xl font-black tabular-nums text-amber-300">
               {lb.length > 0 ? totalTitles : "—"}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-label text-muted-foreground">
               Hub preview only — summed from the Hall of Fame championship leaderboard response, not a separate title
               authority.
             </p>
@@ -191,7 +191,7 @@ export function LeagueHub() {
               );
             })}
           </div>
-          <p className="pt-2 text-[11px] text-muted-foreground">
+          <p className="pt-2 text-label text-muted-foreground">
             Account sync and league rules remain under header utilities:{" "}
             <Link to="/league-settings" className="font-medium text-foreground underline-offset-2 hover:underline">
               League Settings

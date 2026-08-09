@@ -36,7 +36,7 @@ export function RfsnTicker({ items, upNextTeam, className }: RfsnTickerProps) {
         <span className="text-sm font-black tracking-tighter text-white">
           RFS<span className="text-red-500">N</span>
         </span>
-        <span className="hidden items-center gap-1 rounded-sm bg-red-600/90 px-1.5 py-0.5 text-[8px] font-black uppercase text-white sm:inline-flex">
+        <span className="hidden items-center gap-1 rounded-sm bg-red-600/90 px-1.5 py-0.5 text-2xs font-black uppercase text-white sm:inline-flex">
           <Radio className="h-2.5 w-2.5" aria-hidden />
           On air
         </span>
@@ -44,7 +44,7 @@ export function RfsnTicker({ items, upNextTeam, className }: RfsnTickerProps) {
       <div className="relative min-w-0 flex-1 overflow-hidden">
         <p
           className={cn(
-            "whitespace-nowrap text-[11px] text-white/55",
+            "whitespace-nowrap text-label text-white/55",
             items.length > 0 && "rfsn-ticker-crawl",
           )}
         >
@@ -52,7 +52,7 @@ export function RfsnTicker({ items, upNextTeam, className }: RfsnTickerProps) {
         </p>
       </div>
       {upNextTeam && (
-        <p className="hidden shrink-0 border-l border-white/10 pl-3 text-[10px] uppercase tracking-wide text-white/40 md:block">
+        <p className="hidden shrink-0 border-l border-white/10 pl-3 text-label uppercase tracking-wide text-white/40 md:block">
           Up next{" "}
           <span className="font-bold text-emerald-400/90">{upNextTeam}</span>
         </p>

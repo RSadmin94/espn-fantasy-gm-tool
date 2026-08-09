@@ -171,10 +171,10 @@ export function RfsnBroadcastPanel({
       data-rfsn-warroom-broadcast
     >
       <div className="mb-2 flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] font-black uppercase tracking-wider text-[#a3e635]">
+        <span className="text-label font-black uppercase tracking-wider text-[#a3e635]">
           RFSN Booth
         </span>
-        <span className="text-[11px] uppercase tracking-wider text-[#8b97a8]">
+        <span className="text-label uppercase tracking-wider text-[#8b97a8]">
           {payload ? liveSessionStatusLabel(payload.sessionState) : "Standing by"}
         </span>
       </div>
@@ -187,7 +187,7 @@ export function RfsnBroadcastPanel({
         <div className="flex items-center justify-between gap-2">
           <span
             className={cn(
-              "text-[11px] font-semibold",
+              "text-label font-semibold",
               audioIsSpeaking ? "text-[#a3e635]" : "text-zinc-300",
             )}
             data-booth-presence
@@ -196,7 +196,7 @@ export function RfsnBroadcastPanel({
           </span>
           <span
             className={cn(
-              "text-[10px] font-black uppercase tracking-wider",
+              "text-label font-black uppercase tracking-wider",
               audioIsSpeaking ? "text-[#a3e635]" : "text-ink-secondary",
             )}
             data-booth-audio-state
@@ -205,7 +205,7 @@ export function RfsnBroadcastPanel({
           </span>
         </div>
         {!audioIsSpeaking && (
-          <p className="mt-1 text-[10px] text-ink-secondary">
+          <p className="mt-1 text-label text-ink-secondary">
             Silence is editorial — coverage fires on significant moments.
           </p>
         )}

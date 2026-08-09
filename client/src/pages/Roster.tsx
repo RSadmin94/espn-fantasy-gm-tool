@@ -380,15 +380,15 @@ function RosterTable({
             <th className="px-4 py-2.5 text-right text-label font-medium uppercase tracking-wide w-16 hidden md:table-cell" style={{ color: MUTED }}>Proj/G</th>
             {warRoomColumns && (
               <>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
+                <th className="px-3 py-2.5 text-right text-label font-bold uppercase tracking-wide w-24" style={{ color: MUTED }}>
                   KVS
                 </th>
-                <th className="px-3 py-2.5 text-right text-[11px] font-bold uppercase tracking-wide w-28" style={{ color: MUTED }}>
+                <th className="px-3 py-2.5 text-right text-label font-bold uppercase tracking-wide w-28" style={{ color: MUTED }}>
                   Rec.
                 </th>
               </>
             )}
-            <th className="px-4 py-2.5 text-left text-[11px] font-medium uppercase tracking-wide hidden lg:table-cell" style={{ color: MUTED }}>Acq</th>
+            <th className="px-4 py-2.5 text-left text-label font-medium uppercase tracking-wide hidden lg:table-cell" style={{ color: MUTED }}>Acq</th>
           </tr>
         </thead>
         <tbody>
@@ -536,23 +536,23 @@ const KA_POS: Record<string, string> = {
 };
 function RecBadge({ rec, last }: { rec: Recommendation; last: boolean }) {
   if (rec === "KEEP") return (
-    <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold border uppercase",
+    <span className={cn("inline-flex items-center gap-1 rounded px-2 py-0.5 text-label font-bold border uppercase",
       last ? "border-amber-600 bg-amber-600/15 text-amber-300" : "border-lime-600 bg-lime-600/15 text-lime-300")}>
       <CheckCircle className="h-2.5 w-2.5" />{last ? "KEEP*" : "KEEP"}
     </span>
   );
   if (rec === "CONSIDER") return (
-    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold border uppercase border-amber-600 bg-amber-600/10 text-amber-400">
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-label font-bold border uppercase border-amber-600 bg-amber-600/10 text-amber-400">
       <HelpCircle className="h-2.5 w-2.5" />CONSIDER
     </span>
   );
   if (rec === "SKIP") return (
-    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold border uppercase border-zinc-600 bg-zinc-700/30 text-zinc-400">
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-label font-bold border uppercase border-zinc-600 bg-zinc-700/30 text-zinc-400">
       <MinusCircle className="h-2.5 w-2.5" />SKIP
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold border uppercase border-red-700 bg-red-700/10 text-red-400">
+    <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-label font-bold border uppercase border-red-700 bg-red-700/10 text-red-400">
       <XCircle className="h-2.5 w-2.5" />DROP
     </span>
   );
@@ -943,12 +943,12 @@ export function Roster() {
               <Key className="h-4 w-4" style={{ color: RED }} />
               <span className="font-bold text-sm" style={{ color: TEXT }}>Keeper Advisor {draftYear}</span>
               {keeperPool.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-label font-bold">
                   {keeperPool.length} eligible
                 </span>
               )}
               {finalYearKeepers.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-label font-bold">
                   {finalYearKeepers.length} last-year
                 </span>
               )}
@@ -973,7 +973,7 @@ export function Roster() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="text-[10px] uppercase tracking-wider" style={{ background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", color: MUTED }}>
+                        <tr className="text-label uppercase tracking-wider" style={{ background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", color: MUTED }}>
                           <th className="px-4 py-2.5 text-left">Player</th>
                           <th className="px-3 py-2.5 text-center">Pos</th>
                           <th className="px-3 py-2.5 text-center">Team</th>
@@ -990,19 +990,19 @@ export function Roster() {
                             <tr key={i} className="transition-colors hover:bg-foreground/[0.03]" style={{ borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>
                               <td className="px-4 py-2.5">
                                 <div className="font-semibold text-xs leading-tight" style={{ color: TEXT }}>{k.playerName}</div>
-                                <div className="text-[10px]" style={{ color: MUTED }}>{k.ownerName}</div>
+                                <div className="text-label" style={{ color: MUTED }}>{k.ownerName}</div>
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className={cn("text-xs font-bold", KA_POS[k.position] ?? "text-zinc-400")}>{k.position}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>{k.nflTeam || "—"}</span>
+                                <span className="text-label font-semibold px-1.5 py-0.5 rounded" style={{ color: MUTED, background: "color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>{k.nflTeam || "—"}</span>
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className={cn("text-xs font-bold tabular-nums",
                                   k.keeperRoundCost <= 3 ? "text-lime-400" : k.keeperRoundCost <= 6 ? "text-amber-400" : "text-zinc-300"
                                 )}>Rd {k.keeperRoundCost}</span>
-                                {k.isLastKeeperYear && <div className="text-[9px] text-amber-500 font-bold uppercase mt-0.5">Last Year</div>}
+                                {k.isLastKeeperYear && <div className="text-2xs text-amber-500 font-bold uppercase mt-0.5">Last Year</div>}
                               </td>
                               <td className="px-3 py-2.5 text-center">
                                 <span className={cn("text-xl font-black tabular-nums", kvsColor(kvs))}>{kvs}</span>
@@ -1018,7 +1018,7 @@ export function Roster() {
                   </div>
                   <div className="px-4 py-2 flex items-center gap-1.5" style={{ background: "color-mix(in oklch, var(--color-foreground) 2%, transparent)", borderTop: "1px solid color-mix(in oklch, var(--color-foreground) 6%, transparent)" }}>
                     <Info className="h-3 w-3" style={{ color: MUTED }} />
-                    <span className="text-[10px]" style={{ color: MUTED }}>KVS = Keeper Value Score &middot; * = Last eligible year for this player</span>
+                    <span className="text-label" style={{ color: MUTED }}>KVS = Keeper Value Score &middot; * = Last eligible year for this player</span>
                   </div>
                 </>
               )}
@@ -1035,7 +1035,7 @@ export function Roster() {
                 <span className="font-bold text-amber-300 text-sm">Keeper Eligibility Expiring</span>
                 <span className="text-amber-500/60 text-xs ml-2">&mdash; keep or lose forever after {draftYear}</span>
               </div>
-              <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[10px] font-bold">
+              <span className="ml-auto px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 text-label font-bold">
                 {finalYearKeepers.length} players
               </span>
             </div>
@@ -1044,20 +1044,20 @@ export function Roster() {
                 const kvs = calcKVS(k);
                 return (
                   <div key={i} className="flex items-center gap-3 p-3 rounded-lg" style={SUB}>
-                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 border border-foreground/10",
+                    <div className={cn("w-8 h-8 rounded-full flex items-center justify-center text-label font-bold shrink-0 border border-foreground/10",
                       KA_POS[k.position] ?? "text-zinc-400")} style={{ background: "color-mix(in oklch, var(--color-foreground) 5%, transparent)" }}>
                       {k.playerName.split(" ").map((w: string) => w[0]).slice(0,2).join("")}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold truncate" style={{ color: TEXT }}>{k.playerName}</div>
-                      <div className="text-[10px] truncate" style={{ color: MUTED }}>{k.ownerName} &middot; Rd {k.keeperRoundCost}</div>
+                      <div className="text-label truncate" style={{ color: MUTED }}>{k.ownerName} &middot; Rd {k.keeperRoundCost}</div>
                     </div>
                     <span className={cn("text-base font-black tabular-nums shrink-0", kvsColor(kvs))}>{kvs}</span>
                   </div>
                 );
               })}
             </div>
-            <div className="px-5 py-2.5 border-t border-amber-500/10 text-[10px] text-amber-600/90" style={{ background: "color-mix(in oklch, var(--color-foreground) 2%, transparent)" }}>
+            <div className="px-5 py-2.5 border-t border-amber-500/10 text-label text-amber-600/90" style={{ background: "color-mix(in oklch, var(--color-foreground) 2%, transparent)" }}>
               These players cannot be kept in the {draftYear + 1} draft. Make your decision before the {draftYear} draft.
             </div>
           </div>

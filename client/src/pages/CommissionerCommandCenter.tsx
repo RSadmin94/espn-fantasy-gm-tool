@@ -152,7 +152,7 @@ function SmallBadge({ children, color = "zinc" }: { children: React.ReactNode; c
     zinc: "border-white/10 bg-white/[0.04] text-white/60",
   };
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls[color] ?? cls.zinc)}>
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-label font-semibold uppercase tracking-wide", cls[color] ?? cls.zinc)}>
       {children}
     </span>
   );
@@ -634,18 +634,18 @@ export function CommissionerCommandCenter() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-2.5 text-center">
                   <div className="text-xl font-black text-violet-300 tabular-nums">{leagueSize || "—"}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-ink-tertiary">Teams</div>
+                  <div className="text-label uppercase tracking-wide text-ink-tertiary">Teams</div>
                 </div>
                 <div className="rounded-lg border border-white/[0.05] bg-white/[0.02] p-2.5 text-center">
                   <div className="text-xl font-black text-violet-300 tabular-nums">{totalSeasons || "—"}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-ink-tertiary">Seasons</div>
+                  <div className="text-label uppercase tracking-wide text-ink-tertiary">Seasons</div>
                 </div>
                 {hof && hof.coverage.completedRsGmMatchupGames > 0 && (
                   <div className="col-span-2 rounded-lg border border-white/[0.05] bg-white/[0.02] p-2.5 text-center">
                     <div className="text-xl font-black text-violet-300 tabular-nums">
                       {hof.coverage.completedRsGmMatchupGames.toLocaleString()}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wide text-ink-tertiary">Games Played</div>
+                    <div className="text-label uppercase tracking-wide text-ink-tertiary">Games Played</div>
                   </div>
                 )}
               </div>
@@ -678,7 +678,7 @@ export function CommissionerCommandCenter() {
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-[12px] text-ink-tertiary">{tx.teamLabel}</div>
-                      <div className="text-[10px] text-ink-tertiary">{formatDate(tx.processedMs)}</div>
+                      <div className="text-label text-ink-tertiary">{formatDate(tx.processedMs)}</div>
                     </div>
                   </div>
                 ))}
@@ -790,7 +790,7 @@ export function CommissionerCommandCenter() {
                       <span className="mt-0.5 shrink-0">{storyIcon(story.storyType)}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wide text-ink-tertiary">{story.emotionalTag}</span>
+                          <span className="text-label font-bold uppercase tracking-wide text-ink-tertiary">{story.emotionalTag}</span>
                           <span className="ml-auto text-[12px] font-semibold tabular-nums text-ink-tertiary">{story.intensityScore}</span>
                         </div>
                         <p className="mt-1 text-[13px] font-semibold text-white/85 leading-snug line-clamp-2">{story.headline}</p>
@@ -1165,7 +1165,7 @@ export function CommissionerCommandCenter() {
                                 style={{ width: `${team.desperationScore}%` }}
                               />
                             </div>
-                            <span className="text-[10px] text-ink-tertiary shrink-0">{team.desperationLabel}</span>
+                            <span className="text-label text-ink-tertiary shrink-0">{team.desperationLabel}</span>
                           </div>
                         </div>
                       </div>

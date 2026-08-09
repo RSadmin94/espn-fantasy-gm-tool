@@ -244,7 +244,7 @@ function OwnerIntelCard({ intel, teamName }: { intel: OwnerIntel; teamName: stri
           {intel.pedigree ? (
             <p className="text-xs"><span className="text-muted-foreground">Pedigree: </span><span className="text-foreground">{intel.pedigree}</span></p>
           ) : null}
-          <p className="text-[10px] italic text-muted-foreground/70">{intel.inferredNote}</p>
+          <p className="text-label italic text-muted-foreground/70">{intel.inferredNote}</p>
         </div>
       </CardContent>
     </Card>
@@ -308,7 +308,7 @@ function TradeIntelSections({ ti, teamAName, teamBName }: { ti: TradeIntelligenc
                 <ul className="space-y-0.5">
                   {w.reasons.map((r, i) => <li key={i} className="text-xs text-muted-foreground">• {r}</li>)}
                 </ul>
-                <p className="text-[10px] italic text-muted-foreground/70 pt-1 border-t border-border/40">{w.basis}</p>
+                <p className="text-label italic text-muted-foreground/70 pt-1 border-t border-border/40">{w.basis}</p>
               </CardContent>
             </Card>
           ))}
@@ -831,7 +831,7 @@ function TradeResults({
         <div className="flex flex-wrap items-center gap-2">
           <Trophy className="h-5 w-5 shrink-0" />
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide opacity-80">Trade Winner</div>
+            <div className="text-label font-semibold uppercase tracking-wide opacity-80">Trade Winner</div>
             <div className="text-xl font-extrabold tracking-tight">{grade.label}</div>
           </div>
           <span className="ml-auto text-sm font-normal opacity-70">
@@ -854,7 +854,7 @@ function TradeResults({
       {/* 1b. Split Verdict (Tier 1) — value / fit / context / overall; headline = your (YOU GIVE) side */}
       {ti?.splitVerdict && (
         <div className="space-y-1 rounded-lg border border-border bg-muted/20 px-4 py-3">
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="mb-1 text-label font-semibold uppercase tracking-wide text-muted-foreground">
             Verdict Breakdown — Your Side
           </div>
           <div className="flex items-center justify-between">
@@ -877,7 +877,7 @@ function TradeResults({
               {ti.splitVerdict.teamA.overallVerdict}
             </span>
           </div>
-          <div className="pt-1 text-[11px] text-muted-foreground">
+          <div className="pt-1 text-label text-muted-foreground">
             Other side overall <span className="font-semibold">{ti.splitVerdict.teamB.overallVerdict}</span>
             {" "}({ti.splitVerdict.teamB.valueGrade.toLowerCase()} value · {ti.splitVerdict.teamB.championshipContext.toLowerCase()} · fit {ti.splitVerdict.teamB.rosterFit})
           </div>
@@ -887,7 +887,7 @@ function TradeResults({
       {/* 3. Trade result — given / received / net (server totals only) */}
       <div className="rounded-lg border border-border bg-muted/15 px-4 py-3 space-y-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Trade Result</div>
+          <div className="text-label font-semibold uppercase tracking-wide text-muted-foreground">Trade Result</div>
           <p className="mt-1 text-xs text-muted-foreground">
             Net value received = what you get back minus what you send away. A positive net means you came out ahead on value.
           </p>
@@ -895,7 +895,7 @@ function TradeResults({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+              <tr className="text-left text-label uppercase tracking-wide text-muted-foreground">
                 <th className="pb-2 pr-3 font-semibold">Side</th>
                 <th className="pb-2 pr-3 font-semibold text-right">Value Given</th>
                 <th className="pb-2 pr-3 font-semibold text-right">Value Received</th>
@@ -921,7 +921,7 @@ function TradeResults({
                     <td className="py-2 pr-3 font-medium text-foreground">
                       {name}
                       {isWinner && (
-                        <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-emerald-400">Winner</span>
+                        <span className="ml-2 text-2xs font-semibold uppercase tracking-wide text-emerald-400">Winner</span>
                       )}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono tabular-nums">{Math.round(given)}</td>
@@ -969,7 +969,7 @@ function TradeResults({
             <div className="flex items-center justify-between mb-1.5 text-sm">
               <div className="min-w-0">
                 <span className="font-medium text-foreground truncate block">{label}</span>
-                <span className="text-[11px] text-muted-foreground">{sub}</span>
+                <span className="text-label text-muted-foreground">{sub}</span>
               </div>
               <span className="font-mono text-muted-foreground ml-2 shrink-0">
                 {Number.isFinite(value) ? Math.round(value) : "—"}

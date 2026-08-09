@@ -17,7 +17,7 @@ export function RfsnPositionRunAlert({ count, position, className }: RfsnPositio
     >
       <div className="flex items-center gap-2 text-amber-400">
         <TrendingUp className="h-4 w-4 shrink-0" aria-hidden />
-        <span className="text-[9px] font-black uppercase tracking-[0.18em]">
+        <span className="text-2xs font-semibold uppercase tracking-wide">
           Run on {position}s
         </span>
       </div>
@@ -28,7 +28,7 @@ export function RfsnPositionRunAlert({ count, position, className }: RfsnPositio
         {Array.from({ length: Math.min(count, 10) }).map((_, i) => (
           <span
             key={i}
-            className="inline-flex h-5 w-5 items-center justify-center rounded-sm bg-amber-400/20 text-[8px] font-black text-amber-300"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-sm bg-amber-400/20 text-2xs font-semibold text-amber-300"
           >
             {position[0]}
           </span>

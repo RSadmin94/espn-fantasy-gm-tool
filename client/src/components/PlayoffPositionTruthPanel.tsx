@@ -38,7 +38,7 @@ function InfoTip({ text }: { text: string }) {
           <HelpCircle className="h-3 w-3" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-[240px] border border-white/10 bg-zinc-900 text-[11px] leading-snug text-white/85">
+      <TooltipContent side="top" className="max-w-[240px] border border-white/10 bg-zinc-900 text-label leading-snug text-white/85">
         {text}
       </TooltipContent>
     </Tooltip>
@@ -60,12 +60,12 @@ function HeroStat({
     accent === "lime" ? "text-lime-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300" : "text-white/90";
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center">
-      <div className="mb-1 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-ink-tertiary">
+      <div className="mb-1 flex items-center justify-center gap-1 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
         {label}
         <InfoTip text={tip} />
       </div>
       <div className={cn("text-[28px] font-black tabular-nums leading-none", accentClass)}>{fmt(value)}</div>
-      <div className="mt-1 text-[10px] text-ink-tertiary">pts/game</div>
+      <div className="mt-1 text-label text-ink-tertiary">pts/game</div>
     </div>
   );
 }
@@ -77,11 +77,11 @@ function PositionCard({ row }: { row: PosSplit }) {
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[18px] font-black tracking-tight text-white/95">{row.position}</span>
         {row.verdict ? (
-          <span className={cn("rounded-full border px-2.5 py-0.5 text-[11px] font-semibold", TONE_STYLES[tone])}>
+          <span className={cn("rounded-full border px-2.5 py-0.5 text-label font-semibold", TONE_STYLES[tone])}>
             {row.verdict}
           </span>
         ) : row.confidence === "low-sample" ? (
-          <span className="text-[11px] text-ink-tertiary">{row.confidence}</span>
+          <span className="text-label text-ink-tertiary">{row.confidence}</span>
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -105,7 +105,7 @@ function PositionCard({ row }: { row: PosSplit }) {
 function MetricCell({ label, value, tip }: { label: string; value: string; tip: string }) {
   return (
     <div>
-      <div className="mb-0.5 flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-tertiary">
+      <div className="mb-0.5 flex items-center gap-0.5 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
         {label}
         <InfoTip text={tip} />
       </div>
@@ -214,7 +214,7 @@ export function PlayoffPositionTruthPanel({
         ))}
       </div>
 
-      {data.note && <p className="mt-4 text-[11px] leading-relaxed text-ink-secondary">{data.note}</p>}
+      {data.note && <p className="mt-4 text-label leading-relaxed text-ink-secondary">{data.note}</p>}
     </PanelShell>
   );
 }

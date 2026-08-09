@@ -95,7 +95,7 @@ export function MetricPill({
             : "border-border bg-foreground/[0.03] text-foreground";
   return (
     <div className={cn("rounded-lg border px-2.5 py-1.5", v)}>
-      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/90">{label}</div>
+      <div className="text-label font-medium uppercase tracking-wide text-muted-foreground/90">{label}</div>
       <div className="mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
     </div>
   );
@@ -115,7 +115,7 @@ export function MiniTable({
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[280px] text-left">
         <thead>
-          <tr className="border-b border-border bg-foreground/[0.02] text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border bg-foreground/[0.02] text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
             {columns.map((c) => (
               <th key={c} className={cn(cell, "font-semibold")}>
                 {c}
@@ -157,7 +157,7 @@ export function StatusBadge({
             ? "border-violet-500/30 bg-violet-500/15 text-violet-200"
             : "border-border bg-foreground/[0.04] text-muted-foreground";
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", cls)}>
+    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide", cls)}>
       {children}
     </span>
   );

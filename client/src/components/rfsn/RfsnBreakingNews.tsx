@@ -29,7 +29,7 @@ export function RfsnBreakingNews({
     >
       <div className="flex items-center gap-2 text-red-400">
         <Zap className={cn("shrink-0 rfsn-mic-live", isLarge ? "h-5 w-5" : "h-4 w-4")} aria-hidden />
-        <span className="text-[9px] font-black uppercase tracking-[0.22em]">Breaking</span>
+        <span className="text-2xs font-semibold uppercase tracking-wide">Breaking</span>
       </div>
       <h3
         className={cn(
@@ -42,7 +42,7 @@ export function RfsnBreakingNews({
       <p
         className={cn(
           "mt-1 leading-snug text-white/75",
-          compact ? "line-clamp-2 text-[11px]" : "text-xs md:text-sm",
+          compact ? "line-clamp-2 text-label" : "text-sm md:text-[15px]",
           isLarge && "line-clamp-3",
         )}
       >

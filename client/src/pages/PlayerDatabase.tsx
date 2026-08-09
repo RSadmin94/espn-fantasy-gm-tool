@@ -136,11 +136,11 @@ function InsightCard({ type, title, body, tag }: { type: InsightType; title: str
   return (
     <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/60 p-3 space-y-1.5">
       <div className="flex items-center justify-between">
-        <div className={cn("flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border", colors[type])}>
+        <div className={cn("flex items-center gap-1.5 text-label font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border", colors[type])}>
           <Icon className="h-3 w-3" />
           {title}
         </div>
-        {tag && <span className="text-[9px] font-bold uppercase text-ink-tertiary bg-zinc-800 px-1.5 py-0.5 rounded">{tag}</span>}
+        {tag && <span className="text-2xs font-bold uppercase text-ink-tertiary bg-zinc-800 px-1.5 py-0.5 rounded">{tag}</span>}
       </div>
       <p className="text-xs text-zinc-400 leading-relaxed">{body}</p>
     </div>
@@ -264,7 +264,7 @@ export function PlayerDatabase() {
             ].map(s => (
               <div key={s.label} className="text-center min-w-[60px] px-3 py-2 rounded-lg bg-zinc-800/60 border border-zinc-700/40">
                 <div className="text-lg font-black text-white tabular-nums">{s.value}</div>
-                <div className="text-[9px] font-bold uppercase tracking-widest text-ink-secondary mt-0.5">{s.label}</div>
+                <div className="text-2xs font-bold uppercase tracking-widest text-ink-secondary mt-0.5">{s.label}</div>
               </div>
             ))}
           </div>
@@ -284,20 +284,20 @@ export function PlayerDatabase() {
               )}
             >
               {t}
-              {i > 0 && <span className="ml-1.5 text-[9px] text-ink-tertiary normal-case tracking-normal">Soon</span>}
+              {i > 0 && <span className="ml-1.5 text-2xs text-ink-tertiary normal-case tracking-normal">Soon</span>}
             </button>
           ))}
           <button
             type="button"
             onClick={() => syncSleeperMut.mutate({})}
             disabled={syncSleeperMut.isPending}
-            className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-lime-300 hover:border-lime-500/40 disabled:opacity-50"
+            className="text-label font-bold uppercase tracking-wider px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-lime-300 hover:border-lime-500/40 disabled:opacity-50"
             title="Match Sleeper NFL player IDs onto the registry for CDN headshots"
           >
             {syncSleeperMut.isPending ? "Syncing Sleeper…" : "Sync Sleeper Headshots"}
           </button>
           {sleeperCoverageQ.data && (
-            <span className="text-[10px] text-ink-tertiary tabular-nums" title="withBoth / withEspnId">
+            <span className="text-label text-ink-tertiary tabular-nums" title="withBoth / withEspnId">
               Sleeper {sleeperCoverageQ.data.withBoth}/{sleeperCoverageQ.data.withEspnId}
               {sleeperCoverageQ.data.coveragePercent != null
                 ? ` (${sleeperCoverageQ.data.coveragePercent}%)`
@@ -305,14 +305,14 @@ export function PlayerDatabase() {
             </span>
           )}
           <span
-            className="text-[10px] text-ink-tertiary tabular-nums"
+            className="text-label text-ink-tertiary tabular-nums"
             title="Shared compact identity lookup (bundled; not a live Sleeper fetch)"
           >
             Identity v{getPlayerIdentityArtifact().v} · {getPlayerIdentityArtifact().includedPlayerCount} ·{" "}
             {getPlayerIdentityArtifact().contentHash}
           </span>
           {syncSleeperMut.data && (
-            <span className="text-[10px] text-lime-500/80 tabular-nums">
+            <span className="text-label text-lime-500/80 tabular-nums">
               Wrote {syncSleeperMut.data.sleeperIdsWritten}; already {syncSleeperMut.data.alreadyMatched}
               {syncSleeperMut.data.coveragePercent != null
                 ? `; cover ${syncSleeperMut.data.coveragePercent}%`
@@ -400,7 +400,7 @@ export function PlayerDatabase() {
                   ? "36px 1fr 80px 100px 130px 80px 72px 76px 100px"
                   : "36px 1fr 80px 100px 130px 80px 72px 76px",
               }}>
-              <div className="text-[10px] font-semibold text-ink-tertiary uppercase">#</div>
+              <div className="text-label font-semibold text-ink-tertiary uppercase">#</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Player</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">Pos</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">NFL Team</div>
@@ -409,7 +409,7 @@ export function PlayerDatabase() {
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">First Yr</div>
               <div className="text-[12px] font-semibold text-zinc-400 uppercase tracking-wider">AVG Pick</div>
               {showDraftSlotCols && (
-                <div className="text-[10px] font-semibold text-ink-secondary uppercase leading-tight text-right pr-1">
+                <div className="text-label font-semibold text-ink-secondary uppercase leading-tight text-right pr-1">
                   Open / Board<br /><span className="text-ink-tertiary font-normal">(active league)</span>
                 </div>
               )}
@@ -466,22 +466,22 @@ export function PlayerDatabase() {
                       <div className="font-bold text-zinc-100 text-base leading-tight truncate group-hover:text-white">{p.fullName}</div>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {p.currentNflTeam && (
-                          <span className="text-[10px] font-semibold bg-zinc-700/60 text-zinc-300 px-1 py-0 rounded">{p.currentNflTeam}</span>
+                          <span className="text-label font-semibold bg-zinc-700/60 text-zinc-300 px-1 py-0 rounded">{p.currentNflTeam}</span>
                         )}
-                        <span className={cn("text-[10px]", cfg.text)}>{p.position}</span>
+                        <span className={cn("text-label", cfg.text)}>{p.position}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Pos pill */}
                   <div>
-                    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border uppercase", cfg.pill)}>
+                    <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-label font-bold border uppercase", cfg.pill)}>
                       {p.position === "DEF" ? "D/ST" : p.position}
                     </span>
                   </div>
 
                   {/* Team */}
-                  <div className="text-xs text-zinc-400 font-medium">{p.currentNflTeam ?? <span className="text-ink-tertiary italic text-[10px]">Free Agent</span>}</div>
+                  <div className="text-xs text-zinc-400 font-medium">{p.currentNflTeam ?? <span className="text-ink-tertiary italic text-label">Free Agent</span>}</div>
 
                   {/* Dynasty value bar */}
                   <div className="pr-2"><DynBar value={p.dynastyValue} pos={p.position} /></div>
@@ -489,11 +489,11 @@ export function PlayerDatabase() {
                   {/* Status */}
                   <div>
                     {p.isActive ? (
-                      <span className="flex items-center gap-1 text-[10px] font-bold text-lime-400">
+                      <span className="flex items-center gap-1 text-label font-bold text-lime-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-lime-400 shadow shadow-lime-400/60" />Active
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold text-ink-tertiary">Inactive</span>
+                      <span className="text-label font-bold text-ink-tertiary">Inactive</span>
                     )}
                   </div>
 
@@ -502,14 +502,14 @@ export function PlayerDatabase() {
                   {/* AVG Pick */}
                   <div className="text-xs tabular-nums font-semibold text-zinc-300">{p.avgPick != null ? Number(p.avgPick).toFixed(1) : <span className="text-ink-tertiary">{"\u2014"}</span>}</div>
                   {showDraftSlotCols && (
-                    <div className="text-[10px] tabular-nums text-zinc-400 text-right leading-tight pr-1">
+                    <div className="text-label tabular-nums text-zinc-400 text-right leading-tight pr-1">
                       {p.openDraftSelections != null && p.draftBoardSlots != null ? (
                         <>
                           <span className="text-lime-400/90 font-semibold">{p.openDraftSelections}</span>
                           <span className="text-ink-tertiary"> / </span>
                           <span>{p.draftBoardSlots}</span>
                           {(p.keeperSlots > 0 || p.retainedSlots > 0) && (
-                            <div className="text-[9px] text-ink-tertiary mt-0.5">
+                            <div className="text-2xs text-ink-tertiary mt-0.5">
                               K{p.keeperSlots ?? 0} · R{p.retainedSlots ?? 0}
                             </div>
                           )}
@@ -559,7 +559,7 @@ export function PlayerDatabase() {
               <Sparkles className="h-4 w-4 text-lime-400" />
               <span className="text-xs font-black uppercase tracking-widest text-zinc-300">AI Database Insights</span>
             </div>
-            <p className="text-[10px] text-ink-tertiary mt-1">Analysis based on your registry data</p>
+            <p className="text-label text-ink-tertiary mt-1">Analysis based on your registry data</p>
           </div>
 
           <div className="p-3 space-y-2.5 flex-1">
@@ -596,20 +596,20 @@ export function PlayerDatabase() {
 
             {/* Position distribution */}
             <div className="rounded-lg border border-zinc-800/60 bg-zinc-900/40 p-3">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-ink-secondary mb-2.5">Position Distribution</div>
+              <div className="text-label font-bold uppercase tracking-widest text-ink-secondary mb-2.5">Position Distribution</div>
               <div className="space-y-1.5">
                 {posDistEntries.map(([pos, cnt]) => {
                   const cfg = POS_CFG[pos];
                   return (
                     <div key={pos} className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold w-8 text-right text-ink-secondary">{pos === "DEF" ? "D/ST" : pos}</span>
+                      <span className="text-label font-bold w-8 text-right text-ink-secondary">{pos === "DEF" ? "D/ST" : pos}</span>
                       <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
                         <div
                           className={cn("h-full rounded-full", cfg?.bar ?? "bg-zinc-600")}
                           style={{ width: `${(cnt / maxPosCnt) * 100}%` }}
                         />
                       </div>
-                      <span className="text-[10px] tabular-nums text-ink-tertiary w-5 text-right">{cnt}</span>
+                      <span className="text-label tabular-nums text-ink-tertiary w-5 text-right">{cnt}</span>
                     </div>
                   );
                 })}
@@ -625,7 +625,7 @@ export function PlayerDatabase() {
               ].map(s => (
                 <div key={s.lbl}>
                   <div className="text-base font-black text-zinc-100 tabular-nums">{s.val}</div>
-                  <div className="text-[9px] text-ink-tertiary font-semibold uppercase tracking-wide mt-0.5">{s.lbl}</div>
+                  <div className="text-2xs text-ink-tertiary font-semibold uppercase tracking-wide mt-0.5">{s.lbl}</div>
                 </div>
               ))}
             </div>

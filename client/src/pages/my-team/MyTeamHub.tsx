@@ -91,11 +91,11 @@ export function MyTeamHub() {
         className="mb-5"
         meta={
           owner?.isSetupComplete ? (
-            <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full border border-border px-2.5 py-0.5 text-label font-bold uppercase tracking-wider text-muted-foreground">
               {displayName}
             </span>
           ) : (
-            <span className="rounded-full border border-amber-500/30 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-amber-300">
+            <span className="rounded-full border border-amber-500/30 px-2.5 py-0.5 text-label font-bold uppercase tracking-wider text-amber-300">
               Setup needed
             </span>
           )
@@ -140,7 +140,7 @@ export function MyTeamHub() {
 
         <section className="grid gap-3 md:grid-cols-2">
           <IntelPanel variant="card" className="px-4 py-4">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Current threat
             </div>
             {threat?.rivalName || rival?.rivalName || topRival?.rivalName ? (
@@ -169,7 +169,7 @@ export function MyTeamHub() {
           </IntelPanel>
 
           <IntelPanel variant="card" className="px-4 py-4">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Roster DNA pulse
             </div>
             {dna?.archetype ? (
@@ -233,7 +233,7 @@ export function MyTeamHub() {
                 <d.icon className="h-4 w-4 shrink-0 text-violet-300" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground">{d.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{d.hint}</div>
+                  <div className="text-label text-muted-foreground">{d.hint}</div>
                 </div>
               </Link>
             ))}

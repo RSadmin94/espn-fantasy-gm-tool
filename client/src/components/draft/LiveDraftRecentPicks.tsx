@@ -33,27 +33,27 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
       data-rfsn-024
     >
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
           Recent activity
         </span>
         {currentPickNumber != null && Number.isFinite(currentPickNumber) ? (
-          <span className="text-[10px] text-violet-300/90 tabular-nums">
+          <span className="text-label text-violet-300/90 tabular-nums">
             On deck · Pick {currentPickNumber}
           </span>
         ) : null}
       </div>
 
       {picks.length === 0 ? (
-        <p className="text-[11px] text-ink-secondary italic" data-live-draft-timeline-empty>
+        <p className="text-label text-ink-secondary italic" data-live-draft-timeline-empty>
           Waiting for live draft activity
         </p>
       ) : (
-        <ul className="space-y-1 max-h-36 overflow-y-auto pr-1">
+        <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
           {picks.map((p) => (
             <li
               key={p.pickNumber}
               className={cn(
-                "flex items-center gap-2 rounded px-1.5 py-1 text-[11px]",
+                "flex items-center gap-2 rounded px-2 py-1.5 text-label",
                 p.isLast
                   ? "bg-emerald-500/10 border border-emerald-500/30"
                   : "border border-transparent",
@@ -76,12 +76,12 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
                 {p.position}
               </span>
               {p.hasReaction ? (
-                <span className="text-[9px] font-black uppercase tracking-wide text-[#a3e635] shrink-0">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-[#a3e635] shrink-0">
                   RFSN
                 </span>
               ) : null}
               {p.isLast ? (
-                <span className="text-[9px] font-black uppercase tracking-wide text-emerald-300 shrink-0">
+                <span className="text-2xs font-semibold uppercase tracking-wide text-emerald-300 shrink-0">
                   Last
                 </span>
               ) : null}
