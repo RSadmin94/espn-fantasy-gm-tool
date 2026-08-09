@@ -7,7 +7,14 @@ import fs from "node:fs";
 import path from "node:path";
 
 const BASE = (process.env.QA_BASE ?? "http://localhost:3000").replace(/\/$/, "");
-const OUT = path.resolve("audit-artifacts/rfsn-054/screenshots-054a-local");
+const OUT = path.resolve(
+  process.env.QA_SHOT_DIR ??
+    (/localhost|127\.0\.0\.1/i.test(BASE)
+      ? "audit-artifacts/rfsn-054/screenshots-054a-local"
+      : /sprint-8-preview/i.test(BASE)
+        ? "audit-artifacts/rfsn-054/screenshots-054a-preview"
+        : "audit-artifacts/rfsn-054/screenshots-054a-production"),
+);
 const PAGES = [
   ["/draft/live", "draft-live"],
   ["/rfsn/live", "rfsn-live"],
@@ -16,13 +23,23 @@ const PAGES = [
 async function mint(): Promise<string> {
   const secret = process.env.CLERK_SECRET_KEY?.trim();
   if (!secret) throw new Error("CLERK_SECRET_KEY required");
-  const { createClerkClient } = await import("@clerk/clerk-sdk-node");
-  const clerk = createClerkClient({ secretKey: secret });
-  const t = await clerk.signInTokens.createSignInToken({
-    userId: process.env.SMOKE_CLERK_USER_ID ?? "user_3E8K7ihI9tYXU06UJ5BfeCsg1bo",
-    expiresInSeconds: 300,
+  const res = await fetch("https://api.clerk.com/v1/sign_in_tokens", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${secret}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: process.env.SMOKE_CLERK_USER_ID ?? "user_3E8K7ihI9tYXU06UJ5BfeCsg1bo",
+      expires_in_seconds: 300,
+    }),
   });
-  return `${BASE}/sign-in#__clerk_ticket=${t.token}`;
+  if (!res.ok) throw new Error(`Clerk mint failed ${res.status}`);
+  const data = (await res.json()) as { url?: string; token?: string };
+  if (data.url) {
+    const u = new URL(data.url);
+    u.protocol = new URL(BASE).protocol;
+    u.host = new URL(BASE).host;
+    return u.toString();
+  }
+  return `${BASE}/sign-in?__clerk_ticket=${encodeURIComponent(data.token!)}`;
 }
 
 async function main() {
@@ -33,7 +50,12 @@ async function main() {
   try {
     const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
     await page.goto(await mint(), { waitUntil: "domcontentloaded", timeout: 90_000 });
-    await page.waitForURL((u) => !u.pathname.includes("sign-in"), { timeout: 90_000 });
+    await page.waitForURL(
+      (u) =>
+        !u.pathname.includes("sign-in") &&
+        (u.hostname.includes("fantasyfootballrivals.com") || /localhost|127\.0\.0\.1/i.test(u.hostname)),
+      { timeout: 90_000 },
+    );
     await page.waitForTimeout(2500);
 
     const connections = await page.evaluate(async () => {

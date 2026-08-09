@@ -1,6 +1,6 @@
 # RFSN-054A — Compact Live Draft Control
 
-**Status:** Local validation PASS (tests + before shot). Preview/Production via Git after explicit ask.  
+**Status:** Preview + **Production live** (`fa65ab5` / `3bdcd8f3` · `2a80eca` / `3d25ff96`).  
 **Not typography. Not 054 density census.** Shared control panel + live page chrome only.
 
 ## Goal
