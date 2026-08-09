@@ -1,0 +1,4401 @@
+{
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "leagueId": "457622",
+  "season": 2026,
+  "rawRowCount": 481,
+  "tradeRowCount": 437,
+  "byType": {
+    "ROSTER": 43,
+    "TRADE_PROPOSAL": 413,
+    "TRADE_UPHOLD": 6,
+    "TRADE_DECLINE": 7,
+    "FREEAGENT": 1,
+    "TRADE_ACCEPT": 11
+  },
+  "byStatus": {
+    "EXECUTED": 63,
+    "CANCELED": 231,
+    "PENDING": 182,
+    "(NULL)": 5
+  },
+  "clusterCount": 82,
+  "displayedMeaningfulTrades": 75,
+  "filteredTradeClusters": 7,
+  "executedFilter": {
+    "displayed": 5,
+    "executedClusters": 5,
+    "kept": [
+      {
+        "key": "d3731d04-107d-415a-8c25-f5530b88dddf",
+        "ok": true,
+        "reason": "kept_executed_headers (assets unavailable)",
+        "types": [
+          "TRADE_UPHOLD",
+          "TRADE_ACCEPT"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          1,
+          18
+        ],
+        "assetCount": 0,
+        "executed": true
+      },
+      {
+        "key": "f273e8dd-cc69-4b8d-8c34-37eb401924de",
+        "ok": true,
+        "reason": "kept",
+        "types": [
+          "TRADE_UPHOLD",
+          "TRADE_ACCEPT",
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "EXECUTED",
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE",
+          "PROCESS"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 12,
+        "executed": true
+      },
+      {
+        "key": "d2a71389-7880-4ce0-ab0c-674980797f6c",
+        "ok": true,
+        "reason": "kept_executed_headers (assets unavailable)",
+        "types": [
+          "TRADE_ACCEPT",
+          "TRADE_UPHOLD"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          1,
+          27
+        ],
+        "assetCount": 0,
+        "executed": true
+      },
+      {
+        "key": "c5c130dd-296d-4865-9ed8-f3029e4ad3b8",
+        "ok": true,
+        "reason": "kept_executed_headers (assets unavailable)",
+        "types": [
+          "TRADE_ACCEPT",
+          "TRADE_UPHOLD"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          17,
+          22
+        ],
+        "assetCount": 0,
+        "executed": true
+      },
+      {
+        "key": "b2da5b7a-19e5-4122-9176-ef52648f3b2f",
+        "ok": true,
+        "reason": "kept_executed_headers (assets unavailable)",
+        "types": [
+          "TRADE_ACCEPT",
+          "TRADE_UPHOLD"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          1,
+          18
+        ],
+        "assetCount": 0,
+        "executed": true
+      }
+    ],
+    "filtered": [
+      {
+        "key": "b3120051-92c7-4ca6-829c-415eeb181174",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "fc7eb9ba-4ebd-4946-bf74-ba0f0af8f121",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "1e6a4a47-55ad-4e46-b74c-d881c3921c1b",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          26
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "7668aa6f-93d3-4f2c-b8f5-d29556e90ae3",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "fe8dbeaa-b790-4b39-862a-9e44cac1d254",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "0ab06a95-e46a-432c-af10-82fd7d0ebe1b",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          21,
+          26
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "84f7b82f-8862-42ea-9fc7-697a7ce4a78d",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "29d4a5c4-e82e-4ca7-a413-627c6441d15a",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "7df50218-e0dc-46c8-a940-887170db5a97",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "9cf44381-3f3b-48bf-be9e-ad0b59690f99",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "999e9851-f057-4f0c-a54f-ce18cd9626df",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          28
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "8a6eb500-6dcd-4f5b-bf91-24b418ae25ae",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          25
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "ac03a641-12cc-41a0-80f7-c9030f34d449",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          26
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "abcadc78-d39b-4cec-82e2-55ca5636791e",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 0,
+        "executed": false
+      },
+      {
+        "key": "1aa1cb6d-44b8-4a5f-984d-8b156bcbc01f",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 0,
+        "executed": false
+      },
+      {
+        "key": "20632aab-b32c-4649-a4b7-df3562bf842b",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "247f99b6-46b4-4426-9653-70101a08ddb6",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "6c575688-18e8-495b-aa3c-f4623e2b2bae",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "7165ce00-5819-41ee-b5e6-039a633e9750",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 1,
+        "executed": false
+      },
+      {
+        "key": "38b3e4b0-44e4-4f68-89a6-3f603b07cefa",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 0,
+        "executed": false
+      },
+      {
+        "key": "3cc13b2a-f92f-4d6b-97da-9e757a7964ae",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          24
+        ],
+        "assetCount": 10,
+        "executed": false
+      },
+      {
+        "key": "4b99c661-005f-4f35-931a-0a7a26afabe8",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "8dd219fe-9ca3-4c0a-83f8-ad0e9d1f1aab",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          28
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "8e8ed438-3934-45b8-b2e7-a60560973eac",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "b59cc187-e283-44e3-aaeb-1febac208295",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "6ed6cefa-dd40-4070-b547-cf6cadb96459",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          27
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "1f058c13-e35a-4c91-84f1-d9c2c58c578b",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          26
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "c41e80b3-fe58-414c-94c9-20a879dee8e9",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          27
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "8215fabc-3f7b-4a4c-afc9-59066c05ccba",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "1851bd26-d718-4bf6-8fa6-4ae83266104f",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 0,
+        "executed": false
+      },
+      {
+        "key": "1bada305-fc0e-4236-ab0c-d93226a7c8f8",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          4,
+          17
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "43659722-4612-4f44-93ea-616e6eb497c3",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          4,
+          21
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "3781976a-991f-49a0-8feb-73bd08c9a32c",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 1,
+        "executed": false
+      },
+      {
+        "key": "d7686aed-102b-4cc0-90cd-89aaa3f7ef14",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "54ca3126-777a-45ad-8e40-1a4bc41072e2",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          4,
+          17
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "fe175103-0868-4dd3-a6eb-404c9563d963",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          18
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "547b6464-f05f-482c-bcf3-cf3a22c18769",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "079a5d91-dd84-46ed-ab03-8896eab29c44",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "a22e33e5-0bda-400e-85b8-7172435c83b1",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          24
+        ],
+        "assetCount": 10,
+        "executed": false
+      },
+      {
+        "key": "1525a3be-3e44-49e0-a6cf-b6fce5604348",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "5f570fcd-f229-48a1-b838-913273daffc6",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "db6ff649-0810-48bf-94d6-730699eccb91",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "744fbd35-ab0d-42fe-b1c3-a54da729d53a",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "0d3faea9-c5a2-406b-b0f3-a9c3a7203c61",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          24
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "1e87ba91-667f-45e3-b898-8eb6380c95b9",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          26
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "b33f1993-f3ba-4993-a701-2f2882cef847",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "dd33aee1-c58f-4ddf-8ddf-263e7207215c",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          4,
+          17
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "ac4956b1-10e4-43ed-95e1-a795f1057c40",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          4,
+          17
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "f211d274-6d4a-4760-899e-6387f6c0d6d9",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          14
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "bb87c6ec-961e-4c18-a433-89403a7ba514",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "950d7ba4-bf72-45c0-ac26-84a6df9afe5b",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_DECLINE"
+        ],
+        "statuses": [
+          "EXECUTED"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [],
+        "assetCount": 0,
+        "executed": false
+      },
+      {
+        "key": "b8824620-6028-4f06-b85b-caae387b2a47",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 10,
+        "executed": false
+      },
+      {
+        "key": "ff205569-635f-4777-994a-65f620db5843",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          24
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "bb6cbb18-1a09-4f8a-846f-967d4963b7ac",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          14
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "8ab11ee0-38cc-48bc-8207-71acce967236",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "3844a60d-6ded-4af0-948a-dfd5b490a9de",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "1b67fc97-e683-411a-80aa-8da892632258",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "29b1481a-a932-483c-b806-9d0ca4b4e271",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "4d87f929-7363-406c-9697-c1bc44043bd8",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          17
+        ],
+        "assetCount": 10,
+        "executed": false
+      },
+      {
+        "key": "6f38ad63-87bd-4add-b547-e6f28c4efeb8",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "a77945df-4f5a-4823-bf00-f0a61c545d7e",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          26
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "6fb9a2b3-336b-4547-a1f3-c04272bcca42",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          23
+        ],
+        "assetCount": 8,
+        "executed": false
+      },
+      {
+        "key": "984b7a88-ba9b-459e-b124-f4805c9f8ebf",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "db17ceac-fff0-4f2d-a3ab-f1d6b670d803",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          25
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "5a06fae5-2458-43f2-bd1f-041bbec0a727",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "6f119e72-54b7-41a4-82c9-1fe221042aa2",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "b645cf5a-d578-44cc-82fc-1cb38f00c765",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "7bd92f32-88c0-4024-853d-371105440ca6",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          18
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "e683b194-5632-40c6-bf7f-411478f5d57a",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "10ced181-c112-4362-8265-ed79403ffc32",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "a3f74548-7b41-4b2a-879f-d13ea5d518b1",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          21
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "14b06297-9625-4e0f-90b9-95f7edb75bc3",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "fb298d2c-455e-47bc-8f82-5193f8a0ef42",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 6,
+        "executed": false
+      },
+      {
+        "key": "22a2827e-9421-4f57-883b-c808b4514bb8",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "cb70d8c5-ea8d-4e08-8905-73700f48a859",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          17,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "b412afbf-92ed-4b58-b956-87e97c3452fc",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "CANCELED"
+        ],
+        "execTypes": [
+          "CANCEL"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 4,
+        "executed": false
+      },
+      {
+        "key": "875b488b-a9ce-45bc-82c5-9b72e8696614",
+        "ok": false,
+        "reason": "status_filter_executed",
+        "types": [
+          "TRADE_PROPOSAL"
+        ],
+        "statuses": [
+          "PENDING"
+        ],
+        "execTypes": [
+          "EXECUTE"
+        ],
+        "teams": [
+          11,
+          22
+        ],
+        "assetCount": 6,
+        "executed": false
+      }
+    ]
+  },
+  "missingVsClusters": 7,
+  "kept": [
+    {
+      "key": "b3120051-92c7-4ca6-829c-415eeb181174",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "7df50218-e0dc-46c8-a940-887170db5a97"
+      ],
+      "txIds": [
+        "b3120051-92c7-4ca6-829c-415eeb181174"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "fc7eb9ba-4ebd-4946-bf74-ba0f0af8f121",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "547b6464-f05f-482c-bcf3-cf3a22c18769"
+      ],
+      "txIds": [
+        "fc7eb9ba-4ebd-4946-bf74-ba0f0af8f121"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1e6a4a47-55ad-4e46-b74c-d881c3921c1b",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "ac03a641-12cc-41a0-80f7-c9030f34d449"
+      ],
+      "txIds": [
+        "1e6a4a47-55ad-4e46-b74c-d881c3921c1b"
+      ],
+      "teams": [
+        11,
+        26
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "7668aa6f-93d3-4f2c-b8f5-d29556e90ae3",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "6c575688-18e8-495b-aa3c-f4623e2b2bae"
+      ],
+      "txIds": [
+        "7668aa6f-93d3-4f2c-b8f5-d29556e90ae3"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "fe8dbeaa-b790-4b39-862a-9e44cac1d254",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "29b1481a-a932-483c-b806-9d0ca4b4e271"
+      ],
+      "txIds": [
+        "fe8dbeaa-b790-4b39-862a-9e44cac1d254"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "0ab06a95-e46a-432c-af10-82fd7d0ebe1b",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "0219ece6-7269-442a-89cf-24d2c1dfdee0"
+      ],
+      "txIds": [
+        "0ab06a95-e46a-432c-af10-82fd7d0ebe1b"
+      ],
+      "teams": [
+        21,
+        26
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "84f7b82f-8862-42ea-9fc7-697a7ce4a78d",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "db6ff649-0810-48bf-94d6-730699eccb91"
+      ],
+      "txIds": [
+        "84f7b82f-8862-42ea-9fc7-697a7ce4a78d"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "29d4a5c4-e82e-4ca7-a413-627c6441d15a",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "29d4a5c4-e82e-4ca7-a413-627c6441d15a"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "7df50218-e0dc-46c8-a940-887170db5a97",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "7df50218-e0dc-46c8-a940-887170db5a97"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "9cf44381-3f3b-48bf-be9e-ad0b59690f99",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "76b688de-50bc-4e50-8edf-797184254c0c"
+      ],
+      "txIds": [
+        "9cf44381-3f3b-48bf-be9e-ad0b59690f99"
+      ],
+      "teams": [
+        17,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "999e9851-f057-4f0c-a54f-ce18cd9626df",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "999e9851-f057-4f0c-a54f-ce18cd9626df"
+      ],
+      "teams": [
+        11,
+        28
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "8a6eb500-6dcd-4f5b-bf91-24b418ae25ae",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "8a6eb500-6dcd-4f5b-bf91-24b418ae25ae"
+      ],
+      "teams": [
+        11,
+        25
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "ac03a641-12cc-41a0-80f7-c9030f34d449",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "ac03a641-12cc-41a0-80f7-c9030f34d449"
+      ],
+      "teams": [
+        11,
+        26
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "d3731d04-107d-415a-8c25-f5530b88dddf",
+      "rowCount": 2,
+      "types": [
+        "TRADE_UPHOLD",
+        "TRADE_ACCEPT"
+      ],
+      "statuses": [
+        "EXECUTED",
+        ""
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "d3731d04-107d-415a-8c25-f5530b88dddf"
+      ],
+      "txIds": [
+        "c1986f18-e750-4b7c-b18d-3e92db4da059",
+        "7265648a-b1d2-41c4-8b3b-7071e022ed9c"
+      ],
+      "teams": [
+        1,
+        18
+      ],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept_executed_headers (assets unavailable)",
+      "executed": true
+    },
+    {
+      "key": "20632aab-b32c-4649-a4b7-df3562bf842b",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "20632aab-b32c-4649-a4b7-df3562bf842b"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "247f99b6-46b4-4426-9653-70101a08ddb6",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "247f99b6-46b4-4426-9653-70101a08ddb6"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "6c575688-18e8-495b-aa3c-f4623e2b2bae",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "6c575688-18e8-495b-aa3c-f4623e2b2bae"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "3cc13b2a-f92f-4d6b-97da-9e757a7964ae",
+      "rowCount": 10,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "3cc13b2a-f92f-4d6b-97da-9e757a7964ae"
+      ],
+      "teams": [
+        11,
+        24
+      ],
+      "assetRows": 10,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "4b99c661-005f-4f35-931a-0a7a26afabe8",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "4b99c661-005f-4f35-931a-0a7a26afabe8"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "f273e8dd-cc69-4b8d-8c34-37eb401924de",
+      "rowCount": 15,
+      "types": [
+        "TRADE_UPHOLD",
+        "TRADE_ACCEPT",
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "EXECUTED",
+        "",
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE",
+        "PROCESS"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "f273e8dd-cc69-4b8d-8c34-37eb401924de",
+        ""
+      ],
+      "txIds": [
+        "bbe6dbe8-c418-48c6-9829-dd77290ca247",
+        "410f69cb-9fa4-4031-b72e-12a524be5b64",
+        "f034d15b-be69-4525-ad3b-cd8fdf787fe4",
+        "2727926c-c6d6-4bca-ab15-af7b7fb8f159",
+        "f273e8dd-cc69-4b8d-8c34-37eb401924de"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 12,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": true
+    },
+    {
+      "key": "8dd219fe-9ca3-4c0a-83f8-ad0e9d1f1aab",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "999e9851-f057-4f0c-a54f-ce18cd9626df"
+      ],
+      "txIds": [
+        "8dd219fe-9ca3-4c0a-83f8-ad0e9d1f1aab"
+      ],
+      "teams": [
+        11,
+        28
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "8e8ed438-3934-45b8-b2e7-a60560973eac",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "984b7a88-ba9b-459e-b124-f4805c9f8ebf"
+      ],
+      "txIds": [
+        "8e8ed438-3934-45b8-b2e7-a60560973eac"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b59cc187-e283-44e3-aaeb-1febac208295",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "29d4a5c4-e82e-4ca7-a413-627c6441d15a"
+      ],
+      "txIds": [
+        "b59cc187-e283-44e3-aaeb-1febac208295"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "6ed6cefa-dd40-4070-b547-cf6cadb96459",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "c41e80b3-fe58-414c-94c9-20a879dee8e9"
+      ],
+      "txIds": [
+        "6ed6cefa-dd40-4070-b547-cf6cadb96459"
+      ],
+      "teams": [
+        11,
+        27
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1f058c13-e35a-4c91-84f1-d9c2c58c578b",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "d465ea27-dc6b-4ec4-a73d-04574a9ea80b"
+      ],
+      "txIds": [
+        "1f058c13-e35a-4c91-84f1-d9c2c58c578b"
+      ],
+      "teams": [
+        17,
+        26
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "c41e80b3-fe58-414c-94c9-20a879dee8e9",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "c41e80b3-fe58-414c-94c9-20a879dee8e9"
+      ],
+      "teams": [
+        11,
+        27
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "8215fabc-3f7b-4a4c-afc9-59066c05ccba",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "b33f1993-f3ba-4993-a701-2f2882cef847"
+      ],
+      "txIds": [
+        "8215fabc-3f7b-4a4c-afc9-59066c05ccba"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1bada305-fc0e-4236-ab0c-d93226a7c8f8",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "612573c2-1429-42c3-9387-c2771244e54a"
+      ],
+      "txIds": [
+        "1bada305-fc0e-4236-ab0c-d93226a7c8f8"
+      ],
+      "teams": [
+        4,
+        17
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "43659722-4612-4f44-93ea-616e6eb497c3",
+      "rowCount": 9,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "0ae3d3cf-192f-4e96-9d14-2eabc782e22b"
+      ],
+      "txIds": [
+        "43659722-4612-4f44-93ea-616e6eb497c3"
+      ],
+      "teams": [
+        4,
+        21
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "d7686aed-102b-4cc0-90cd-89aaa3f7ef14",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "1b67fc97-e683-411a-80aa-8da892632258"
+      ],
+      "txIds": [
+        "d7686aed-102b-4cc0-90cd-89aaa3f7ef14"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "54ca3126-777a-45ad-8e40-1a4bc41072e2",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "bd75f40e-c8a5-47e7-98cd-618b510e5923"
+      ],
+      "txIds": [
+        "54ca3126-777a-45ad-8e40-1a4bc41072e2"
+      ],
+      "teams": [
+        4,
+        17
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "fe175103-0868-4dd3-a6eb-404c9563d963",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "3f359576-bf65-4d0a-9989-b597762192db"
+      ],
+      "txIds": [
+        "fe175103-0868-4dd3-a6eb-404c9563d963"
+      ],
+      "teams": [
+        17,
+        18
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "547b6464-f05f-482c-bcf3-cf3a22c18769",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "547b6464-f05f-482c-bcf3-cf3a22c18769"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "079a5d91-dd84-46ed-ab03-8896eab29c44",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "4b99c661-005f-4f35-931a-0a7a26afabe8"
+      ],
+      "txIds": [
+        "079a5d91-dd84-46ed-ab03-8896eab29c44"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "a22e33e5-0bda-400e-85b8-7172435c83b1",
+      "rowCount": 10,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "3cc13b2a-f92f-4d6b-97da-9e757a7964ae"
+      ],
+      "txIds": [
+        "a22e33e5-0bda-400e-85b8-7172435c83b1"
+      ],
+      "teams": [
+        11,
+        24
+      ],
+      "assetRows": 10,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1525a3be-3e44-49e0-a6cf-b6fce5604348",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "8ab11ee0-38cc-48bc-8207-71acce967236"
+      ],
+      "txIds": [
+        "1525a3be-3e44-49e0-a6cf-b6fce5604348"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "5f570fcd-f229-48a1-b838-913273daffc6",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "6fb9a2b3-336b-4547-a1f3-c04272bcca42"
+      ],
+      "txIds": [
+        "5f570fcd-f229-48a1-b838-913273daffc6"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "db6ff649-0810-48bf-94d6-730699eccb91",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "db6ff649-0810-48bf-94d6-730699eccb91"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "744fbd35-ab0d-42fe-b1c3-a54da729d53a",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "20632aab-b32c-4649-a4b7-df3562bf842b"
+      ],
+      "txIds": [
+        "744fbd35-ab0d-42fe-b1c3-a54da729d53a"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "0d3faea9-c5a2-406b-b0f3-a9c3a7203c61",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "ff205569-635f-4777-994a-65f620db5843"
+      ],
+      "txIds": [
+        "0d3faea9-c5a2-406b-b0f3-a9c3a7203c61"
+      ],
+      "teams": [
+        11,
+        24
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1e87ba91-667f-45e3-b898-8eb6380c95b9",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "a77945df-4f5a-4823-bf00-f0a61c545d7e"
+      ],
+      "txIds": [
+        "1e87ba91-667f-45e3-b898-8eb6380c95b9"
+      ],
+      "teams": [
+        11,
+        26
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b33f1993-f3ba-4993-a701-2f2882cef847",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "b33f1993-f3ba-4993-a701-2f2882cef847"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "dd33aee1-c58f-4ddf-8ddf-263e7207215c",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "e5459bb3-dafa-400a-a269-a6d71f2f4c34"
+      ],
+      "txIds": [
+        "dd33aee1-c58f-4ddf-8ddf-263e7207215c"
+      ],
+      "teams": [
+        4,
+        17
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "ac4956b1-10e4-43ed-95e1-a795f1057c40",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "b90d7b8d-1eeb-43d1-ac29-6309270d619c"
+      ],
+      "txIds": [
+        "ac4956b1-10e4-43ed-95e1-a795f1057c40"
+      ],
+      "teams": [
+        4,
+        17
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "f211d274-6d4a-4760-899e-6387f6c0d6d9",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "f211d274-6d4a-4760-899e-6387f6c0d6d9"
+      ],
+      "teams": [
+        11,
+        14
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "bb87c6ec-961e-4c18-a433-89403a7ba514",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "247f99b6-46b4-4426-9653-70101a08ddb6"
+      ],
+      "txIds": [
+        "bb87c6ec-961e-4c18-a433-89403a7ba514"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b8824620-6028-4f06-b85b-caae387b2a47",
+      "rowCount": 10,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "4d87f929-7363-406c-9697-c1bc44043bd8"
+      ],
+      "txIds": [
+        "b8824620-6028-4f06-b85b-caae387b2a47"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 10,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "ff205569-635f-4777-994a-65f620db5843",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "ff205569-635f-4777-994a-65f620db5843"
+      ],
+      "teams": [
+        11,
+        24
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "bb6cbb18-1a09-4f8a-846f-967d4963b7ac",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "f211d274-6d4a-4760-899e-6387f6c0d6d9"
+      ],
+      "txIds": [
+        "bb6cbb18-1a09-4f8a-846f-967d4963b7ac"
+      ],
+      "teams": [
+        11,
+        14
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "8ab11ee0-38cc-48bc-8207-71acce967236",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "8ab11ee0-38cc-48bc-8207-71acce967236"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "3844a60d-6ded-4af0-948a-dfd5b490a9de",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "3844a60d-6ded-4af0-948a-dfd5b490a9de"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "1b67fc97-e683-411a-80aa-8da892632258",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "1b67fc97-e683-411a-80aa-8da892632258"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "29b1481a-a932-483c-b806-9d0ca4b4e271",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "29b1481a-a932-483c-b806-9d0ca4b4e271"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "4d87f929-7363-406c-9697-c1bc44043bd8",
+      "rowCount": 10,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "4d87f929-7363-406c-9697-c1bc44043bd8"
+      ],
+      "teams": [
+        11,
+        17
+      ],
+      "assetRows": 10,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "6f38ad63-87bd-4add-b547-e6f28c4efeb8",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "3844a60d-6ded-4af0-948a-dfd5b490a9de"
+      ],
+      "txIds": [
+        "6f38ad63-87bd-4add-b547-e6f28c4efeb8"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "a77945df-4f5a-4823-bf00-f0a61c545d7e",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "a77945df-4f5a-4823-bf00-f0a61c545d7e"
+      ],
+      "teams": [
+        11,
+        26
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "6fb9a2b3-336b-4547-a1f3-c04272bcca42",
+      "rowCount": 8,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "6fb9a2b3-336b-4547-a1f3-c04272bcca42"
+      ],
+      "teams": [
+        11,
+        23
+      ],
+      "assetRows": 8,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "984b7a88-ba9b-459e-b124-f4805c9f8ebf",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "984b7a88-ba9b-459e-b124-f4805c9f8ebf"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "db17ceac-fff0-4f2d-a3ab-f1d6b670d803",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "8a6eb500-6dcd-4f5b-bf91-24b418ae25ae"
+      ],
+      "txIds": [
+        "db17ceac-fff0-4f2d-a3ab-f1d6b670d803"
+      ],
+      "teams": [
+        11,
+        25
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "d2a71389-7880-4ce0-ab0c-674980797f6c",
+      "rowCount": 2,
+      "types": [
+        "TRADE_ACCEPT",
+        "TRADE_UPHOLD"
+      ],
+      "statuses": [
+        "",
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "d2a71389-7880-4ce0-ab0c-674980797f6c"
+      ],
+      "txIds": [
+        "fa71923e-8f60-4433-b574-1ebdaa8c5837",
+        "7a259f30-3608-4d26-9bac-c75eabaa52c7"
+      ],
+      "teams": [
+        1,
+        27
+      ],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept_executed_headers (assets unavailable)",
+      "executed": true
+    },
+    {
+      "key": "5a06fae5-2458-43f2-bd1f-041bbec0a727",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "5a06fae5-2458-43f2-bd1f-041bbec0a727"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "c5c130dd-296d-4865-9ed8-f3029e4ad3b8",
+      "rowCount": 2,
+      "types": [
+        "TRADE_ACCEPT",
+        "TRADE_UPHOLD"
+      ],
+      "statuses": [
+        "",
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "c5c130dd-296d-4865-9ed8-f3029e4ad3b8"
+      ],
+      "txIds": [
+        "90e191b0-2433-4de6-a082-6f1d8b855c25",
+        "70435302-10fc-4afb-9288-22e9d4a440e0"
+      ],
+      "teams": [
+        17,
+        22
+      ],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept_executed_headers (assets unavailable)",
+      "executed": true
+    },
+    {
+      "key": "6f119e72-54b7-41a4-82c9-1fe221042aa2",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "6f119e72-54b7-41a4-82c9-1fe221042aa2"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b645cf5a-d578-44cc-82fc-1cb38f00c765",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "92aed625-5e4f-46de-a0f7-3280c603fc4f"
+      ],
+      "txIds": [
+        "b645cf5a-d578-44cc-82fc-1cb38f00c765"
+      ],
+      "teams": [
+        17,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "7bd92f32-88c0-4024-853d-371105440ca6",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "7bd92f32-88c0-4024-853d-371105440ca6"
+      ],
+      "teams": [
+        11,
+        18
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "e683b194-5632-40c6-bf7f-411478f5d57a",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "a3f74548-7b41-4b2a-879f-d13ea5d518b1"
+      ],
+      "txIds": [
+        "e683b194-5632-40c6-bf7f-411478f5d57a"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b2da5b7a-19e5-4122-9176-ef52648f3b2f",
+      "rowCount": 2,
+      "types": [
+        "TRADE_ACCEPT",
+        "TRADE_UPHOLD"
+      ],
+      "statuses": [
+        "",
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "b2da5b7a-19e5-4122-9176-ef52648f3b2f"
+      ],
+      "txIds": [
+        "b2095400-acd1-4441-8205-4fae78ffd5d1",
+        "84ac2bdd-a6ca-46ba-acd9-a5c93a7bc56a"
+      ],
+      "teams": [
+        1,
+        18
+      ],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept_executed_headers (assets unavailable)",
+      "executed": true
+    },
+    {
+      "key": "10ced181-c112-4362-8265-ed79403ffc32",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "10ced181-c112-4362-8265-ed79403ffc32"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "a3f74548-7b41-4b2a-879f-d13ea5d518b1",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "a3f74548-7b41-4b2a-879f-d13ea5d518b1"
+      ],
+      "teams": [
+        11,
+        21
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "14b06297-9625-4e0f-90b9-95f7edb75bc3",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "d5a12fd2-bc32-4c3d-8cca-13283a7ed1e2"
+      ],
+      "txIds": [
+        "14b06297-9625-4e0f-90b9-95f7edb75bc3"
+      ],
+      "teams": [
+        17,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "fb298d2c-455e-47bc-8f82-5193f8a0ef42",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "875b488b-a9ce-45bc-82c5-9b72e8696614"
+      ],
+      "txIds": [
+        "fb298d2c-455e-47bc-8f82-5193f8a0ef42"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "22a2827e-9421-4f57-883b-c808b4514bb8",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "5a06fae5-2458-43f2-bd1f-041bbec0a727"
+      ],
+      "txIds": [
+        "22a2827e-9421-4f57-883b-c808b4514bb8"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "cb70d8c5-ea8d-4e08-8905-73700f48a859",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "673ea62f-b9c3-4f72-a897-d22cd5146250"
+      ],
+      "txIds": [
+        "cb70d8c5-ea8d-4e08-8905-73700f48a859"
+      ],
+      "teams": [
+        17,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "b412afbf-92ed-4b58-b956-87e97c3452fc",
+      "rowCount": 4,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "CANCELED"
+      ],
+      "execTypes": [
+        "CANCEL"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "6f119e72-54b7-41a4-82c9-1fe221042aa2"
+      ],
+      "txIds": [
+        "b412afbf-92ed-4b58-b956-87e97c3452fc"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 4,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    },
+    {
+      "key": "875b488b-a9ce-45bc-82c5-9b72e8696614",
+      "rowCount": 6,
+      "types": [
+        "TRADE_PROPOSAL"
+      ],
+      "statuses": [
+        "PENDING"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        ""
+      ],
+      "txIds": [
+        "875b488b-a9ce-45bc-82c5-9b72e8696614"
+      ],
+      "teams": [
+        11,
+        22
+      ],
+      "assetRows": 6,
+      "sampleNames": [],
+      "ok": true,
+      "reason": "kept",
+      "executed": false
+    }
+  ],
+  "dropped": [
+    {
+      "key": "abcadc78-d39b-4cec-82e2-55ca5636791e",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "4d87f929-7363-406c-9697-c1bc44043bd8"
+      ],
+      "txIds": [
+        "abcadc78-d39b-4cec-82e2-55ca5636791e"
+      ],
+      "teams": [],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "1aa1cb6d-44b8-4a5f-984d-8b156bcbc01f",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "ac03a641-12cc-41a0-80f7-c9030f34d449"
+      ],
+      "txIds": [
+        "1aa1cb6d-44b8-4a5f-984d-8b156bcbc01f"
+      ],
+      "teams": [],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "7165ce00-5819-41ee-b5e6-039a633e9750",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "8ab11ee0-38cc-48bc-8207-71acce967236"
+      ],
+      "txIds": [
+        "7165ce00-5819-41ee-b5e6-039a633e9750"
+      ],
+      "teams": [],
+      "assetRows": 1,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "38b3e4b0-44e4-4f68-89a6-3f603b07cefa",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "b33f1993-f3ba-4993-a701-2f2882cef847"
+      ],
+      "txIds": [
+        "38b3e4b0-44e4-4f68-89a6-3f603b07cefa"
+      ],
+      "teams": [],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "1851bd26-d718-4bf6-8fa6-4ae83266104f",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "20632aab-b32c-4649-a4b7-df3562bf842b"
+      ],
+      "txIds": [
+        "1851bd26-d718-4bf6-8fa6-4ae83266104f"
+      ],
+      "teams": [],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "3781976a-991f-49a0-8feb-73bd08c9a32c",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "906ce3c7-291c-4ffb-96d0-e80e8254ab5a"
+      ],
+      "txIds": [
+        "3781976a-991f-49a0-8feb-73bd08c9a32c"
+      ],
+      "teams": [],
+      "assetRows": 1,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    },
+    {
+      "key": "950d7ba4-bf72-45c0-ac26-84a6df9afe5b",
+      "rowCount": 1,
+      "types": [
+        "TRADE_DECLINE"
+      ],
+      "statuses": [
+        "EXECUTED"
+      ],
+      "execTypes": [
+        "EXECUTE"
+      ],
+      "sources": [
+        ""
+      ],
+      "relIds": [
+        "f211d274-6d4a-4760-899e-6387f6c0d6d9"
+      ],
+      "txIds": [
+        "950d7ba4-bf72-45c0-ac26-84a6df9afe5b"
+      ],
+      "teams": [],
+      "assetRows": 0,
+      "sampleNames": [],
+      "ok": false,
+      "reason": "trade_decline (not a completed trade)",
+      "executed": false
+    }
+  ],
+  "sampleNonTrade": [
+    {
+      "season": 2026,
+      "transactionId": "40cb97f7-d022-4c8b-9b61-cb9d69ab124c",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1777252202301,
+      "processedDate": null,
+      "teamId": 4,
+      "playerId": 4242557,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 4,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "aac93210-212a-41f8-99f1-0a9768f5d4f9",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1777251679987,
+      "processedDate": null,
+      "teamId": 1,
+      "playerId": 4428209,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 1,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "2a45d27e-6a4a-420a-a5e8-55e357fb3d22",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1778811990842,
+      "processedDate": null,
+      "teamId": 18,
+      "playerId": 4038815,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 18,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "fcfc5467-0fb5-447e-b37b-4c9dd2bd7cc6",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1780268726320,
+      "processedDate": null,
+      "teamId": 11,
+      "playerId": 4431268,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 11,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "fcfc5467-0fb5-447e-b37b-4c9dd2bd7cc6",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1780268726320,
+      "processedDate": null,
+      "teamId": 11,
+      "playerId": 4685415,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 11,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "90faa30c-2006-4b46-888a-b143d10ee8c7",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1777252206853,
+      "processedDate": null,
+      "teamId": 4,
+      "playerId": 4429013,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 4,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "0a2040d2-36c3-4a2d-8459-ad1464668587",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1777252228620,
+      "processedDate": null,
+      "teamId": 4,
+      "playerId": 3121422,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 4,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    },
+    {
+      "season": 2026,
+      "transactionId": "7a6eea4c-c974-4a02-9e72-94be9edd958f",
+      "type": "ROSTER",
+      "status": "EXECUTED",
+      "proposedDate": 1778811940254,
+      "processedDate": null,
+      "teamId": 18,
+      "playerId": 3116165,
+      "playerName": null,
+      "position": null,
+      "fromTeamId": 18,
+      "toTeamId": 0,
+      "bidAmount": 0,
+      "itemType": "DROP",
+      "overallPickNumber": 0,
+      "round": null,
+      "pickInRound": null,
+      "pickSeason": null,
+      "relatedTransactionId": null,
+      "teamActions": null,
+      "executionType": "EXECUTE",
+      "isPending": false
+    }
+  ]
+}
