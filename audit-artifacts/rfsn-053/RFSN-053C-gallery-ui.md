@@ -109,4 +109,8 @@ Reuse existing cards, typography tokens (`TYPE_BADGE`), and RFSN-054 density (`S
 **Typecheck:** `npx tsc --noEmit` exit 0  
 **Build:** `npm run build` exit 0 (`dist/public/assets/index-CB17HEEi.js`)
 
-Preview validation + screenshots after Git deploy. No Production.
+**Preview:** Git `539dfea` · Railway `ba0bbd5a` · `buildTime=2026-08-09T12:50:42.295Z`  
+**Founder ESPN 457622:** 12/12 PASS (No Mercy 22, Rod vs Bruce 19, one-point 34, closest, championship honest empty `insufficient_playoff_tier`, viewer get).  
+**Screenshots:** `audit-artifacts/rfsn-053/screenshots-053c-preview/` (1920 / 1440 / 390).
+
+No Production.

@@ -1,0 +1,162 @@
+{
+  "host": "sprint-8-preview.fantasyfootballrivals.com",
+  "league": "457622",
+  "buildTime": "2026-08-09T12:50:42.295Z",
+  "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+  "pass": 12,
+  "fail": 0,
+  "probes": [
+    {
+      "name": "default gallery",
+      "filter": {
+        "phase": "all",
+        "limit": 25
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 1674,
+      "emptyReason": null,
+      "sample": "Steffon Bizzell vs LOZELL STYLES 2025 W17 (103.58-167.58, m64)"
+    },
+    {
+      "name": "owner Rod",
+      "filter": {
+        "ownerName": "Rod",
+        "phase": "all",
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 254,
+      "emptyReason": null,
+      "sample": "Rod Sellers vs Jan Graham 2025 W17 (193.04-127.14, m65.9)"
+    },
+    {
+      "name": "Rod vs Bruce",
+      "filter": {
+        "ownerName": "Rod",
+        "opponentName": "Bruce",
+        "phase": "all",
+        "limit": 80
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 19,
+      "emptyReason": null,
+      "sample": "Rod Sellers vs Bruce Edwards 2025 W12 (139.92-142.96, m3.04)"
+    },
+    {
+      "name": "season 2014",
+      "filter": {
+        "seasonFrom": 2014,
+        "seasonTo": 2014,
+        "phase": "all",
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 95,
+      "emptyReason": null,
+      "sample": "Nate West vs Orlando Howard 2014 W16 (93.5-66.5, m27)"
+    },
+    {
+      "name": "No Mercy",
+      "filter": {
+        "ownerName": "Rod",
+        "marginMin": 50,
+        "result": "win",
+        "noMercy": true,
+        "phase": "all",
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 22,
+      "emptyReason": null,
+      "sample": "Rod Sellers vs Jan Graham 2025 W17 (193.04-127.14, m65.9)"
+    },
+    {
+      "name": "one-point",
+      "filter": {
+        "onePoint": true,
+        "phase": "all",
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 34,
+      "emptyReason": null,
+      "sample": "Sheldon deRoux vs Tony Dorsey 2025 W17 (112-113.1, m1.1)"
+    },
+    {
+      "name": "closest",
+      "filter": {
+        "sort": "closest",
+        "phase": "all",
+        "limit": 20
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 1671,
+      "emptyReason": null,
+      "sample": "steven hibbard vs Christian Graham 2017 W3 (123.62-123.68, m0.06)"
+    },
+    {
+      "name": "championship",
+      "filter": {
+        "championshipGames": true,
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 0,
+      "emptyReason": "insufficient_playoff_tier",
+      "sample": "Championship-game candidates need ESPN playoffTierType coverage. Recorded playoff flags alone are not enough (132/275 unknown tier)."
+    },
+    {
+      "name": "playoffs",
+      "filter": {
+        "phase": "playoffs",
+        "limit": 40
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 275,
+      "emptyReason": null,
+      "sample": "Steffon Bizzell vs LOZELL STYLES 2025 W17 (103.58-167.58, m64)"
+    },
+    {
+      "name": "blowouts sort",
+      "filter": {
+        "sort": "margin_desc",
+        "limit": 10
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 1674,
+      "emptyReason": null,
+      "sample": "steven hibbard vs Vince Abram 2010 W14 (344-176, m168)"
+    },
+    {
+      "name": "unresolved owner empty",
+      "filter": {
+        "ownerName": "Nobody McFake",
+        "phase": "all"
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "total": 0,
+      "emptyReason": "unresolved_owner",
+      "sample": "No owner matched that name in this league."
+    },
+    {
+      "name": "viewer get",
+      "filter": {
+        "matchupId": 4558
+      },
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Rod Sellers vs Bruce Edwards 2025 W12 (139.92-142.96, m3.04)"
+    }
+  ]
+}

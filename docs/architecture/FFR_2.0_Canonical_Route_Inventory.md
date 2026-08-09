@@ -100,8 +100,9 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/league/history/dynasties` | Archive focus scroll | Dynasty timeline | Yes | — | — |
 | `/league/history/timeline` | Archive focus scroll | Milestones | Yes | — | — |
 | `/league/history/transactions` | `LeagueTransactions` → `Transactions` | Transaction authority | Yes | `/transactions` | `/transactions` → redirect |
-| `/league/history/matchups` | `HistoricalMatchupGalleryPage` | `matchupGallery.query` (053B) | Yes | — | **053C local WIP — not Preview/Production** |
-| `/league/history/matchups/no-mercy` | Gallery No Mercy preset | same + margin ≥ 50 | Yes | — | **053C local WIP — not Preview/Production** |
+| `/league/history/matchups` | `HistoricalMatchupGalleryPage` | `matchupGallery.query` (053B) | Yes | — | **053C Preview live** `539dfea` — not Production |
+| `/league/history/matchups/no-mercy` | Gallery No Mercy preset | same + margin ≥ 50 + wins | Yes | — | **053C Preview live** — not Production |
+| `/league/history/matchups/:matchupId` | Historical Matchup Viewer V1 | `matchupGallery.get` | Yes | — | **053C Preview live** — lineups/bench when recorded; not Production |
 | `/league/acquisition-impact` | `LeagueAcquisitionImpact` | Acquisition impact | Yes | `/acquisition-impact` | `/acquisition-impact` → redirect |
 | `/league/commissioner` | `LeagueCommissioner` | Commissioner tools | Yes | `/commissioner-command-center` | `/commissioner-command-center` → redirect |
 | `/history` | `LeagueHistory` | Dynasty Board | Yes | — | Preserved (distinct from HoF archive) |
