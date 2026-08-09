@@ -1,0 +1,135 @@
+{
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T10:08:41.624Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T10:06:02.242Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "rows": [
+    {
+      "question": "Who reaches the most?",
+      "kind": "adp",
+      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "FAIL",
+      "failures": [
+        "no recognizable founder owner",
+        "reach/steal answer missing pick or ADP number",
+        "not a deterministic ADP draft-intelligence answer"
+      ]
+    },
+    {
+      "question": "What was the biggest reach ever?",
+      "kind": "adp",
+      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "FAIL",
+      "failures": [
+        "no recognizable founder owner",
+        "reach/steal answer missing pick or ADP number",
+        "not a deterministic ADP draft-intelligence answer"
+      ]
+    },
+    {
+      "question": "What was the biggest steal?",
+      "kind": "adp",
+      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "FAIL",
+      "failures": [
+        "no recognizable founder owner",
+        "reach/steal answer missing pick or ADP number",
+        "not a deterministic ADP draft-intelligence answer"
+      ]
+    },
+    {
+      "question": "Who drafts QBs early?",
+      "kind": "board",
+      "answer": "Across recorded drafts from 2010–2026, earliest average QB selection:\n1. Maurice Welch — round 2.0 (1 QB picks, earliest R2)\n2. Steffon Bizzell — round 3.7 (6 QB picks, earliest R1)\n3. Nate West — round 4.7 (10 QB picks, earliest R2)\n4. LOZELL STYLES — round 5.3 (7 QB picks, earliest R1)\n5. Randy Broner Jr — round 5.5 (8 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who waits on QB?",
+      "kind": "board",
+      "answer": "Across recorded drafts from 2010–2026, latest average QB selection:\n1. Jan Graham — round 9.0 (2 QB picks, earliest R6)\n2. Tony Dorsey — round 8.7 (3 QB picks, earliest R5)\n3. teco Browning — round 8.3 (3 QB picks, earliest R8)\n4. Sheldon deRoux — round 8.0 (10 QB picks, earliest R1)\n5. Christian Graham — round 7.8 (9 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who loves RBs?",
+      "kind": "board",
+      "answer": "Across recorded drafts from 2010–2026, earliest average RB selection:\n1. Tony Dorsey — round 3.0 (5 RB picks, earliest R1)\n2. teco Browning — round 3.4 (7 RB picks, earliest R2)\n3. Vince Sellers — round 3.8 (4 RB picks, earliest R2)\n4. Steffon Bizzell — round 4.1 (8 RB picks, earliest R1)\n5. steven hibbard — round 4.4 (14 RB picks, earliest R1)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who drafts safest?",
+      "kind": "adp",
+      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "FAIL",
+      "failures": [
+        "no recognizable founder owner",
+        "reach/steal answer missing pick or ADP number",
+        "not a deterministic ADP draft-intelligence answer"
+      ]
+    },
+    {
+      "question": "Who gambles the most?",
+      "kind": "adp",
+      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "FAIL",
+      "failures": [
+        "no recognizable founder owner",
+        "reach/steal answer missing pick or ADP number",
+        "not a deterministic ADP draft-intelligence answer"
+      ]
+    },
+    {
+      "question": "Who reached the most in 2010?",
+      "kind": "thin-adp",
+      "answer": "Recorded draft history covers 2010. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    }
+  ]
+}

@@ -157,10 +157,11 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
   }
 
   const adpBySeason = new Map<number, Map<string, number>>();
-  for (const season of teamsBySeason.keys()) {
+  const ingestSeason = async (season: number) => {
+    if (adpBySeason.has(season)) return;
     try {
       const durable = await loadDurableEspnOffenseAdp(season);
-      if (!durable) continue;
+      if (!durable) return;
       const map = new Map<string, number>();
       for (const [pid, info] of durable) {
         if (isUsableAdp(info.adp)) map.set(String(pid), info.adp);
@@ -168,6 +169,23 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
       if (map.size) adpBySeason.set(season, map);
     } catch {
       /* season ADP optional */
+    }
+  };
+  for (const season of teamsBySeason.keys()) {
+    await ingestSeason(season);
+  }
+
+  // Current / prior calendar year only: same live ESPN offense ADP War Room uses.
+  // Never apply that map to any other draft-board season.
+  const calendarYear = new Date().getFullYear();
+  const liveCandidates = [calendarYear, calendarYear - 1].filter((y) => teamsBySeason.has(y));
+  if (liveCandidates.some((y) => !adpBySeason.has(y))) {
+    try {
+      const { getEspnPlayerInfoMap } = await import("./playerStatsRouter");
+      await getEspnPlayerInfoMap();
+      for (const season of liveCandidates) await ingestSeason(season);
+    } catch {
+      /* live ESPN ADP optional */
     }
   }
 

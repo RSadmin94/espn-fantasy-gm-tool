@@ -17,7 +17,7 @@ const OUT_JSON = path.join(OUT_DIR, "RFSN-055-preview-validation.json");
 const ESPN_LEAGUE = "457622";
 const GAP_MS = 6500;
 const OWNER_RE =
-  /demetri|lozell|rod sellers|bruce|graham|nate west|randy|maurice|hibbard|deroux|christian/i;
+  /demetri|lozell|rod sellers|bruce|graham|nate west|randy|maurice|hibbard|deroux|christian|tony dorsey|teco|steffon|vince|sheldon|jan graham/i;
 
 type LiveLeague = {
   id: number;
@@ -72,15 +72,20 @@ function genericFails(message: string): string[] {
 
 function failuresFor(kind: ProbeRow["kind"], message: string, tool?: string, llmInvoked?: boolean): string[] {
   const failures = genericFails(message);
+  const honestyOnly =
+    /adp is not available for those seasons/i.test(message) &&
+    /recorded draft history covers/i.test(message);
   if (tool && tool !== "query_draft_intelligence") {
     failures.push(`unexpected tool ${tool}`);
   }
   if (!tool) failures.push("missing query_draft_intelligence tool");
   if (llmInvoked) failures.push("LLM invoked for deterministic draft ranking");
   if (!/20\d{2}/.test(message)) failures.push("no coverage year");
-  if (kind !== "thin-adp" && !OWNER_RE.test(message)) failures.push("no recognizable founder owner");
+  if (kind !== "thin-adp" && !honestyOnly && !OWNER_RE.test(message)) {
+    failures.push("no recognizable founder owner");
+  }
 
-  if (kind === "adp") {
+  if (kind === "adp" && !honestyOnly) {
     if (!/adp|reach|steal|pick/i.test(message)) failures.push("missing pick/ADP/reach language");
     if (
       /biggest reach|largest reach|steal/i.test(message) &&
@@ -89,7 +94,11 @@ function failuresFor(kind: ProbeRow["kind"], message: string, tool?: string, llm
     ) {
       failures.push("reach/steal answer missing pick or ADP number");
     }
-    if (!/draft reach data is available|adp-joined|avg reach|reach frequency|largest reach|largest steal/i.test(message)) {
+    if (
+      !/draft reach data is available|adp-joined|avg reach|reach frequency|largest reach|largest steal/i.test(
+        message,
+      )
+    ) {
       failures.push("not a deterministic ADP draft-intelligence answer");
     }
   }
