@@ -21,6 +21,13 @@ import { getDb } from "./db";
 import { gmMatchups } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import { buildOwnerIdentityAuthority } from "./ownerIdentityAuthority";
+import {
+  classifyEspnPlayoffTier,
+  meetingKey,
+  parsePlayoffTierFromRawMatchup,
+  placementWinnersBracketKeys,
+  type EspnPlayoffTierKind,
+} from "./matchupPlayoffTier";
 
 /** A single meeting, oriented to a requested "personA" perspective. */
 export interface H2HMeeting {
@@ -85,6 +92,32 @@ export interface H2HAuthority {
   listPersons(): string[];
   /** Canonical opponent ids that personA has faced (>=1 completed meeting). */
   opponentsOf(personA: string): string[];
+  /**
+   * League-wide championship-bracket eliminations when ESPN playoffTierType
+   * can prove WINNERS_BRACKET (consolation excluded; 3rd-place excluded when
+   * semi-final winners identify the title game). Same gmMatchups + Owner Identity
+   * corpus Rivalry uses — not a second engine.
+   *
+   * If tier coverage is too thin, scope is `recorded_playoff_wins` (isPlayoff
+   * wins, honestly labeled — not called eliminations).
+   */
+  eliminationsInflicted(): {
+    scope: "championship_bracket_eliminations" | "recorded_playoff_wins";
+    note: string;
+    playoffMeetings: number;
+    winnersBracketMeetings: number;
+    consolationMeetings: number;
+    unknownTierMeetings: number;
+    placementGamesExcluded: number;
+    leaderboard: Array<{
+      personId: string;
+      displayName: string;
+      inflicted: number;
+      topVictimId: string | null;
+      topVictimName: string | null;
+      topVictimCount: number;
+    }>;
+  };
 }
 
 interface RawMeeting {
@@ -92,6 +125,8 @@ interface RawMeeting {
   week: number;
   mpId: number;
   isPlayoff: boolean;
+  playoffTierType: string | null;
+  playoffKind: EspnPlayoffTierKind;
   homePerson: string;
   awayPerson: string;
   homeScore: number;
@@ -137,11 +172,26 @@ export async function buildH2HAuthority(leagueId: string): Promise<H2HAuthority>
       else winnerPerson = null; // genuine tie
     }
 
+    const playoffTierType = parsePlayoffTierFromRawMatchup(
+      r.rawMatchup != null ? String(r.rawMatchup) : null,
+    );
+    const isPlayoff = !!r.isPlayoff;
+    const playoffKind = classifyEspnPlayoffTier(playoffTierType, isPlayoff);
+
     const key = pairKey(homePerson, awayPerson);
     if (!pairs.has(key)) pairs.set(key, []);
     pairs.get(key)!.push({
-      season: r.season, week: r.week, mpId: r.matchupPeriodId,
-      isPlayoff: !!r.isPlayoff, homePerson, awayPerson, homeScore, awayScore, winnerPerson,
+      season: r.season,
+      week: r.week,
+      mpId: r.matchupPeriodId,
+      isPlayoff,
+      playoffTierType,
+      playoffKind,
+      homePerson,
+      awayPerson,
+      homeScore,
+      awayScore,
+      winnerPerson,
     });
   }
 
@@ -237,5 +287,110 @@ export async function buildH2HAuthority(leagueId: string): Promise<H2HAuthority>
     return [...set];
   }
 
-  return { getH2H, listPersons, opponentsOf };
+  function eliminationsInflicted(): {
+    scope: "championship_bracket_eliminations" | "recorded_playoff_wins";
+    note: string;
+    playoffMeetings: number;
+    winnersBracketMeetings: number;
+    consolationMeetings: number;
+    unknownTierMeetings: number;
+    placementGamesExcluded: number;
+    leaderboard: Array<{
+      personId: string;
+      displayName: string;
+      inflicted: number;
+      topVictimId: string | null;
+      topVictimName: string | null;
+      topVictimCount: number;
+    }>;
+  } {
+    const all = [...pairs.values()].flat();
+    const playoff = all.filter((m) => m.isPlayoff);
+    const winners = playoff.filter((m) => m.playoffKind === "winners");
+    const consolation = playoff.filter((m) => m.playoffKind === "consolation");
+    const unknown = playoff.filter((m) => m.playoffKind === "unknown");
+    const placement = placementWinnersBracketKeys(
+      winners.map((m) => ({
+        season: m.season,
+        matchupPeriodId: m.mpId,
+        homePerson: m.homePerson,
+        awayPerson: m.awayPerson,
+        winnerPerson: m.winnerPerson,
+        kind: m.playoffKind,
+      })),
+    );
+    const unknownRatio = playoff.length ? unknown.length / playoff.length : 1;
+    const canProveElim = playoff.length > 0 && winners.length > 0 && unknownRatio <= 0.1;
+    const scope = canProveElim ? "championship_bracket_eliminations" : "recorded_playoff_wins";
+    const countable = canProveElim
+      ? winners.filter((m) => !placement.has(meetingKey({
+          season: m.season,
+          matchupPeriodId: m.mpId,
+          homePerson: m.homePerson,
+          awayPerson: m.awayPerson,
+        })))
+      : playoff;
+    const placementExcluded = canProveElim ? placement.size : 0;
+
+    const counts = new Map<string, number>();
+    const victims = new Map<string, Map<string, number>>();
+    for (const m of countable) {
+      if (!m.winnerPerson) continue;
+      counts.set(m.winnerPerson, (counts.get(m.winnerPerson) ?? 0) + 1);
+      const loser =
+        m.winnerPerson === m.homePerson
+          ? m.awayPerson
+          : m.winnerPerson === m.awayPerson
+            ? m.homePerson
+            : null;
+      if (!loser) continue;
+      if (!victims.has(m.winnerPerson)) victims.set(m.winnerPerson, new Map());
+      const byLoser = victims.get(m.winnerPerson)!;
+      byLoser.set(loser, (byLoser.get(loser) ?? 0) + 1);
+    }
+
+    const leaderboard = [...counts.entries()]
+      .map(([personId, inflicted]) => {
+        let topVictimId: string | null = null;
+        let topVictimCount = 0;
+        for (const [victimId, n] of victims.get(personId) ?? []) {
+          if (
+            n > topVictimCount ||
+            (n === topVictimCount &&
+              (nameById.get(victimId) ?? victimId).localeCompare(
+                nameById.get(topVictimId ?? "") ?? topVictimId ?? "",
+              ) < 0)
+          ) {
+            topVictimId = victimId;
+            topVictimCount = n;
+          }
+        }
+        return {
+          personId,
+          displayName: nameById.get(personId) ?? personId,
+          inflicted,
+          topVictimId,
+          topVictimName: topVictimId ? (nameById.get(topVictimId) ?? topVictimId) : null,
+          topVictimCount,
+        };
+      })
+      .sort((a, b) => b.inflicted - a.inflicted || a.displayName.localeCompare(b.displayName));
+
+    const note = canProveElim
+      ? `Championship bracket only (ESPN WINNERS_BRACKET). Consolation/losers-bracket excluded. ${placementExcluded} placement game(s) excluded when semi-final winners identified the title game.`
+      : `Recorded playoff wins (isPlayoff meetings, including consolation if flagged). ESPN playoffTierType coverage is insufficient to prove championship-contention eliminations (${unknown.length}/${playoff.length} unknown tier).`;
+
+    return {
+      scope,
+      note,
+      playoffMeetings: playoff.length,
+      winnersBracketMeetings: winners.length,
+      consolationMeetings: consolation.length,
+      unknownTierMeetings: unknown.length,
+      placementGamesExcluded: placementExcluded,
+      leaderboard,
+    };
+  }
+
+  return { getH2H, listPersons, opponentsOf, eliminationsInflicted };
 }

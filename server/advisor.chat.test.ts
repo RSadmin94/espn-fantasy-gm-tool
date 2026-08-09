@@ -19,6 +19,7 @@ vi.mock("./db", async (importOriginal) => {
     getChatHistory: vi.fn().mockResolvedValue([]),
     addChatMessage: vi.fn().mockResolvedValue(undefined),
     clearChatHistory: vi.fn().mockResolvedValue(undefined),
+    getUserMemory: vi.fn().mockResolvedValue(null),
     getCachedView: vi.fn().mockResolvedValue(null),
     upsertCachedView: vi.fn().mockResolvedValue(undefined),
     getRefreshManifests: vi.fn().mockResolvedValue([]),
@@ -111,7 +112,14 @@ describe("advisor.chat", () => {
     });
     expect(result.message).toContain("Bruce Edwards");
     expect((result as { tool?: string }).tool).toBe("query_matchup_margins");
-    expect((result as { meta?: { llmInvoked?: boolean } }).meta?.llmInvoked).toBe(false);
+    const meta049 = (result as { meta?: Record<string, unknown> }).meta;
+    expect(meta049?.llmInvoked).toBe(false);
+    expect(meta049?.deterministicShortCircuit).toBe(true);
+    expect(meta049?.intent).toBe("matchup_margins");
+    expect(meta049?.authoritiesUsed).toEqual(expect.arrayContaining(["matchup_margins"]));
+    expect(meta049?.resolvedLeagueId).toBeDefined();
+    expect(meta049?.resolvedScope).toBeTruthy();
+    expect(meta049?.evidenceCoverage).toBeTruthy();
     expect(invokeLLM).not.toHaveBeenCalled();
     spy.mockRestore();
   });
@@ -129,6 +137,10 @@ describe("advisor.chat", () => {
     expect(meta?.llmInvoked).toBe(true);
     expect(meta?.promptTokens).toBe(1200);
     expect(meta?.model).toBe("gpt-4o");
+    expect(meta?.deterministicShortCircuit).toBe(false);
+    expect(meta?.intent).toBe("advisor_fallback");
+    expect(meta?.resolvedScope).toBeTruthy();
+    expect(meta?.authoritiesUsed).toEqual([]);
   });
 });
 

@@ -89,3 +89,104 @@ describe("championshipAuthority.resolveChampionsFromRows", () => {
     expect(a.titlesByKey.get(a.canonicalKeyForOwnerId("guid-B"))).toBe(1);
   });
 });
+
+describe("RFSN-052J partial legacy podium seasons", () => {
+  const fullRows: GmTeamRow[] = [
+    team(2011, 1, "guid-A", "Alice", "Team A", 1),
+    team(2011, 2, "guid-B", "Bob", "Team B", 2),
+    team(2011, 3, "guid-C", "Cara", "Team C", 3),
+    team(2021, 1, "guid-A", "Alice", "Team A", 1),
+    team(2021, 2, "guid-B", "Bob", "Team B", 2),
+    team(2021, 3, "guid-C", "Cara", "Team C", 3),
+  ];
+  const aliasLabelToKey = new Map([
+    ["legacy alice fc", "id:guid-A"],
+    ["legacy bob fc", "id:guid-B"],
+    ["legacy cara fc", "id:guid-C"],
+  ]);
+
+  it("counts a podium-only season toward championship totals via approved alias", () => {
+    const a = resolveChampionsFromRows(
+      fullRows,
+      [
+        { season: 2009, championOwner: "Legacy Alice FC", runnerUpOwner: "Legacy Bob FC", thirdPlaceOwner: "Legacy Cara FC" },
+        { season: 2011, championOwner: "Alice" },
+        { season: 2021, championOwner: "Alice" },
+      ],
+      { aliasLabelToKey, matchupSeasons: new Set([2011, 2021]) },
+    );
+    const keyA = a.canonicalKeyForOwnerId("guid-A");
+    expect(a.titlesByKey.get(keyA)).toBe(3);
+    expect(a.championSeasonsByKey.get(keyA)).toEqual([2009, 2011, 2021]);
+    expect(a.coverageBySeason.get(2009)).toBe("partial_legacy");
+    expect(a.partialLegacySeasons).toEqual([2009]);
+    expect(a.fullSeasons).toEqual([2011, 2021]);
+    expect(a.championshipCoverageStart).toBe(2009);
+    expect(a.championshipCoverageEnd).toBe(2021);
+    expect(a.matchupCoverageStart).toBe(2011);
+    expect(a.matchupCoverageEnd).toBe(2021);
+    expect(a.championTeamIdBySeason.get(2009)).toBeNull();
+    expect(a.sourceBySeason.get(2009)).toBe("medal");
+  });
+
+  it("keeps runner-up and third place available without inventing matchups", () => {
+    const a = resolveChampionsFromRows(
+      fullRows,
+      [
+        { season: 2009, championOwner: "Legacy Alice FC", runnerUpOwner: "Legacy Bob FC", thirdPlaceOwner: "Legacy Cara FC" },
+        { season: 2011, championOwner: "Alice", runnerUpOwner: "Bob", thirdPlaceOwner: "Cara" },
+      ],
+      { aliasLabelToKey, matchupSeasons: new Set([2011, 2021]) },
+    );
+    expect(a.runnerUpSeasonsByKey.get(a.canonicalKeyForOwnerId("guid-B"))).toEqual([2009, 2011]);
+    expect(a.thirdPlaceSeasonsByKey.get(a.canonicalKeyForOwnerId("guid-C"))).toEqual([2009, 2011]);
+    expect(a.runnerUpNameBySeason.get(2009)).toBe("Bob");
+    expect(a.thirdPlaceNameBySeason.get(2009)).toBe("Cara");
+  });
+
+  it("does not fabricate matchup history for partial legacy seasons", () => {
+    const a = resolveChampionsFromRows(
+      fullRows,
+      [{ season: 2009, championOwner: "Legacy Alice FC", runnerUpOwner: "Legacy Bob FC", thirdPlaceOwner: "Legacy Cara FC" }],
+      { aliasLabelToKey, matchupSeasons: new Set([2011, 2021]) },
+    );
+    expect(a.coverageBySeason.get(2009)).toBe("partial_legacy");
+    expect(a.championOwnerIdBySeason.get(2009)).toBeNull();
+    expect(a.championTeamIdBySeason.get(2009)).toBeNull();
+    expect(a.fullSeasons).not.toContain(2009);
+  });
+
+  it("leaves full-data seasons unchanged when a partial legacy season is present", () => {
+    const a = resolveChampionsFromRows(
+      fullRows,
+      [
+        { season: 2009, championOwner: "Legacy Alice FC" },
+        { season: 2011, championOwner: "Alice" },
+        { season: 2021, championOwner: "Bob" },
+      ],
+      { aliasLabelToKey, matchupSeasons: new Set([2011, 2021]) },
+    );
+    expect(a.sourceBySeason.get(2011)).toBe("medal");
+    expect(a.championOwnerIdBySeason.get(2011)).toBe("guid-A");
+    expect(a.championTeamIdBySeason.get(2011)).toBe(1);
+    expect(a.coverageBySeason.get(2011)).toBe("full");
+    expect(a.coverageBySeason.get(2021)).toBe("full");
+    expect(a.titlesByKey.get(a.canonicalKeyForOwnerId("guid-B"))).toBe(1);
+  });
+
+  it("does not double-count a championship when alias and in-season labels resolve to the same owner", () => {
+    const a = resolveChampionsFromRows(
+      [
+        team(2011, 1, "guid-A", "Alice", "Team A", 1),
+        team(2011, 2, "guid-B", "Bob", "Team B", 2),
+      ],
+      [
+        { season: 2011, championOwner: "Alice" },
+        { season: 2011, championOwner: "Legacy Alice FC" },
+      ],
+      { aliasLabelToKey, matchupSeasons: new Set([2011]) },
+    );
+    expect(a.titlesByKey.get(a.canonicalKeyForOwnerId("guid-A"))).toBe(1);
+    expect(a.championSeasonsByKey.get(a.canonicalKeyForOwnerId("guid-A"))).toEqual([2011]);
+  });
+});

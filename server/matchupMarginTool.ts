@@ -13,6 +13,7 @@ import {
   computeMatchupMarginAnalytics,
   formatMatchupMarginAnswer,
   type MarginGameRecord,
+  type MatchupMarginAggregation,
   type MatchupMarginAnalyticsResult,
   type MatchupMarginQuery,
   type MatchupPhaseFilter,
@@ -69,16 +70,124 @@ function parseGroupBy(text: string): "owner" | "team" {
   return "owner";
 }
 
+const NAME_STOP =
+  /^(how|what|whats|who|when|where|why|most|many|the|a|an|my|your|our|his|her|their|biggest|largest|highest|lowest|best|worst)$/i;
+const NAME_TAIL_STOP =
+  /^(have|has|had|get|got|win|wins|won|lose|lost|losses|from|in|on|the|a|an|most|many|close|one|point|over|against)$/i;
+const NAME_TOKEN = "[A-Za-z][A-Za-z\\-]+";
+
+function titleishName(raw: string): string {
+  return raw
+    .trim()
+    .split(/\s+/)
+    .map((w) => (w ? w[0]!.toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(" ");
+}
+
+function cleanPersonName(raw: string | undefined): string | undefined {
+  if (!raw?.trim()) return undefined;
+  const parts = raw.trim().split(/\s+/).filter(Boolean);
+  if (!parts[0] || NAME_STOP.test(parts[0]) || NAME_TAIL_STOP.test(parts[0])) return undefined;
+  if (parts[1] && !NAME_STOP.test(parts[1]) && !NAME_TAIL_STOP.test(parts[1])) {
+    return titleishName(`${parts[0]} ${parts[1]}`);
+  }
+  return titleishName(parts[0]!);
+}
+
 function parseOwnerMention(text: string): string | undefined {
-  // "for Bruce Edwards" / "does Rod Sellers have" / "did Rod have"
+  // "for Bruce Edwards" / "does Rod Sellers have" / "did Rod have" / "rod's"
   const m =
-    text.match(/\b(?:for|about|does|did)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/) ||
-    text.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)'s\b/);
-  const name = m?.[1]?.trim();
-  if (!name) return undefined;
-  // Avoid capturing non-names like "How" from malformed matches
-  if (/^(How|What|Who|When|Where|Why|Most|Many)$/i.test(name)) return undefined;
-  return name;
+    text.match(new RegExp(`\\b(?:for|about|does|did)\\s+(${NAME_TOKEN}(?:\\s+${NAME_TOKEN})?)\\b`, "i")) ||
+    text.match(new RegExp(`\\b(${NAME_TOKEN}(?:\\s+${NAME_TOKEN})?)'s\\b`, "i"));
+  return cleanPersonName(m?.[1]);
+}
+
+function isPersonalBiggestWinAsk(t: string): boolean {
+  return (
+    /\bmy\s+(biggest|largest|most\s+dominant)\s+(win|victory|blowout|margin)\b/.test(t) ||
+    /\b(what(?:'s| is|s)?|show)\s+my\s+(biggest|largest)\b/.test(t)
+  );
+}
+
+function parseOwnerOpponentPair(
+  raw: string,
+): { ownerName?: string; opponentName?: string } {
+  const over = raw.match(
+    new RegExp(
+      `\\b(${NAME_TOKEN}(?:\\s+${NAME_TOKEN})?)(?:'s)?\\s+(?:biggest|largest|most\\s+dominant)\\s+(?:win|victory|blowout|margin)\\s+(?:over|against|vs\\.?|versus)\\s+(${NAME_TOKEN}(?:\\s+${NAME_TOKEN})?)`,
+      "i",
+    ),
+  );
+  const ownerName = cleanPersonName(over?.[1]);
+  const opponentName = cleanPersonName(over?.[2]);
+  if (ownerName && opponentName) return { ownerName, opponentName };
+  return {};
+}
+
+function isCountBlowoutsAsk(t: string): boolean {
+  return (
+    /\bmost\s+blowout\s+wins?\b/.test(t) ||
+    /\bblowout\s+wins?\s+by\b/.test(t) ||
+    /\b(?:wins?|losses?)\s+by\s+\d+(?:\.\d+)?\s*\+/.test(t) ||
+    /\b\d+(?:\.\d+)?\s*\+\s*(?:point|pt)?\s*blowouts?\b/.test(t) ||
+    /\bmost\s+\d+(?:\.\d+)?[-\s]?point\s+blowout/.test(t) ||
+    /\bmost\s+wins?\s+by\s+\d+/.test(t)
+  );
+}
+
+/** Largest single-game win / blowout / margin-of-victory (not 50+ count). */
+export function isLargestMarginAsk(t: string): boolean {
+  if (isCountBlowoutsAsk(t)) return false;
+  if (/\bone[-\s]?point|1[-\s]?point|narrow(?:est)?\s+wins?\b/.test(t)) return false;
+  if (/\bmargin of victory\b/.test(t)) return true;
+  if (/\b(largest|biggest|highest)\s+(winning\s+)?margins?\b/.test(t)) return true;
+  if (/\b(largest|biggest|most\s+dominant)\s+(blowout|wins?|victory|victories)\b/.test(t)) return true;
+  if (/\bmost dominant win\b/.test(t)) return true;
+  if (/\b(biggest|largest)\s+(win|victory)\b/.test(t)) return true;
+  return false;
+}
+
+function largestMarginAggregation(
+  t: string,
+  personal: boolean,
+  hasOpponent: boolean,
+): MatchupMarginAggregation {
+  if (personal || hasOpponent) return "single_game";
+  if (
+    /\bwhat was\b/.test(t) ||
+    /\bin a single game\b/.test(t) ||
+    /\bsingle[-\s]?game\b/.test(t) ||
+    /\bin league history\b/.test(t) ||
+    /\bever\b/.test(t)
+  ) {
+    return "single_game";
+  }
+  if (/\bwho (?:has|holds)\b/.test(t)) return "owner_max";
+  return "single_game";
+}
+
+function isHighestCombinedAsk(t: string): boolean {
+  return /\bhighest combined (?:score|total)s?\b/.test(t) || /\bmost combined points\b/.test(t);
+}
+
+function isLowestCombinedAsk(t: string): boolean {
+  return /\blowest combined (?:score|total)s?\b/.test(t) || /\bfewest combined points\b/.test(t);
+}
+
+function isHighestLosingScoreAsk(t: string): boolean {
+  return /\bhighest losing score\b/.test(t) || /\bmost points? (?:in|in a) loss\b/.test(t);
+}
+
+function isLowestWinningScoreAsk(t: string): boolean {
+  return /\blowest winning score\b/.test(t) || /\bfewest points? (?:in|in a) win\b/.test(t);
+}
+
+function isLargestUpsetAsk(t: string): boolean {
+  return /\b(largest|biggest)\s+upsets?\b/.test(t);
+}
+
+function isHalftimeDeficitAsk(t: string): boolean {
+  return /\b(biggest|largest)\s+halftime\s+(deficit|comeback|lead)\b/.test(t);
 }
 
 const WORD_NUM: Record<string, number> = {
@@ -136,19 +245,45 @@ function parseExactMargin(text: string): number | undefined {
   return undefined;
 }
 
+/** "blowout wins by 50+" / "wins by 50+" / "50+ point blowouts" */
+function parseBlowoutMin(text: string): number | undefined {
+  const t = text.toLowerCase();
+  const plus = t.match(/\b(?:by|of)\s+(\d+(?:\.\d+)?)\s*\+|\b(\d+(?:\.\d+)?)\s*\+\s*(?:point|pt)?/);
+  if (plus) {
+    const n = Number(plus[1] || plus[2]);
+    if (Number.isFinite(n) && n >= 10) return n;
+  }
+  const blowoutN = t.match(/\bblowout(?:s)?\s+(?:wins?\s+)?(?:by\s+)?(\d+(?:\.\d+)?)/);
+  if (blowoutN) {
+    const n = Number(blowoutN[1]);
+    if (Number.isFinite(n) && n >= 10) return n;
+  }
+  if (/\bblowout/.test(t) && !/\bby\s+\d/.test(t)) return 50;
+  return undefined;
+}
+
+export type MatchupMarginToolContext = {
+  /** Display names already resolved by Advisor (viewer / mentioned owners). */
+  resolvedOwnerNames?: string[];
+};
+
 /**
  * Select the deterministic matchup-margin tool when the prompt is a margin /
  * close-game factual question. Returns null for unrelated Advisor prompts.
  */
-export function selectMatchupMarginTool(message: string): MatchupMarginToolSelection | null {
+export function selectMatchupMarginTool(
+  message: string,
+  ctx?: MatchupMarginToolContext,
+): MatchupMarginToolSelection | null {
   const raw = message.trim();
   if (!raw) return null;
   const t = raw.toLowerCase();
 
   const marginCue =
-    /\b(one[-\s]?point|1[-\s]?point|margin|closest\s+game|narrow(?:est)?\s+wins?|narrowest|nail-?biter|close\s+games?|close\s+losses?|decided\s+by|average\s+margin|blowout|ties?\b|tied\s+games?|comeback|heartbreak|league\s+history)/.test(
+    /\b(one[-\s]?point|1[-\s]?point|margin|closest\s+game|narrow(?:est)?\s+wins?|narrowest|nail-?biter|close\s+games?|close\s+losses?|decided\s+by|average\s+margin|blowout|ties?\b|tied\s+games?|comeback|heartbreak|league\s+history|margin of victory|dominant win|combined (?:score|total)|losing score|winning score|upset|halftime)\b/.test(
       t,
     ) ||
+    /\b(biggest|largest)\s+(win|victory|blowout|margin)\b/.test(t) ||
     /\b(wins?|losses?)\s+by\s+(\d+|one|two|three|four|five)/.test(t) ||
     /\bpoints?\s+or\s+(less|fewer)\b/.test(t);
 
@@ -157,7 +292,13 @@ export function selectMatchupMarginTool(message: string): MatchupMarginToolSelec
   const seasons = parseSeasonRange(t);
   const phase = parsePhase(t);
   const groupBy = parseGroupBy(t);
-  const ownerName = parseOwnerMention(raw);
+  const pair = parseOwnerOpponentPair(raw);
+  const personal = isPersonalBiggestWinAsk(t);
+  let ownerName = pair.ownerName || parseOwnerMention(raw);
+  const opponentName = pair.opponentName;
+  if (personal && !ownerName && ctx?.resolvedOwnerNames?.[0]) {
+    ownerName = ctx.resolvedOwnerNames[0];
+  }
   const base: MatchupMarginQuery = {
     metric: "losses_by_margin",
     phase,
@@ -165,7 +306,79 @@ export function selectMatchupMarginTool(message: string): MatchupMarginToolSelec
     topN: 5,
     ...seasons,
     ...(ownerName ? { ownerName } : {}),
+    ...(opponentName ? { opponentName } : {}),
+    ...(personal ? { personalAsk: true } : {}),
   };
+
+  // RFSN-052K — largest win / blowout / margin of victory BEFORE one-point fallback.
+  if (isLargestMarginAsk(t)) {
+    const aggregation = largestMarginAggregation(t, personal, Boolean(opponentName));
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: {
+        ...base,
+        metric: "largest_margin",
+        aggregation,
+        marginExact: undefined,
+        marginMax: undefined,
+        marginMin: undefined,
+      },
+    };
+  }
+
+  if (isHighestCombinedAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "highest_combined_score", aggregation: "single_game" },
+    };
+  }
+  if (isLowestCombinedAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "lowest_combined_score", aggregation: "single_game" },
+    };
+  }
+  if (isHighestLosingScoreAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "highest_losing_score", aggregation: "single_game" },
+    };
+  }
+  if (isLowestWinningScoreAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "lowest_winning_score", aggregation: "single_game" },
+    };
+  }
+  if (isLargestUpsetAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "largest_upset" },
+    };
+  }
+  if (isHalftimeDeficitAsk(t)) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: { ...base, metric: "largest_halftime_deficit" },
+    };
+  }
+
+  const wantsLossSideEarly = /\bloss(?:es|ing)?\b|\bclose\s+losses?\b|\bheartbreak/.test(t);
+  const wantsWinSideEarly = /\bwins?\b/.test(t) && !wantsLossSideEarly;
+  const blowoutMin = parseBlowoutMin(t);
+  if (blowoutMin != null && (wantsWinSideEarly || /\bblowout\b/.test(t))) {
+    return {
+      toolName: MATCHUP_MARGIN_TOOL_NAME,
+      query: {
+        ...base,
+        metric: wantsLossSideEarly ? "losses_by_margin" : "wins_by_margin",
+        aggregation: "count",
+        marginMin: blowoutMin,
+        marginExact: undefined,
+        marginMax: undefined,
+      },
+    };
+  }
 
   if (/\bcomeback\b/.test(t)) {
     return {
@@ -270,8 +483,9 @@ export function selectMatchupMarginTool(message: string): MatchupMarginToolSelec
     };
   }
 
-  // Generic margin cue without a clearer metric → one-point losses (the observed failure).
-  if (/\bmargin\b|\bclose\s+games?\b|\bnail-?biter/.test(t)) {
+  // Close games / nail-biters without an explicit band → one-point / decided-by.
+  // Bare "margin" is NOT one-point losses (RFSN-052K).
+  if (/\bclose\s+games?\b|\bnail-?biter/.test(t)) {
     const decidedMax = parseMarginMax(t);
     if (decidedMax != null) {
       return {
@@ -389,8 +603,11 @@ export async function tryMatchupMarginToolAnswer(opts: {
   leagueId: string;
   message: string;
   games?: MarginGameRecord[];
+  resolvedOwnerNames?: string[];
 }): Promise<MatchupMarginToolResult | null> {
-  const selection = selectMatchupMarginTool(opts.message);
+  const selection = selectMatchupMarginTool(opts.message, {
+    resolvedOwnerNames: opts.resolvedOwnerNames,
+  });
   if (!selection) return null;
   if (!opts.leagueId.trim()) {
     const analytics = computeMatchupMarginAnalytics([], selection.query);
