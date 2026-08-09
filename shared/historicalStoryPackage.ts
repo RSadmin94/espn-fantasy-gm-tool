@@ -3,6 +3,8 @@
  * Deterministic facts only. LLM narrates this package and never computes stats.
  */
 import {
+  CASHIER_SCORE_MIN,
+  STORY_NO_MERCY_MARGIN,
   getStoryCollection,
   isStoryCollectionId,
   STORY_COLLECTION_IDS,
@@ -87,6 +89,13 @@ export type StoryMatchupInput = ShareMatchupInput & {
   provenance?: string[];
 };
 
+function collectionThresholdFacts(id: StoryCollectionId | null | undefined): string[] {
+  if (id === "no-mercy") return [`No Mercy threshold ${STORY_NO_MERCY_MARGIN}`];
+  if (id === "heartbreak") return ["Heartbreak one-point band 0.50 to 1.49", "One-point aliases 1 and 1.5"];
+  if (id === "cashier") return [`Cashier score threshold ${CASHIER_SCORE_MIN}`];
+  return [];
+}
+
 function uniq(values: Array<string | null | undefined>): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -129,6 +138,7 @@ export function matchupToStoryPackage(input: StoryMatchupInput): HistoricalStory
     input.phase === "playoffs" ? "Playoff game" : "Regular season game",
     input.isChampionshipGame ? "Proven championship game" : null,
     input.coverageNote?.trim() || null,
+    ...collectionThresholdFacts(collection?.id),
   ].filter((x): x is string => Boolean(x));
   return {
     storyType: "matchup",
@@ -190,6 +200,7 @@ export function collectionToStoryPackage(
     input.coverageNote?.trim() || null,
     input.ownerName?.trim() ? `Owner ${input.ownerName.trim()}` : null,
     input.opponentName?.trim() ? `Opponent ${input.opponentName.trim()}` : null,
+    ...collectionThresholdFacts(collectionId),
   ].filter((x): x is string => Boolean(x));
   return {
     storyType: "collection",
@@ -336,6 +347,11 @@ const ALLOWED_STORY_WORDS = new Set(
     "defeat", "defeated", "tells", "story", "stories", "intro", "broadcast", "receipt", "receipts",
     "printed", "recorded", "blowout", "blowouts", "nailbiter", "continues", "remains", "stands",
     "falls", "returns", "began", "ended", "cover", "coverage", "years", "year", "finest", "atlantas",
+    "dominates", "dominate", "unmatched", "triumph", "triumphs", "narrow", "defeats", "agonizingly",
+    "close", "margins", "define", "defines", "chronicle", "chronicles", "worthy", "performance",
+    "performances", "high", "drama", "toughest", "greatest", "clash", "clashes", "but", "not",
+    "only", "just", "even", "almost", "nearly", "analysis", "saga", "legacy", "master", "masters",
+    "alias", "aliases", "band", "threshold", "one",
     ...STORY_COLLECTION_IDS.flatMap((id) => id.split("-")),
   ].map((w) => w.toLowerCase()),
 );
@@ -389,13 +405,16 @@ export function narrationUsesOnlyPackageFacts(
     invented.push(raw);
   }
   const allowedNames = narrationAllowedNames(pkg);
-  const nameHits = text.match(/\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g) ?? [];
-  for (const hit of nameHits) {
-    const lower = hit.toLowerCase();
-    if (allowedNames.has(lower)) continue;
-    const parts = lower.split(/[ \t]+/);
-    if (parts.every((p) => allowedNames.has(p) || ALLOWED_STORY_WORDS.has(p))) continue;
-    invented.push(hit);
+  for (const line of text.split(/\n+/)) {
+    const tokens = line.match(/\b[A-Z][a-z]+\b/g) ?? [];
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const a = tokens[i].toLowerCase();
+      const b = tokens[i + 1].toLowerCase();
+      const pair = `${a} ${b}`;
+      if (allowedNames.has(pair) || allowedNames.has(a) || allowedNames.has(b)) continue;
+      if (ALLOWED_STORY_WORDS.has(a) || ALLOWED_STORY_WORDS.has(b)) continue;
+      invented.push(`${tokens[i]} ${tokens[i + 1]}`);
+    }
   }
   return { ok: invented.length === 0, invented };
 }
