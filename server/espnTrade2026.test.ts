@@ -16,7 +16,11 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { normalizeTransactions, mergeTradeProposalsIntoTransactions } from "./espnService";
+import {
+  normalizeTransactions,
+  mergeTradeProposalsIntoTransactions,
+  relinkSyntheticTradesToOrphanHeaders,
+} from "./espnService";
 
 // ── Mock 2026-style payload ───────────────────────────────────────────────────
 
@@ -836,5 +840,86 @@ describe("tradeAging — 2026 path: proposal in cache with PENDING status", () =
     const trades = reconstructTradesFixed(mixedPayload as Record<string, unknown>);
     expect(trades).toHaveLength(1);
     expect(trades[0].playerCount).toBe(2);
+  });
+});
+
+describe("relinkSyntheticTradesToOrphanHeaders — RFSN-056A", () => {
+  const orphanHeaders = [
+    {
+      id: "c1986f18-e750-4b7c-b18d-3e92db4da059",
+      type: "TRADE_UPHOLD",
+      status: "EXECUTED",
+      teamId: 1,
+      relatedTransactionId: "d3731d04-107d-415a-8c25-f5530b88dddf",
+      items: [],
+    },
+    {
+      id: "7265648a-b1d2-41c4-8b3b-7071e022ed9c",
+      type: "TRADE_ACCEPT",
+      status: null,
+      teamId: 18,
+      relatedTransactionId: "d3731d04-107d-415a-8c25-f5530b88dddf",
+      items: [],
+    },
+  ];
+
+  const existingProposal = {
+    id: "f273e8dd-cc69-4b8d-8c34-37eb401924de",
+    type: "TRADE_PROPOSAL",
+    status: "PENDING",
+    teamId: 11,
+    items: [
+      { fromTeamId: 11, toTeamId: 23, type: "DRAFT_TRADE", overallPickNumber: 11 },
+      { fromTeamId: 23, toTeamId: 11, type: "DRAFT_TRADE", overallPickNumber: 23 },
+    ],
+  };
+
+  it("relinks activity synthetics onto orphan UPHOLD relatedTransactionId", () => {
+    const synthetic = [
+      {
+        id: "activity_trade_topic-1",
+        type: "TRADE_PROPOSAL",
+        status: "EXECUTED",
+        _source: "activity_feed",
+        items: [
+          { fromTeamId: 1, toTeamId: 18, type: "DRAFT_TRADE", overallPickNumber: 7 },
+          { fromTeamId: 18, toTeamId: 1, type: "DRAFT_TRADE", overallPickNumber: 39 },
+        ],
+      },
+    ];
+    const relinked = relinkSyntheticTradesToOrphanHeaders(synthetic, orphanHeaders);
+    expect(relinked).toHaveLength(1);
+    expect(relinked[0]!.id).toBe("d3731d04-107d-415a-8c25-f5530b88dddf");
+    expect(relinked[0]!.relatedTransactionId).toBe("d3731d04-107d-415a-8c25-f5530b88dddf");
+    expect(relinked[0]!.status).toBe("EXECUTED");
+
+    const merged = mergeTradeProposalsIntoTransactions(
+      { seasonId: 2026, transactions: orphanHeaders },
+      relinked,
+    );
+    const rows = normalizeTransactions(merged) as { type?: string; transactionId?: string; itemType?: string }[];
+    const proposalItems = rows.filter(
+      (r) => r.type === "TRADE_PROPOSAL" && r.transactionId === "d3731d04-107d-415a-8c25-f5530b88dddf",
+    );
+    expect(proposalItems.length).toBe(2);
+  });
+
+  it("drops synthetics that duplicate an existing proposal with items", () => {
+    const synthetic = [
+      {
+        id: "activity_trade_topic-2",
+        type: "TRADE_PROPOSAL",
+        status: "EXECUTED",
+        items: [
+          { fromTeamId: 11, toTeamId: 23, type: "DRAFT_TRADE", overallPickNumber: 11 },
+          { fromTeamId: 23, toTeamId: 11, type: "DRAFT_TRADE", overallPickNumber: 23 },
+        ],
+      },
+    ];
+    const relinked = relinkSyntheticTradesToOrphanHeaders(synthetic, [
+      ...orphanHeaders,
+      existingProposal,
+    ]);
+    expect(relinked).toHaveLength(0);
   });
 });

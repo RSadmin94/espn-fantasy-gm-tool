@@ -1284,6 +1284,106 @@ export function normalizeTransactions(data: Record<string, unknown>) {
 // ID) against the mDraftDetail picks array, and synthesises TRADE_PROPOSAL
 // records with status="EXECUTED" that the Trade Aging router can process.
 
+function rawTxTeamIds(tx: Record<string, unknown>): Set<number> {
+  const ids = new Set<number>();
+  const teamId = Number(tx.teamId);
+  if (Number.isFinite(teamId) && teamId > 0) ids.add(teamId);
+  const items = (tx.items as Record<string, unknown>[] | undefined) || [];
+  for (const item of items) {
+    const from = Number(item.fromTeamId);
+    const to = Number(item.toTeamId);
+    if (Number.isFinite(from) && from > 0) ids.add(from);
+    if (Number.isFinite(to) && to > 0) ids.add(to);
+  }
+  return ids;
+}
+
+function sameTradePair(a: Set<number>, b: Set<number>): boolean {
+  if (a.size === 0 || b.size === 0) return false;
+  if (a.size >= 2 && b.size >= 2) {
+    return [...a].every((id) => b.has(id)) && [...b].every((id) => a.has(id));
+  }
+  return [...a].some((id) => b.has(id));
+}
+
+/**
+ * RFSN-056A — Activity-feed synthetics used `activity_trade_${topicId}`, which
+ * never clustered with TRADE_UPHOLD/ACCEPT headers whose relatedTransactionId
+ * is the original ESPN proposal UUID. Relink orphan headers by team pair.
+ * Drop synthetics that duplicate a proposal already present with items.
+ */
+export function relinkSyntheticTradesToOrphanHeaders(
+  syntheticTrades: Record<string, unknown>[],
+  existingTransactions: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  if (syntheticTrades.length === 0) return syntheticTrades;
+
+  const proposals = existingTransactions.filter(
+    (tx) => String(tx.type || "").toUpperCase() === "TRADE_PROPOSAL",
+  );
+  const proposalIds = new Set(
+    proposals.map((tx) => String(tx.id || "").trim()).filter(Boolean),
+  );
+  const proposalsWithItems = proposals.filter((tx) => {
+    const items = tx.items;
+    return Array.isArray(items) && items.length > 0;
+  });
+
+  type Orphan = { relId: string; teams: Set<number> };
+  const orphanByRel = new Map<string, Orphan>();
+  for (const tx of existingTransactions) {
+    const typ = String(tx.type || "").toUpperCase();
+    if (typ !== "TRADE_UPHOLD" && typ !== "TRADE_ACCEPT") continue;
+    const rel = String(tx.relatedTransactionId || "").trim();
+    if (!rel || proposalIds.has(rel)) continue;
+    const cur = orphanByRel.get(rel) ?? { relId: rel, teams: new Set<number>() };
+    for (const id of rawTxTeamIds(tx)) cur.teams.add(id);
+    orphanByRel.set(rel, cur);
+  }
+
+  const usedOrphans = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+
+  for (const syn of syntheticTrades) {
+    const synTeams = rawTxTeamIds(syn);
+
+    const coveredByExistingProposal = proposalsWithItems.some((p) =>
+      sameTradePair(synTeams, rawTxTeamIds(p)),
+    );
+    if (coveredByExistingProposal) continue;
+
+    let bestRel: string | null = null;
+    let bestScore = 0;
+    for (const orphan of orphanByRel.values()) {
+      if (usedOrphans.has(orphan.relId)) continue;
+      const overlap = [...orphan.teams].filter((id) => synTeams.has(id)).length;
+      if (overlap === 0) continue;
+      const covered = [...orphan.teams].every((id) => synTeams.has(id));
+      const score = (covered ? 100 : 0) + overlap;
+      if (score > bestScore) {
+        bestScore = score;
+        bestRel = orphan.relId;
+      }
+    }
+
+    if (bestRel) {
+      usedOrphans.add(bestRel);
+      out.push({
+        ...syn,
+        id: bestRel,
+        relatedTransactionId: bestRel,
+        status: "EXECUTED",
+        _source: syn._source ?? "activity_feed",
+      });
+      continue;
+    }
+
+    out.push(syn);
+  }
+
+  return out;
+}
+
 export async function fetchRecentActivityTrades(
   season: number,
   combinedData: Record<string, unknown>,
@@ -1393,7 +1493,8 @@ export async function fetchRecentActivityTrades(
       });
     }
 
-    return syntheticTrades;
+    const existing = (combinedData.transactions as Record<string, unknown>[]) || [];
+    return relinkSyntheticTradesToOrphanHeaders(syntheticTrades, existing);
   } catch {
     return [];
   }

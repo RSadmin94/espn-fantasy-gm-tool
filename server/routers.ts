@@ -33,6 +33,7 @@ import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
 import { loadGmTradeLegs } from "./completedTradeAuthority";
 import { enrichNormalizedTransactionsWithReconstruction } from "./transactionTradeClusterEnrichment";
+import { orphanExecutedProposalIds } from "@shared/transactionDisplay";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
@@ -4232,6 +4233,43 @@ export const appRouter = router({
         const data = await getSeasonData(input.season, undefined, ctx.user?.id);
         if (!data) return [];
         let txs = normalizeTransactions(data) as Record<string, unknown>[];
+
+        // RFSN-056A — if executed UPHOLD/ACCEPT headers have no linked proposal,
+        // live-merge ESPN trade proposals + activity-feed synthetics (relinked to
+        // the orphan relatedTransactionId). Cached 10m; does not change grading.
+        const orphans = orphanExecutedProposalIds(txs);
+        if (orphans.length > 0 && ctx.user?.id) {
+          try {
+            const { leagueId } = await resolveActiveLeagueId(
+              { user: { id: ctx.user.id } },
+              null,
+              undefined,
+            );
+            if (leagueId) {
+              txs = await memCache(
+                `txOrphanRepair:${leagueId}:${input.season}`,
+                10 * 60_000,
+                async () => {
+                  const creds = await resolveEspnCreds(undefined, ctx.user!.id);
+                  const fetchCreds = { ...creds, leagueId };
+                  const proposals = await fetchTradeProposals(input.season, fetchCreds);
+                  let enriched = mergeTradeProposalsIntoTransactions(data, proposals);
+                  const activity = await fetchRecentActivityTrades(
+                    input.season,
+                    enriched,
+                    fetchCreds,
+                  );
+                  if (activity.length > 0) {
+                    enriched = mergeTradeProposalsIntoTransactions(enriched, activity);
+                  }
+                  return normalizeTransactions(enriched) as Record<string, unknown>[];
+                },
+              );
+            }
+          } catch {
+            /* keep cache-normalized rows */
+          }
+        }
 
         // RFSN-029 — reconcile incomplete accepted trades with gmTransactions reconstruction
         // (same authority Owner Dossier uses). Non-fatal if league/db unavailable.

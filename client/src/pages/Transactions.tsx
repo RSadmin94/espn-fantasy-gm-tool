@@ -29,6 +29,16 @@ import {
   Trophy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  clusterIsExecuted,
+  clusterMatchesStatusFilter,
+  displayedClusterStatus,
+  evaluateTradeCluster,
+  summarizeTradePipeline,
+  tradeClusterKey as sharedTradeClusterKey,
+  tradePartyTeamIds,
+  type TradeStatusFilter,
+} from "@shared/transactionDisplay";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +55,7 @@ interface TxnRow {
   proposedDate?: number | null;
   processedDate?: number | null;
   status?: string | null;
+  executionType?: string | null;
   bidAmount?: number | null;
   itemType?: string | null;
   overallPickNumber?: number | null;
@@ -103,11 +114,7 @@ function isTradeType(type: string | undefined): boolean {
 }
 
 function tradeClusterKey(r: TxnRow): string {
-  const t = r.type || "";
-  if (t === "TRADE_UPHOLD" || t === "TRADE_ACCEPT") {
-    return String(r.relatedTransactionId || r.transactionId || "");
-  }
-  return String(r.transactionId || "");
+  return sharedTradeClusterKey(r);
 }
 
 function eventMs(r: TxnRow): number {
@@ -349,10 +356,7 @@ function describeTrade(
   const teamName = (id: number) => teamMap.get(id) || `Team ${id}`;
 
   const assetTeamIds = [...new Set(assets.flatMap((a) => [a.fromTeamId, a.toTeamId]).filter(isValidTeam))];
-  const partyIds =
-    assetTeamIds.length >= 2
-      ? assetTeamIds
-      : [...new Set([...assetTeamIds, ...rows.flatMap((r) => [r.fromTeamId, r.toTeamId]).filter(isValidTeam)])];
+  const partyIds = assetTeamIds.length >= 2 ? assetTeamIds : tradePartyTeamIds(rows);
 
   if (partyIds.length < 2) {
     return "Trade details unavailable.";
@@ -388,14 +392,7 @@ function dominantTradeType(rows: TxnRow[]): string {
 }
 
 function displayedTradeStatus(rows: TxnRow[]): string | null {
-  const completed = rows.find(
-    r => r.type === "TRADE_UPHOLD" || r.type === "TRADE_ACCEPT"
-  );
-  if (completed?.status != null && String(completed.status).trim() !== "") {
-    return String(completed.status);
-  }
-  const any = rows.find(r => r.status != null && String(r.status).trim() !== "");
-  return any?.status != null ? String(any.status) : null;
+  return displayedClusterStatus(rows);
 }
 
 function normalizeStatusForMatch(status: string | null | undefined): string {
@@ -420,7 +417,9 @@ function parentStatusMatchesFilter(
 ): boolean {
   const n = normalizeStatusForMatch(statusRaw);
   if (n === "") return false;
-  if (filter === "EXECUTED") return n === "EXECUTED" || n === "TRADE_UPHOLD" || n === "TRADE_ACCEPT";
+  if (filter === "EXECUTED") {
+    return n === "EXECUTED" || n === "COMPLETED" || n === "PROCESSED" || n === "TRADE_UPHOLD" || n === "TRADE_ACCEPT";
+  }
   if (filter === "PROPOSED") return n === "PROPOSED" || n === "PENDING";
   return n === "CANCELED" || n === "CANCELLED";
 }
@@ -493,6 +492,8 @@ function addDropLine(
 }
 
 function involvedTeamIds(rows: TxnRow[]): number[] {
+  const parties = tradePartyTeamIds(rows);
+  if (parties.length > 0) return parties;
   const s = new Set<number>();
   for (const r of rows) {
     if (r.teamId != null && r.teamId > 0) s.add(Number(r.teamId));
@@ -540,18 +541,7 @@ function isDraftAsset(a: TradeAsset): boolean {
 
 function isMeaningfulEntry(entry: DisplayEntry): boolean {
   if (entry.kind === "trade") {
-    const tAssets = collectTradeAssets(entry.rows);
-    if (tAssets.length === 0) return false;
-    const tIds = new Set<number>();
-    for (const a of tAssets) {
-      if (a.fromTeamId && a.fromTeamId > 0) tIds.add(a.fromTeamId);
-      if (a.toTeamId && a.toTeamId > 0) tIds.add(a.toTeamId);
-    }
-    for (const row of entry.rows) {
-      if (row.fromTeamId && row.fromTeamId > 0) tIds.add(row.fromTeamId);
-      if (row.toTeamId && row.toTeamId > 0) tIds.add(row.toTeamId);
-    }
-    return tIds.size >= 2;
+    return evaluateTradeCluster(entry.key, entry.rows).ok;
   }
   const r = entry.row;
   const t = String(r.type || "").toUpperCase();
@@ -623,7 +613,9 @@ function buildTradeSidesModel(
 function statusBadgeClasses(statusRaw: string | null): string {
   const n = normalizeStatusForMatch(statusRaw);
   const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-label font-semibold uppercase tracking-wide";
-  if (n === "EXECUTED") return cn(base, "border-lime-500/40 bg-lime-500/15 text-lime-300");
+  if (n === "EXECUTED" || n === "COMPLETED" || n === "PROCESSED") {
+    return cn(base, "border-lime-500/40 bg-lime-500/15 text-lime-300");
+  }
   if (n === "PROPOSED" || n === "PENDING") return cn(base, "border-amber-500/40 bg-amber-500/15 text-amber-200");
   if (n === "CANCELED" || n === "CANCELLED") return cn(base, "border-red-500/40 bg-red-500/15 text-red-300");
   return cn(base, "border-border/80 bg-muted/25 text-muted-foreground");
@@ -938,7 +930,7 @@ function TradeComparisonCard({
   const teamsCol = involvedTeamIds(rows);
   const rosterTeams = teamsCol.map(tid => ({ tid, name: teamMap.get(tid) || `Team ${tid}` }));
   const safeId = `trade-recap-${String(entry.key).replace(/[^a-zA-Z0-9_-]/g, "-")}-${idx}`;
-  const isExecuted = normalizeStatusForMatch(tradeStatusLine) === "EXECUTED";
+  const isExecuted = clusterIsExecuted(rows) || normalizeStatusForMatch(tradeStatusLine) === "EXECUTED";
 
   return (
     <div id={safeId} className="border-b border-border/60 bg-gradient-to-b from-card/40 to-transparent px-3 py-4 sm:px-5">
@@ -1054,7 +1046,7 @@ export function Transactions() {
   const [season, setSeason] = useState<number>(defaultSeason);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [teamFilter, setTeamFilter] = useState("ALL");
-  const [tradeStatusFilter, setTradeStatusFilter] = useState<"ALL" | "EXECUTED" | "PROPOSED" | "CANCELED">("ALL");
+  const [tradeStatusFilter, setTradeStatusFilter] = useState<TradeStatusFilter>("ALL");
   const [search, setSearch] = useState("");
 
   useEffect(() => {
@@ -1165,6 +1157,10 @@ export function Transactions() {
       }
       const allowedKeys = new Set<string>();
       for (const [key, group] of preBuckets) {
+        if (clusterMatchesStatusFilter(group, tradeStatusFilter)) {
+          allowedKeys.add(key);
+          continue;
+        }
         const rep = pickRowForParentTradeStatus(group);
         if (!rep) continue;
         const st = parentTradeStatusFromRow(rep);
@@ -1207,6 +1203,11 @@ export function Transactions() {
     return filtered;
   }, [rawTxns, search, tradeStatusFilter, enabled, season, leagueKeyReady, pulseQ.isSuccess, pulseQ.data?.week, pulseQ.data?.isSeasonComplete]);
 
+  const pipeline = useMemo(
+    () => summarizeTradePipeline(rawTxns, tradeStatusFilter),
+    [rawTxns, tradeStatusFilter],
+  );
+
   const isNotCached = !cachedSeasons.includes(season);
 
   return (
@@ -1247,7 +1248,7 @@ export function Transactions() {
 
           <div className="flex w-40 flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Trade Status</span>
-            <Select value={tradeStatusFilter} onValueChange={v => setTradeStatusFilter(v as "ALL" | "EXECUTED" | "PROPOSED" | "CANCELED")}>
+            <Select value={tradeStatusFilter} onValueChange={v => setTradeStatusFilter(v as TradeStatusFilter)}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All statuses</SelectItem>
@@ -1284,6 +1285,50 @@ export function Transactions() {
           )}
         </CardContent>
       </Card>
+
+      {!isNotCached && !txQ.isLoading && rawTxns.length > 0 && (
+        <details className="rounded-lg border border-border/60 bg-muted/10 px-4 py-3 text-xs text-muted-foreground">
+          <summary className="cursor-pointer text-sm font-medium text-foreground">
+            Transaction pipeline · raw {pipeline.rawTradeRows} trade rows · {pipeline.clusterCount} clusters · displayed {pipeline.displayedTrades} · filtered {pipeline.filteredTrades}
+            {tradeStatusFilter === "EXECUTED" ? ` · executed ${pipeline.displayedExecuted}/${pipeline.executedClusters}` : ""}
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 font-semibold uppercase tracking-wide text-foreground/80">Displayed trades</div>
+              <ul className="space-y-1">
+                {pipeline.kept.length === 0 ? (
+                  <li>None for this status filter.</li>
+                ) : (
+                  pipeline.kept.slice(0, 20).map((k) => (
+                    <li key={`kept-${k.key}`}>
+                      <span className="font-mono text-[11px] text-foreground/90">{k.key.slice(0, 8)}</span>
+                      {" · "}
+                      {k.types.join("/")} · teams {k.teams.join("/") || "—"} · assets {k.assetCount}
+                      {k.executed ? " · EXECUTED" : ""} · {k.reason}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+            <div>
+              <div className="mb-1 font-semibold uppercase tracking-wide text-foreground/80">Filtered trades</div>
+              <ul className="space-y-1">
+                {pipeline.filtered.length === 0 ? (
+                  <li>None.</li>
+                ) : (
+                  pipeline.filtered.slice(0, 20).map((f) => (
+                    <li key={`filt-${f.key}`}>
+                      <span className="font-mono text-[11px] text-foreground/90">{f.key.slice(0, 8)}</span>
+                      {" · "}
+                      {f.types.join("/")} · {f.reason}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </div>
+        </details>
+      )}
 
       {isNotCached && (
         <div className="flex items-center gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-300">
