@@ -2,6 +2,8 @@
  * RFSN-053C — Gallery UI helpers.
  * Display-only. Championship / playoff claims come from matchupGallery.query fields.
  */
+import type { StoryCollectionId } from "@shared/matchupStoryCollections";
+import { isStoryCollectionId } from "@shared/matchupStoryCollections";
 import type {
   GalleryEmptyReason,
   GalleryFilter,
@@ -30,6 +32,8 @@ export type GalleryUiFilter = {
   noMercy?: boolean;
   sort?: GallerySort;
   championshipGames?: boolean;
+  /** RFSN-053E — Story Collection id when browsing a branded theme. */
+  collection?: StoryCollectionId;
 };
 
 export type GalleryPresetId =
@@ -253,6 +257,10 @@ export function parseGallerySearchParams(search: string, preset?: "no-mercy"): G
     noMercy: params.get("noMercy") === "1" || params.get("noMercy") === "true",
     sort,
     championshipGames: params.get("championship") === "1",
+    collection: (() => {
+      const raw = params.get("collection");
+      return isStoryCollectionId(raw) ? raw : undefined;
+    })(),
   };
 
   if (preset === "no-mercy") {
@@ -291,6 +299,7 @@ export function serializeGallerySearchParams(filter: GalleryUiFilter): string {
   if (filter.scoreMax != null) q.set("scoreMax", String(filter.scoreMax));
   if (filter.championshipGames) q.set("championship", "1");
   if (filter.sort && filter.sort !== "newest") q.set("sort", filter.sort);
+  if (filter.collection) q.set("collection", filter.collection);
   return q.toString();
 }
 
@@ -426,9 +435,13 @@ export function formatCoverageRange(from: number | null | undefined, to: number 
   return `${from}–${to}`;
 }
 
-export function matchupViewHref(matchup: Pick<GalleryMatchup, "matchupId" | "season" | "week" | "viewerHref">): string {
+export function matchupViewHref(
+  matchup: Pick<GalleryMatchup, "matchupId" | "season" | "week" | "viewerHref">,
+  opts?: { collection?: StoryCollectionId | null },
+): string {
   const base = matchup.viewerHref || `/league/history/matchups/${matchup.matchupId}`;
   const q = new URLSearchParams({ season: String(matchup.season), week: String(matchup.week) });
+  if (opts?.collection) q.set("collection", opts.collection);
   return `${base}?${q.toString()}`;
 }
 

@@ -355,6 +355,9 @@ describe("planAdvisorEvidence", () => {
     expectPlan("Show me all my No Mercy wins.", "matchup_gallery", ["owner_identity", "matchup_history"], {
       narrativeAllowed: false,
     });
+    expectPlan("Show my Heartbreak games", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
     expectPlan("Show me every game I beat Bruce.", "matchup_gallery", ["owner_identity", "matchup_history"], {
       narrativeAllowed: false,
     });

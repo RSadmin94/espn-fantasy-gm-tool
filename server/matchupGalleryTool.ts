@@ -4,6 +4,12 @@
  * Deterministic: classify “show me games” → queryMatchupGallery (053C contract).
  * Does not duplicate filter math. Does not invent games.
  */
+import {
+  CASHIER_SCORE_MIN,
+  inferStoryCollection,
+  storyCollectionHref,
+  type StoryCollectionId,
+} from "@shared/matchupStoryCollections";
 import { findMentionedOwners, type AdvisorOwnerAlias } from "./advisorQuestionClassify";
 import {
   type AdvisorGalleryPreset,
@@ -26,6 +32,7 @@ export type MatchupGalleryToolSelection = {
   query: GalleryFilter;
   preset: AdvisorGalleryPreset;
   personal: boolean;
+  collection: StoryCollectionId | null;
 };
 
 export type MatchupGalleryToolAnswer = {
@@ -33,6 +40,7 @@ export type MatchupGalleryToolAnswer = {
   toolName: typeof MATCHUP_GALLERY_TOOL_NAME;
   query: GalleryFilter;
   preset: AdvisorGalleryPreset;
+  collection: StoryCollectionId | null;
   answer: string;
   visual: AdvisorMatchupGalleryVisual;
   analytics: GalleryQueryResult;
@@ -120,6 +128,11 @@ function hasGameCue(t: string): boolean {
     /\bversus\b/.test(t) ||
     /\bagainst\b/.test(t) ||
     /\bclosest\b/.test(t) ||
+    /\bheartbreak\b/.test(t) ||
+    /\bblood rival\b/.test(t) ||
+    /\bstatement wins?\b/.test(t) ||
+    /\bcollapses?\b/.test(t) ||
+    /\bcashier\b/.test(t) ||
     /\bbiggest\b/.test(t) ||
     /\bover \d+\s*points?\b/.test(t) ||
     /\bunder \d+\s*points?\b/.test(t) ||
@@ -212,7 +225,7 @@ function parseOpponentName(raw: string, mentioned: string[], currentOwner?: stri
 
 function isPersonalAsk(t: string): boolean {
   return (
-    /\bmy\s+(no mercy|closest|biggest|playoff|one[-\s]?point|wins?|losses?|games?)\b/.test(t) ||
+    /\bmy\s+(no mercy|heartbreak|closest|biggest|playoff|one[-\s]?point|statement|collapses?|cashier|wins?|losses?|games?)\b/.test(t) ||
     /\ball my\b/.test(t) ||
     /\bi beat\b/.test(t) ||
     /\bevery game i\b/.test(t) ||
@@ -252,8 +265,26 @@ function applyThemeFromText(t: string, base: GalleryFilter): GalleryFilter {
     next.marginMin = NO_MERCY_MARGIN;
     if (!next.result) next.result = "win";
   }
+  if (/\bheartbreak\b|\bheart break\b|\bheartbreak kids\b/.test(t)) {
+    next.onePoint = true;
+  }
   if (/\bone[-\s]?point\b|\b1[-\s]?point\b/.test(t)) {
     next.onePoint = true;
+  }
+  if (/\bstatement wins?\b|\bstatement victories\b/.test(t)) {
+    next.sort = "highest_score";
+    if (!next.result) next.result = "win";
+  }
+  if (/\bbiggest collapses?\b|\bcollapses?\b/.test(t)) {
+    next.sort = "margin_desc";
+    next.result = "loss";
+  }
+  if (/\bcashier\b|\breceipt[-\s]?worth/.test(t)) {
+    next.scoreMin = CASHIER_SCORE_MIN;
+    if (!next.sort) next.sort = "highest_score";
+  }
+  if (/\bclosest calls?\b/.test(t)) {
+    next.sort = "closest";
   }
   if (/\bchampionship\b/.test(t)) {
     next.championshipGames = true;
@@ -329,11 +360,15 @@ export function selectMatchupGalleryTool(
 
   if (followUp) {
     filter.limit = filter.limit ?? ADVISOR_GALLERY_LIMIT;
+    const personalFollow = Boolean(
+      filter.ownerName && current && filter.ownerName.toLowerCase() === current.toLowerCase(),
+    );
     return {
       toolName: MATCHUP_GALLERY_TOOL_NAME,
       query: filter,
-      preset: inferPreset(filter, Boolean(filter.ownerName && current && filter.ownerName === current)),
-      personal: Boolean(filter.ownerName && current && filter.ownerName.toLowerCase() === current.toLowerCase()),
+      preset: inferPreset(filter, personalFollow),
+      personal: personalFollow,
+      collection: inferStoryCollection(filter),
     };
   }
 
@@ -380,6 +415,7 @@ export function selectMatchupGalleryTool(
     query: filter,
     preset,
     personal,
+    collection: inferStoryCollection(filter),
   };
 }
 
@@ -467,11 +503,14 @@ export async function tryMatchupGalleryToolAnswer(args: {
     limit: selection.query.limit ?? ADVISOR_GALLERY_LIMIT,
   });
   const answer = formatGalleryAdvisorMessage(result, selection, args.currentOwnerName);
+  const collection = inferStoryCollection(result.filter) ?? selection.collection;
+  const href = collection ? storyCollectionHref(collection, result.filter) : result.seeAllHref;
   return {
     selected: true,
     toolName: MATCHUP_GALLERY_TOOL_NAME,
     query: result.filter,
     preset: selection.preset,
+    collection,
     answer,
     analytics: result,
     visual: {
@@ -479,7 +518,8 @@ export async function tryMatchupGalleryToolAnswer(args: {
       preset: selection.preset,
       filters: galleryFilterToVisualFilters(result.filter),
       result,
-      href: result.seeAllHref,
+      href,
+      ...(collection ? { collection } : {}),
     },
   };
 }

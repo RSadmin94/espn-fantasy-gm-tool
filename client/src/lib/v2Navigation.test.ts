@@ -173,7 +173,9 @@ describe("v2Navigation — locked FFR 2.0", () => {
       expect(routes).toContain(route);
     }
     expect(V2_PARAM_ROUTES).toContain("/league/history/matchups/:matchupId");
+    expect(V2_PARAM_ROUTES).toContain("/league/history/matchups/c/:collectionId");
     expect(routes).toContain("/league/history/matchups/:matchupId");
+    expect(routes).toContain("/league/history/matchups/c/:collectionId");
   });
 
   it("points Home sidebar to canonical /home; Draft destinations are live", () => {

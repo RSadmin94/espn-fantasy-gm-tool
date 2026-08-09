@@ -6,6 +6,8 @@ import { MatchupGalleryCard } from "./MatchupGalleryCard";
 import type { GalleryMatchup, ScoringPrecision } from "../../../../server/matchupGalleryQuery";
 import type { ViewerLineupPlayer, ViewerSideLineup } from "../../../../server/matchupGalleryViewer";
 import { formatGalleryScore } from "@/lib/matchupGalleryUi";
+import type { StoryCollectionDefinition } from "@shared/matchupStoryCollections";
+import { storyCollectionHomeHref, storyCollectionPath } from "@shared/matchupStoryCollections";
 
 export function HistoricalMatchupViewer({
   matchup,
@@ -15,6 +17,7 @@ export function HistoricalMatchupViewer({
   home,
   away,
   lineupNote,
+  collection,
 }: {
   matchup: GalleryMatchup;
   scoringPrecision?: ScoringPrecision | null;
@@ -23,16 +26,18 @@ export function HistoricalMatchupViewer({
   home: ViewerSideLineup | null;
   away: ViewerSideLineup | null;
   lineupNote?: string | null;
+  collection?: StoryCollectionDefinition | null;
 }) {
+  const backHref = collection ? storyCollectionPath(collection.id) : storyCollectionHomeHref();
   return (
-    <div data-matchup-viewer className={SPACE_SECTION_Y}>
+    <div data-matchup-viewer data-collection-theme={collection?.id ?? undefined} className={SPACE_SECTION_Y}>
       <p className="text-sm text-muted-foreground">
-        <Link to="/league/history/matchups" className="font-semibold text-foreground underline-offset-2 hover:underline">
-          ← Historical Matchups
+        <Link to={backHref} className="font-semibold text-foreground underline-offset-2 hover:underline">
+          ← {collection ? collection.title : "Historical Matchups"}
         </Link>
       </p>
 
-      <MatchupGalleryCard matchup={matchup} scoringPrecision={scoringPrecision} />
+      <MatchupGalleryCard matchup={matchup} scoringPrecision={scoringPrecision} collection={collection?.id} />
 
       {(leagueName || coverageNote) ? (
         <section data-viewer-meta className={cn("rounded-xl border border-border bg-card", SPACE_CARD)}>

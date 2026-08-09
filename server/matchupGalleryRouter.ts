@@ -16,6 +16,7 @@ import {
   type GalleryGameRecord,
 } from "./matchupGalleryQuery";
 import { emptyViewerSide, loadMatchupLineups, type MatchupViewerPayload } from "./matchupGalleryViewer";
+import { listStoryCollectionSummaries } from "./matchupStoryCollections";
 
 export const galleryFilterInput = z.object({
   activeLeagueKey: z.string().optional(),
@@ -133,6 +134,25 @@ async function resolveGalleryLeagueId(userId: number, activeLeagueKey?: string):
 }
 
 export const matchupGalleryRouter = router({
+  collections: publicProcedure
+    .input(
+      z.object({
+        activeLeagueKey: z.string().optional(),
+        ownerName: z.string().optional(),
+        opponentName: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      if (!ctx.user?.id) return listStoryCollectionSummaries([], {});
+      const leagueId = await resolveGalleryLeagueId(ctx.user.id, input.activeLeagueKey);
+      if (!leagueId) return listStoryCollectionSummaries([], {});
+      const games = await loadGalleryGames(leagueId);
+      return listStoryCollectionSummaries(games, {
+        ownerName: input.ownerName,
+        opponentName: input.opponentName,
+      });
+    }),
+
   query: publicProcedure.input(galleryFilterInput).query(async ({ ctx, input }) => {
     const filter: GalleryFilter = { ...input };
     if (!ctx.user?.id) {

@@ -13,9 +13,11 @@ import {
   visualFiltersToGalleryUi,
   type GalleryUiFilter,
 } from "@/lib/matchupGalleryUi";
+import { getStoryCollection, storyCollectionHref } from "@shared/matchupStoryCollections";
 import type { AdvisorMatchupGalleryVisual } from "../../../../server/advisorVisual";
 import type { GalleryQueryResult } from "../../../../server/matchupGalleryQuery";
 import { MatchupGallery } from "./MatchupGallery";
+import { StoryCollectionHeader } from "./StoryCollectionHeader";
 import type { GalleryOwnerOption } from "./MatchupGalleryFilters";
 import { cn } from "@/lib/utils";
 
@@ -53,8 +55,13 @@ export function AdvisorMatchupGalleryEmbed({
   });
 
   const result = filterChanged ? galleryQ.data : seedResult;
+  const collection = visual.collection ? getStoryCollection(visual.collection) : null;
   const href =
-    (filterChanged ? result?.seeAllHref : visual.href) ||
+    (collection
+      ? storyCollectionHref(collection.id, filter)
+      : filterChanged
+        ? result?.seeAllHref
+        : visual.href) ||
     `/league/history/matchups${(() => {
       const qs = serializeGallerySearchParams(filter);
       return qs ? `?${qs}` : "";
@@ -63,7 +70,9 @@ export function AdvisorMatchupGalleryEmbed({
   return (
     <div
       data-rfsn-053d
+      data-rfsn-053e
       data-advisor-visual="matchup_gallery"
+      data-advisor-collection={collection?.id ?? undefined}
       className="mt-3 w-full min-w-0"
     >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -80,8 +89,13 @@ export function AdvisorMatchupGalleryEmbed({
         </Link>
       </div>
       <div data-advisor-gallery-scroll className="max-h-[560px] overflow-y-auto pr-1">
+        {collection ? (
+          <div className="mb-3">
+            <StoryCollectionHeader collection={collection} count={result?.total ?? null} showBack={false} compact />
+          </div>
+        ) : null}
         <MatchupGallery
-          title="Historical Matchup Gallery"
+          title={collection ? `${collection.title} gallery` : "Historical Matchup Gallery"}
           filter={filter}
           result={result}
           owners={owners}
@@ -95,8 +109,9 @@ export function AdvisorMatchupGalleryEmbed({
               result: "win",
             })
           }
-          noMercyActive={!!filter.noMercy}
+          noMercyActive={!!filter.noMercy || collection?.id === "no-mercy"}
           activeOwnerName={activeOwnerName}
+          collection={collection?.id}
         />
       </div>
     </div>

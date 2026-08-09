@@ -542,7 +542,11 @@ export const V2_DESTINATIONS: V2Destination[] = [
 ];
 
 /** Extra parameterized routes registered but not shown as separate sidebar rows. */
-export const V2_PARAM_ROUTES: string[] = ["/rivals/owners/:ownerId", "/league/history/matchups/:matchupId"];
+export const V2_PARAM_ROUTES: string[] = [
+  "/rivals/owners/:ownerId",
+  "/league/history/matchups/c/:collectionId",
+  "/league/history/matchups/:matchupId",
+];
 
 function normalizeV2Route(route: string): string {
   if (route.length > 1 && route.endsWith("/")) return route.slice(0, -1);
