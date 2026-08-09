@@ -83,6 +83,7 @@ import {
   persistLlmUsage,
   getLlmUsageSummary,
 } from "./db";
+import { resetAdvisorConversationSession } from "./advisorSessionReset";
 import { resolveCurrentOwner } from "./currentOwnerService";
 import { resolveLeagueDisplayName } from "./leagueDisplayName";
 import {
@@ -10690,7 +10691,7 @@ Provide:
           undefined,
         );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
-        await clearChatHistory(ctx.user.id, chatLeagueId);
+        await resetAdvisorConversationSession(ctx.user.id, chatLeagueId);
         return { success: true };
       }),
     getMemory: protectedProcedure.query(async ({ ctx }) => {

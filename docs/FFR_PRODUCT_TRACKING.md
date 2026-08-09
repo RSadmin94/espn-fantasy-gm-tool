@@ -132,6 +132,7 @@ On Preview **in addition to** Production, unless noted.
 | **051E** | Typography closeout (Preview then Production of 051A–D) | **Closed** 2026-08-09 |
 | **054** | UI Density & Scanability (predictable spacing rhythm) | **Production live** `2db9b77`. Not typography. 051 stays closed. |
 | **054A** | Compact Live Draft Control (`/rfsn/live` + `/draft/live`) | **Production live** `2a80eca` / `3d25ff96`. |
+| **052L** | GM Advisor Clear = true session reset | **Implemented locally.** Preview after validation. Not Production. |
 | **053A** | Gallery + screenshot architecture | Complete (docs only). |
 | **053B** | `matchupGallery.query` contract | Complete (tests 16/16). Not deployed. |
 | **053C** | Gallery UI `/league/history/matchups` + No Mercy route | Complete locally. Not deployed. |
@@ -145,19 +146,20 @@ No Advisor / Rivalry Center / live Matchups redesign is in progress.
 
 Stop after each increment. Production only when explicitly asked.
 
-1. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
-2. **Preview-deploy 053C** Historical Matchup Gallery after review.  
-3. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
-4. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
-5. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
-6. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
-7. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
-8. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
-9. **RFSN-053J** — Viewer screenshot engine.  
-10. **RFSN-053K** — Batch + ZIP + scheduled job.  
-11. **RFSN-053L** — Preview regression smoke. Close 053.  
-12. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
-13. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
+1. **RFSN-052L Preview** — Advisor Clear true session reset. Stop after Preview validation.  
+2. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
+3. **Preview-deploy 053C** Historical Matchup Gallery after review.  
+4. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
+5. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
+6. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
+7. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
+8. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
+9. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
+10. **RFSN-053J** — Viewer screenshot engine.  
+11. **RFSN-053K** — Batch + ZIP + scheduled job.  
+12. **RFSN-053L** — Preview regression smoke. Close 053.  
+13. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
+14. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
 
 **Do not** reopen 052 Advisor architecture. **Do not** start another typography census.
 
@@ -274,6 +276,7 @@ Stop after each increment. Production only when explicitly asked.
 | 052 A–I | GM Advisor historical intelligence | done | yes | yes (closed 08-08) |
 | 052J | Partial-legacy championships | done | **Git Preview** `e48b34e` | **Production live** LOZELL 3 + 2009 limitation PASS |
 | 052K | Matchup margin intent expansion | done | **Git Preview** `e48b34e` | **Production live** league-wide PASS · personal biggest-win FAIL |
+| **052L** | Advisor Clear true session reset | in progress | pending | **no** — stop after Preview |
 | 053A | Gallery architecture | docs | no | no |
 | 053B | Gallery query contract | done (16/16) | no | no |
 | 053C | Gallery UI | **local complete** | no | no |
@@ -304,6 +307,7 @@ Stop after each increment. Production only when explicitly asked.
 | **051E closeout** | yes | **Shipped** | A–D on Preview + Production |
 | **054 density** | yes | **Shipped** `2db9b77` / `803d531b` | Closed |
 | **054A compact Live Draft Control** | yes | **Shipped** `2a80eca` / `3d25ff96` | Closed |
+| **052L Clear reset** | pending | **No** | Preview only; stop after validation |
 | **053A/B/C** | no | No | Preview 053C before later increments |
 | **053D–L / MKT-001** | no | No | Not ready |
 

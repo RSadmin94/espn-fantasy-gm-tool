@@ -1,5 +1,6 @@
 /**
  * RFSN-052H — Advisor conversation entity continuity.
+ * RFSN-052L — Clear deletes this record (true session reset).
  *
  * In-memory last-resolved owner pair, scoped by user + active league.
  * League switch uses a different key, so prior owners cannot leak.
