@@ -293,7 +293,7 @@ export function LiveDraftControlPanel({
       )}
 
       {/* Diagnostics — collapsed; board driver, source radios, errors, detail lines */}
-      <details className={cn("group border-t border-emerald-500/10 pt-2", SPACE_META)} data-live-advanced
+      <details className={cn("group border-t border-emerald-500/10 pt-2", SPACE_META)} data-live-advanced>
         <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-2xs font-bold uppercase tracking-wider text-ink-secondary hover:text-zinc-300 select-none">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
           Advanced
