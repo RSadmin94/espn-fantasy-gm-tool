@@ -80,9 +80,11 @@ describe("RFSN-053H HistoricalStoryPackage", () => {
     expect(fakeOwner.ok).toBe(false);
     const titleCase = narrationUsesOnlyPackageFacts(
       pkg,
-      "The Battle Continues\nNo Mercy Rule dominance in ATLANTAS FINEST FF.",
+      "The Battle Continues\nNo Mercy Rule dominance in ATLANTAS FINEST FF.\nUnmatched Triumphs.",
     );
     expect(titleCase.ok).toBe(true);
+    const heartbreak = collectionToStoryPackage("heartbreak", { count: 4, leagueName: "ATLANTAS FINEST FF" });
+    expect(narrationUsesOnlyPackageFacts(heartbreak, "Margins from 0.50 to 1.5 in four Heartbreak Kids games.").ok).toBe(true);
   });
 
   it("hash input ignores provenance wording differences that are not facts", () => {
