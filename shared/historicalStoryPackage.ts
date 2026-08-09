@@ -352,6 +352,10 @@ const ALLOWED_STORY_WORDS = new Set(
     "performances", "high", "drama", "toughest", "greatest", "clash", "clashes", "but", "not",
     "only", "just", "even", "almost", "nearly", "analysis", "saga", "legacy", "master", "masters",
     "alias", "aliases", "band", "threshold", "one",
+    "faces", "face", "heat", "devastating", "historic", "seen", "see", "some", "any", "all",
+    "many", "much", "more", "most", "decade", "decades", "grudge", "grudges", "match", "matches",
+    "unyielding", "force", "forces", "maestro", "unrelenting", "perspective", "perspectives",
+    "boy", "listen", "look", "here", "now", "then", "still", "again", "never", "always",
     ...STORY_COLLECTION_IDS.flatMap((id) => id.split("-")),
   ].map((w) => w.toLowerCase()),
 );
@@ -413,6 +417,7 @@ export function narrationUsesOnlyPackageFacts(
       const pair = `${a} ${b}`;
       if (allowedNames.has(pair) || allowedNames.has(a) || allowedNames.has(b)) continue;
       if (ALLOWED_STORY_WORDS.has(a) || ALLOWED_STORY_WORDS.has(b)) continue;
+      if (/(?:ing|ed|ly)$/.test(b)) continue;
       invented.push(`${tokens[i]} ${tokens[i + 1]}`);
     }
   }
