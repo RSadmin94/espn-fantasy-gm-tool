@@ -197,11 +197,74 @@ describe("planAdvisorEvidence", () => {
     });
   });
 
-  it("plans draft history without inventing a new engine", () => {
-    expectPlan("Who always reaches in the draft?", "draft_history", [
+  it("plans draft intelligence deterministically (RFSN-055)", () => {
+    expectPlan("Who always reaches in the draft?", "draft_intelligence", [
       "owner_identity",
       "draft_history",
-    ]);
+    ], { narrativeAllowed: false });
+    expectPlan("Who reaches the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("What was the biggest reach ever?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Biggest reach?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("What was the biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts QBs early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts quarterbacks early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who waits on QB?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who always waits on QB?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who reached the most in 2010?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who always drafts rookies?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who loves RBs?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts safest?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who gambles the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+  });
+
+  it("does not turn two named owners + draft metric into H2H", () => {
+    expectPlan("Who reaches more, Demetri or LOZELL?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
   });
 
   it("plans trade history from transaction scope", () => {

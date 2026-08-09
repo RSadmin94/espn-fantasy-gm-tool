@@ -715,6 +715,24 @@ export function formatDeterministicAdvisorAnswer(
     return { message: formatMostCareerLossesAnswer(pkg) };
   }
 
+  if (plan.intent === "draft_intelligence") {
+    const stats = pkg.draftStats as {
+      formattedAnswer?: string | null;
+      noDraftBoard?: boolean;
+    };
+    const draftCoverage = coverageLabelForUser(covStart, covEnd);
+    if (stats.formattedAnswer?.trim()) {
+      return {
+        message: stats.formattedAnswer.trim(),
+        tool: "query_draft_intelligence",
+      };
+    }
+    return {
+      message: missingDatasetSentence("draft history", draftCoverage),
+      tool: "query_draft_intelligence",
+    };
+  }
+
   return null;
 }
 

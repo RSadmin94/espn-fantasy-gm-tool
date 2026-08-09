@@ -298,6 +298,8 @@ export type AdvisorEvidenceSources = {
   playoffScope?: AdvisorEvidencePackage["playoffScope"] | null;
   rivalryRanking?: RivalrySnapshot[] | null;
   draft?: DraftSnapshot[] | null;
+  /** Preformatted deterministic draft-intelligence answer. */
+  draftAnswer?: string | null;
   trades?: TradeSnapshot[] | null;
   timeline?: TimelineSnapshotFact[] | null;
 };
@@ -1030,8 +1032,12 @@ export function buildAdvisorEvidencePackage(
     }
   }
 
+  if (wanted.has("draft_history") && sources.draftAnswer?.trim()) {
+    pkg.draftStats = { formattedAnswer: sources.draftAnswer.trim() };
+  }
+
   if (wanted.has("draft_history") && sources.draft?.length) {
-    pkg.draftStats = { owners: sources.draft };
+    pkg.draftStats = { ...pkg.draftStats, owners: sources.draft };
     for (const d of sources.draft) {
       if (d.reachCount == null && d.pickCount == null && !d.note) continue;
       pushFact(pkg, {
@@ -1445,6 +1451,26 @@ export async function loadAdvisorEvidenceSources(args: {
       sources.marginsAnswer = hit?.answer ?? null;
     } catch {
       sources.margins = null;
+    }
+  }
+
+  if (wanted.has("draft_history")) {
+    try {
+      const { selectDraftIntelligenceTool, tryDraftIntelligenceToolAnswer } = await import(
+        "./draftIntelligenceTool"
+      );
+      if (selectDraftIntelligenceTool(args.message)) {
+        const hit = await tryDraftIntelligenceToolAnswer({
+          leagueId,
+          message: args.message,
+          resolvedOwnerNames: args.owners
+            .map((o) => o.displayName)
+            .filter((n): n is string => Boolean(n?.trim())),
+        });
+        sources.draftAnswer = hit?.answer ?? null;
+      }
+    } catch {
+      sources.draftAnswer = null;
     }
   }
 

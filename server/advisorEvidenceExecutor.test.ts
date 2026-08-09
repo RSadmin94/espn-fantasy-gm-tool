@@ -63,6 +63,15 @@ const MARGIN_PLAN: AdvisorEvidencePlan = {
   fallbackToAdvisorContext: false,
 };
 
+const DRAFT_INTEL_PLAN: AdvisorEvidencePlan = {
+  intent: "draft_intelligence",
+  authorities: ["owner_identity", "draft_history"],
+  deterministicFirst: true,
+  narrativeAllowed: false,
+  requiredEvidence: ["draft_picks", "draft_adp_join"],
+  fallbackToAdvisorContext: false,
+};
+
 const PERSONS = [
   {
     canonicalPersonId: "id:rod",
@@ -231,6 +240,27 @@ describe("formatDeterministicAdvisorAnswer", () => {
     expect(out?.tool).toBe("query_matchup_margins");
     expect(out?.message).toContain("Rod Sellers");
     expect(out?.message).toContain("11");
+  });
+
+  it("returns a deterministic draft-intelligence answer with tool name (RFSN-055)", () => {
+    const pkg = buildAdvisorEvidencePackage(
+      {
+        message: "Who reaches the most?",
+        leagueId: "457622",
+        scope: LEAGUE_HISTORY,
+        owners: [],
+        plan: DRAFT_INTEL_PLAN,
+      },
+      baseSources({
+        draftAnswer:
+          "Across recorded ADP-joined drafts from 2024–2025, reach frequency:\n1. LOZELL — 2 reaches / 2 ADP-joined picks (100%)\nNot all-time. ADP-joined coverage is 2024–2025. Recorded draft board also covers 2010–2025 without ADP.",
+      }),
+    );
+    const out = formatDeterministicAdvisorAnswer(pkg);
+    expect(out?.tool).toBe("query_draft_intelligence");
+    expect(out?.message).toContain("LOZELL");
+    expect(out?.message).toMatch(/2024–2025/);
+    expect(out?.message).not.toMatch(/lacks draft strategy/i);
   });
 });
 
