@@ -14,7 +14,7 @@ import { DraftWarRoom } from "@/pages/DraftWarRoom";
 
 function RfsnLiveDisabled() {
   return (
-    <RfsnMediaShell active="home" subtitle="Live Draft">
+    <RfsnMediaShell active="home" subtitle="Live Draft" compactHeader>
       <div className="rounded-xl border border-white/[0.08] bg-black/20 p-8 text-center max-w-lg mx-auto">
         <Radio className="mx-auto h-10 w-10 text-[#8b97a8] mb-4" />
         <h2 className="text-lg font-bold text-[#f3f8ff]">Live Draft is not enabled</h2>
@@ -50,7 +50,7 @@ export function RfsnLive() {
 
   if (!leagueKeyReady || accessQ.isLoading) {
     return (
-      <RfsnMediaShell active="home" showLive={showLiveNav} leagueName={leagueName} subtitle="Live Draft">
+      <RfsnMediaShell active="home" showLive={showLiveNav} leagueName={leagueName} subtitle="Live Draft" compactHeader>
         <div className="flex justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-[#a3e635]" />
         </div>
@@ -68,6 +68,7 @@ export function RfsnLive() {
       showLive={showLiveNav}
       leagueName={leagueName}
       subtitle="Live Draft · Control Center"
+      compactHeader
       data-rfsn-live-page=""
     >
       <DraftWarRoom preferLiveDraft liveOpsOnly />

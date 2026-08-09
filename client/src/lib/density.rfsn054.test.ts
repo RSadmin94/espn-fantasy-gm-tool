@@ -36,11 +36,11 @@ describe("RFSN-054 density surface wiring", () => {
     expect(warRoom).not.toContain("gap-px");
   });
 
-  it("live control and recent picks use chip + card tokens", () => {
+  it("live control and recent picks use chip + strip/card tokens", () => {
     const control = read("client/src/components/draft/LiveDraftControlPanel.tsx");
     const recent = read("client/src/components/draft/LiveDraftRecentPicks.tsx");
     expect(control).toContain("SPACE_CHIP");
-    expect(control).toContain("SPACE_CARD");
+    expect(control).toContain("SPACE_STRIP");
     expect(recent).toContain("SPACE_CARD");
     expect(recent).toContain("SPACE_ROW");
     expect(control).not.toContain("space-y-3");

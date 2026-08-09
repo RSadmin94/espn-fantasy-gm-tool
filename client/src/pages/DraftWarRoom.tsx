@@ -164,9 +164,9 @@ function EvidenceList({ items }: { items: string[] }) {
   );
 }
 
-function Section({ id, title, icon, badge, children, defaultOpen = true, accent }: {
+function Section({ id, title, icon, badge, children, defaultOpen = true, accent, compact = false }: {
   id?: string; title: string; icon: any; badge?: string | number; children: React.ReactNode;
-  defaultOpen?: boolean; accent?: string;
+  defaultOpen?: boolean; accent?: string; compact?: boolean;
 }) {
   const { expandToken } = useContext(DwrExpandContext);
   const [open, setOpen] = useState(defaultOpen);
@@ -178,7 +178,7 @@ function Section({ id, title, icon, badge, children, defaultOpen = true, accent 
   return (
     <div id={id} className="scroll-mt-28 rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] overflow-hidden">
       <button type="button" onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors">
+        className={cn("w-full flex items-center justify-between hover:bg-white/[0.02] transition-colors", compact ? "px-4 py-2.5" : "px-5 py-4")}>
         <div className="flex items-center gap-2.5">
           <Icon className="h-5 w-5 text-lime-400" />
           <span className="font-extrabold tracking-tight text-zinc-50 text-[20px]">{title}</span>
@@ -1612,7 +1612,7 @@ function LiveDraftEngine({
 
   return (
     <div
-      className="p-4 live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden"
+      className={cn("live-draft-surface text-[1.2rem] min-w-0 overflow-x-hidden", preferLiveDraft ? "p-3" : "p-4")}
       data-draft-surface={preferLiveDraft ? "live" : "mock"}
       data-live-draft-source={preferLiveDraft ? liveSource : mockSource}
     >
@@ -2174,7 +2174,7 @@ function MockDraftBoard({
   return (
     <div>
       {/* Controls bar */}
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06] flex-wrap">
+      <div className={cn("flex items-center gap-2 border-b border-white/[0.06] flex-wrap", preferLiveDraft ? "px-4 py-2" : "px-5 py-3")}>
         {(["live", "board", "team"] as const).map(v => (
           <button key={v} onClick={() => { setView(v); if (v === "live" && preferLiveDraft) resetSim(); }}
             className={cn("px-3 py-1.5 rounded text-xs font-bold transition-colors",
@@ -2948,10 +2948,10 @@ export function DraftWarRoom({
               "radial-gradient(circle at 85% -10%,rgba(163,230,53,.05),transparent 45%),linear-gradient(180deg,#0c1218,#080b10)",
           }}
         >
-          <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+          <div className="mb-2 flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h1 className="text-2xl font-black tracking-tight text-white">Live Draft</h1>
-              <p className="mt-1 text-xs text-ink-secondary max-w-xl">
+              <p className="mt-0.5 text-xs text-ink-secondary max-w-xl">
                 Control center — pick RFSN Draft or Connected League, start or connect, pause/resume,
                 and see what is driving the board. Broadcast booth stays on the board rail.
               </p>
@@ -2987,7 +2987,7 @@ export function DraftWarRoom({
     <div className="-m-4 md:-m-6 p-5 md:p-7 min-h-full text-zinc-100" style={{ background: "radial-gradient(circle at 85% -10%,rgba(245,197,24,.06),transparent 45%),linear-gradient(180deg,#140e17,#0f0b11)" }}>
 
       {/* Header */}
-      <div className="mb-5">
+      <div className={forceLive ? "mb-3" : "mb-5"}>
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-2.5 mb-1">
@@ -3030,7 +3030,7 @@ export function DraftWarRoom({
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className={forceLive ? "space-y-3" : "space-y-5"}>
         {!keepersOn && (
           <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-amber-100/90">
             <span className="font-semibold text-amber-200">Redraft league.</span>{" "}
@@ -3047,6 +3047,7 @@ export function DraftWarRoom({
             icon={Target}
             badge={totalPicks}
             defaultOpen={true}
+            compact
           >
             {liveOrMockBoard}
           </Section>

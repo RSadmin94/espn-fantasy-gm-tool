@@ -1,5 +1,6 @@
 /**
  * RFSN-041 — Live Draft Control panel height compression (layout-only).
+ * RFSN-054A further collapses the default strip; diagnostics stay in Advanced.
  * @vitest-environment node
  */
 import { describe, expect, it } from "vitest";
@@ -15,7 +16,6 @@ describe("RFSN-041 Live Draft Control compression", () => {
   it("uses a dense dashboard metric row", () => {
     expect(panel).toContain("data-live-compact-status");
     expect(panel).toContain('label="Status"');
-    expect(panel).toContain('label="Mirror"');
     expect(panel).toContain('label="Session"');
     expect(panel).toContain('label="Source"');
     expect(panel).toContain('label="Picks"');
@@ -23,7 +23,7 @@ describe("RFSN-041 Live Draft Control compression", () => {
     expect(panel).toContain("liveDraftPhaseBadgeLabel(phase)");
   });
 
-  it("keeps board driver, source picker, and errors under Advanced", () => {
+  it("keeps board driver, source picker, mirror, and errors under Advanced", () => {
     expect(panel).toContain("data-live-advanced");
     expect(panel).toContain("<details");
     const advancedIdx = panel.indexOf("data-live-advanced");
@@ -31,6 +31,7 @@ describe("RFSN-041 Live Draft Control compression", () => {
     expect(panel.indexOf("data-live-source-picker")).toBeGreaterThan(advancedIdx);
     expect(panel.indexOf("data-live-draft-error")).toBeGreaterThan(advancedIdx);
     expect(panel.indexOf("data-live-status-lines")).toBeGreaterThan(advancedIdx);
+    expect(panel.indexOf('label="Mirror"')).toBeGreaterThan(advancedIdx);
   });
 
   it("filters duplicate explanatory sentences from the primary path", () => {
