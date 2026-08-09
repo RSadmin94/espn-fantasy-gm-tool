@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { HelpCircle, Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SPACE_CARD, SPACE_META } from "@/lib/density";
 import { IntelPanel, SectionLoading } from "@/components/layout";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -59,13 +60,13 @@ function HeroStat({
   const accentClass =
     accent === "lime" ? "text-lime-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300" : "text-white/90";
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-center">
+    <div className={cn("rounded-xl border border-white/[0.06] bg-white/[0.02] text-center", SPACE_CARD)}>
       <div className="mb-1 flex items-center justify-center gap-1 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
         {label}
         <InfoTip text={tip} />
       </div>
       <div className={cn("text-[28px] font-black tabular-nums leading-none", accentClass)}>{fmt(value)}</div>
-      <div className="mt-1 text-label text-ink-tertiary">pts/game</div>
+      <div className={cn("text-label text-ink-tertiary", SPACE_META)}>pts/game</div>
     </div>
   );
 }

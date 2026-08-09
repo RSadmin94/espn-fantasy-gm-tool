@@ -5,6 +5,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { normalizeRfsnByline } from "@/lib/rfsnEditorial";
 import { cn } from "@/lib/utils";
+import { SPACE_CARD, SPACE_CARD_GAP, SPACE_META, SPACE_SECTION_INSET } from "@/lib/density";
 import {
   Radio, BookOpen, Trophy, Loader2,
   Sparkles, Archive, FileText, ChevronRight,
@@ -99,7 +100,7 @@ function ArticleCard({
   return (
     <button
       onClick={() => onOpen(article)}
-      className="text-left rounded-[12px] border border-white/[0.07] bg-white/[0.03] p-5 hover:border-white/[0.14] hover:bg-white/[0.05] transition-all group w-full"
+      className={cn("text-left rounded-[12px] border border-white/[0.07] bg-white/[0.03] hover:border-white/[0.14] hover:bg-white/[0.05] transition-all group w-full", SPACE_SECTION_INSET)}
     >
       <div className="flex items-start gap-3">
         <div className={cn("p-2 rounded-lg border shrink-0 mt-0.5", cfg.bg)}>
@@ -114,8 +115,8 @@ function ArticleCard({
             )}
           </div>
           <h3 className="font-semibold text-zinc-100 text-base leading-snug group-hover:text-white line-clamp-2">{article.headline}</h3>
-          {preview && <p className="text-ink-secondary text-label mt-1.5 leading-relaxed line-clamp-2">{preview}…</p>}
-          <div className="flex items-center gap-2 mt-2">
+          {preview && <p className={cn("text-ink-secondary text-label leading-relaxed line-clamp-2", SPACE_META)}>{preview}…</p>}
+          <div className={cn("flex items-center gap-2", SPACE_META)}>
             <span className="text-label text-ink-tertiary">{displayByline(article.byline, brand, staffByline)}</span>
             <span className="text-ink-tertiary">·</span>
             <span className="text-label text-ink-tertiary">{new Date(article.createdAt).toLocaleDateString()}</span>
@@ -518,14 +519,14 @@ export function LeagueWireNewsroom({
 
         {view === "feed" && (wireReports as any[]).length > 0 && (
           <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+            <div className={cn("flex items-center gap-2 border-b border-white/[0.06]", SPACE_CARD)}>
               <Radio className="h-3.5 w-3.5 text-[#a3e635] animate-pulse" />
               <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
               <span className="text-label text-ink-tertiary">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-px bg-white/[0.06]">
+            <div className={cn("grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 p-3 bg-transparent", SPACE_CARD_GAP)}>
               {(wireReports as any[]).filter(r => r.winner).map((r: any) => (
-                <div key={r.matchupId} className="p-3 bg-white/[0.02]">
+                <div key={r.matchupId} className={cn("rounded-lg bg-white/[0.03] border border-white/[0.06]", SPACE_CARD)}>
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="text-xs font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
@@ -536,7 +537,7 @@ export function LeagueWireNewsroom({
                       <div className="text-xs text-ink-secondary tabular-nums">{r.loser?.score.toFixed(2)}</div>
                     </div>
                   </div>
-                  <p className="text-label text-ink-secondary mt-1.5 line-clamp-1">{r.shortRecap?.split(".")[0]}.</p>
+                  <p className={cn("text-label text-ink-secondary line-clamp-2 leading-relaxed", SPACE_META)}>{r.shortRecap?.split(".")[0]}.</p>
                 </div>
               ))}
             </div>

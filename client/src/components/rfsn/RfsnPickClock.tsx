@@ -1,6 +1,7 @@
 import React from "react";
 import { Clock, Radio, Pause, User, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SPACE_CARD } from "@/lib/density";
 import { CLOCK_STATE_LABEL, formatClock, type DraftClockState } from "@/lib/draftClock";
 
 export type RfsnPickClockProps = {
@@ -66,7 +67,7 @@ export function RfsnPickClock({
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-lg border px-3 py-2 text-sm flex-wrap",
+        "flex items-center gap-3 rounded-lg border text-sm flex-wrap", SPACE_CARD,
         TONE[state],
         state === "urgent" && "animate-pulse",
         className,
