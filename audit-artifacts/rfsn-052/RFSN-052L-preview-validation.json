@@ -1,0 +1,129 @@
+{
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "commit": "68fa655",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T08:32:11.865Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T08:23:34.167Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "rows": [
+    {
+      "scenario": "baseline",
+      "step": "fresh biggest win",
+      "question": "Who has the biggest win?",
+      "answer": "Largest single-game victory margins:\n\n1. Rod Sellers – 129.5\n2. Christian Graham – 129.0\n3. Randy Broner Jr – 128.0\n4. Mark Deroux – 124.0\n5. Demetri Clark – 121.4\n\nThis was calculated from 1,399 recorded league regular-season matchups from 2010–2025.",
+      "tool": "query_matchup_margins",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "primary",
+      "step": "Q1 championships",
+      "question": "Who has the most championships?",
+      "answer": "Across recorded championship history from 2009–2025, championship totals:\n1. Christian Graham — 3 (2012, 2013, 2018)\n2. Demetri Clark — 3 (2014, 2017, 2024)\n3. LOZELL STYLES — 3 (2009, 2011, 2021)\n4. Bruce Edwards — 2 (2016, 2023)\n5. Randy Broner Jr — 2 (2019, 2020)\n6. Rod Sellers — 2 (2010, 2025)\n7. Nate West — 1 (2015)\n8. steven hibbard — 1 (2022)",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "primary",
+      "step": "Clear",
+      "activeLeagueAfter": "457622",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "primary",
+      "step": "Q2 biggest win after Clear",
+      "question": "Who has the biggest win?",
+      "answer": "Largest single-game victory margins:\n\n1. Rod Sellers – 129.5\n2. Christian Graham – 129.0\n3. Randy Broner Jr – 128.0\n4. Mark Deroux – 124.0\n5. Demetri Clark – 121.4\n\nThis was calculated from 1,399 recorded league regular-season matchups from 2010–2025.",
+      "tool": "query_matchup_margins",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "compare-then-historical",
+      "step": "Q1 compare",
+      "question": "Compare Demetri Clark and LOZELL STYLES.",
+      "answer": "Across recorded meetings from 2010–2025, Demetri Clark vs LOZELL STYLES:\nRegular season: tied 10–10–0 (20 games).\nPlayoffs: Demetri Clark leads 5–1–0 (6 games).\nMeetings: 26.\nPlayoff eliminations: Demetri Clark has eliminated LOZELL STYLES 5 times; LOZELL STYLES has eliminated Demetri Clark 1 time.\nRecent regular-season (last 5): 2–3–0 (5 games).\nCurrent streak: Demetri Clark, 1-game win streak.\nClosest game: 2013 week 1, 135.5–136 (margin 0.5).\nBiggest blowout: 2015 week 16 (playoffs), 110–166 (margin 56, LOZELL STYLES).\nNot all-time. Recorded meeting coverage is 2010–2025.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "compare-then-historical",
+      "step": "Q2 2009 record after Clear",
+      "question": "What was LOZELL's 2009 regular-season record?",
+      "answer": "2009 is preserved as a partial legacy season. The recorded data includes final podium placement, but detailed matchup history is unavailable.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "metric-then-other",
+      "step": "Q1 one-point losses",
+      "question": "Who has the most one-point losses?",
+      "answer": "Mark Deroux has the most one-point losses: 4. This was calculated from 1,399 recorded league regular-season matchups from 2010–2025. Using a one-point range of 0.50–1.49 because this league uses decimal scoring. Next: Nate West 4, Jan Graham 2, LOZELL STYLES 2, Marlon Moore 2.",
+      "tool": "query_matchup_margins",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "metric-then-other",
+      "step": "Q2 blowouts after Clear",
+      "question": "Who has the most 50-point blowout wins?",
+      "answer": "Christian Graham has the most wins by 50+ points: 32. This was calculated from 1,399 recorded league regular-season matchups from 2010–2025. Counting final-score win margins of at least 50 points (ties excluded). Next: Demetri Clark 28, Bruce Edwards 23, Jan Graham 23, Randy Broner Jr 23.",
+      "tool": "query_matchup_margins",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "pronoun-then-named",
+      "step": "Q1 LOZELL championships",
+      "question": "How many championships does LOZELL STYLES have?",
+      "answer": "Across recorded championship history from 2009–2025, LOZELL STYLES has 3 championships (2009, 2011, 2021).",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "pronoun-then-named",
+      "step": "Q2 Bruce after Clear",
+      "question": "How many championships does Bruce Edwards have?",
+      "answer": "Across recorded championship history from 2009–2025, Bruce Edwards has 2 championships (2016, 2023).",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "ui-clear",
+      "step": "Clear button resets chrome",
+      "answer": "{\"scrollTop\":0,\"input\":\"\",\"bubbleCount\":0,\"bubbleSample\":[],\"stillOnAdvisor\":true,\"userChip\":\"signed-in\"}",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "scenario": "ui-clear",
+      "step": "UI biggest win after Clear",
+      "question": "Who has the biggest win?",
+      "answer": "Who has the biggest win?Largest single-game victory margins:\n\n1. Rod Sellers – 129.5\n2. Christian Graham – 129.0\n3. Randy Broner Jr – 128.0\n4. Mark Deroux – 124.0\n5. Demetri Clark – 121.4\n\nThis was calculated from 1,399 recorded league regular-season matchups from 2010–2025.",
+      "verdict": "PASS",
+      "failures": []
+    }
+  ]
+}
