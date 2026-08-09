@@ -76,10 +76,10 @@ export function RfsnPickClock({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden />
       <div className="flex items-baseline gap-1.5">
-        <span className="text-[11px] uppercase tracking-wider opacity-70">Round</span>
-        <span className="font-black tabular-nums">{round}</span>
-        <span className="text-[11px] uppercase tracking-wider opacity-70 ml-2">Pick</span>
-        <span className="font-black tabular-nums">
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">Round</span>
+        <span className="font-extrabold tabular-nums text-base">{round}</span>
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary ml-2">Pick</span>
+        <span className="font-extrabold tabular-nums text-base">
           {overallPick}
           {totalPicks ? <span className="opacity-50">/{totalPicks}</span> : null}
         </span>
@@ -87,14 +87,14 @@ export function RfsnPickClock({
 
       {state !== "complete" && (
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-[11px] uppercase tracking-wider opacity-70 shrink-0">On the clock</span>
-          <span className="font-bold truncate">{onClockTeam}</span>
-          {onClockOwner ? <span className="text-[11px] opacity-60 truncate hidden sm:inline">{onClockOwner}</span> : null}
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary shrink-0">On the clock</span>
+          <span className="font-semibold truncate text-sm">{onClockTeam}</span>
+          {onClockOwner ? <span className="text-label text-ink-secondary truncate hidden sm:inline">{onClockOwner}</span> : null}
         </div>
       )}
 
       <div
-        className="min-w-0 max-w-[min(100%,28rem)] flex-1 basis-[12rem] truncate text-center font-black tracking-[0.12em] text-[11px] sm:text-xs uppercase opacity-90"
+        className="min-w-0 max-w-[min(100%,28rem)] flex-1 basis-[12rem] truncate text-center font-semibold tracking-wide text-label sm:text-xs uppercase opacity-90"
         data-player-ticker
         aria-label={ticker.accessible}
         title={ticker.display}
@@ -104,9 +104,9 @@ export function RfsnPickClock({
 
       <div className="ml-auto flex items-center gap-2 shrink-0">
         {showCountdown ? (
-          <span className="font-black tabular-nums text-base">{formatClock(remainingMs)}</span>
+          <span className="font-extrabold tabular-nums text-lg">{formatClock(remainingMs)}</span>
         ) : (
-          <span className="text-[11px] font-black uppercase tracking-wider">
+          <span className="text-2xs font-semibold uppercase tracking-wide">
             {CLOCK_STATE_LABEL[state]}
           </span>
         )}

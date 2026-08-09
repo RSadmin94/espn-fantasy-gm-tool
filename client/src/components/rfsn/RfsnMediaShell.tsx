@@ -40,7 +40,7 @@ export function RfsnMediaShell({
     >
       <header className="border-b border-white/[0.06] pb-4 mb-6">
         <RfsnBrandMark />
-        <p className="text-[11px] text-[#8b97a8] uppercase tracking-[0.2em] font-bold mt-1">{tagline}</p>
+        <p className="text-2xs text-ink-tertiary uppercase tracking-wide font-semibold mt-1">{tagline}</p>
         <RfsnDestinationNav active={active} showLive={showLive} className="mt-4" />
       </header>
       {children}

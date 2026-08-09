@@ -200,7 +200,7 @@ function formatLastMeeting(m: TapeMeeting | null | undefined): string {
 function TapeRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 border-b py-1.5 last:border-b-0" style={{ borderColor: "rgba(255,255,255,.06)" }}>
-      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
+      <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
       <span className="font-mono text-sm font-semibold tabular-nums" style={{ color: TEXT }}>{value}</span>
     </div>
   );
@@ -320,7 +320,7 @@ function StoryReceiptCard({ receipt }: { receipt: StoryReceiptPayload }) {
           {receipt.receiptId}
         </span>
         <span
-          className="text-[10px] font-bold uppercase tracking-wide"
+          className="text-2xs font-semibold uppercase tracking-wide"
           style={{ color: receipt.isPlayoff ? GOLD : MUTED }}
         >
           {receipt.type === "trade"
@@ -332,7 +332,7 @@ function StoryReceiptCard({ receipt }: { receipt: StoryReceiptPayload }) {
                 : "Regular"}
         </span>
       </div>
-      <div className="mt-1.5 grid gap-1 text-[11px] sm:grid-cols-2">
+      <div className="mt-1.5 grid gap-1 text-label sm:grid-cols-2">
         <span style={{ color: MUTED }}>
           Season {receipt.season}
           {receipt.week != null ? ` · Wk ${receipt.week}` : ""}
@@ -351,7 +351,7 @@ function StoryReceiptCard({ receipt }: { receipt: StoryReceiptPayload }) {
         </span>
       </div>
       {receipt.factKeys.length > 0 ? (
-        <p className="mt-1 font-mono text-[10px]" style={{ color: MUTED }}>
+        <p className="mt-1 font-mono text-label" style={{ color: MUTED }}>
           {receipt.factKeys.join(", ")}
         </p>
       ) : null}
@@ -381,7 +381,7 @@ function ReceiptDrawer({
       <button
         type="button"
         onClick={onToggle}
-        className="rounded px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.06]"
+        className="rounded px-2 py-0.5 text-label font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.06]"
         style={{ border: `1px solid ${GOLD}44`, color: GOLD }}
       >
         {open ? "Hide receipts" : "View receipts"}
@@ -394,7 +394,7 @@ function ReceiptDrawer({
               Loading receipts…
             </div>
           ) : attached.length === 0 ? (
-            <p className="text-[11px]" style={{ color: MUTED }}>Receipts unavailable.</p>
+            <p className="text-label" style={{ color: MUTED }}>Receipts unavailable.</p>
           ) : (
             attached.map((receipt) => <StoryReceiptCard key={receipt.receiptId} receipt={receipt} />)
           )}
@@ -493,8 +493,8 @@ function countReceiptSources(receipts: StoryReceiptPayload[]) {
 function ReceiptKvRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-      <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
-      <span className="break-all font-mono text-[11px] tabular-nums" style={{ color: TEXT }}>{value}</span>
+      <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
+      <span className="break-all font-mono text-label tabular-nums" style={{ color: TEXT }}>{value}</span>
     </div>
   );
 }
@@ -502,7 +502,7 @@ function ReceiptKvRow({ label, value }: { label: string; value: string }) {
 function TapeStatCell({ label, value, accent, dense }: { label: string; value: string; accent?: string; dense?: boolean }) {
   return (
     <div className="rounded-[8px] px-3 py-2.5" style={{ ...SUB, borderRadius: 8 }}>
-      <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>{label}</div>
+      <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{label}</div>
       <div
         className={cn("mt-1 font-extrabold tabular-nums", dense ? "text-sm leading-snug" : "text-lg")}
         style={{ color: accent ?? TEXT }}
@@ -547,7 +547,7 @@ function RivalryColdOpenSection({
       <p className="text-base font-semibold leading-snug md:text-lg" style={{ color: TEXT }}>
         {coldOpen.text}
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]" style={{ color: MUTED }}>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-label" style={{ color: MUTED }}>
         <span>
           Confidence:{" "}
           <span className="font-mono font-semibold tabular-nums" style={{ color: TEXT }}>
@@ -605,7 +605,7 @@ function RivalryStoryReceiptsSection({
   if (receiptsQ.isError) {
     return (
       <div className="p-3" style={SUB}>
-        <p className="text-[11px]" style={{ color: MUTED }}>Story receipts unavailable.</p>
+        <p className="text-label" style={{ color: MUTED }}>Story receipts unavailable.</p>
       </div>
     );
   }
@@ -615,7 +615,7 @@ function RivalryStoryReceiptsSection({
     return (
       <Collapsible defaultOpen={false} className="border-b border-white/[0.06] p-3">
         <CollapsibleTrigger
-          className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide"
+          className="flex w-full items-center justify-between gap-2 text-left text-label font-semibold uppercase tracking-wide"
           style={{ color: MUTED }}
         >
           <span className="flex items-center gap-2">
@@ -625,7 +625,7 @@ function RivalryStoryReceiptsSection({
           <ChevronDown className="h-4 w-4 shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2">
-          <p className="text-[11px]" style={{ color: MUTED }}>No story receipts available.</p>
+          <p className="text-label" style={{ color: MUTED }}>No story receipts available.</p>
         </CollapsibleContent>
       </Collapsible>
     );
@@ -638,13 +638,13 @@ function RivalryStoryReceiptsSection({
   return (
     <Collapsible defaultOpen={false} className="border-b border-white/[0.06] p-3">
       <CollapsibleTrigger
-        className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
+        className="flex w-full items-center justify-between gap-2 text-left text-label font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
         style={{ color: MUTED }}
       >
         <span className="flex items-center gap-2">
           <Receipt className="h-4 w-4" style={{ color: GOLD }} />
           Raw receipts
-          <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
+          <span className="rounded px-1.5 py-0.5 text-2xs font-semibold normal-case tracking-normal" style={{ border: "1px solid rgba(255,255,255,.1)", color: MUTED }}>
             debug
           </span>
         </span>
@@ -663,7 +663,7 @@ function RivalryStoryReceiptsSection({
 
       <Collapsible open={listOpen} onOpenChange={setListOpen} className="mt-2">
         <CollapsibleTrigger
-          className="flex w-full items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.03]"
+          className="flex w-full items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-left text-label font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.03]"
           style={{ border: "1px solid rgba(255,255,255,.08)", color: MUTED }}
         >
           <span>Receipt list ({receipts.length})</span>
@@ -734,13 +734,13 @@ function RivalryTaleOfTheTapeSection({
         <DocumentarySectionHeader icon={<Swords className="h-4 w-4" />} title="Tale of the Tape" accent={GOLD} />
         <div className="flex flex-wrap gap-2">
           <span
-            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            className="rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide"
             style={{ border: `1px solid ${GOLD}44`, color: GOLD, background: "rgba(245,198,90,.08)" }}
           >
             {story.tier}
           </span>
           <span
-            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold"
+            className="rounded px-2 py-0.5 font-mono text-label font-semibold"
             style={{ border: "1px solid rgba(255,255,255,.1)", color: ACCENT }}
           >
             {story.headline.key}
@@ -852,7 +852,7 @@ function RivalryCurrentStateSection({
         <div className={cn("grid gap-2 sm:grid-cols-2", stateStatements.length > 0 && "mt-3")}>
           {rows.map((row) => (
             <div key={row.label} className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+              <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                 {row.label}
               </div>
               <div className="mt-1 text-sm font-semibold tabular-nums" style={{ color: TEXT }}>
@@ -970,14 +970,14 @@ function RivalryDocumentaryTimelineSection({
                   {event.week != null ? ` · Wk ${event.week}` : ""}
                 </span>
                 <span
-                  className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase"
+                  className="rounded px-1.5 py-0.5 font-mono text-2xs font-semibold uppercase"
                   style={{ border: "1px solid rgba(255,255,255,.1)", color: ACCENT }}
                 >
                   {event.label}
                 </span>
               </div>
               {receipt ? (
-                <p className="mt-1 text-[11px] font-mono tabular-nums" style={{ color: MUTED }}>
+                <p className="mt-1 text-label font-mono tabular-nums" style={{ color: MUTED }}>
                   {receipt.receiptId}
                   {receipt.focalScore != null && receipt.rivalScore != null
                     ? ` · ${receipt.focalScore}–${receipt.rivalScore}`
@@ -1033,7 +1033,7 @@ function RivalryDocumentaryEvidenceSection({
             onOpenChange={(open) => setOpenGroup(open ? section.key : null)}
           >
             <CollapsibleTrigger
-              className="flex w-full items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.03]"
+              className="flex w-full items-center justify-between gap-2 rounded-[8px] px-3 py-2 text-left text-label font-semibold uppercase tracking-wide transition-colors hover:bg-white/[0.03]"
               style={{ border: "1px solid rgba(255,255,255,.08)", color: MUTED }}
             >
               <span>
@@ -1068,7 +1068,7 @@ function RivalryControlledStatementsSection({
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b border-white/[0.06] p-3">
       <CollapsibleTrigger
-        className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide"
+        className="flex w-full items-center justify-between gap-2 text-left text-label font-semibold uppercase tracking-wide"
         style={{ color: MUTED }}
       >
         <span className="flex items-center gap-2">
@@ -1080,14 +1080,14 @@ function RivalryControlledStatementsSection({
       <CollapsibleContent className="mt-3 space-y-2">
         {statements.map((s) => (
           <div key={`${s.block}-${s.statementKey}`} className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+            <div className="flex flex-wrap items-center gap-2 text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
               <span>{s.block}</span>
               <span className="font-mono" style={{ color: ACCENT }}>{s.statementKey}</span>
               <span className="font-mono tabular-nums">p{s.priority}</span>
               <span className="font-mono tabular-nums">c{s.confidence.toFixed(2)}</span>
             </div>
             <p className="mt-1 text-xs leading-relaxed" style={{ color: TEXT }}>{s.text}</p>
-            <p className="mt-1 font-mono text-[10px]" style={{ color: MUTED }}>
+            <p className="mt-1 font-mono text-label" style={{ color: MUTED }}>
               receipts: {s.receiptIds.length > 0 ? s.receiptIds.join(", ") : "—"}
             </p>
           </div>
@@ -1116,7 +1116,7 @@ function RivalryStoryMetadataSection({
   if (storyQ.isError || !storyQ.data) {
     return (
       <div className="p-3" style={SUB}>
-        <p className="text-[11px]" style={{ color: MUTED }}>Story metadata unavailable.</p>
+        <p className="text-label" style={{ color: MUTED }}>Story metadata unavailable.</p>
       </div>
     );
   }
@@ -1127,7 +1127,7 @@ function RivalryStoryMetadataSection({
   return (
     <Collapsible defaultOpen={false} className="border-b border-white/[0.06] p-3">
       <CollapsibleTrigger
-        className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
+        className="flex w-full items-center justify-between gap-2 text-left text-label font-semibold uppercase tracking-wide transition-colors hover:opacity-90"
         style={{ color: MUTED }}
       >
         <span className="flex items-center gap-2">
@@ -1139,22 +1139,22 @@ function RivalryStoryMetadataSection({
       <CollapsibleContent className="mt-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-          <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Tier</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Tier</div>
           <div className="mt-1 font-mono text-sm font-semibold" style={{ color: TEXT }}>{story.tier}</div>
         </div>
         <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-          <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Headline Key</div>
+          <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Headline Key</div>
           <div className="mt-1 break-all font-mono text-sm font-semibold" style={{ color: ACCENT }}>{story.headline.key}</div>
         </div>
       </div>
       <div className="mt-2 rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-        <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Blocks</div>
+        <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Blocks</div>
         <p className="mt-1 font-mono text-xs leading-relaxed" style={{ color: TEXT }}>
           {story.availableBlocks.length > 0 ? story.availableBlocks.join(", ") : "—"}
         </p>
       </div>
       <div className="mt-2 rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-        <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Facts</div>
+        <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Facts</div>
         <p className="mt-1 font-mono text-xs leading-relaxed" style={{ color: TEXT }}>
           {factKeys.length > 0 ? factKeys.join(", ") : "—"}
         </p>
@@ -1331,7 +1331,7 @@ function RivalryTradeLedgerSection({
           title={sectionTitle}
           accent={ACCENT}
         />
-        <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+        <span className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
           {season} season
         </span>
       </div>
@@ -1352,23 +1352,23 @@ function RivalryTradeLedgerSection({
         <div className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-3">
             <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Trade record</div>
+              <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Trade record</div>
               <div className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: TEXT }}>
                 {ledger.recordA}–{ledger.recordB}
                 {ledger.ties > 0 ? `–${ledger.ties}` : ""}
               </div>
-              <div className="mt-0.5 text-[10px] leading-snug" style={{ color: MUTED }}>
+              <div className="mt-0.5 text-label leading-snug" style={{ color: MUTED }}>
                 {focalDisplayName} vs {opponentDisplayName} · {ledger.tradeCount} trade{ledger.tradeCount === 1 ? "" : "s"}
               </div>
             </div>
             <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Ledger winner</div>
+              <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Ledger winner</div>
               <div className="mt-1 text-sm font-bold" style={{ color: ledger.ledgerWinnerKey ? ACCENT : MUTED }}>
                 {ledger.ledgerWinnerName ?? "Even"}
               </div>
             </div>
             <div className="rounded-[8px] px-3 py-2" style={{ ...SUB, borderRadius: 8 }}>
-              <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Trade count</div>
+              <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Trade count</div>
               <div className="mt-1 text-lg font-extrabold tabular-nums" style={{ color: TEXT }}>{ledger.tradeCount}</div>
             </div>
           </div>
@@ -1377,7 +1377,7 @@ function RivalryTradeLedgerSection({
             <div className="grid gap-2 sm:grid-cols-2">
               {ledger.biggestFleece && (
                 <div className="rounded-[8px] px-3 py-2" style={{ border: `1px solid ${ACCENT}33`, background: "rgba(163,230,53,.06)" }}>
-                  <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: ACCENT }}>Biggest trade win</div>
+                  <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: ACCENT }}>Biggest trade win</div>
                   <p className="mt-1 text-xs leading-relaxed" style={{ color: TEXT }}>
                     {ledger.biggestFleece.winnerOwnerKey === focalOwnerKey
                       ? focalDisplayName
@@ -1386,12 +1386,12 @@ function RivalryTradeLedgerSection({
                         : "Even"}{" "}
                     · +{Math.round(ledger.biggestFleece.margin)} value
                   </p>
-                  <p className="mt-1 text-[10px]" style={{ color: MUTED }}>{ledger.biggestFleece.verdictLabel}</p>
+                  <p className="mt-1 text-label" style={{ color: MUTED }}>{ledger.biggestFleece.verdictLabel}</p>
                 </div>
               )}
               {ledger.mostBalanced && (
                 <div className="rounded-[8px] px-3 py-2" style={{ border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.03)" }}>
-                  <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Most balanced trade</div>
+                  <div className="text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Most balanced trade</div>
                   <p className="mt-1 text-xs leading-relaxed" style={{ color: TEXT }}>
                     Margin {Math.round(ledger.mostBalanced.margin)} · {ledger.mostBalanced.verdictLabel}
                   </p>
@@ -1401,7 +1401,7 @@ function RivalryTradeLedgerSection({
           )}
 
           <div>
-            <p className="mb-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>Recent trades</p>
+            <p className="mb-2 text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>Recent trades</p>
             <div className="space-y-2">
               {(ledger.recentTrades ?? ledger.trades ?? []).map((entry: any) => {
                 const trade = entry.trade;
@@ -1424,7 +1424,7 @@ function RivalryTradeLedgerSection({
                         {trade.season} · {formatTradeProcessedDate(trade.processedDate)}
                       </div>
                       <span
-                        className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                        className="rounded px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide"
                         style={tradeResultStyle(result)}
                       >
                         {result === "win" ? "Win" : result === "loss" ? "Loss" : "Even"}
@@ -1440,7 +1440,7 @@ function RivalryTradeLedgerSection({
                         {oppReceived.length ? oppReceived.join(", ") : "—"}
                       </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: MUTED }}>
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-label" style={{ color: MUTED }}>
                       <span>
                         Margin:{" "}
                         <span className="font-semibold tabular-nums" style={{ color: TEXT }}>
@@ -1449,7 +1449,7 @@ function RivalryTradeLedgerSection({
                         </span>
                       </span>
                       {trade.verdictLabel ? (
-                        <span className="rounded border px-1.5 py-0.5 text-[10px]" style={{ borderColor: "rgba(255,255,255,.1)", color: MUTED }}>
+                        <span className="rounded border px-1.5 py-0.5 text-label" style={{ borderColor: "rgba(255,255,255,.1)", color: MUTED }}>
                           {trade.verdictLabel}
                         </span>
                       ) : null}
@@ -1691,7 +1691,7 @@ export function RivalryDossierPanel({
               />
             )}
           </div>
-          <p className="mt-1 text-[11px]" style={{ color: MUTED }}>
+          <p className="mt-1 text-label" style={{ color: MUTED }}>
             Completed games (RS + playoffs) · {data.matchupRowsUsed} deduped rows · season {activeSeason ?? "—"}
           </p>
         </div>
@@ -1749,10 +1749,10 @@ export function RivalryDossierPanel({
                 </div>
                 <div className="min-w-0 space-y-1">
                   <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.focalDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide" style={{ border: `1px solid ${ACCENT}55`, background: "rgba(139,92,246,.10)", color: ACCENT }}>
                     {pd.focalTag}
                   </div>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
+                  <p className="text-label" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
                   <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
                     Record vs {pd.opponentDisplayName}: {pd.recordFocalVs.wins}–{pd.recordFocalVs.losses}{pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
                   </p>
@@ -1773,10 +1773,10 @@ export function RivalryDossierPanel({
                 </div>
                 <div className="min-w-0 space-y-1">
                   <div className="truncate text-lg font-bold" style={{ color: TEXT }}>{pd.opponentDisplayName}</div>
-                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(139,92,246,.10)", color: BLUE }}>
+                  <div className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide" style={{ border: `1px solid ${BLUE}55`, background: "rgba(139,92,246,.10)", color: BLUE }}>
                     {pd.opponentTag}
                   </div>
-                  <p className="text-[11px]" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
+                  <p className="text-label" style={{ color: MUTED }}>Active since {pd.firstMeetingSeason ?? "—"}</p>
                   <p className="text-sm font-medium tabular-nums" style={{ color: TEXT }}>
                     Record vs {pd.focalDisplayName}: {pd.recordFocalVs.losses}–{pd.recordFocalVs.wins}{pd.recordFocalVs.ties ? `–${pd.recordFocalVs.ties}` : ""}
                   </p>
@@ -1814,9 +1814,9 @@ export function RivalryDossierPanel({
                 Head-to-Head History
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-left text-[11px]">
+                <table className="w-full min-w-[420px] text-left text-label">
                   <thead>
-                    <tr className="border-b text-[10px] uppercase tracking-wide" style={{ borderColor: LINE, color: MUTED }}>
+                    <tr className="border-b text-label uppercase tracking-wide" style={{ borderColor: LINE, color: MUTED }}>
                       <th className="py-2 pr-2">Season</th>
                       <th className="py-2 pr-2">Week</th>
                       <th className="py-2 pr-2 text-right" style={{ color: ACCENT }}>{pd.focalDisplayName}</th>
@@ -1877,7 +1877,7 @@ export function RivalryDossierPanel({
                     <Line type="monotone" dataKey="opponentScore" name={pd.opponentDisplayName} stroke={CHART_OPP} dot={false} strokeWidth={2} />
                   </LineChart>
                 </ResponsiveContainer>
-                <div className="mt-2 flex flex-wrap gap-3 text-[10px]" style={{ color: MUTED }}>
+                <div className="mt-2 flex flex-wrap gap-3 text-label" style={{ color: MUTED }}>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm" style={{ background: CHART_FOCAL }} />{pd.focalDisplayName}</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-4 rounded-sm" style={{ background: CHART_OPP }} />{pd.opponentDisplayName}</span>
                 </div>
@@ -1909,12 +1909,12 @@ function StatCard({
 }) {
   return (
     <div className="px-3 py-2.5" style={SUB}>
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
+      <div className="flex items-center gap-2 text-2xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
         {icon}
         {label}
       </div>
       <div className="mt-1 text-xl font-extrabold tabular-nums" style={{ color: valueColor ?? TEXT }}>{value}</div>
-      <div className="mt-0.5 text-[10px] leading-snug" style={{ color: MUTED }}>{sub}</div>
+      <div className="mt-0.5 text-label leading-snug" style={{ color: MUTED }}>{sub}</div>
     </div>
   );
 }

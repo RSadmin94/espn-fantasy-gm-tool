@@ -19,7 +19,7 @@ export function RfsnChampionshipOdds({
     return (
       <div
         className={cn(
-          "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-white/5 bg-black/25 px-2.5 py-1.5 text-[10px] text-white/40",
+          "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-white/5 bg-black/25 px-2.5 py-1.5 text-label text-ink-tertiary",
           className,
         )}
         aria-label="Championship odds"
@@ -52,11 +52,11 @@ export function RfsnChampionshipOdds({
       >
         <div className="mb-2 flex items-center gap-1.5 text-sky-400/80">
           <Trophy className="h-3.5 w-3.5" aria-hidden />
-          <span className="text-[8px] font-black uppercase tracking-[0.2em]">Championship odds</span>
+          <span className="text-2xs font-black uppercase tracking-[0.2em]">Championship odds</span>
         </div>
         <ul className="space-y-1.5">
           {teams.slice(0, 4).map((t) => (
-            <li key={t.team} className="flex items-center gap-2 text-[10px]">
+            <li key={t.team} className="flex items-center gap-2 text-label">
               <span className="w-16 truncate text-white/45">{t.team.replace("Team ", "")}</span>
               <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/8">
                 <div
@@ -81,7 +81,7 @@ export function RfsnChampionshipOdds({
     >
       <div className="flex items-center gap-2 text-sky-400">
         <Trophy className="h-4 w-4" aria-hidden />
-        <span className="text-[10px] font-bold uppercase tracking-widest">Championship odds</span>
+        <span className="text-label font-bold uppercase tracking-widest">Championship odds</span>
       </div>
       <ul className="mt-2 space-y-1.5">
         {teams.map((t) => (

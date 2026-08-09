@@ -71,25 +71,25 @@ export function FreeGmProfileTeaser({
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {careerLine ? (
             <div className="rounded-xl border border-emerald-500/20 bg-muted/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-400/90">Career</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-emerald-400/90">Career</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{careerLine}</p>
             </div>
           ) : null}
           {titlesLine ? (
             <div className="rounded-xl border border-amber-500/20 bg-muted/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400/90">Titles</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-amber-400/90">Titles</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{titlesLine}</p>
             </div>
           ) : null}
           {rivalName ? (
             <div className="rounded-xl border border-violet-500/20 bg-muted/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-violet-400/90">Top rival</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-violet-400/90">Top rival</p>
               <p className="mt-1 text-sm font-semibold text-foreground truncate">{rivalName}</p>
             </div>
           ) : null}
           {threatLine ? (
             <div className="rounded-xl border border-red-500/20 bg-muted/40 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-red-400/90">Biggest threat</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-red-400/90">Biggest threat</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{threatLine}</p>
             </div>
           ) : null}
@@ -145,7 +145,7 @@ export function FreeLeagueDnaTeaser() {
             <Dna className="h-5 w-5 text-violet-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-400/90">Your archetype</p>
+            <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-violet-400/90">Your archetype</p>
             <p className="mt-1 text-2xl font-black text-foreground">{data.archetype}</p>
             {data.primaryTrait ? (
               <p className="mt-2 text-sm text-muted-foreground">
@@ -276,7 +276,7 @@ export function FreeStorylineTeaser({
           <div className="flex items-center gap-2">
             {storyIcon(String(topStory.storyType ?? ""))}
             {topStory.emotionalTag ? (
-              <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-300">
+              <span className="rounded-full border border-orange-500/30 bg-orange-500/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-orange-300">
                 {topStory.emotionalTag}
               </span>
             ) : null}

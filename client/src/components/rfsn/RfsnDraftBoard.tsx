@@ -42,13 +42,13 @@ export function RfsnDraftBoard({
       data-rfsn-focus-target
     >
       <div className="border-b border-white/10 bg-white/[0.04] px-3 py-2">
-        <h2 className="text-[11px] font-black uppercase tracking-[0.25em] text-white/75">
+        <h2 className="text-label font-black uppercase tracking-[0.25em] text-white/75">
           Draft Board
         </h2>
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full min-w-[360px] border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-[#0a0a10] text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
+          <thead className="sticky top-0 z-10 bg-[#0a0a10] text-2xs font-bold uppercase tracking-[0.18em] text-white/40">
             <tr className="border-b border-white/10">
               <th className="w-12 px-3 py-2">Rank</th>
               <th className="px-3 py-2">Player</th>
@@ -86,7 +86,7 @@ export function RfsnDraftBoard({
                       {placeholder ? "Available" : row.player}
                     </span>
                     {row.isOnClock && (
-                      <span className="mt-1 block text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                      <span className="mt-1 block text-label font-black uppercase tracking-wider text-emerald-400">
                         On the clock: {onClockTeam}
                         <span className="mx-1 text-white/20">·</span>
                         Pick {overallPick}
@@ -111,7 +111,7 @@ export function RfsnDraftBoard({
           </tbody>
         </table>
       </div>
-      <div className="flex items-center justify-center gap-1 border-t border-white/10 bg-black/30 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/35">
+      <div className="flex items-center justify-center gap-1 border-t border-white/10 bg-black/30 px-3 py-1.5 text-label font-semibold uppercase tracking-wider text-white/35">
         Show more players
         <ChevronDown className="h-3 w-3" aria-hidden />
       </div>

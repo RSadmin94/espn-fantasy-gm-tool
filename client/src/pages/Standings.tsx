@@ -408,31 +408,31 @@ export function Standings({
             <table className="w-full min-w-[860px] border-collapse text-sm">
               <thead>
                 <tr style={{ borderBottom: "1px solid color-mix(in oklch, var(--color-foreground) 8%, transparent)" }}>
-                  <th className="sticky left-0 z-10 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ background: HEAD, color: MUTED }}>
+                  <th className="sticky left-0 z-10 px-2 py-2.5 text-left text-label font-semibold uppercase tracking-wide" style={{ background: HEAD, color: MUTED }}>
                     RK
                   </th>
-                  <th className="min-w-[200px] px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="min-w-[200px] px-2 py-2.5 text-left text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     Team
                   </th>
-                  <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-center text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     REC
                   </th>
-                  <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-right text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     PF
                   </th>
-                  <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-right text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     PA
                   </th>
-                  <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-right text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     PF/G
                   </th>
-                  <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-right text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     PA/G
                   </th>
-                  <th className="px-2 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-right text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     DIFF
                   </th>
-                  <th className="px-2 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                  <th className="px-2 py-2.5 text-center text-label font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                     MOVES
                   </th>
                 </tr>
@@ -479,7 +479,7 @@ export function Standings({
                             {logo ? (
                               <img src={logo} alt="" className="h-full w-full object-cover" loading="lazy" />
                             ) : (
-                              <span className="flex h-full w-full items-center justify-center text-[10px] font-bold" style={{ color: MUTED }}>
+                              <span className="flex h-full w-full items-center justify-center text-label font-bold" style={{ color: MUTED }}>
                                 {(abbrevSafe || teamNameSafe || "?").slice(0, 3).toUpperCase()}
                               </span>
                             )}

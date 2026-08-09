@@ -76,7 +76,7 @@ export function RfsnAnalysts() {
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0c0e12] via-transparent to-transparent" />
               </div>
               <div className="space-y-2 p-4">
-                <p className={cn("text-[10px] font-black uppercase tracking-widest", meta.accentClass)}>
+                <p className={cn("text-2xs font-semibold uppercase tracking-widest", meta.accentClass)}>
                   {meta.role}
                 </p>
                 <h3 className="text-xl font-black text-white">{meta.displayName}</h3>

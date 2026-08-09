@@ -59,7 +59,7 @@ function AwardBlock({ award }: { award: DraftNightAward }) {
       <h4 className="text-xs font-black uppercase tracking-wider text-zinc-100">
         {meta.emoji} {meta.label}
       </h4>
-      <dl className="grid gap-1 text-[11px] text-zinc-300">
+      <dl className="grid gap-1 text-label text-zinc-300">
         <div>
           <dt className="text-ink-secondary inline">Owner: </dt>
           <dd className="inline font-bold text-zinc-100">{award.ownerName}</dd>
@@ -119,7 +119,7 @@ function AwardBlock({ award }: { award: DraftNightAward }) {
             </dd>
           </div>
         )}
-        <p className="text-[10px] text-ink-tertiary pt-0.5">
+        <p className="text-label text-ink-tertiary pt-0.5">
           Persona lead: {award.persona} · conf {(award.confidence * 100).toFixed(0)}% · heat{" "}
           {Math.round(award.narrativeHeat)}
         </p>
@@ -144,7 +144,7 @@ function SuppressedBlock({
       <h4 className="text-xs font-black uppercase tracking-wider text-zinc-400">
         {meta.emoji} {meta.label}
       </h4>
-      <p className="mt-1 text-[11px] text-ink-secondary">{reason}</p>
+      <p className="mt-1 text-label text-ink-secondary">{reason}</p>
     </article>
   );
 }
@@ -172,7 +172,7 @@ export function DraftNightShow({ show, analystRecap, className }: DraftNightShow
         <h3 className="text-sm font-black uppercase tracking-wider text-violet-200">
           Draft Night Show
         </h3>
-        <p className="text-[11px] text-ink-secondary">
+        <p className="text-label text-ink-secondary">
           {show.totalPicks} picks · {show.teamCount} teams · evidence-gated awards
         </p>
       </header>
@@ -190,8 +190,8 @@ export function DraftNightShow({ show, analystRecap, className }: DraftNightShow
         <h4 className="text-xs font-black uppercase tracking-wider text-zinc-200">
           Final RFSN Summary
         </h4>
-        <p className="text-[11px] text-zinc-300 leading-relaxed">{recap}</p>
-        <p className="text-[10px] text-ink-tertiary">Top analyst recap — booth audio uses the existing wrap-up pipeline.</p>
+        <p className="text-label text-zinc-300 leading-relaxed">{recap}</p>
+        <p className="text-label text-ink-tertiary">Top analyst recap — booth audio uses the existing wrap-up pipeline.</p>
       </footer>
     </section>
   );

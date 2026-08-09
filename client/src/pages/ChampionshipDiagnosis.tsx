@@ -313,7 +313,7 @@ export function ChampionshipDiagnosis() {
                   </div>
                   <div className="text-right">
                     <div className="text-[22px] font-black tabular-nums text-lime-300">{cp.closestChampion.similarity}%</div>
-                    <p className="text-[11px] uppercase tracking-wide text-ink-tertiary">similar profile</p>
+                    <p className="text-label uppercase tracking-wide text-ink-tertiary">similar profile</p>
                   </div>
                 </div>
               ) : pathQ.isLoading ? (
@@ -332,7 +332,7 @@ export function ChampionshipDiagnosis() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="text-[15px] font-bold text-white/90">{m.title}</p>
-                          {m.impact && <span className={cn("rounded-md border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide", IMPACT_TONE[m.impact] ?? IMPACT_TONE.low)}>{m.impact}</span>}
+                          {m.impact && <span className={cn("rounded-md border px-1.5 py-0.5 text-label font-bold uppercase tracking-wide", IMPACT_TONE[m.impact] ?? IMPACT_TONE.low)}>{m.impact}</span>}
                         </div>
                         {m.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/55">{m.detail}</p>}
                       </div>

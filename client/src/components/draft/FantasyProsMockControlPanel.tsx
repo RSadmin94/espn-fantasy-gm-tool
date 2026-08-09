@@ -53,7 +53,7 @@ export function FantasyProsMockControlPanel({
 
   return (
     <div
-      className="mb-3 rounded-lg border border-sky-500/30 bg-sky-500/5 px-3 py-2.5 text-[11px] text-zinc-300 space-y-2"
+      className="mb-3 rounded-lg border border-sky-500/30 bg-sky-500/5 px-3 py-2.5 text-label text-zinc-300 space-y-2"
       data-fantasypros-mock-control
       data-rfsn-030c
       data-mock-draft-source="fantasypros"
@@ -63,7 +63,7 @@ export function FantasyProsMockControlPanel({
           <div className="font-black uppercase tracking-wider text-sky-200 text-xs">
             FantasyPros Mock
           </div>
-          <div className="text-[10px] text-sky-300/80">
+          <div className="text-label text-sky-300/80">
             External simulated draft · {leagueLabel} · {season}
           </div>
         </div>
@@ -72,7 +72,7 @@ export function FantasyProsMockControlPanel({
             <button
               type="button"
               onClick={onStart}
-              className="px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider bg-sky-600/30 border border-sky-500/50 text-sky-100"
+              className="px-2.5 py-1 rounded text-label font-black uppercase tracking-wider bg-sky-600/30 border border-sky-500/50 text-sky-100"
             >
               Start Mock Commentary
             </button>
@@ -81,14 +81,14 @@ export function FantasyProsMockControlPanel({
               <button
                 type="button"
                 onClick={onNewDraft}
-                className="px-2 py-1 rounded text-[11px] font-bold border border-zinc-600 text-zinc-300 hover:text-zinc-100"
+                className="px-2 py-1 rounded text-label font-bold border border-zinc-600 text-zinc-300 hover:text-zinc-100"
               >
                 New session
               </button>
               <button
                 type="button"
                 onClick={onStop}
-                className="px-2.5 py-1 rounded text-[11px] font-black uppercase tracking-wider bg-zinc-800 border border-zinc-500 text-zinc-200"
+                className="px-2.5 py-1 rounded text-label font-black uppercase tracking-wider bg-zinc-800 border border-zinc-500 text-zinc-200"
               >
                 Stop
               </button>
@@ -169,12 +169,12 @@ export function FantasyProsMockControlPanel({
       </div>
 
       {status.lastError && (
-        <div className="text-amber-200/90 text-[11px]" role="status">
+        <div className="text-amber-200/90 text-label" role="status">
           {status.lastError}
         </div>
       )}
 
-      <p className="text-[10px] text-ink-tertiary leading-snug">
+      <p className="text-label text-ink-tertiary leading-snug">
         Open the{" "}
         <a
           className="text-sky-400 underline"
@@ -193,10 +193,10 @@ export function FantasyProsMockControlPanel({
         onToggle={(e) => setDiagnosticsOpen((e.target as HTMLDetailsElement).open)}
         data-fp-diagnostics
       >
-        <summary className="cursor-pointer text-[10px] uppercase tracking-wider text-ink-secondary select-none">
+        <summary className="cursor-pointer text-label uppercase tracking-wider text-ink-secondary select-none">
           Diagnostics
         </summary>
-        <div className="mt-1.5 space-y-0.5 text-[10px] text-ink-secondary font-mono">
+        <div className="mt-1.5 space-y-0.5 text-label text-ink-secondary font-mono">
           <div>extension: {status.extensionPresent ? "detected" : "missing"}</div>
           <div>connector: {status.connectorStatus}</div>
           <div>draftId: {status.draftId || "—"}</div>

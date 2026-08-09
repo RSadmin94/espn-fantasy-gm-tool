@@ -36,7 +36,7 @@ function Card({ children, className = "", style }: { children: React.ReactNode; 
   return <div style={{ ...SUB, ...style }} className={`p-5 ${className}`}>{children}</div>;
 }
 function Eyebrow({ children, color = MUTED }: { children: React.ReactNode; color?: string }) {
-  return <div className="text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color }}>{children}</div>;
+  return <div className="text-label font-bold uppercase tracking-[0.22em]" style={{ color }}>{children}</div>;
 }
 
 export function LeagueDna() {
@@ -195,23 +195,23 @@ export function LeagueDna() {
                         <div className="text-4xl font-black tabular-nums leading-none" style={{ color: gradeColor(r.current.grade) }}>{r.current.grade}</div>
                         <div className="self-center text-2xl font-black leading-none" style={{ color: MUTED }}>/</div>
                         <div className="text-4xl font-black tabular-nums leading-none" style={{ color: gradeColor(r.overall.grade) }}>{r.overall.grade}</div>
-                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(r.current.season).slice(2)}</div>
+                        <div className="mt-1 text-2xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>{"'" + String(r.current.season).slice(2)}</div>
                         <div />
-                        <div className="mt-1 text-[9px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>
+                        <div className="mt-1 text-2xs font-bold uppercase tracking-wider" style={{ color: MUTED }}>Career</div>
                       </div>
                     ) : (
                       <div className="text-5xl font-black tabular-nums" style={{ color: gradeColor(r.overall.grade) }}>{r.overall.grade}</div>
                     )}
-                    <div className="mt-2 text-center text-[11px] font-bold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div>
+                    <div className="mt-2 text-center text-label font-bold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div>
                   </div>
                 ))}
               </div>
               {data.ratings?.drafting?.method === "sim" ? (
-                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
+                <p className="mt-3 text-label leading-relaxed" style={{ color: MUTED }}>
                   Each grade shows your <b style={{ color: TEXT }}>most recent season</b> and your <b style={{ color: TEXT }}>career</b> average over {data.ratings.drafting.overall.seasonsUsed} season{data.ratings.drafting.overall.seasonsUsed === 1 ? "" : "s"} with full weekly data. Drafting and Roster come from the no-move simulation - what your drafted roster would have done untouched, and how much your in-season moves improved it. Trading is your trade-activity rank in the league.
                 </p>
               ) : (
-                <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>
+                <p className="mt-3 text-label leading-relaxed" style={{ color: MUTED }}>
                   Grades are style-based for now - this league has no seasons with full weekly player data to run the no-move simulation.
                 </p>
               )}

@@ -23,8 +23,8 @@ export function RfsnCommentaryQueue({ queue, compact = false, className }: RfsnC
     >
       <div className="flex items-center gap-2 text-muted-foreground">
         <Clock className="h-3.5 w-3.5" aria-hidden />
-        <span className="text-[10px] font-bold uppercase tracking-widest">Queued</span>
-        <span className="ml-auto rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-mono">
+        <span className="text-label font-bold uppercase tracking-widest">Queued</span>
+        <span className="ml-auto rounded-full bg-white/10 px-1.5 py-0.5 text-label font-mono">
           {queue.length}
         </span>
       </div>
@@ -38,7 +38,7 @@ export function RfsnCommentaryQueue({ queue, compact = false, className }: RfsnC
             >
               <div className="flex items-center justify-between gap-2">
                 <span className={cn("font-semibold", meta.accentClass)}>{meta.displayName}</span>
-                <span className="text-[9px] uppercase text-muted-foreground">
+                <span className="text-2xs uppercase text-muted-foreground">
                   {significanceLabel(moment.significance)}
                 </span>
               </div>

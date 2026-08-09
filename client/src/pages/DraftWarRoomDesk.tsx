@@ -108,7 +108,7 @@ function SectionTitle({ icon: Icon, kicker, title, color }: any) {
         <Icon className="h-5 w-5" style={{ color }} />
       </div>
       <div className="min-w-0">
-        {kicker && <div className="text-[10px] font-bold uppercase tracking-[0.18em] truncate" style={{ color: MUTED }}>{kicker}</div>}
+        {kicker && <div className="text-label font-bold uppercase tracking-[0.18em] truncate" style={{ color: MUTED }}>{kicker}</div>}
         <div className="text-[20px] font-extrabold tracking-tight leading-tight" style={{ color: TEXT }}>{title}</div>
       </div>
     </div>
@@ -252,7 +252,7 @@ function DraftRealityMode({
             <div className="flex flex-wrap gap-1.5 mb-2">
               {probablyGone.map((p: any, i: number) => chip(p.name, p.position, "rgba(248,113,113,.10)", i))}
             </div>
-            <div className="text-[11px]" style={{ color: MUTED }}>Current ADP projects these selected before your slot.</div>
+            <div className="text-label" style={{ color: MUTED }}>Current ADP projects these selected before your slot.</div>
           </>
         )}
       </div>
@@ -271,14 +271,14 @@ function DraftRealityMode({
               <div key={`${t.round}.${t.roundPick}`} className="p-3" style={SUB}>
                 <div className="text-[14px] font-black mb-2" style={{ color: GOLD }}>Pick {t.round}.{pad2(t.roundPick)} targets</div>
                 <div className="mb-2">
-                  <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: TEAL }}>Tier A · fits your need</div>
+                  <div className="text-label uppercase tracking-wider mb-1" style={{ color: TEAL }}>Tier A · fits your need</div>
                   <div className="flex flex-wrap gap-1.5">
                     {t.tierA.length === 0 && <span className="text-[12px]" style={{ color: MUTED }}>No need-fit available</span>}
                     {t.tierA.map((p: any, i: number) => chip(p.name, p.position, "rgba(46,212,191,.12)", p.id || i))}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: MUTED }}>Tier B · best available</div>
+                  <div className="text-label uppercase tracking-wider mb-1" style={{ color: MUTED }}>Tier B · best available</div>
                   <div className="flex flex-wrap gap-1.5">
                     {t.tierB.map((p: any, i: number) => (
                       <span key={p.id || i} className="text-[12px] font-bold px-2 py-0.5 rounded" style={{ color: MUTED, background: "rgba(255,255,255,.04)" }}>
@@ -306,7 +306,7 @@ function DraftRealityMode({
             {risks.map((r: any) => (
               <div key={`${r.round}.${r.roundPick}`} className="flex items-center gap-3 p-2.5" style={SUB}>
                 <span className="text-[13px] font-black shrink-0" style={{ color: GOLD, width: 70 }}>Pick {r.round}.{pad2(r.roundPick)}</span>
-                <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded shrink-0" style={{ color: r.color, background: r.color + "1f", minWidth: 64, textAlign: "center" }}>{r.label}</span>
+                <span className="text-label font-black uppercase tracking-wider px-2 py-0.5 rounded shrink-0" style={{ color: r.color, background: r.color + "1f", minWidth: 64, textAlign: "center" }}>{r.label}</span>
                 <span className="text-[12px]" style={{ color: MUTED }}>{r.meaning}</span>
               </div>
             ))}
@@ -488,7 +488,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[18px] font-black leading-none" style={{ color: TEAL }}>{Math.round(p.projectedPoints || 0)}</div>
-                  <div className="text-[9px] uppercase tracking-wider mt-1" style={{ color: MUTED }}>proj · MKT {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
+                  <div className="text-2xs uppercase tracking-wider mt-1" style={{ color: MUTED }}>proj · MKT {p.marketValue != null ? Math.round(p.marketValue) : "—"}</div>
                 </div>
               </div>
             );
@@ -548,11 +548,11 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
               ].map((s) => (
                 <div key={s.label} className="p-3 text-center" style={SUB}>
                   <div className="text-[24px] font-black leading-none" style={{ color: s.c }}>{s.val}</div>
-                  <div className="text-[10px] uppercase tracking-wider mt-1.5" style={{ color: MUTED }}>{s.label}</div>
+                  <div className="text-label uppercase tracking-wider mt-1.5" style={{ color: MUTED }}>{s.label}</div>
                 </div>
               ))}
             </div>
-            <div className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>Top removed</div>
+            <div className="text-label font-bold uppercase tracking-wider mb-2" style={{ color: MUTED }}>Top removed</div>
             <div className="flex flex-wrap gap-2">
               {(draftAfterKeepers.topRemoved ?? []).map((r: any) => (
                 <span key={r.playerId} className="text-[12px] font-bold px-2.5 py-1 rounded" style={{ color: TEXT, background: "rgba(255,255,255,.05)" }}>
@@ -562,7 +562,7 @@ export function DraftWarRoomDesk({ data }: { data: any }) {
             </div>
             <div className="mt-4 flex items-center gap-2">
               <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: MUTED }} />
-              <span className="text-[10px]" style={{ color: MUTED }}>Keepers removed by player ID before the board, mock &amp; scarcity are built.</span>
+              <span className="text-label" style={{ color: MUTED }}>Keepers removed by player ID before the board, mock &amp; scarcity are built.</span>
             </div>
           </div>
         ) : (

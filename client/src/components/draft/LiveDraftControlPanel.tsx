@@ -126,7 +126,7 @@ function InlineMetric({
       className="inline-flex items-baseline gap-1.5 min-w-0"
       data-live-metric={testId ?? label.toLowerCase()}
     >
-      <span className="text-[9px] font-bold uppercase tracking-wider text-ink-secondary shrink-0">
+      <span className="text-2xs font-bold uppercase tracking-wider text-ink-secondary shrink-0">
         {label}
       </span>
       <span className="truncate text-[11px] font-semibold text-zinc-100 tabular-nums">
@@ -168,14 +168,14 @@ export function LiveDraftControlPanel({
     >
       {/* Title + session power — one row */}
       <div className="flex items-center justify-between gap-2">
-        <div className="font-black uppercase tracking-wider text-emerald-200 text-[10px]">
+        <div className="font-black uppercase tracking-wider text-emerald-200 text-label">
           {experience === "live" ? "Live Draft Control" : "Mock Draft Control"}
         </div>
         <button
           type="button"
           onClick={onToggleActive}
           className={cn(
-            "shrink-0 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider border",
+            "shrink-0 px-2 py-0.5 rounded text-label font-black uppercase tracking-wider border",
             status.active
               ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
               : "border-zinc-600 text-zinc-400 hover:text-zinc-200",
@@ -210,7 +210,7 @@ export function LiveDraftControlPanel({
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5" data-live-espn-connect>
           <span
             className={cn(
-              "px-2 py-0.5 rounded text-[10px] font-black border",
+              "px-2 py-0.5 rounded text-label font-black border",
               status.connectorReady
                 ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
                 : "bg-amber-500/10 border-amber-500/30 text-amber-200",
@@ -226,7 +226,7 @@ export function LiveDraftControlPanel({
                 : "Waiting for league connection"}
           </span>
           {status.lastPollAt ? (
-            <span className="text-[10px] text-ink-secondary tabular-nums">
+            <span className="text-label text-ink-secondary tabular-nums">
               Updated {new Date(status.lastPollAt).toLocaleTimeString()}
             </span>
           ) : null}
@@ -239,7 +239,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onStart}
-              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-[10px] font-black hover:bg-violet-500/25"
+              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25"
               data-live-action-start
             >
               ▶ Start Draft
@@ -249,7 +249,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onResume}
-              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-[10px] font-black hover:bg-violet-500/25"
+              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25"
               data-live-action-resume
             >
               ▶ Resume
@@ -259,7 +259,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onPause}
-              className="px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-black"
+              className="px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-label font-black"
               data-live-action-pause
             >
               ⏸ Pause
@@ -269,7 +269,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onNewDraft}
-              className="px-2 py-0.5 rounded text-zinc-300 text-[10px] font-bold hover:text-zinc-100 border border-zinc-600"
+              className="px-2 py-0.5 rounded text-zinc-300 text-label font-bold hover:text-zinc-100 border border-zinc-600"
               data-live-action-new
             >
               Start new draft
@@ -279,13 +279,13 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onReset}
-              className="px-2 py-0.5 rounded text-zinc-400 text-[10px] hover:text-zinc-200 border border-zinc-700"
+              className="px-2 py-0.5 rounded text-zinc-400 text-label hover:text-zinc-200 border border-zinc-700"
               data-live-action-reset
             >
               ↺ Reset
             </button>
           )}
-          <span className="text-[10px] text-zinc-400 tabular-nums">
+          <span className="text-label text-zinc-400 tabular-nums">
             {sessionActions.pickLabel}
           </span>
         </div>
@@ -293,13 +293,13 @@ export function LiveDraftControlPanel({
 
       {/* Diagnostics — collapsed; board driver, source radios, errors, detail lines */}
       <details className="group mt-1 border-t border-emerald-500/10 pt-0.5" data-live-advanced>
-        <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider text-ink-secondary hover:text-zinc-300 select-none">
+        <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-2xs font-bold uppercase tracking-wider text-ink-secondary hover:text-zinc-300 select-none">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
           Advanced
         </summary>
         <div className="mt-1 space-y-1 pb-0.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-live-source-picker>
-            <span className="text-[9px] uppercase tracking-wider text-ink-secondary">Draft source</span>
+            <span className="text-2xs uppercase tracking-wider text-ink-secondary">Draft source</span>
             {catalog.map((entry) => {
               const controlId: DraftControlSource =
                 entry.id === "espn-live"
@@ -319,7 +319,7 @@ export function LiveDraftControlPanel({
                 <label
                   key={entry.id}
                   className={cn(
-                    "inline-flex items-center gap-1 text-[10px] text-zinc-200",
+                    "inline-flex items-center gap-1 text-label text-zinc-200",
                     entry.available ? "cursor-pointer" : "opacity-40 cursor-not-allowed",
                   )}
                 >
@@ -338,14 +338,14 @@ export function LiveDraftControlPanel({
                   />
                   {entry.label}
                   {!entry.available ? (
-                    <span className="text-[9px] uppercase text-ink-tertiary">Soon</span>
+                    <span className="text-2xs uppercase text-ink-tertiary">Soon</span>
                   ) : null}
                 </label>
               );
             })}
           </div>
 
-          <p className="text-[10px] text-ink-secondary leading-snug" data-live-board-driver>
+          <p className="text-label text-ink-secondary leading-snug" data-live-board-driver>
             {isEspn
               ? status.transportKind === "espn-mirror"
                 ? "Board driver: ESPN Mirror (bookmarklet) → extension transport → shared Draft Engine."
@@ -360,7 +360,7 @@ export function LiveDraftControlPanel({
               <div
                 key={`${i}:${line}`}
                 className={cn(
-                  i === 0 ? "text-[10px] font-semibold text-zinc-300" : "text-[10px] text-ink-secondary",
+                  i === 0 ? "text-label font-semibold text-zinc-300" : "text-label text-ink-secondary",
                 )}
               >
                 {line}
@@ -369,7 +369,7 @@ export function LiveDraftControlPanel({
           </div>
 
           {status.active && (
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink-secondary tabular-nums">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-label text-ink-secondary tabular-nums">
               <span>
                 Picks locked {status.lockedCount}
                 {status.notifiedCount > 0 ? ` · covered ${status.notifiedCount}` : ""}
@@ -384,7 +384,7 @@ export function LiveDraftControlPanel({
           )}
 
           {status.lastError ? (
-            <div className="text-[10px] text-amber-300/90 font-mono" data-live-draft-error>
+            <div className="text-label text-amber-300/90 font-mono" data-live-draft-error>
               {status.lastError}
             </div>
           ) : null}

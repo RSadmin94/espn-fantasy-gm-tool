@@ -176,7 +176,7 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
           }
         />
         <p className="text-sm font-medium text-muted-foreground">
-          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-foreground/70">
+          <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-foreground/70">
             {V1.home.stateOfTheWeek}
           </span>
           <span className="mx-2 text-border">·</span>
@@ -317,7 +317,7 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
                           </span>,
                           <div key="o" className="min-w-0 font-medium text-lime-400">
                             <div className="truncate">{showPinned.ownerName || showPinned.teamName}</div>
-                            <div className="text-[10px] text-muted-foreground">You</div>
+                            <div className="text-label text-muted-foreground">You</div>
                           </div>,
                           formatRecord(showPinned),
                           <span key="pf" className="tabular-nums text-foreground">
@@ -363,7 +363,7 @@ export function WelcomeBackCoachHome(props: WelcomeBackCoachHomeProps) {
         <FlagshipDiscoveryGrid />
       </section>
 
-      <div className="border-t border-border pt-4 pb-2 text-center text-[11px] tracking-wide text-muted-foreground/60">
+      <div className="border-t border-border pt-4 pb-2 text-center text-label tracking-wide text-muted-foreground/60">
         Build: {__APP_GIT_HASH__ && __APP_GIT_HASH__ !== "unknown" ? __APP_GIT_HASH__.slice(0, 7) : "Unknown"}
       </div>
     </IntelPageShell>

@@ -36,7 +36,7 @@ export function RfsnDraftOrder({
       aria-label="Draft order"
       data-rfsn-focus-dim
     >
-      <h2 className="border-b border-white/10 px-2.5 py-2 text-[9px] font-black uppercase tracking-[0.22em] text-white/40">
+      <h2 className="border-b border-white/10 px-2.5 py-2 text-2xs font-black uppercase tracking-[0.22em] text-white/40">
         Draft Order
       </h2>
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
@@ -44,16 +44,16 @@ export function RfsnDraftOrder({
           <li
             key={slot.pickLabel}
             className={cn(
-              "flex items-center gap-2 rounded px-2 py-1.5 text-[11px] transition-colors duration-500",
+              "flex items-center gap-2 rounded px-2 py-1.5 text-label transition-colors duration-500",
               slot.isOnClock &&
                 "border border-emerald-400/60 bg-emerald-500/15 shadow-[0_0_16px_rgba(52,211,153,0.12)]",
               slot.isComplete && !slot.isOnClock && "opacity-45",
             )}
           >
-            <span className="w-9 shrink-0 font-mono text-[10px] text-white/45">{slot.pickLabel}</span>
+            <span className="w-9 shrink-0 font-mono text-label text-white/45">{slot.pickLabel}</span>
             <span
               className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[8px] font-black text-white/80",
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-2xs font-black text-white/80",
                 slot.isOnClock && "ring-2 ring-emerald-400 ring-offset-1 ring-offset-[#050508]",
               )}
             >
@@ -67,7 +67,7 @@ export function RfsnDraftOrder({
       {onClockIdx >= 0 && (
         <div className="border-t border-white/10 p-3">
           <div className="flex flex-col items-center">
-            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400">
+            <span className="text-2xs font-black uppercase tracking-[0.2em] text-emerald-400">
               On the clock
             </span>
             <div className="relative mt-2 flex h-20 w-20 items-center justify-center">
@@ -103,7 +103,7 @@ export function RfsnDraftOrder({
                 {formatClock(clockSeconds)}
               </span>
             </div>
-            <span className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/45">
+            <span className="mt-1 text-label font-bold uppercase tracking-wider text-white/45">
               Pick {overallPick}
             </span>
           </div>

@@ -54,8 +54,8 @@ export function RfsnSecondaryReaction({
           <p className={cn("font-bold", meta.accentClass, compact ? "text-xs" : "text-sm")}>
             {meta.displayName}
           </p>
-          <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-white/40">{card.label}</p>
-          <p className={cn("mt-1.5 leading-snug text-white/88", compact ? "text-[11px]" : "text-xs")}>
+          <p className="text-2xs font-bold uppercase tracking-[0.16em] text-white/40">{card.label}</p>
+          <p className={cn("mt-1.5 leading-snug text-white/88", compact ? "text-label" : "text-sm")}>
             {card.text}
           </p>
         </div>

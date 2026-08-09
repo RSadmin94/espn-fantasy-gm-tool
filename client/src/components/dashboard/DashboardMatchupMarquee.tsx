@@ -68,7 +68,7 @@ export function DashboardMatchupMarquee({
 
       <div className="relative flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-red-400/90">This week&apos;s matchup</p>
+          <p className="text-2xs font-semibold uppercase tracking-[0.2em] text-red-400/90">This week&apos;s matchup</p>
           <p className="mt-1 text-xs text-muted-foreground">{weekLabel}</p>
         </div>
         <Link to="/matchups" className="text-xs font-medium text-red-400/90 hover:text-red-300">
@@ -93,7 +93,7 @@ export function DashboardMatchupMarquee({
             <div className="flex flex-1 flex-col items-center gap-3 text-center sm:items-start sm:text-left">
               <Avatar label={teamA.ownerName || teamA.teamName} url={teamA.logoUrl} />
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400/80">
+                <p className="text-2xs font-semibold uppercase tracking-widest text-red-400/80">
                   #{teamA.displayRank} {teamA.ownerName || teamA.teamName}
                 </p>
                 <p className="mt-0.5 truncate text-lg font-bold text-foreground">{teamA.teamName}</p>
@@ -104,7 +104,7 @@ export function DashboardMatchupMarquee({
             </div>
 
             <div className="flex shrink-0 flex-col items-center justify-center gap-2 px-2">
-              <span className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-red-300">
+              <span className="rounded-full border border-red-500/35 bg-red-500/10 px-3 py-1 text-2xs font-semibold uppercase tracking-[0.2em] text-red-300">
                 vs
               </span>
             </div>
@@ -112,7 +112,7 @@ export function DashboardMatchupMarquee({
             <div className="flex flex-1 flex-col items-center gap-3 text-center sm:items-end sm:text-right">
               <Avatar label={teamB.ownerName || teamB.teamName} url={teamB.logoUrl} />
               <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                <p className="text-2xs font-semibold uppercase tracking-widest text-muted-foreground">
                   #{teamB.displayRank} {teamB.ownerName || teamB.teamName}
                 </p>
                 <p className="mt-0.5 truncate text-lg font-bold text-foreground">{teamB.teamName}</p>
@@ -126,7 +126,7 @@ export function DashboardMatchupMarquee({
           <div className="space-y-3 rounded-xl border border-border bg-black/25 px-4 py-4">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Projected</p>
+                <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Projected</p>
                 {board?.homeProjected != null && board?.awayProjected != null ? (
                   <p className="mt-1 font-mono text-2xl font-bold tabular-nums tracking-tight text-foreground sm:text-3xl">
                     {teamA.teamId === board.homeTeamId
@@ -140,7 +140,7 @@ export function DashboardMatchupMarquee({
             </div>
 
             <div>
-              <div className="mb-1 flex justify-between text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="mb-1 flex justify-between text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
                 <span>Team outlook (pulse)</span>
                 {aPct != null ? <span className="tabular-nums text-foreground">{aPct}%</span> : <span>—</span>}
               </div>
@@ -150,7 +150,7 @@ export function DashboardMatchupMarquee({
                   <div className="flex-1 bg-violet-500/25" />
                 </div>
               ) : (
-                <div className="rounded-md border border-border bg-foreground/[0.02] px-3 py-2 text-center text-[11px] text-muted-foreground">
+                <div className="rounded-md border border-border bg-foreground/[0.02] px-3 py-2 text-center text-label text-muted-foreground">
                   Not Yet Available — no outlook score for this featured pairing in the current pulse payload.
                   {winProbCaption ? ` ${winProbCaption}` : ""}
                 </div>

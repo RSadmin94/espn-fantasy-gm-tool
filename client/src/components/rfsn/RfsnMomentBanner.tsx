@@ -38,14 +38,14 @@ export function RfsnMomentBanner({
       <div className="flex items-center justify-between gap-3">
         {score != null && (
           <div>
-            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">
+            <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
               Moment score
             </span>
             <p className="text-lg font-black tabular-nums leading-none text-white">{score}</p>
           </div>
         )}
         <div className="text-right">
-          <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-white/40">
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
             {score == null ? "Moment" : "Pick tier"}
           </span>
           <p className="text-xs font-black uppercase tracking-wide text-white">

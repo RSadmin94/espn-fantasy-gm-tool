@@ -69,11 +69,11 @@ export function RfsnPrimaryCommentary({
               <p className={cn("font-black tracking-tight", meta.accentClass, compact ? "text-sm" : "text-lg")}>
                 {meta.displayName}
               </p>
-              <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-white/40">
+              <p className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
                 {card.label}
               </p>
             </div>
-            <span className="text-[8px] font-black uppercase tracking-widest text-white/20">RFSN</span>
+            <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">RFSN</span>
           </div>
           <p
             className={cn(
