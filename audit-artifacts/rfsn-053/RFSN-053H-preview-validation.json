@@ -1,0 +1,70 @@
+{
+  "label": "preview",
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T23:50:32.767Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T23:47:19.209Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "passed": 7,
+  "failed": 0,
+  "probes": [
+    {
+      "name": "Narrate no-mercy (sofia)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Rod Sellers: The No Mercy Maestro of ATLANTAS FINEST FF"
+    },
+    {
+      "name": "Narrate heartbreak (sofia)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Heartbreak in Atlanta's Finest Fantasy Football League"
+    },
+    {
+      "name": "Narrate cashier (cashier)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Receipt-Worthy Showdowns: ATLANTAS FINEST FF"
+    },
+    {
+      "name": "Narrate statement-wins (sofia)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Rod Sellers' Dominance in Statement Wins"
+    },
+    {
+      "name": "Narrate biggest-collapses (coach)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "The Collapse Chronicles: ATLANTAS FINEST FF"
+    },
+    {
+      "name": "Narrate blood-rival (roxanne)",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "The Clash of Titans: Sellers vs. Edwards"
+    },
+    {
+      "name": "Advisor Why is this No Mercy?",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "STORY\nSOFIA\nRod Sellers: The Architect of No Mercy\n\nA Legacy of Dominance and Decisive Victories\n\nIn the realm of fantasy football, few names resonate with the "
+    }
+  ]
+}
