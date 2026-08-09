@@ -10,6 +10,7 @@ import {
   noMercyPresetFilter,
   parseGallerySearchParams,
   serializeGallerySearchParams,
+  visualFiltersToGalleryUi,
 } from "./matchupGalleryUi";
 
 function matchup(over: Partial<GalleryMatchup> = {}): GalleryMatchup {
@@ -192,5 +193,26 @@ describe("RFSN-053C matchup gallery UI model", () => {
     expect(activeGalleryPreset({})).toBe("all");
     expect(activeGalleryPreset({ noMercy: true, marginMin: 50, result: "win" })).toBe("no-mercy");
     expect(activeGalleryPreset({ championshipGames: true })).toBe("championship");
+  });
+
+  it("RFSN-053D maps Advisor visual filters onto GalleryUiFilter + Open Full Gallery href", () => {
+    const ui = visualFiltersToGalleryUi({
+      owner: "Rod Sellers",
+      marginMin: 50,
+      winsOnly: true,
+      noMercy: true,
+    });
+    expect(ui).toMatchObject({
+      ownerName: "Rod Sellers",
+      marginMin: 50,
+      result: "win",
+      noMercy: true,
+    });
+    const href = `/league/history/matchups?${serializeGallerySearchParams(ui)}`;
+    expect(href).toContain("/league/history/matchups?");
+    expect(href).toContain("ownerName=Rod+Sellers");
+    expect(href).toContain("noMercy=1");
+    expect(href).toContain("marginMin=50");
+    expect(href).toContain("result=win");
   });
 });

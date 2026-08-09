@@ -11,6 +11,7 @@
  */
 
 import { isSeasonMatchupDetailAsk } from "./championshipAuthority";
+import { isMatchupGalleryAsk } from "./matchupGalleryTool";
 import { selectMatchupMarginTool } from "./matchupMarginTool";
 import { selectDraftIntelligenceTool } from "./draftIntelligenceTool";
 import {
@@ -81,6 +82,7 @@ const AUTHORITY_ORDER: AdvisorAuthorityId[] = [
 ];
 
 export type AdvisorPlannerIntent =
+  | "matchup_gallery"
   | "matchup_margins"
   | "h2h_pair"
   | "best_rivalry"
@@ -320,6 +322,14 @@ function planForIntent(
   "authorities" | "deterministicFirst" | "narrativeAllowed" | "requiredEvidence" | "fallbackToAdvisorContext"
 > {
   switch (intent) {
+    case "matchup_gallery":
+      return {
+        authorities: uniqueAuthorities(["owner_identity", "matchup_history"]),
+        deterministicFirst: true,
+        narrativeAllowed: false,
+        requiredEvidence: ["gallery_query"],
+        fallbackToAdvisorContext: false,
+      };
     case "matchup_margins":
       return {
         authorities: uniqueAuthorities(["owner_identity", "matchup_margins"]),
@@ -544,6 +554,7 @@ function detectIntent(
   if (isGoatAsk(t)) return "goat";
   if (isPlayoffVillainAsk(t)) return "playoff_villain";
   if (isBestRivalryAsk(t)) return "best_rivalry";
+  if (isMatchupGalleryAsk(t)) return "matchup_gallery";
   if (selectMatchupMarginTool(t) != null) return "matchup_margins";
   if (selectDraftIntelligenceTool(t) != null) return "draft_intelligence";
   if (isChampionshipCompareAsk(t, ownerCount)) return "championship_compare";

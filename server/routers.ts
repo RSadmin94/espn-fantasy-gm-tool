@@ -10658,6 +10658,7 @@ Provide:
           return {
             message: path.message,
             tool: path.tool,
+            visual: path.visual,
             meta: {
               classification,
               systemChars: 0,
@@ -10669,6 +10670,7 @@ Provide:
               llmInvoked: false,
               latencyMs: Date.now() - startedAt,
               ...path.telemetry,
+              ...(path.visual ? { visual: path.visual } : {}),
             },
           };
         }

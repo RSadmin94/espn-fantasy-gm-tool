@@ -124,6 +124,51 @@ describe("advisor.chat", () => {
     spy.mockRestore();
   });
 
+  it("RFSN-053D: returns visual matchup_gallery payload and skips LLM", async () => {
+    const { invokeLLM } = await import("./_core/llm");
+    const galleryMod = await import("./matchupGalleryTool");
+    const spy = vi.spyOn(galleryMod, "tryMatchupGalleryToolAnswer").mockResolvedValue({
+      selected: true,
+      toolName: "query_matchup_gallery",
+      query: { ownerName: "Rod Sellers", noMercy: true, marginMin: 50, result: "win" },
+      preset: "no_mercy",
+      answer: "You have 22 No Mercy Rule victories across recorded league history.",
+      analytics: {} as never,
+      visual: {
+        type: "matchup_gallery",
+        preset: "no_mercy",
+        filters: { owner: "Rod Sellers", marginMin: 50, winsOnly: true, noMercy: true, result: "win" },
+        result: {
+          matchups: [],
+          total: 22,
+          summary: "Rod Sellers has 22 No Mercy Rule victories.",
+          empty: false,
+          emptyReason: null,
+          seeAllHref: "/league/history/matchups?noMercy=1",
+          filter: {},
+          coverage: {} as never,
+        },
+        href: "/league/history/matchups?noMercy=1&ownerName=Rod+Sellers",
+      },
+    });
+
+    const ctx = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.advisor.chat({
+      message: "Show me my No Mercy wins.",
+      season: 2025,
+    });
+    expect(result.message).toMatch(/22 No Mercy/);
+    expect((result as { tool?: string }).tool).toBe("query_matchup_gallery");
+    expect((result as { visual?: { type?: string } }).visual?.type).toBe("matchup_gallery");
+    const meta = (result as { meta?: Record<string, unknown> }).meta;
+    expect(meta?.llmInvoked).toBe(false);
+    expect(meta?.deterministicShortCircuit).toBe(true);
+    expect(meta?.intent).toBe("matchup_gallery");
+    expect(invokeLLM).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it("RFSN-049B: returns runtime telemetry meta for LLM answers", async () => {
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);

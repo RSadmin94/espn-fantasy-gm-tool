@@ -112,10 +112,15 @@ export function registerAdvisorStreamRoute(app: Express) {
       });
 
       if (path.kind === "deterministic") {
-        sendEvent({ delta: path.message, tool: path.tool, meta: path.telemetry });
+        const visual = path.visual;
+        sendEvent({
+          delta: path.message,
+          tool: path.tool,
+          meta: { ...path.telemetry, ...(visual ? { visual } : {}) },
+        });
         await addChatMessage(user.id, "assistant", path.message, season, chatLeagueId);
         recordUsage({ userId: user.id, callType: "advisor", tokensUsed: 0 });
-        sendEvent({ done: true, meta: path.telemetry });
+        sendEvent({ done: true, meta: { ...path.telemetry, ...(visual ? { visual } : {}) } });
         return;
       }
 
