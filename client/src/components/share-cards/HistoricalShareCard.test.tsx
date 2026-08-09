@@ -125,14 +125,15 @@ describe("ShareCardRenderer", () => {
     expect(el.querySelector("[data-share-card-layout='square']")).toBeTruthy();
   });
 
-  it("modal preview can switch theme and layout; download stays disabled", () => {
+  it("modal preview can switch theme and layout; download is enabled", () => {
     const model = matchupToShareCard(matchup(), { collectionId: "no-mercy" });
     render(createElement(HistoricalShareCardModal, { open: true, onOpenChange: () => undefined, model }));
     const root = document.body;
     expect(root.querySelector("[data-share-card-modal]")).toBeTruthy();
     expect(root.querySelector("[data-share-card-preview] [data-share-card-theme='no-mercy']")).toBeTruthy();
-    expect((root.querySelector("[data-share-download]") as HTMLButtonElement | null)?.disabled).toBe(true);
+    expect((root.querySelector("[data-share-download]") as HTMLButtonElement | null)?.disabled).toBe(false);
     expect(root.querySelector("[data-share-copy-link]")).toBeTruthy();
+    expect(root.querySelector("[data-share-scale='2']")?.getAttribute("aria-pressed")).toBe("true");
 
     flushSync(() => {
       (root.querySelector("[data-share-theme='cashier']") as HTMLButtonElement).click();

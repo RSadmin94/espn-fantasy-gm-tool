@@ -32,6 +32,7 @@ describe("RFSN-053F Share Card wiring", () => {
     expect(renderer).not.toMatch(/openai|anthropic|ai narration/i);
     expect(modal).toContain("withShareCardPresentation");
     expect(modal).toContain("data-share-download");
+    expect(modal).toContain("/api/share-card/png");
     expect(button).toContain("data-share-card-open");
   });
 

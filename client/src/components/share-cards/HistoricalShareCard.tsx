@@ -3,6 +3,7 @@
  * One HTML engine for matchup / collection / record. Theme + layout live on ShareCardModel.
  * 053G snapshots `[data-share-card-root]` without rebuilding.
  */
+import React from "react";
 import { cn } from "@/lib/utils";
 import {
   SHARE_CARD_LAYOUT_SIZE,
