@@ -7,6 +7,7 @@
  */
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SPACE_CARD, SPACE_CHIP, SPACE_CLUSTER, SPACE_META } from "@/lib/density";
 import {
   liveDraftPhaseBadgeLabel,
   liveDraftStatusLines,
@@ -123,7 +124,7 @@ function InlineMetric({
 }) {
   return (
     <div
-      className="inline-flex items-baseline gap-1.5 min-w-0"
+      className={cn("inline-flex items-baseline min-w-0", SPACE_CLUSTER)}
       data-live-metric={testId ?? label.toLowerCase()}
     >
       <span className="text-2xs font-bold uppercase tracking-wider text-ink-secondary shrink-0">
@@ -156,7 +157,7 @@ export function LiveDraftControlPanel({
 
   return (
     <div
-      className="mb-1.5 sticky top-16 z-10 rounded-md border border-emerald-500/25 bg-emerald-500/[0.04] px-2 py-1.5 text-[11px] text-zinc-300 backdrop-blur-md"
+      className={cn("mb-4 sticky top-16 z-10 rounded-md border border-emerald-500/25 bg-emerald-500/[0.04] text-[11px] text-zinc-300 backdrop-blur-md", SPACE_CARD)}
       data-live-draft-control
       data-live-draft-ops
       data-draft-experience={experience}
@@ -175,7 +176,7 @@ export function LiveDraftControlPanel({
           type="button"
           onClick={onToggleActive}
           className={cn(
-            "shrink-0 px-2 py-0.5 rounded text-label font-black uppercase tracking-wider border",
+            "shrink-0 rounded text-label font-black uppercase tracking-wider border", SPACE_CHIP,
             status.active
               ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-200"
               : "border-zinc-600 text-zinc-400 hover:text-zinc-200",
@@ -188,7 +189,7 @@ export function LiveDraftControlPanel({
 
       {/* Dashboard metrics — single dense wrap row */}
       <div
-        className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-0.5"
+        className={cn(SPACE_META, "flex flex-wrap items-baseline gap-x-4 gap-y-1.5")}
         data-live-compact-status
       >
         <InlineMetric label="Status" value={primaryStatus} testId="status" />
@@ -207,10 +208,10 @@ export function LiveDraftControlPanel({
 
       {/* Primary chip + timestamp on one row */}
       {status.active && isEspn && (
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5" data-live-espn-connect>
+        <div className={cn(SPACE_META, "flex flex-wrap items-center gap-x-2 gap-y-1")} data-live-espn-connect>
           <span
             className={cn(
-              "px-2 py-0.5 rounded text-label font-black border",
+              "rounded text-label font-black border", SPACE_CHIP,
               status.connectorReady
                 ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
                 : "bg-amber-500/10 border-amber-500/30 text-amber-200",
@@ -234,12 +235,12 @@ export function LiveDraftControlPanel({
       )}
 
       {status.active && isRfsnLocal && sessionActions && (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5" data-live-session-actions>
+        <div className={cn(SPACE_META, "flex flex-wrap items-center", SPACE_CLUSTER)} data-live-session-actions>
           {sessionActions.canStart && (
             <button
               type="button"
               onClick={sessionActions.onStart}
-              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25"
+              className={cn("rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25", SPACE_CHIP)}
               data-live-action-start
             >
               ▶ Start Draft
@@ -249,7 +250,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onResume}
-              className="px-2.5 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25"
+              className={cn("rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 text-label font-black hover:bg-violet-500/25", SPACE_CHIP)}
               data-live-action-resume
             >
               ▶ Resume
@@ -259,7 +260,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onPause}
-              className="px-2.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-label font-black"
+              className={cn("rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-label font-black", SPACE_CHIP)}
               data-live-action-pause
             >
               ⏸ Pause
@@ -269,7 +270,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onNewDraft}
-              className="px-2 py-0.5 rounded text-zinc-300 text-label font-bold hover:text-zinc-100 border border-zinc-600"
+              className={cn("rounded text-zinc-300 text-label font-bold hover:text-zinc-100 border border-zinc-600", SPACE_CHIP)}
               data-live-action-new
             >
               Start new draft
@@ -279,7 +280,7 @@ export function LiveDraftControlPanel({
             <button
               type="button"
               onClick={sessionActions.onReset}
-              className="px-2 py-0.5 rounded text-zinc-400 text-label hover:text-zinc-200 border border-zinc-700"
+              className={cn("rounded text-zinc-400 text-label hover:text-zinc-200 border border-zinc-700", SPACE_CHIP)}
               data-live-action-reset
             >
               ↺ Reset
@@ -292,12 +293,12 @@ export function LiveDraftControlPanel({
       )}
 
       {/* Diagnostics — collapsed; board driver, source radios, errors, detail lines */}
-      <details className="group mt-1 border-t border-emerald-500/10 pt-0.5" data-live-advanced>
+      <details className={cn("group border-t border-emerald-500/10 pt-2", SPACE_META)} data-live-advanced
         <summary className="cursor-pointer list-none inline-flex items-center gap-0.5 text-2xs font-bold uppercase tracking-wider text-ink-secondary hover:text-zinc-300 select-none">
           <ChevronDown className="h-3 w-3 transition-transform group-open:rotate-180" />
           Advanced
         </summary>
-        <div className="mt-1 space-y-1 pb-0.5">
+        <div className="mt-2 space-y-2 pb-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1" data-live-source-picker>
             <span className="text-2xs uppercase tracking-wider text-ink-secondary">Draft source</span>
             {catalog.map((entry) => {

@@ -4,6 +4,15 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import {
+  SPACE_CARD,
+  SPACE_CHIP,
+  SPACE_META,
+  SPACE_ROW_STACK,
+  SPACE_ROW_Y,
+  SPACE_SECTION,
+  SPACE_SECTION_INSET,
+} from "@/lib/density";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { pickMostAndLeastHighActivity } from "@/lib/activityDnaExtremes";
 import {
@@ -48,7 +57,7 @@ const PAGEBG: React.CSSProperties = {
 const PANEL =
   "rounded-2xl border border-white/[0.07] bg-[linear-gradient(180deg,#1b131f,#140e17)] shadow-[0_0_28px_-14px_rgba(0,0,0,0.65)]";
 
-const CARD = cn(PANEL, "p-4 sm:p-5");
+const CARD = cn(PANEL, SPACE_CARD, "sm:p-5");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,10 +142,10 @@ function StatTile({
   accent?: string;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+    <div className={cn("rounded-xl border border-white/[0.06] bg-white/[0.02] text-center", SPACE_SECTION_INSET)}>
       <div className={cn("text-[22px] font-black leading-none tabular-nums", accent ?? "text-white/90")}>{value}</div>
-      <div className="mt-1 text-[12px] uppercase tracking-wide text-ink-tertiary">{label}</div>
-      {sub && <div className="mt-1 text-[12px] text-ink-tertiary">{sub}</div>}
+      <div className={cn("text-[12px] uppercase tracking-wide text-ink-tertiary", SPACE_META)}>{label}</div>
+      {sub && <div className={cn("text-[12px] text-ink-tertiary", SPACE_META)}>{sub}</div>}
     </div>
   );
 }
@@ -152,7 +161,7 @@ function SmallBadge({ children, color = "zinc" }: { children: React.ReactNode; c
     zinc: "border-white/10 bg-white/[0.04] text-white/60",
   };
   return (
-    <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-label font-semibold uppercase tracking-wide", cls[color] ?? cls.zinc)}>
+    <span className={cn("inline-flex items-center rounded-full border text-label font-semibold uppercase tracking-wide", SPACE_CHIP, cls[color] ?? cls.zinc)}>
       {children}
     </span>
   );
@@ -527,7 +536,7 @@ export function CommissionerCommandCenter() {
             accent="lime"
           />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("grid sm:grid-cols-2 lg:grid-cols-3", SPACE_SECTION)}>
 
             {/* Most Active */}
             {dnaQ.isLoading ? <LoadingCard /> : mostActive ? (
@@ -542,7 +551,7 @@ export function CommissionerCommandCenter() {
                   <SmallBadge color="lime">{mostActive.seasons} seasons</SmallBadge>
                   <SmallBadge color="lime">{mostActive.confidence}</SmallBadge>
                 </div>
-                <p className="mt-2 text-[12px] text-ink-secondary leading-snug">{mostActive.evidence[0]}</p>
+                <p className="mt-3 text-[12px] text-ink-secondary leading-snug">{mostActive.evidence[0]}</p>
               </div>
             ) : <LoadingCard />}
 
@@ -559,7 +568,7 @@ export function CommissionerCommandCenter() {
                   <SmallBadge>{leastActive.seasons} seasons</SmallBadge>
                   <SmallBadge>{leastActive.confidence}</SmallBadge>
                 </div>
-                <p className="mt-2 text-[12px] text-ink-secondary leading-snug">{leastActive.evidence[0]}</p>
+                <p className="mt-3 text-[12px] text-ink-secondary leading-snug">{leastActive.evidence[0]}</p>
               </div>
             ) : mostActive ? (
               <div className={CARD}>
@@ -597,7 +606,7 @@ export function CommissionerCommandCenter() {
                   <Globe className="h-4 w-4 text-cyan-400" />
                   <span className="text-[12px] font-bold uppercase tracking-[0.14em] text-ink-tertiary">Activity Snapshot</span>
                 </div>
-                <div className="space-y-2">
+                <div className={SPACE_ROW_STACK}>
                   {dnaList
                     .sort((a, b) => {
                       const sa = (a.archetypes as any).highActivity?.score ?? 0;
@@ -670,7 +679,7 @@ export function CommissionerCommandCenter() {
             ) : (
               <div className="divide-y divide-white/[0.04]">
                 {recentTxns.slice(0, 8).map((tx: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 py-2.5">
+                  <div key={i} className={cn("flex items-start gap-3", SPACE_ROW_Y)}>
                     <div className="min-w-0 flex-1">
                       <span className="text-[12px] font-semibold text-white/60">{tx.eventType}</span>
                       {" "}
@@ -698,7 +707,7 @@ export function CommissionerCommandCenter() {
             accent="violet"
           />
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className={cn("grid sm:grid-cols-2", SPACE_SECTION)}>
 
             {/* Biggest Active Rivalry — canonical RivalrySummaryCard (rivalry.getScores) */}
             <RivalrySummaryCard title="Biggest Active Rivalry" />
@@ -816,7 +825,7 @@ export function CommissionerCommandCenter() {
             accent="cyan"
           />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("grid sm:grid-cols-2 lg:grid-cols-3", SPACE_SECTION)}>
 
             {/* Rising Contender */}
             {fearQ.isLoading ? <LoadingCard /> : risingContender ? (
@@ -983,7 +992,7 @@ export function CommissionerCommandCenter() {
 
           {broadcastFacts.length === 0 ? (
             hofQ.isLoading ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className={cn("grid sm:grid-cols-2", SPACE_SECTION)}>
                 {[0, 1, 2, 3].map((i) => <LoadingCard key={i} lines={4} />)}
               </div>
             ) : (
@@ -992,7 +1001,7 @@ export function CommissionerCommandCenter() {
               </div>
             )
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className={cn("grid sm:grid-cols-2", SPACE_SECTION)}>
               {broadcastFacts.map((bf, i) => (
                 <BroadcastCard key={i} icon={bf.icon} label={bf.label} fact={bf.fact} />
               ))}
@@ -1011,7 +1020,7 @@ export function CommissionerCommandCenter() {
             accent="amber"
           />
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("grid sm:grid-cols-2 lg:grid-cols-3", SPACE_SECTION)}>
 
             {/* Defending Champion */}
             {medalsQ.isLoading ? <LoadingCard /> : currentChampion ? (

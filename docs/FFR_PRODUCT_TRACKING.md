@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-09 (052J/K Production smoke)  
+**Edition:** 2026-08-09 (RFSN-054)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -9,13 +9,15 @@
 
 | ID | Name | Status |
 | --- | --- | --- |
-| **051A** | Foundation (typography system repair) | Preview (`22d5bfa` / `2befaac`) |
-| **051B** | Contrast Migration (zinc → ink) | Preview (`b551cac`) |
-| **051C** | Contrast Completion | Preview (`2b6ec62`) |
-| **051D** | Typography Readability (floors, spacing, pinch-zoom) | **Local only** (formerly mislabeled “051C scale”) |
-| **051E** | Closeout (Preview + Production of 051A–D) | **Not started** |
+| **051A** | Foundation (typography system repair) | Preview + **Production** (`4ec5d90` stack) |
+| **051B** | Contrast Migration (zinc → ink) | Preview + **Production** |
+| **051C** | Contrast Completion | Preview + **Production** |
+| **051D** | Typography Readability (floors, spacing, pinch-zoom) | Preview + **Production** (`4ec5d90` / `buildTime=2026-08-09T04:08:39.829Z`) |
+| **051E** | Closeout (Preview + Production of 051A–D) | **Done** 2026-08-09 |
 
 Former “051D = measure typography again” is **cancelled**. Do not start a new census.
+
+**RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
 ---
 
@@ -23,15 +25,16 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 Stable | Restored via Git `--from-source` · deploy `fea8db3c` · `buildTime=2026-08-09T02:39:50.181Z` · 052J/K smoke **5/6 PASS** |
-| Preview | 🟡 Ahead of Production | Contrast 051A–C + Advisor 052J/K. **Git vs CLI still diverges** (P0 below) |
-| GM Advisor | 🟢 / 🟡 | 052J+K live: LOZELL **3**, HoF-matching leaderboard, largest margin, H2H, 2009 limitation. **“What's my biggest win?” FAIL** (generic no-margins) |
+| Production | 🟢 Stable | deploy `ba2d475b` · Git `4ec5d90` · `buildTime=2026-08-09T04:08:39.829Z` · 051A–D + 052J/K |
+| Preview | 🟢 Git-aligned | Git `b8306ec` · deploy `625e86dc` · `buildTime=2026-08-09T03:20:44.489Z` · 051A–D + 052J/K |
+| GM Advisor | 🟢 / 🟡 | 052J+K live Preview + Production: LOZELL **3**, HoF leaderboard, largest margin, H2H, 2009 limitation. **“What's my biggest win?” FAIL** |
 | RFSN | 🟢 | Live / Stories / Recaps |
-| Typography | 🟡 Awaiting Production | 051A–C contrast on Preview only. **051D** readability still local. **051E** closeout not started |
+| Typography | 🟢 Production | 051A–D live Preview + Production. **051E closed.** Pinch-zoom on. |
+| UI density | 🟡 RFSN-054 | Spacing rhythm on Draft / Stories / Commissioner / Championship Path. Preview pending Git push. |
 | Matchup Gallery | 🟡 In Development | 053A–C local; 053D–L not started |
 | Mobile | 🟡 Partial | FFR 2.0 responsive IA. RFSN-025 active-draft dock unvalidated |
 | Data Sync | 🟢 | ESPN / Sleeper / Yahoo / workbook paths live |
-| Release Pipeline | 🔴 Needs Git/Preview alignment | CLI `railway up` can serve newer Preview than `origin/feature/provider-expansion`. Highest ops priority |
+| Release Pipeline | 🟢 Preview=Git proven | Push `e48b34e` → Railway Git deploy `0afa371e` SUCCESS. No CLI `railway up`. `gitSha` still stale — trust `buildTime` + Railway `commitHash` |
 | Extension | 🟢 / low tracking | GM War Room **v1.14.2** (`chrome-extension/manifest.json`). Not Railway |
 
 Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynasty**, ESPN **`158918` Teco’s**. Do not fabricate Sleeper/Workbook validation.
@@ -42,11 +45,11 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`49649b8`**. Health `buildTime=2026-08-09T02:39:50.181Z` (gitSha may still show `06b35ba`) · deploy `fea8db3c` SUCCESS |
-| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git tip **`f85797d`**. Health `buildTime=2026-08-09T02:26:16.308Z` (gitSha often stale `dff6154`) |
-| **Local working tree** | localhost | — | uncommitted | **051D** typography readability · **053C** gallery UI |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`4ec5d90`**. Railway deploy `ba2d475b` (Git, not CLI). Health `buildTime=2026-08-09T04:08:39.829Z` (gitSha still stale `06b35ba`) |
+| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`b8306ec`**. Railway deploy `625e86dc` (Git, not CLI). Health `buildTime=2026-08-09T03:20:44.489Z` (gitSha still stale `dff6154`) |
+| **Local working tree** | localhost | — | uncommitted | **RFSN-054** density (this increment) · **053C** gallery UI · marketing |
 
-Trust **`buildTime`**, not CLI-upload `gitSha`.
+Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha` (stale on both CLI and Git deploys).
 
 ---
 
@@ -62,7 +65,9 @@ Trust **`buildTime`**, not CLI-upload `gitSha`.
 4. Production trigger remains `release/promote-provider-expansion-dff6154`. Promote by cherry-pick/merge + push; same no-orphan-CLI rule.
 5. If Preview `buildTime` is newer than `origin/feature/provider-expansion` HEAD, treat Preview as **unverified** until Git catches up.
 
-This is the highest remaining operational priority.
+**Proven 2026-08-09:** push `e48b34e` on `feature/provider-expansion` → Railway Preview `0afa371e` SUCCESS (`commitHash=e48b34e`, no `cliCaller`). Prior CLI deploy `b3639df7` REMOVED. Preview `buildTime` advanced `02:26:16Z` → `02:51:01Z`. Gate Advisor smokes PASS on that Git build.
+
+Keep the no-CLI rule. Do not `railway up` Preview.
 
 ---
 
@@ -72,17 +77,17 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 | Layer | State |
 | --- | --- |
-| Production | Git **`49649b8`** includes 052 A–K. Live `buildTime=2026-08-09T02:39:50.181Z` (deploy `fea8db3c`). 051 contrast **not** on Production. |
-| Preview | Ahead: **051A–C contrast** + 052J/K. Git tip **`f85797d`**. |
-| Local / unpushed | **051D** typography readability · **053A–C** Historical Matchup Gallery. Not Preview, not Production. |
+| Production | Git **`4ec5d90`** includes 052 A–K + **051A–D**. Live `buildTime=2026-08-09T04:08:39.829Z` (deploy `ba2d475b`). |
+| Preview | Same typography + Advisor stack. Git tip **`b8306ec`** via Git deploy `625e86dc`. |
+| Local / unpushed | **RFSN-054** density rhythm · **053A–C** Historical Matchup Gallery · marketing. Not Preview, not Production. |
 
-**Headline remaining gaps:** (1) Git/Preview alignment policy above. (2) 051D/E typography not Preview/Production. (3) 052K personal “What's my biggest win?” still fails (generic no-margins) while league-wide largest margin works.
+**Headline remaining gaps:** (1) 054 density not Preview yet. (2) 052K personal “What's my biggest win?” still fails. (3) 053 gallery still local.
 
 ---
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` (git `49649b8` / buildTime `2026-08-09T02:39:50.181Z` / deploy `fea8db3c`).
+Shipped and live on `www.fantasyfootballrivals.com` (git `4ec5d90` / buildTime `2026-08-09T04:08:39.829Z` / deploy `ba2d475b`).
 
 | Area | What’s in Production |
 | --- | --- |
@@ -96,7 +101,7 @@ Shipped and live on `www.fantasyfootballrivals.com` (git `49649b8` / buildTime `
 | Commercial | Free + Rivals Pro Stripe · The League deferred |
 | Extension | GM War Room **v1.14.2** (Chrome; not Railway) |
 
-051 contrast tokens and 051D readability are **not** Production.
+051A–D typography (contrast + readability + pinch-zoom) **is Production**.
 
 ---
 
@@ -110,7 +115,8 @@ On Preview **in addition to** Production, unless noted.
 | **051B** Contrast Migration | Live (`b551cac`) | AA failures −75% on settled census |
 | **051C** Contrast Completion | Live (`2b6ec62`) | Nav kicker + white-alpha P1 |
 | **052 A–K** Advisor historical intelligence | Live + **on Production** | 052J/K smoke 5/6. Personal biggest-win still FAIL |
-| **051D** Typography Readability | **Not on Preview** | Local working tree only |
+| **051D** Typography Readability | Live Preview + **Production** | `4ec5d90` / `ba2d475b` |
+| **054** UI Density & Scanability | **Not on Preview yet** | Commit + Git push this increment |
 | **053A/B/C** Matchup Gallery | **Not on Preview** | Local working tree only |
 
 ---
@@ -119,10 +125,11 @@ On Preview **in addition to** Production, unless noted.
 
 | ID | Work | Status |
 | --- | --- | --- |
-| **P0 Preview=Git** | Stop orphan CLI Preview uploads; Git tip must explain Preview `buildTime` | **Open — highest ops priority** |
+| **P0 Preview=Git** | Stop orphan CLI Preview uploads; Git tip must explain Preview `buildTime` | **Proven** `e48b34e` → `0afa371e`. Keep no-CLI discipline |
 | **052K-follow** | Personal “What's my biggest win?” → generic no-margins | **Open** — league-wide largest margin PASS; `my` owner not resolved into margin tool |
-| **051D** | Typography readability (floors, draft/RFSN/stories/commissioner spacing, pinch-zoom) | Implemented locally. Stop for review. |
-| **051E** | Typography closeout (Preview then Production of 051A–D) | Not started |
+| **051D** | Typography readability (floors, draft/RFSN/stories/commissioner spacing, pinch-zoom) | **Production live** `4ec5d90` |
+| **051E** | Typography closeout (Preview then Production of 051A–D) | **Closed** 2026-08-09 |
+| **054** | UI Density & Scanability (predictable spacing rhythm) | **Implemented** — Preview after Git push. Not typography. |
 | **053A** | Gallery + screenshot architecture | Complete (docs only). |
 | **053B** | `matchupGallery.query` contract | Complete (tests 16/16). Not deployed. |
 | **053C** | Gallery UI `/league/history/matchups` + No Mercy route | Complete locally. Not deployed. |
@@ -136,21 +143,20 @@ No Advisor / Rivalry Center / live Matchups redesign is in progress.
 
 Stop after each increment. Production only when explicitly asked.
 
-1. **P0 — Align Preview with Git** (no orphan `railway up`; push `feature/provider-expansion` before calling Preview current).  
+1. **RFSN-054 Preview** — density scan on Draft Mock / Live, Stories, Commissioner, Championship Path. Production only if scan is comfortable and nothing regresses.  
 2. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
-3. **Preview-deploy 051D** Typography Readability after review.  
-4. **051E** Typography closeout → Production when asked.  
-5. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
-6. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
-7. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
-8. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
-9. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
-10. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
-11. **RFSN-053J** — Viewer screenshot engine.  
-12. **RFSN-053K** — Batch + ZIP + scheduled job.  
-13. **RFSN-053L** — Preview regression smoke. Close 053.  
-14. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
-15. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
+3. **Preview-deploy 053C** Historical Matchup Gallery after review.  
+4. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
+5. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
+6. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
+7. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
+8. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
+9. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
+10. **RFSN-053J** — Viewer screenshot engine.  
+11. **RFSN-053K** — Batch + ZIP + scheduled job.  
+12. **RFSN-053L** — Preview regression smoke. Close 053.  
+13. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
+14. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
 
 **Do not** reopen 052 Advisor architecture. **Do not** start another typography census.
 
@@ -169,7 +175,7 @@ Stop after each increment. Production only when explicitly asked.
 | Light-theme typography debt | 051 audit dark-only; unmeasured |
 | Self-host Inter / drop unused weight 300 | 051 note, not scheduled |
 | Strength of Schedule authority | Route exists; empty — no SOS engine |
-| Pinch-zoom / 051D on Preview+Production | Local until 051E |
+| Pinch-zoom / 051D on Preview+Production | Live both envs |
 | Extension version in this dashboard | Low priority; currently **v1.14.2** |
 
 `todo.md` is **legacy planning only** — not backlog.
@@ -180,7 +186,10 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
-| 2026-08-09 | **052J + 052K Production smoke** (ESPN 457622) **5/6 PASS**. `railway down` accidentally removed the prior SUCCESS deploy (brief Production 404); restored with `railway redeploy --from-source`. Stuck INITIALIZING `670a86c2` gone. | Production `fea8db3c` · `buildTime=2026-08-09T02:39:50.181Z` · artifact `RFSN-052JK-production-smoke.md` |
+| 2026-08-09 | **051D Production** (A–D closeout / 051E). Git push `4ec5d90` → deploy `ba2d475b`. Pinch-zoom on. Advisor gates still PASS. | Production `buildTime=2026-08-09T04:08:39.829Z` · `RFSN-051D-production-validation.md` |
+| 2026-08-09 | **051D Preview** via Git-only push `b8306ec` → deploy `625e86dc`. Readability validated. **READY FOR PRODUCTION** pending explicit ask. | Preview `buildTime=2026-08-09T03:20:44.489Z` · `RFSN-051D-preview-validation.md` |
+| 2026-08-09 | **P0 Preview=Git proven.** Push `e48b34e` (ops SOT docs only) → Railway Git deploy `0afa371e` SUCCESS. CLI `b3639df7` REMOVED. Gate smokes PASS on Preview + Production. | Preview `buildTime=2026-08-09T02:51:01.724Z` · artifacts `RFSN-052JK-preview-git-smoke.md` + `RFSN-052JK-production-smoke.md` |
+| 2026-08-09 | **052J + 052K Production smoke** (ESPN 457622) **5/6 PASS**. `railway down` accidentally removed the prior SUCCESS deploy (brief Production 404); restored with `railway redeploy --from-source`. Stuck INITIALIZING `670a86c2` gone. | Production `fea8db3c` · `buildTime=2026-08-09T02:39:50.181Z` |
 | 2026-08-09 | **052J + 052K** committed + pushed (`f85797d` Preview, `49649b8` release) | Preview `buildTime=2026-08-09T02:26:16.308Z` |
 | 2026-08-08 | **RFSN-052 A–I CLOSED** — Advisor Production close. 5/5 ESPN 457622 first-answer smoke. LOZELL still **2** on that snapshot | Production then `06b35ba` / `buildTime=2026-08-08T22:14:10.014Z` (historical close-out artifact — do not rewrite) |
 | 2026-08-08 | **051A/B/C contrast** on `feature/provider-expansion` | Preview only (`2b6ec62`). Production still without 051 contrast |
@@ -197,8 +206,8 @@ Stop after each increment. Production only when explicitly asked.
 
 | Issue | Env | Severity |
 | --- | --- | --- |
-| Preview Git HEAD vs CLI upload can diverge; health `gitSha` stale on CLI | Preview | **P0 ops** |
-| Git deploy `f6ce7484` (`f85797d`) was **REMOVED** ~17s later by CLI `railway up` `b3639df7` (cursor). Serving Preview `buildTime=2026-08-09T02:26:16.308Z` is CLI, not Git | Preview | **P0 — this push is the Git-only proof** |
+| Health `gitSha` stays stale (`dff6154`) even on Git Preview deploys — trust `buildTime` + Railway `commitHash` | Preview | Ops caveat (not a P0 blocker) |
+| CLI `railway up` can still clobber a Git Preview deploy (happened to `f6ce7484` / `f85797d`) | Preview | Discipline — do not `railway up` Preview |
 | **Never `railway down` a serving SUCCESS** to kill INITIALIZING — it removes the live deploy. Use cancel on the stuck row, or `redeploy --from-source` if Production 404s | Production | **P0 ops lesson** (2026-08-09 brief outage) |
 | 052K “What's my biggest win?” returns generic no-margins while league-wide largest margin works (Rod 129.5 vs Maurice Welch W4 2010) | Production | **Open** — personal `my` not bound to margin owner |
 | 052J Preview run 1 failed 3/8 (LLM invented 2009 record/score) | Preview (superseded) | Fixed in run 2; do not cite run 1 |
@@ -219,7 +228,7 @@ Stop after each increment. Production only when explicitly asked.
 | Playoff tier thin on some leagues | Championship **games** vs medals: 052I honesty; gallery championship filter may empty |
 | Box scores / week standings sparse | Historical Viewer: scores always; lineups/standings null with CTA |
 | Sleeper / Workbook | Not used to validate 052/053 historical facts |
-| Pinch-zoom | Restored in local **051D**; Preview/Production still `maximum-scale=1` until 051E |
+| Pinch-zoom | Restored on Preview + **Production** (051D) |
 | Light theme | Not in 051 measurement |
 | The League SKU | Not sold in V1 |
 | FantasyPros multiplayer live pick wire | Blocked on authenticated MUD evidence (030B-3) |
@@ -236,7 +245,7 @@ Stop after each increment. Production only when explicitly asked.
 | Distinct championship vs matchup coverage + partial-legacy | **052J Production live** (LOZELL 3 + 2009 limitation smoke PASS) |
 | Matchup margin largest-win / combined / unsupported upset | **052K Production live** (league-wide PASS; personal biggest-win FAIL) |
 | Matchup Gallery query + UI | **Local 053B/C** |
-| Preview Git = Preview deploy | **Policy adopted; not yet proven** |
+| Preview Git = Preview deploy | **Proven** `e48b34e` → `0afa371e` (2026-08-09) |
 | Product Encyclopedia | **Retired** — this file is permanent operational SOT |
 
 ---
@@ -250,13 +259,15 @@ Stop after each increment. Production only when explicitly asked.
 | 049 / A / B / C | Margin analytics + Advisor intent/context | done | yes | yes |
 | 050 | Founder test league connection cleanup | done (Preview DB) | n/a | n/a |
 | 051 | Typography & readability **audit** | audit only | measured | — |
-| **051A** | Foundation | done | yes | no |
-| **051B** | Contrast Migration | done | yes | no |
-| **051C** | Contrast Completion | done | yes (`2b6ec62`) | no |
-| **051D** | Typography Readability | **local complete** | no | no |
+| **051A** | Foundation | done | yes | **yes** `4ec5d90` |
+| **051B** | Contrast Migration | done | yes | **yes** |
+| **051C** | Contrast Completion | done | yes | **yes** |
+| **051D** | Typography Readability | done | yes `b8306ec` | **yes** `4ec5d90` / `ba2d475b` |
+| **051E** | Typography closeout | done | yes | **yes** — A–D on both envs |
+| **054** | UI Density & Scanability | **impl** | no | no |
 | 052 A–I | GM Advisor historical intelligence | done | yes | yes (closed 08-08) |
-| 052J | Partial-legacy championships | done | git + CLI | **Production live** LOZELL 3 + 2009 limitation PASS |
-| 052K | Matchup margin intent expansion | done | git + CLI | **Production live** league-wide PASS · personal biggest-win FAIL |
+| 052J | Partial-legacy championships | done | **Git Preview** `e48b34e` | **Production live** LOZELL 3 + 2009 limitation PASS |
+| 052K | Matchup margin intent expansion | done | **Git Preview** `e48b34e` | **Production live** league-wide PASS · personal biggest-win FAIL |
 | 053A | Gallery architecture | docs | no | no |
 | 053B | Gallery query contract | done (16/16) | no | no |
 | 053C | Gallery UI | **local complete** | no | no |
@@ -267,10 +278,8 @@ Stop after each increment. Production only when explicitly asked.
 
 | ID | Title | Blocked on |
 | --- | --- | --- |
-| **P0 Preview=Git** | Preview deploy = Git HEAD | Ops discipline |
+| **054** | UI Density & Scanability Preview → Production | Git push + manual scan |
 | **052K-follow** | Personal “What's my biggest win?” | Owner resolution into `query_matchup_margins` |
-| **051D Preview** | Typography readability deploy | Review + explicit Preview ask |
-| **051E** | Typography closeout → Production | 051D Preview + explicit Production ask |
 | **053D** | Advisor gallery visual | 053C review |
 | **053E–L** | No Mercy Advisor copy, dossier presets, viewer, stories, screenshots, batch, smoke | Prior increment |
 | 025 / 026 | Mobile dock / synthetic ADP | Backlog |
@@ -285,22 +294,23 @@ Stop after each increment. Production only when explicitly asked.
 | **052 A–I** | yes | **Shipped** (08-08 close) | Closed |
 | **052J** | yes | **Shipped** `49649b8` / `fea8db3c` | LOZELL 3 + 2009 limitation PASS |
 | **052K** | yes | **Shipped** (partial) | League-wide largest margin PASS · personal biggest-win FAIL |
-| **051A/B/C contrast** | yes | Not asked | Keep Preview-only until 051E |
-| **051D readability** | no | No | Review locally; then Preview |
-| **051E closeout** | no | No | After 051D Preview |
+| **051A/B/C contrast** | yes | **Shipped** `4ec5d90` | Closed with 051E |
+| **051D readability** | yes | **Shipped** `4ec5d90` / `ba2d475b` | Closed |
+| **051E closeout** | yes | **Shipped** | A–D on Preview + Production |
+| **054 density** | no | After Preview scan | Git push only; not typography |
 | **053A/B/C** | no | No | Preview 053C before later increments |
 | **053D–L / MKT-001** | no | No | Not ready |
 
-**Production must not receive** unpushed 051D or 053 gallery until explicitly requested.
+**Production must not receive** 053 gallery or marketing until explicitly requested. 051 stays closed. 054 Production only after Preview scan.
 
 ---
 
 ## Inconsistencies found (doc vs impl vs live)
 
 1. **Encyclopedia retired.** Path now exists only as a retirement stub. Do not cite Editions 1.1–1.3.
-2. **051 numbering is now locked** (A Foundation → E Closeout). Older audit text may still say “051C scale” / “next 051D measure”; those aliases map to **051D readability** and **cancelled census** respectively.
+2. **051 numbering is now locked** (A Foundation → E Closeout). Older audit text may still say “051C scale” / “next 051D measure”; those aliases map to **051D readability** and **cancelled census** respectively. Density follow-up is **RFSN-054**, not 051F.
 3. **052 Production close artifact still documents LOZELL = 2.** That snapshot is historical (`06b35ba`, 2026-08-08). Do not rewrite it. Current Production live probe: LOZELL **3 (2009, 2011, 2021)**.
-4. **Preview Git vs CLI** remains the P0 ops issue even after `f85797d` push + CLI upload — health `gitSha` still stale. Policy above; not yet proven green.
+4. **Preview=Git is proven** (`e48b34e` → `0afa371e`). Health `gitSha` still stale (`dff6154`) on Git deploys — do not use it as the alignment signal.
 5. **053C routes** exist locally only. Canonical inventory lists them as **planned / local WIP**, not Production.
 6. **053E** remaining work is Advisor copy, not the No Mercy route (already in 053C).
 7. **`todo.md`** is legacy planning only (banner added). Not SOT.
@@ -310,7 +320,7 @@ Stop after each increment. Production only when explicitly asked.
 
 ## Recommendations still open
 
-1. Prove P0: next Preview deploy via **Git push only**; confirm `buildTime` + behavior match `origin/feature/provider-expansion` HEAD.
+1. Preview-scan **RFSN-054** (Draft Mock/Live, Stories, Commissioner, Championship Path). Promote only if it feels less cramped and nothing regresses. Git push only, no `railway up`.
 2. Fix 052K personal biggest-win (`my` → margin `ownerName`) and re-smoke Production only when asked.
 3. When 053 ships to Preview/Production, flip route inventory rows from WIP → live (including `/m/:shareCode` at 053I).
 4. Extension version stays a dashboard footnote (v1.14.2); bump here when the zip ships.

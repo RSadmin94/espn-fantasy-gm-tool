@@ -20,6 +20,16 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import {
+  SPACE_CARD,
+  SPACE_CARD_GAP,
+  SPACE_CHIP,
+  SPACE_CHIP_GAP,
+  SPACE_META,
+  SPACE_ROW,
+  SPACE_ROW_GAP,
+  SPACE_ROW_STACK,
+} from "@/lib/density";
 import { DraftWarRoomDesk } from "./DraftWarRoomDesk";
 import { useRfsnLiveLockedPickNotify } from "@/hooks/useRfsnLiveLockedPickNotify";
 import { useDraftRunIdentity } from "@/hooks/useDraftRunIdentity";
@@ -472,15 +482,15 @@ function RosterNeedsSection({ needs }: { needs: any[] }) {
   const [sel, setSel] = useState<number | null>(null);
   return (
     <div>
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className={cn("p-4 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7", SPACE_CARD_GAP)}>
         {needs.map(n => (
           <button key={n.teamId} onClick={() => setSel(sel === n.teamId ? null : n.teamId)}
-            className={cn("rounded-lg border p-2.5 text-left transition-all hover:scale-105",
+            className={cn("rounded-lg border text-left transition-all hover:scale-105", SPACE_CARD,
               sel === n.teamId ? "border-violet-500/40 bg-violet-500/8 shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-700")}>
             <div className={cn("text-xl font-black tabular-nums", sel === n.teamId ? "text-violet-400" : "text-zinc-200")}>#{n.overallRank}</div>
-            <div className="text-label font-bold text-zinc-300 leading-tight mt-0.5 truncate">{n.teamName}</div>
-            <div className="text-label text-ink-tertiary mt-0.5">{n.projectedTotal?.toLocaleString()} pts</div>
-            <div className="flex flex-wrap gap-0.5 mt-1.5">{n.draftPriority?.slice(0,3).map((p: string) => <PosPill key={p} pos={p} />)}</div>
+            <div className={cn("text-label font-bold text-zinc-300 leading-tight truncate", SPACE_META)}>{n.teamName}</div>
+            <div className={cn("text-label text-ink-tertiary", SPACE_META)}>{n.projectedTotal?.toLocaleString()} pts</div>
+            <div className={cn("flex flex-wrap gap-1", SPACE_META)}>{n.draftPriority?.slice(0,3).map((p: string) => <PosPill key={p} pos={p} />)}</div>
           </button>
         ))}
       </div>
@@ -636,18 +646,18 @@ function ShockMeterSection({ meters }: { meters: any[] }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2 p-4">
+      <div className={cn("grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 p-4", SPACE_CARD_GAP)}>
         {sorted.map(m => {
           const arc = ownerArchetype(m);
           const behavior = draftBehaviorLabel(m);
           return (
             <button key={m.teamId} type="button" onClick={() => setSel(sel === m.teamId ? null : m.teamId)}
               title={`${m.ownerName} · ${m.predictabilityScore}% predictability`}
-              className={cn("rounded-lg border p-3 text-left transition-all hover:scale-105 space-y-1.5",
+              className={cn("rounded-lg border text-left transition-all hover:scale-105 space-y-2", SPACE_CARD,
                 sel === m.teamId ? "border-violet-500/40 bg-white/[0.04] shadow-lg" : "border-white/[0.06] bg-white/[0.03] hover:border-zinc-700")}>
               <div className="text-[12px] font-bold text-zinc-100 truncate">{m.ownerName?.split(" ")[0] ?? m.ownerName}</div>
               <div className="text-label text-ink-tertiary truncate">{m.teamName}</div>
-              <span className={cn("inline-block text-2xs font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded border", arc.cls)}>{arc.label}</span>
+              <span className={cn("inline-block text-2xs font-semibold uppercase tracking-wider px-1.5 py-1.5 rounded border", arc.cls)}>{arc.label}</span>
               <div className="text-label text-zinc-400">Draft behavior: {behavior}</div>
               <div className="text-label font-bold text-zinc-300 tabular-nums">
                 {m.predictabilityScore}% predictability
@@ -1805,17 +1815,17 @@ function LiveDraftEngine({
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-xs font-black text-zinc-200 uppercase tracking-wider">Available</span>
             <span className="text-label text-ink-secondary">{available.length} players</span>
-            <div className="flex gap-1 ml-auto">
+            <div className={cn("flex ml-auto", SPACE_CHIP_GAP)}>
               {SORTS.map(([k, lbl]) => (
-                <button key={k} onClick={() => setSort(k)} className={cn("px-2.5 py-1 rounded text-label font-semibold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{lbl}</button>
+                <button key={k} onClick={() => setSort(k)} className={cn(SPACE_CHIP, "rounded text-label font-semibold", sort === k ? "bg-zinc-700 text-zinc-100" : "text-zinc-400 hover:text-zinc-200")}>{lbl}</button>
               ))}
             </div>
           </div>
-          <div className="flex gap-1 mb-2 flex-wrap">
+          <div className={cn("flex mb-2 flex-wrap", SPACE_CHIP_GAP)}>
             {POSES.map(p => (
-              <button key={p} onClick={() => setPos(p)} className={cn("px-2.5 py-1 rounded text-label font-semibold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-400 hover:text-zinc-200 border border-white/[0.06]")}>{p}</button>
+              <button key={p} onClick={() => setPos(p)} className={cn(SPACE_CHIP, "rounded text-label font-semibold", posFilter === p ? "bg-violet-600/30 text-violet-200" : "text-zinc-400 hover:text-zinc-200 border border-white/[0.06]")}>{p}</button>
             ))}
-            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className="ml-auto text-label bg-zinc-800 border border-zinc-700 rounded px-2.5 py-1 text-zinc-200 placeholder-zinc-600" />
+            <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search…" className={cn("ml-auto text-label bg-zinc-800 border border-zinc-700 rounded text-zinc-200 placeholder-zinc-600", SPACE_CHIP)} />
           </div>
           <div className="rounded-lg border border-white/[0.06] divide-y divide-white/[0.06] max-h-[min(560px,calc(100dvh-14rem))] overflow-auto">
             {available.length === 0 ? (
@@ -1837,7 +1847,7 @@ function LiveDraftEngine({
                     disabled={!awaitingUser}
                     onClick={() => allowInternalSimPicks && awaitingUser && userDraft(p)}
                     className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2.5 text-left",
+                      "w-full flex items-center text-left", SPACE_ROW_GAP, SPACE_ROW,
                       awaitingUser ? "hover:bg-violet-500/10 cursor-pointer" : "cursor-default",
                     )}
                   >
@@ -1846,7 +1856,7 @@ function LiveDraftEngine({
                         <PosPill pos={String(p.position ?? "?").toUpperCase()} />
                         <span className="text-sm font-semibold text-zinc-100 truncate">{p.name}</span>
                       </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-label text-ink-secondary">
+                      <div className={cn(SPACE_META, "flex flex-wrap items-center gap-x-3 gap-y-1 text-label text-ink-secondary")}>
                         <span className={adpDisp.isReal ? "text-zinc-300 tabular-nums" : "text-ink-tertiary"}>
                           {adpDisp.label}
                         </span>
@@ -1904,14 +1914,14 @@ function LiveDraftEngine({
                 </span>
                 <button
                   onClick={resetTeamControls}
-                  className="ml-auto text-label text-ink-secondary hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5"
+                  className={cn("ml-auto text-label text-ink-secondary hover:text-zinc-300 border border-zinc-700 rounded", SPACE_CHIP)}
                 >
                   Reset team controls
                 </button>
               </>
             )}
           </div>
-          <div className="space-y-2 max-h-[min(560px,calc(100dvh-14rem))] overflow-auto pr-1">
+          <div className={cn(SPACE_ROW_STACK, "max-h-[min(560px,calc(100dvh-14rem))] overflow-auto pr-1")}>
             {teams.map((t: any) => {
               const tid = Number(t.teamId);
               const roster = (rostersByTeam.get(tid) ?? []).sort((a, b) => a.pickNumber - b.pickNumber);
@@ -1920,8 +1930,8 @@ function LiveDraftEngine({
               const isYou = myTeamId === tid;
               const isManual = allowInternalSimPicks && manualTeamIds.has(tid);
               return (
-                <div key={tid} className={cn("rounded-lg border p-2", isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
-                  <div className="flex items-center gap-1.5 mb-1">
+                <div key={tid} className={cn("rounded-lg border", SPACE_CARD, isOnClock ? "border-violet-500/50 bg-violet-500/5" : isManual ? "border-violet-500/30 bg-violet-500/5" : "border-white/[0.06] bg-white/[0.03]")}>
+                  <div className="flex items-center gap-2 mb-2">
                     {allowInternalSimPicks ? (
                     <input
                       type="checkbox"
@@ -1936,7 +1946,7 @@ function LiveDraftEngine({
                     {grade && grade.letter !== "—" && (
                       <span
                         title={`Draft grade ${grade.letter} — ${grade.avgDelta >= 0 ? "+" : ""}${grade.avgDelta.toFixed(0)} avg value vs ADP, ${grade.strength.toFixed(0)}/100 avg talent`}
-                        className={cn("text-2xs font-semibold px-1.5 py-0.5 rounded border shrink-0",
+                        className={cn("text-2xs font-semibold px-1.5 py-1.5 rounded border shrink-0",
                           grade.letter === "A" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" :
                           grade.letter === "B" ? "text-lime-300 bg-lime-500/15 border-lime-500/30" :
                           grade.letter === "C" ? "text-amber-300 bg-amber-500/15 border-amber-500/30" :
@@ -1945,12 +1955,12 @@ function LiveDraftEngine({
                         {grade.letter}
                       </span>
                     )}
-                    {isYou && <span className="text-2xs font-semibold uppercase tracking-wide text-violet-300 bg-violet-500/15 px-1.5 py-0.5 rounded">YOU</span>}
+                    {isYou && <span className="text-2xs font-semibold uppercase tracking-wide text-violet-300 bg-violet-500/15 px-1.5 py-1.5 rounded">YOU</span>}
                     <span className="text-label text-ink-tertiary ml-auto tabular-nums">{roster.length}</span>
                   </div>
-                  <div className="flex flex-wrap gap-1">
+                  <div className={cn("flex flex-wrap", SPACE_CHIP_GAP)}>
                     {roster.map((r: any) => (
-                      <span key={r.pickNumber} className={cn("text-label px-1.5 py-1 rounded border truncate max-w-[140px]",
+                      <span key={r.pickNumber} className={cn("text-label rounded border truncate max-w-[180px]", SPACE_CHIP,
                         r.isKeeper ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-zinc-700/60 bg-zinc-800/50 text-zinc-300")}
                         title={`${r.name} (${r.position}) R${r.round}`}>
                         <span className="text-ink-secondary">{r.position}</span> {String(r.name ?? "—").split(" ").slice(-1)[0]}
@@ -2413,12 +2423,12 @@ function MockDraftBoard({
         <div className="overflow-auto max-h-[700px]">
           {rounds.map(([round, rPicks]) => (
             <div key={round} className="border-b border-zinc-800/20">
-              <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur px-4 py-1.5 flex items-center gap-2">
+              <div className="sticky top-0 z-10 bg-zinc-900/95 backdrop-blur px-4 py-3 flex items-center gap-2">
                 <span className="text-label font-black uppercase tracking-wider text-ink-secondary">Round {round}</span>
                 <div className="flex-1 h-px bg-white/[0.03]" />
                 <span className="text-label text-ink-tertiary">{rPicks.length} picks</span>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-px bg-zinc-800/20">
+              <div className={cn("grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 p-3 bg-transparent", SPACE_CARD_GAP)}>
                 {rPicks.map((p: any) => {
                   // Real ADP for this player (carried on the pick, fallback to the board)
                   const adp = p.adp ?? availablePool.find(ap => ap.name === p.player)?.adp;
@@ -2426,7 +2436,7 @@ function MockDraftBoard({
                     <button key={p.pickNumber}
                       onClick={() => setExp(expandPick === p.pickNumber ? null : p.pickNumber)}
                       className={cn(
-                        "text-left p-2.5 bg-zinc-900/60 hover:bg-white/[0.04] transition-colors",
+                        "text-left rounded-lg bg-zinc-900/60 hover:bg-white/[0.04] transition-colors", SPACE_CARD,
                         p.isKeeperSlot && "border border-amber-500/20 bg-amber-500/5",
                         p.tradedPickContext && "border-t-2 border-t-violet-500/50",
                         yourTeamId && Number(p.teamId) === yourTeamId && "border border-violet-500/30 bg-violet-500/5",
@@ -2440,9 +2450,9 @@ function MockDraftBoard({
                         {yourTeamId && Number(p.teamId) === yourTeamId && <span className="text-label text-violet-400 font-bold">YOU</span>}
                       </div>
                       <div className="text-label font-bold text-zinc-200 leading-tight truncate">{p.player}</div>
-                      <div className="text-label text-ink-secondary truncate mt-0.5">{p.ownerName?.split(" ")[0]}</div>
+                      <div className={cn("text-label text-ink-secondary truncate", SPACE_META)}>{p.ownerName?.split(" ")[0]}</div>
                       {!p.isKeeperSlot && p.projectedPoints > 0 && (
-                        <div className="flex items-center gap-1 mt-0.5">
+                        <div className={cn("flex items-center gap-1.5", SPACE_META)}>
                           <span className="text-label text-ink-tertiary tabular-nums">{p.projectedPoints.toFixed(0)}</span>
                           {adp && <span className="text-label text-ink-tertiary">ADP {adp}</span>}
                         </div>
