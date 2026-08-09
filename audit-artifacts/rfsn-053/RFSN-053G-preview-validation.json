@@ -1,0 +1,82 @@
+{
+  "label": "preview",
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T20:37:11.999Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T20:34:42.594Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "passed": 9,
+  "failed": 0,
+  "probes": [
+    {
+      "name": "PNG no-mercy landscape",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "no-mercy.png cache=miss 1920x1080"
+    },
+    {
+      "name": "PNG heartbreak portrait",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "heartbreak.png cache=miss 1080x1920"
+    },
+    {
+      "name": "PNG championship square",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "championship.png cache=miss 1080x1080"
+    },
+    {
+      "name": "PNG blood-rival landscape",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "blood-rival.png cache=miss 1920x1080"
+    },
+    {
+      "name": "PNG cashier landscape",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "cashier.png cache=miss 1920x1080"
+    },
+    {
+      "name": "PNG league record",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "championship-championships.png cache=miss"
+    },
+    {
+      "name": "PNG hall of fame",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "championship-championships.png cache=hit"
+    },
+    {
+      "name": "PNG Advisor gallery",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "no-mercy.png cache=miss"
+    },
+    {
+      "name": "PNG Rivalry",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "blood-rival-rod-vs-marlon.png cache=miss"
+    }
+  ]
+}
