@@ -6,12 +6,14 @@
  *
  *  6px  chip     — filter chips, compact controls, badges
  *  8px  cluster  — related metadata groups
+ *  8/12 strip    — sticky chrome (Live Draft Control)
  * 12px  row      — list rows, table cells, label-under-value
  * 16px  card     — card inset + tile grids
  * 20px  section  — major section cards / stat tiles
  */
 export const SPACE_CHIP = "px-2.5 py-1.5";
 export const SPACE_CHIP_GAP = "gap-1.5";
+export const SPACE_STRIP = "px-3 py-2";
 export const SPACE_CLUSTER = "gap-2";
 export const SPACE_META = "mt-2";
 export const SPACE_ROW = "px-3.5 py-3";

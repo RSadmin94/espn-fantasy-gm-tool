@@ -47,7 +47,7 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 | --- | --- | --- | --- | --- |
 | **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`2db9b77`**. Railway deploy `803d531b` (Git, not CLI). Health `buildTime=2026-08-09T06:02:41.032Z` (gitSha still stale `06b35ba`) |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`a9b7d87`**. Railway deploy `4e447c06` (Git, not CLI). Health `buildTime=2026-08-09T05:56:49.880Z` (gitSha still stale `dff6154`) |
-| **Local working tree** | localhost | — | uncommitted | **053C** gallery UI · marketing |
+| **Local working tree** | localhost | — | uncommitted | **053C** gallery UI · marketing · **054A committed separately** |
 
 Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha` (stale on both CLI and Git deploys).
 
@@ -130,6 +130,7 @@ On Preview **in addition to** Production, unless noted.
 | **051D** | Typography readability (floors, draft/RFSN/stories/commissioner spacing, pinch-zoom) | **Production live** `4ec5d90` |
 | **051E** | Typography closeout (Preview then Production of 051A–D) | **Closed** 2026-08-09 |
 | **054** | UI Density & Scanability (predictable spacing rhythm) | **Production live** `2db9b77`. Not typography. 051 stays closed. |
+| **054A** | Compact Live Draft Control (`/rfsn/live` + `/draft/live`) | **Local validation PASS.** Git Preview next. |
 | **053A** | Gallery + screenshot architecture | Complete (docs only). |
 | **053B** | `matchupGallery.query` contract | Complete (tests 16/16). Not deployed. |
 | **053C** | Gallery UI `/league/history/matchups` + No Mercy route | Complete locally. Not deployed. |
@@ -143,19 +144,20 @@ No Advisor / Rivalry Center / live Matchups redesign is in progress.
 
 Stop after each increment. Production only when explicitly asked.
 
-1. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
-2. **Preview-deploy 053C** Historical Matchup Gallery after review.  
-3. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
-4. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
-5. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
-6. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
-7. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
-8. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
-9. **RFSN-053J** — Viewer screenshot engine.  
-10. **RFSN-053K** — Batch + ZIP + scheduled job.  
-11. **RFSN-053L** — Preview regression smoke. Close 053.  
-12. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
-13. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
+1. **RFSN-054A Preview → Production** — compact Live Draft Control on `/rfsn/live` + `/draft/live`. Local PASS; Git Preview then Production (explicit ask in session).  
+2. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
+3. **Preview-deploy 053C** Historical Matchup Gallery after review.  
+4. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
+5. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
+6. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
+7. **RFSN-053G** — Historical Matchup Viewer (game-day layout, honest nulls).  
+8. **RFSN-053H** — Deterministic story archetypes (no LLM, no Miracle Comeback).  
+9. **RFSN-053I** — Share/hype cards (resvg) + `/m/:shareCode`.  
+10. **RFSN-053J** — Viewer screenshot engine.  
+11. **RFSN-053K** — Batch + ZIP + scheduled job.  
+12. **RFSN-053L** — Preview regression smoke. Close 053.  
+13. **RFSN-MKT-001** — We Got The Tape (Preview/local only).  
+14. Backlog polish: RFSN-025 mobile dock, RFSN-026 synthetic ADP, 030B-3 authenticated MUD, The League commercial tier.
 
 **Do not** reopen 052 Advisor architecture. **Do not** start another typography census.
 

@@ -27,7 +27,7 @@ export function LiveDraftRecentPicks({ picks, currentPickNumber, className }: Pr
   return (
     <div
       className={cn(
-        "mb-4 rounded-lg border border-white/[0.08] bg-black/20", SPACE_CARD,
+        "mb-2 rounded-lg border border-white/[0.08] bg-black/20", SPACE_CARD,
         className,
       )}
       data-live-draft-timeline

@@ -13,12 +13,17 @@ import {
   SPACE_SECTION,
   SPACE_SECTION_INSET,
   SPACE_SECTION_Y,
+  SPACE_STRIP,
 } from "./density";
 
 describe("RFSN-054 density rhythm", () => {
   it("keeps chips on 6px vertical padding", () => {
     expect(SPACE_CHIP).toBe("px-2.5 py-1.5");
     expect(SPACE_CHIP_GAP).toBe("gap-1.5");
+  });
+
+  it("keeps the compact chrome strip at 8/12px", () => {
+    expect(SPACE_STRIP).toBe("px-3 py-2");
   });
 
   it("keeps clusters at 8px and label-under-value at 12px", () => {

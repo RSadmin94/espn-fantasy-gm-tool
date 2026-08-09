@@ -18,6 +18,7 @@ export function RfsnMediaShell({
   leagueName,
   subtitle,
   showLive = false,
+  compactHeader = false,
   children,
   className,
   ...rest
@@ -26,6 +27,8 @@ export function RfsnMediaShell({
   leagueName?: string;
   subtitle?: string;
   showLive?: boolean;
+  /** RFSN-054A — tighter title/nav rhythm on Live Draft only. */
+  compactHeader?: boolean;
   children: ReactNode;
 } & HTMLAttributes<HTMLDivElement>) {
   const tagline =
@@ -38,10 +41,10 @@ export function RfsnMediaShell({
       style={{ background: RFSN_PAGE_BG }}
       {...rest}
     >
-      <header className="border-b border-white/[0.06] pb-4 mb-6">
+      <header className={cn("border-b border-white/[0.06]", compactHeader ? "pb-2.5 mb-3" : "pb-4 mb-6")}>
         <RfsnBrandMark />
-        <p className="text-2xs text-ink-tertiary uppercase tracking-wide font-semibold mt-1">{tagline}</p>
-        <RfsnDestinationNav active={active} showLive={showLive} className="mt-4" />
+        <p className={cn("text-2xs text-ink-tertiary uppercase tracking-wide font-semibold", compactHeader ? "mt-0.5" : "mt-1")}>{tagline}</p>
+        <RfsnDestinationNav active={active} showLive={showLive} className={compactHeader ? "mt-2" : "mt-4"} />
       </header>
       {children}
     </div>
