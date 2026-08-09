@@ -97,9 +97,11 @@ async function narrateOnPage(page: Page, voice: string): Promise<{ headline: str
   ]).catch(() => [null] as const);
   if (!res) failures.push("narrate request did not start");
   else if (!res.ok()) failures.push(`narrate http ${res.status()}`);
-  await page.waitForSelector("[data-narration-headline]", { timeout: 20_000 }).catch(() => null);
+  await page.waitForSelector("[data-narration-headline], [data-narration-error]", { timeout: 20_000 }).catch(() => null);
   const headline = ((await page.locator("[data-narration-headline]").innerText().catch(() => "")) || "").trim();
   const story = ((await page.locator("[data-narration-story]").innerText().catch(() => "")) || "").trim();
+  const err = ((await page.locator("[data-narration-error]").innerText().catch(() => "")) || "").trim();
+  if (err) failures.push(err);
   if (!headline) failures.push("missing headline");
   if (!story) failures.push("missing story");
   if (/\b1999\b/.test(`${headline} ${story}`)) failures.push("invented year 1999");

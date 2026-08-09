@@ -88,15 +88,22 @@ export function clearHistoricalNarrationCacheForTests(): void {
   }
 }
 
-async function defaultLlm(pkg: HistoricalStoryPackage, voice: NarrationVoice): Promise<HistoricalNarration> {
+async function defaultLlm(
+  pkg: HistoricalStoryPackage,
+  voice: NarrationVoice,
+  invented?: string[],
+): Promise<HistoricalNarration> {
   const prompt = buildNarrationPrompt(pkg, voice);
+  const repair = invented?.length
+    ? `\n\nYour previous draft invented: ${invented.slice(0, 12).join(", ")}. Rewrite using only FACTS_JSON.`
+    : "";
   const res = await invokeLLM({
     messages: [
       { role: "system", content: prompt.system },
-      { role: "user", content: prompt.user },
+      { role: "user", content: `${prompt.user}${repair}` },
     ],
     callType: "json_structured",
-    temperature: 0.4,
+    temperature: invented?.length ? 0.2 : 0.4,
     maxTokens: 900,
     responseFormat: { type: "json_object" },
   });
@@ -116,8 +123,13 @@ export async function narrateHistoricalStory(
   if (cached) return { narration: cached, cacheHit: true, key };
 
   const impl = llmImpl ?? defaultLlm;
-  const narration = await impl(pkg, voice);
-  const grounded = narrationUsesOnlyPackageFacts(pkg, narrationCorpus(narration));
+  let narration = await impl(pkg, voice);
+  let grounded = narrationUsesOnlyPackageFacts(pkg, narrationCorpus(narration));
+  if (!grounded.ok && !llmImpl) {
+    console.warn("[historical-narration] retry after invented facts", grounded.invented);
+    narration = await defaultLlm(pkg, voice, grounded.invented);
+    grounded = narrationUsesOnlyPackageFacts(pkg, narrationCorpus(narration));
+  }
   if (!grounded.ok) {
     console.error("[historical-narration] invented facts", grounded.invented);
     throw new Error(NARRATION_EXPORT_ERROR);
