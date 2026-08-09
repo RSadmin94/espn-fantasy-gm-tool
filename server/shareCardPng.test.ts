@@ -6,6 +6,8 @@ import {
   withShareCardPresentation,
   type ShareMatchupInput,
 } from "@shared/historicalShareCard";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   clearShareCardPngCacheForTests,
   exportShareCardPng,
@@ -116,6 +118,12 @@ describe("RFSN-053G PNG cache + integrity", () => {
     expect(readPngSize(collection.png)).toEqual({ width: 1920, height: 1080 });
     expect(record.filename).toBe("cashier-largest-margin.png");
     expect(readPngSize(record.png)).toEqual({ width: 7680, height: 4320 });
+  });
+
+  it("resolves a host chromium executable for Railway Preview", () => {
+    const src = readFileSync(join(process.cwd(), "server/shareCardPng.ts"), "utf8");
+    expect(src).toContain("command -v chromium");
+    expect(src).toContain("PLAYWRIGHT_BROWSERS_PATH");
   });
 
   it("never returns a partial/non-png buffer", async () => {

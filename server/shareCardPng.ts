@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { getAuth } from "@clerk/express";
@@ -95,15 +96,41 @@ function lookup(key: string): Buffer | null {
   }
 }
 
+function resolveChromiumExecutable(): string | undefined {
+  const envPath =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() || process.env.CHROMIUM_PATH?.trim();
+  if (envPath && fs.existsSync(envPath)) return envPath;
+  for (const candidate of ["/usr/bin/chromium", "/usr/bin/chromium-browser", "/bin/chromium"]) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  try {
+    const cmd =
+      process.platform === "win32"
+        ? "where chromium 2>nul"
+        : "command -v chromium || command -v chromium-browser || true";
+    const found = execSync(cmd, {
+      encoding: "utf8",
+      shell: process.platform === "win32" ? undefined : "/bin/sh",
+    })
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0 && fs.existsSync(line));
+    if (found) return found;
+  } catch {
+    /* fall through to Playwright's bundled Chromium */
+  }
+  return undefined;
+}
+
 async function playwrightRasterize(
   html: string,
   size: { width: number; height: number; scale: ShareCardScale },
 ): Promise<Buffer> {
+  if (!process.env.PLAYWRIGHT_BROWSERS_PATH?.trim() && fs.existsSync("/app/ms-playwright")) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = "/app/ms-playwright";
+  }
   const { chromium } = await import("playwright");
-  const executablePath =
-    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ||
-    process.env.CHROMIUM_PATH?.trim() ||
-    undefined;
+  const executablePath = resolveChromiumExecutable();
   const browser = await chromium.launch({
     executablePath,
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--font-render-hinting=none"],
@@ -180,7 +207,7 @@ export function registerShareCardPng(app: Express): void {
       res.setHeader("X-Share-Card-Renderer", SHARE_CARD_RENDERER_VERSION);
       res.status(200).send(out.png);
     } catch (err) {
-      console.error("[share-card-png]", err);
+      console.error("[share-card-png]", err instanceof Error ? err.stack || err.message : err);
       if (!res.headersSent) {
         res.status(500).json({ error: SHARE_CARD_EXPORT_ERROR });
       }
