@@ -1,6 +1,6 @@
 # RFSN-052L — GM Advisor Clear = True Session Reset
 
-**Status:** Preview live `68fa655` / `buildTime=2026-08-09T08:23:34.167Z`. Founder 12/12. Not Production until explicit ask.
+**Status:** Preview `68fa655` + **Production live** `ee9ed04` / `buildTime=2026-08-09T09:07:04.929Z`. Founder 12/12 both.
 
 ## Bug
 

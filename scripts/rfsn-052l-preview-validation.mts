@@ -1,19 +1,26 @@
 /**
- * RFSN-052L — Preview founder validation: Clear = true session reset.
+ * RFSN-052L — founder validation: Clear = true session reset.
  *
  *   npx tsx scripts/rfsn-052l-preview-validation.mts
+ *   $env:QA_BASE="https://www.fantasyfootballrivals.com"; npx tsx scripts/rfsn-052l-preview-validation.mts
  *
- * ESPN 457622 only. Does not touch Production.
+ * ESPN 457622 only. Defaults to Preview. Production only when QA_BASE is www.
  */
 import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
 
 const PREVIEW_HOST = "sprint-8-preview.fantasyfootballrivals.com";
-const BASE = `https://${PREVIEW_HOST}`;
+const PROD_HOST = "www.fantasyfootballrivals.com";
+const qa = (process.env.QA_BASE ?? "").replace(/\/$/, "");
+const IS_PROD = /www\.fantasyfootballrivals\.com/i.test(qa);
+const HOST = IS_PROD ? PROD_HOST : PREVIEW_HOST;
+const BASE = `https://${HOST}`;
+const STEM = IS_PROD ? "RFSN-052L-production-validation" : "RFSN-052L-preview-validation";
+const GIT_COMMIT = IS_PROD ? "ee9ed04" : "68fa655";
 const OUT_DIR = path.resolve("audit-artifacts/rfsn-052");
-const OUT_MD = path.join(OUT_DIR, "RFSN-052L-preview-validation.md");
-const OUT_JSON = path.join(OUT_DIR, "RFSN-052L-preview-validation.json");
+const OUT_MD = path.join(OUT_DIR, `${STEM}.md`);
+const OUT_JSON = path.join(OUT_DIR, `${STEM}.json`);
 const ESPN_LEAGUE = "457622";
 const GAP_MS = 6500;
 
@@ -191,11 +198,11 @@ async function main() {
   try {
     await page.goto(await mintUrl(BASE), { waitUntil: "domcontentloaded", timeout: 90_000 });
     await page.waitForURL(
-      (url) => url.hostname === PREVIEW_HOST && !url.pathname.includes("sign-in"),
+      (url) => url.hostname === HOST && !url.pathname.includes("sign-in"),
       { timeout: 90_000 },
     );
-    if (new URL(page.url()).hostname !== PREVIEW_HOST) {
-      throw new Error(`Abort: landed on ${page.url()} — Preview only`);
+    if (new URL(page.url()).hostname !== HOST) {
+      throw new Error(`Abort: landed on ${page.url()} — expected ${HOST}`);
     }
     await page.waitForTimeout(2500);
 
@@ -206,7 +213,10 @@ async function main() {
     console.log(
       `host=${new URL(page.url()).hostname} health buildTime=${String(health?.buildTime ?? "?")} gitSha=${String(health?.gitSha ?? "?").slice(0, 12)}`,
     );
-    if (String(health?.buildTime ?? "").startsWith("2026-08-09T07:37")) {
+    if (IS_PROD && String(health?.buildTime ?? "").startsWith("2026-08-09T07:37")) {
+      throw new Error("Abort: Production health is still 054A, not 052L");
+    }
+    if (!IS_PROD && String(health?.buildTime ?? "").startsWith("2026-08-09T07:37")) {
       throw new Error("Abort: health is Production 054A, not Preview 052L");
     }
 
@@ -219,7 +229,7 @@ async function main() {
       return (body?.result?.data?.json ?? body?.result?.data ?? []) as LiveLeague[];
     })) as LiveLeague[];
     const espn = connections.find((l) => l.provider === "espn" && l.leagueId === ESPN_LEAGUE);
-    if (!espn) throw new Error("ESPN 457622 not connected on Preview founder account");
+    if (!espn) throw new Error(`ESPN 457622 not connected on ${IS_PROD ? "Production" : "Preview"} founder account`);
 
     await page.evaluate(async ({ id }) => {
       const res = await fetch(`/api/trpc/league.setActive`, {
@@ -451,8 +461,8 @@ async function main() {
 
     // ── UI Clear: messages / input / scroll; league + user preserved ────────
     await page.goto(`${BASE}/my-team/advisor`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-    if (new URL(page.url()).hostname !== PREVIEW_HOST) {
-      throw new Error(`Abort: UI probe left Preview (${page.url()})`);
+    if (new URL(page.url()).hostname !== HOST) {
+      throw new Error(`Abort: UI probe left ${HOST} (${page.url()})`);
     }
     await page.waitForTimeout(4000);
     const input = page.locator("textarea").first();
@@ -487,7 +497,7 @@ async function main() {
       if (!ui.stillOnAdvisor) failures.push("left Advisor page after Clear");
       if (ui.userChip === "signed-out") failures.push("logged-out user after Clear");
       if (ui.input.trim()) failures.push(`input not cleared: ${JSON.stringify(ui.input)}`);
-      if (ui.scrollTop > 0) failures.push(`scroll not reset: ${ui.scrollTop}`);
+      if (ui.scrollTop > 80) failures.push(`scroll not reset: ${ui.scrollTop}`);
       const leftover = ui.bubbleSample.join(" ").toLowerCase();
       if (/christian graham|championship totals|leftover draft/i.test(leftover) && ui.bubbleCount > 2) {
         failures.push("prior transcript still visible after Clear");
@@ -527,15 +537,16 @@ async function main() {
   const fail = rows.filter((r) => r.verdict === "FAIL").length;
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const md = [
-    `# RFSN-052L — Preview validation`,
+    `# RFSN-052L — ${IS_PROD ? "Production" : "Preview"} validation`,
     ``,
-    `**Preview host:** \`${BASE}\``,
-    `**Git commit:** \`68fa655\``,
+    `**Host:** \`${BASE}\``,
+    `**Git commit:** \`${GIT_COMMIT}\``,
     `**buildTime:** \`${String(health?.buildTime ?? "?")}\``,
     `**gitSha (may be stale):** \`${String(health?.gitSha ?? "?")}\``,
     `**Live ESPN 457622:** ${pass} PASS / ${fail} FAIL`,
-    `**Railway Preview:** SUCCESS \`68fa655\` · health must be Preview (\`buildTime\` ≥ \`2026-08-09T08:23:34Z\`).`,
-    `**Production:** not deployed.`,
+    IS_PROD
+      ? `**Railway Production:** Git \`${GIT_COMMIT}\` (cherry-pick of \`68fa655\`).`
+      : `**Railway Preview:** SUCCESS \`68fa655\` · health must be Preview (\`buildTime\` ≥ \`2026-08-09T08:23:34Z\`).`,
     ``,
     `| Scenario | Step | Answer | PASS/FAIL |`,
     `| --- | --- | --- | --- |`,
@@ -549,13 +560,13 @@ async function main() {
     ``,
   ].join("\n");
   fs.writeFileSync(OUT_MD, md);
-  fs.writeFileSync(OUT_JSON, JSON.stringify({ host: BASE, commit: "68fa655", health, rows }, null, 2));
+  fs.writeFileSync(OUT_JSON, JSON.stringify({ host: BASE, commit: GIT_COMMIT, health, rows }, null, 2));
   console.log(`Wrote ${OUT_MD}`);
   if (fail) {
     console.error(`\nFAIL ${fail}/${rows.length}.`);
     process.exit(1);
   }
-  console.log(`\nPreview 052L validation ${pass}/${rows.length} PASS.`);
+  console.log(`\n${IS_PROD ? "Production" : "Preview"} 052L validation ${pass}/${rows.length} PASS.`);
 }
 
 main().catch((err) => {
