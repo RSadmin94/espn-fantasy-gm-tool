@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { SPACE_CARD, SPACE_CHIP, SPACE_CHIP_GAP } from "@/lib/density";
 import { TYPE_BADGE } from "@/lib/typeScale";
+import type { StoryCollectionId } from "@shared/matchupStoryCollections";
 import type { GalleryMatchup, ScoringPrecision, GallerySort } from "../../../../server/matchupGalleryQuery";
 import {
   formatGalleryScore,
@@ -24,11 +25,13 @@ export function MatchupGalleryCard({
   scoringPrecision,
   sort,
   showActions = true,
+  collection,
 }: {
   matchup: GalleryMatchup;
   scoringPrecision?: ScoringPrecision | null;
   sort?: GallerySort;
   showActions?: boolean;
+  collection?: StoryCollectionId | null;
 }) {
   const badges = galleryCardBadges(matchup, { sort, scoringPrecision });
   const wl = winnerLoserLabels(matchup);
@@ -36,7 +39,7 @@ export function MatchupGalleryCard({
   const awayScore = formatGalleryScore(matchup.awayScore, scoringPrecision);
   const margin = formatGalleryScore(matchup.margin, scoringPrecision);
   const phaseLabel = matchup.phase === "playoffs" ? "Playoffs" : "Regular season";
-  const viewHref = matchupViewHref(matchup);
+  const viewHref = matchupViewHref(matchup, { collection });
 
   const onShare = async () => {
     try {

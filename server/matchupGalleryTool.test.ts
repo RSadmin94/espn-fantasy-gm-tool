@@ -130,11 +130,27 @@ describe("RFSN-053D matchup gallery tool selector", () => {
     const hit = selectMatchupGalleryTool("Show me all my No Mercy wins.", ctx);
     expect(hit?.toolName).toBe(MATCHUP_GALLERY_TOOL_NAME);
     expect(hit?.preset).toBe("no_mercy");
+    expect(hit?.collection).toBe("no-mercy");
     expect(hit?.query).toMatchObject({
       ownerName: "Rod Sellers",
       marginMin: 50,
       result: "win",
       noMercy: true,
+    });
+  });
+
+  it("opens Heartbreak and Blood Rival story collections", () => {
+    const heart = selectMatchupGalleryTool("Show my Heartbreak games", ctx);
+    expect(heart?.collection).toBe("heartbreak");
+    expect(heart?.query).toMatchObject({
+      ownerName: "Rod Sellers",
+      onePoint: true,
+    });
+    const rival = selectMatchupGalleryTool("Show Rod vs Bruce", ctx);
+    expect(rival?.collection).toBe("blood-rival");
+    expect(rival?.query).toMatchObject({
+      ownerName: "Rod Sellers",
+      opponentName: "Bruce Edwards",
     });
   });
 
@@ -213,6 +229,7 @@ describe("RFSN-053D matchup gallery tool selector", () => {
       priorFilter: prior,
     });
     expect(isMatchupGalleryFollowUpAsk("Show only the playoff ones.")).toBe(true);
+    expect(follow?.collection).toBe("no-mercy");
     expect(follow?.query).toMatchObject({
       ownerName: "Rod Sellers",
       noMercy: true,
@@ -248,6 +265,8 @@ describe("RFSN-053D tryMatchupGalleryToolAnswer", () => {
     expect(hit?.toolName).toBe(MATCHUP_GALLERY_TOOL_NAME);
     expect(hit?.visual.type).toBe("matchup_gallery");
     expect(hit?.visual.preset).toBe("no_mercy");
+    expect(hit?.visual.collection).toBe("no-mercy");
+    expect(hit?.visual.href).toContain("/league/history/matchups/c/no-mercy");
     expect(hit?.visual.filters).toMatchObject({
       owner: "Rod Sellers",
       marginMin: 50,

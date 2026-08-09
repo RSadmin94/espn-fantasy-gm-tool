@@ -7,6 +7,7 @@ import {
   galleryEmptyCopy,
   galleryFilterChips,
   galleryFilterToQueryInput,
+  matchupViewHref,
   noMercyPresetFilter,
   parseGallerySearchParams,
   serializeGallerySearchParams,
@@ -193,6 +194,16 @@ describe("RFSN-053C matchup gallery UI model", () => {
     expect(activeGalleryPreset({})).toBe("all");
     expect(activeGalleryPreset({ noMercy: true, marginMin: 50, result: "win" })).toBe("no-mercy");
     expect(activeGalleryPreset({ championshipGames: true })).toBe("championship");
+  });
+
+  it("parses and serializes Story Collection ids for routing", () => {
+    const parsed = parseGallerySearchParams("collection=heartbreak&ownerName=Rod+Sellers");
+    expect(parsed.collection).toBe("heartbreak");
+    expect(parsed.ownerName).toBe("Rod Sellers");
+    const qs = serializeGallerySearchParams({ collection: "cashier", scoreMin: 150, sort: "highest_score" });
+    expect(qs).toContain("collection=cashier");
+    expect(qs).toContain("scoreMin=150");
+    expect(matchupViewHref(matchup(), { collection: "no-mercy" })).toContain("collection=no-mercy");
   });
 
   it("RFSN-053D maps Advisor visual filters onto GalleryUiFilter + Open Full Gallery href", () => {

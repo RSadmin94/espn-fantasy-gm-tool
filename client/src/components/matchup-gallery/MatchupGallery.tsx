@@ -1,3 +1,4 @@
+import type { StoryCollectionId } from "@shared/matchupStoryCollections";
 import type { GalleryQueryResult } from "../../../../server/matchupGalleryQuery";
 import {
   applyGalleryPreset,
@@ -25,6 +26,7 @@ export function MatchupGallery({
   onNoMercy,
   noMercyActive,
   activeOwnerName,
+  collection,
 }: {
   title: string;
   leagueName?: string | null;
@@ -36,6 +38,7 @@ export function MatchupGallery({
   onNoMercy?: () => void;
   noMercyActive?: boolean;
   activeOwnerName?: string | null;
+  collection?: StoryCollectionId | null;
 }) {
   const chips = galleryFilterChips(filter);
   const coverage = formatCoverageRange(result?.coverage.seasonFrom, result?.coverage.seasonTo);
@@ -102,6 +105,7 @@ export function MatchupGallery({
               matchup={matchup}
               scoringPrecision={result?.coverage.scoringPrecision}
               sort={filter.sort}
+              collection={collection}
             />
           ))}
         </div>

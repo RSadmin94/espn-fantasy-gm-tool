@@ -323,6 +323,7 @@ const router = createBrowserRouter([
           },
           { path: "/league/history/matchups", element: <HistoricalMatchupGalleryPage /> },
           { path: "/league/history/matchups/no-mercy", element: <HistoricalMatchupGalleryPage /> },
+          { path: "/league/history/matchups/c/:collectionId", element: <HistoricalMatchupGalleryPage /> },
           { path: "/league/history/matchups/:matchupId", element: <HistoricalMatchupDetailPage /> },
           { path: "/league/history/transactions", element: <LeagueTransactions /> },
           { path: "/league/acquisition-impact", element: <LeagueAcquisitionImpact /> },
