@@ -1,0 +1,87 @@
+{
+  "label": "preview",
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T19:17:54.939Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T19:12:00.470Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "passed": 10,
+  "failed": 0,
+  "probes": [
+    {
+      "name": "Story Collections home Share Card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "share=8"
+    },
+    {
+      "name": "collection no-mercy",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/no-mercy"
+    },
+    {
+      "name": "collection heartbreak",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/heartbreak"
+    },
+    {
+      "name": "collection championship",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/championship"
+    },
+    {
+      "name": "collection blood-rival",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/blood-rival?ownerName=Rod%20Sellers&opponentName=Bruce%20Edwards"
+    },
+    {
+      "name": "collection cashier",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/cashier"
+    },
+    {
+      "name": "gallery matchup Share Card",
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "name": "viewer Share Card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/4585?season=2025&week=17&collection=no-mercy"
+    },
+    {
+      "name": "Hall of Fame / records Share Card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "recordButtons=5 theme=championship"
+    },
+    {
+      "name": "Advisor embed Share Card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Show me my No Mercy games You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025). OPEN FULL GALLERY Share Card No Mercy Rule NO MERCY 22 games Share Card Blo"
+    }
+  ]
+}

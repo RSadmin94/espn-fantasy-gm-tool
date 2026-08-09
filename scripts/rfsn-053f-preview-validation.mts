@@ -287,21 +287,25 @@ async function main() {
     });
 
     await clearHistory(page, ESPN_LEAGUE);
-    await waitGap();
-    const out = await chat(page, ESPN_LEAGUE, "Show me my No Mercy games");
-    lastAt = Date.now();
-    await page.goto(`${BASE}/league/advisor`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForSelector("[data-advisor-collection='no-mercy']", { timeout: 45_000 }).catch(() => null);
-    await page.waitForSelector("[data-advisor-visual='matchup_gallery'] [data-share-card-open]", { timeout: 20_000 }).catch(() => null);
+    await page.waitForTimeout(Math.max(GAP_MS, 8000));
+    await page.goto(`${BASE}/my-team/advisor`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.waitForTimeout(2000);
+    const input = page.locator("textarea").first();
+    await input.fill("Show me my No Mercy games");
+    await input.press("Enter");
+    await page.waitForSelector("[data-advisor-visual='matchup_gallery']", { timeout: 45_000 }).catch(() => null);
+    await page.waitForSelector("[data-advisor-collection='no-mercy'] [data-share-card-open], [data-advisor-visual='matchup_gallery'] [data-share-card-open]", { timeout: 20_000 }).catch(() => null);
     const advisorShare = Boolean(await page.$("[data-advisor-visual='matchup_gallery'] [data-share-card-open]"));
+    const advisorCollection = await page.$eval("[data-advisor-visual='matchup_gallery']", (n) => n.getAttribute("data-advisor-collection")).catch(() => null);
+    const bubble = ((await page.locator("[data-advisor-messages]").innerText().catch(() => "")) || "").replace(/\s+/g, " ").slice(0, 200);
     push({
       name: "Advisor embed Share Card",
-      verdict: out.visual?.collection === "no-mercy" && advisorShare ? "PASS" : "FAIL",
+      verdict: advisorCollection === "no-mercy" && advisorShare ? "PASS" : "FAIL",
       failures: [
-        ...(out.visual?.collection !== "no-mercy" ? [`collection=${out.visual?.collection ?? "none"}`] : []),
+        ...(advisorCollection !== "no-mercy" ? [`collection=${advisorCollection ?? "none"}`] : []),
         ...(!advisorShare ? ["missing embed Share Card"] : []),
       ],
-      sample: String(out.message ?? "").replace(/\s+/g, " ").slice(0, 200),
+      sample: bubble || `collection=${advisorCollection ?? "none"}`,
     });
   } finally {
     await browser.close();
