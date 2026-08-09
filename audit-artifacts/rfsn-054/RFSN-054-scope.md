@@ -1,6 +1,6 @@
 # RFSN-054 — UI Density & Scanability
 
-**Status:** Implemented locally. Preview/Production only after Git push + scan.  
+**Status:** Preview + **Production live** (`a9b7d87` / `4e447c06` · `2db9b77` / `803d531b`).  
 **Not typography.** 051A–E stay closed. This increment is spacing rhythm only.
 
 ## Goal
