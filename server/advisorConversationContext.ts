@@ -8,6 +8,7 @@
 
 import type { AdvisorPlannerIntent, AdvisorResolvedOwner } from "./advisorEvidencePlanner";
 import type { AdvisorQuestionScope } from "./advisorScopeResolver";
+import type { GalleryFilter } from "./matchupGalleryQuery";
 
 export type AdvisorConversationContext = {
   lastResolvedOwners: AdvisorResolvedOwner[];
@@ -15,6 +16,9 @@ export type AdvisorConversationContext = {
   lastScope: AdvisorQuestionScope | null;
   lastLeagueId: string;
   updatedAt: number;
+  /** RFSN-053D — last gallery filter for follow-up merge. Cleared on unrelated intent / Clear. */
+  lastGalleryFilter?: GalleryFilter;
+  lastGalleryPreset?: string;
 };
 
 const store = new Map<string, AdvisorConversationContext>();
@@ -33,8 +37,13 @@ export function getAdvisorConversationContext(
 export function setAdvisorConversationContext(
   userId: number,
   leagueId: string,
-  patch: Omit<AdvisorConversationContext, "updatedAt" | "lastLeagueId"> & {
+  patch: Omit<
+    AdvisorConversationContext,
+    "updatedAt" | "lastLeagueId" | "lastGalleryFilter" | "lastGalleryPreset"
+  > & {
     lastLeagueId?: string;
+    lastGalleryFilter?: GalleryFilter | null;
+    lastGalleryPreset?: string | null;
   },
 ): AdvisorConversationContext {
   const key = advisorConversationKey(userId, leagueId);
@@ -44,6 +53,8 @@ export function setAdvisorConversationContext(
     lastScope: patch.lastScope,
     lastLeagueId: patch.lastLeagueId ?? String(leagueId),
     updatedAt: Date.now(),
+    ...(patch.lastGalleryFilter ? { lastGalleryFilter: { ...patch.lastGalleryFilter } } : {}),
+    ...(patch.lastGalleryPreset ? { lastGalleryPreset: patch.lastGalleryPreset } : {}),
   };
   store.set(key, next);
   return next;

@@ -288,6 +288,80 @@ describe("planAdvisorEvidence", () => {
     ]);
   });
 
+  it("plans matchup gallery for show-me-games asks (RFSN-053D)", () => {
+    expectPlan("Show me all my No Mercy wins.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every game I beat Bruce.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every championship game.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every playoff game.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me my closest wins.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me my closest losses.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every one-point game.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every game over 200 points.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every game under 100 points.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me my biggest wins.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me my biggest losses.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me all games against LOZELL.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me Rod vs Bruce.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show Rod vs Bruce", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me every game from 2018.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Show me my playoff losses.", "matchup_gallery", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: false,
+    });
+  });
+
+  it("keeps leaderboards and singular facts as text, not gallery (RFSN-053D)", () => {
+    expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
+    expect(plan("Who has the best record?").intent).not.toBe("matchup_gallery");
+    expectPlan("Who has the most one-point losses?", "matchup_margins", ["owner_identity", "matchup_margins"], {
+      narrativeAllowed: false,
+    });
+    expect(plan("Who has the most blowouts?").intent).not.toBe("matchup_gallery");
+    expectPlan("Who drafts QBs early?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("What's my biggest win?", "matchup_margins", ["owner_identity", "matchup_margins"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Rod vs Bruce", "h2h_pair", ["owner_identity", "h2h", "playoffs"], {
+      narrativeAllowed: false,
+    });
+  });
+
   it("does not invoke an LLM and stays pure", () => {
     const p = plan("Rod vs Bruce");
     expect(p.intent).toBe("h2h_pair");

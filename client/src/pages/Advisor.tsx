@@ -4,6 +4,9 @@ import { cn } from "@/lib/utils";
 import { V1 } from "@/lib/v1Copy";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
+import { AdvisorMatchupGalleryEmbed } from "@/components/matchup-gallery/AdvisorMatchupGalleryEmbed";
+import type { GalleryOwnerOption } from "@/components/matchup-gallery/MatchupGalleryFilters";
+import type { AdvisorVisual } from "../../../server/advisorVisual";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +36,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   pending?: boolean;
+  visual?: AdvisorVisual;
 }
 
 interface HistoryRow {
@@ -68,8 +72,19 @@ function timeGreeting(): string {
 
 // ── Chat message bubble ─────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  owners,
+  activeOwnerName,
+  leagueContextKey,
+}: {
+  msg: ChatMessage;
+  owners: GalleryOwnerOption[];
+  activeOwnerName?: string | null;
+  leagueContextKey: string;
+}) {
   const isUser = msg.role === "user";
+  const galleryVisual = msg.visual?.type === "matchup_gallery" ? msg.visual : undefined;
   return (
     <div className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
       <div className={cn(
@@ -81,7 +96,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {isUser ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
       </div>
       <div className={cn(
-        "max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+        "rounded-2xl px-4 py-3 text-sm leading-relaxed",
+        galleryVisual ? "w-full min-w-0 max-w-full" : "max-w-[82%]",
         isUser
           ? "rounded-tr-sm bg-primary/15 text-foreground"
           : "rounded-tl-sm bg-card border border-border text-foreground"
@@ -91,7 +107,19 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Thinking...
             </span>
-          : <span className="whitespace-pre-wrap">{msg.content}</span>}
+          : (
+            <>
+              <span className="whitespace-pre-wrap">{msg.content}</span>
+              {!isUser && galleryVisual ? (
+                <AdvisorMatchupGalleryEmbed
+                  visual={galleryVisual}
+                  owners={owners}
+                  activeOwnerName={activeOwnerName}
+                  leagueContextKey={leagueContextKey}
+                />
+              ) : null}
+            </>
+          )}
       </div>
     </div>
   );
@@ -271,6 +299,23 @@ export function Advisor() {
   const firstName = ownerName ? String(ownerName).split(/\s+/)[0] : null;
 
   const allOwners: OwnerRow[] = ownersQ.data?.allOwners ?? [];
+  const galleryOwners: GalleryOwnerOption[] = useMemo(() => {
+    const seen = new Set<string>();
+    const out: GalleryOwnerOption[] = [];
+    for (const row of allOwners) {
+      const label = row.ownerName?.trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ value: label, label });
+    }
+    if (ownerName?.trim()) {
+      const key = ownerName.trim().toLowerCase();
+      if (!seen.has(key)) out.push({ value: ownerName.trim(), label: ownerName.trim() });
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label));
+  }, [allOwners, ownerName]);
   const seasonsCount: number = summaryQ.data?.seasons ?? cachedSeasons.length;
   const ownersCount = allOwners.length;
   const matchupsCount: number | null = summaryQ.data?.matchups ?? null;
@@ -376,10 +421,13 @@ export function Advisor() {
     chatMutation.mutate(withLeagueSalt({ message: msg, season }, leagueContextKey), {
       onSuccess: (data) => {
         if (advisorSessionGenRef.current !== sessionGen) return;
-        const resp = data as { message: string };
+        const resp = data as { message: string; visual?: AdvisorVisual };
         setMessages((prev) => {
           const withoutPending = prev.filter((m) => !m.pending);
-          return [...withoutPending, { role: "assistant", content: resp.message }];
+          return [
+            ...withoutPending,
+            { role: "assistant", content: resp.message, visual: resp.visual },
+          ];
         });
         void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
       },
@@ -412,6 +460,7 @@ export function Advisor() {
   }
 
   const isEmpty = messages.length === 0 && !historyQ.isLoading;
+  const hasGalleryVisual = messages.some((m) => m.visual?.type === "matchup_gallery");
 
   if (!leagueKeyReady) {
     return (
@@ -536,7 +585,14 @@ export function Advisor() {
           </div>
 
           {/* Messages */}
-          <div ref={messagesPaneRef} className="h-[420px] space-y-4 overflow-y-auto px-4 py-4" data-advisor-messages>
+          <div
+            ref={messagesPaneRef}
+            className={cn(
+              "space-y-4 overflow-y-auto px-4 py-4",
+              hasGalleryVisual ? "h-[min(72vh,820px)]" : "h-[420px]",
+            )}
+            data-advisor-messages
+          >
             {historyQ.isLoading && (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -554,7 +610,15 @@ export function Advisor() {
                 </div>
               </div>
             )}
-            {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+            {messages.map((msg, i) => (
+              <MessageBubble
+                key={i}
+                msg={msg}
+                owners={galleryOwners}
+                activeOwnerName={ownerName}
+                leagueContextKey={leagueContextKey}
+              />
+            ))}
             <div ref={messagesEndRef} />
           </div>
 

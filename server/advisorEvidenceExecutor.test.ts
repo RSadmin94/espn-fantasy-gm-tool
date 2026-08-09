@@ -374,4 +374,185 @@ describe("runAdvisorEvidencePath", () => {
     );
     expect(sawOwners?.map((o) => o.displayName)).toEqual(["Rod Sellers", "Bruce Edwards"]);
   });
+
+  it("RFSN-053D returns visual gallery and merges follow-ups until Clear", async () => {
+    const {
+      clearAllAdvisorConversationContext,
+      getAdvisorConversationContext,
+    } = await import("./advisorConversationContext");
+    clearAllAdvisorConversationContext();
+
+    const calls: Array<{ message: string; priorFilter?: unknown }> = [];
+    const tryGallery = async (args: {
+      message: string;
+      priorFilter?: unknown;
+      lastIntent?: string | null;
+    }) => {
+      calls.push({ message: args.message, priorFilter: args.priorFilter });
+      const noMercy = /no mercy/i.test(args.message);
+      const playoffFollow = /playoff ones/i.test(args.message);
+      return {
+        selected: true as const,
+        toolName: "query_matchup_gallery" as const,
+        query: {
+          ownerName: "Rod Sellers",
+          noMercy: true,
+          marginMin: 50,
+          result: "win" as const,
+          ...(playoffFollow ? { phase: "playoffs" as const } : {}),
+        },
+        preset: noMercy ? ("no_mercy" as const) : ("custom" as const),
+        answer: playoffFollow
+          ? "You have 3 No Mercy Rule victories in recorded playoff matchups."
+          : "You have 22 No Mercy Rule victories across recorded league history.",
+        analytics: {} as never,
+        visual: {
+          type: "matchup_gallery" as const,
+          preset: noMercy ? ("no_mercy" as const) : ("custom" as const),
+          filters: {
+            owner: "Rod Sellers",
+            marginMin: 50,
+            winsOnly: true,
+            ...(playoffFollow ? { phase: "playoffs" as const } : {}),
+          },
+          result: { matchups: [], total: playoffFollow ? 3 : 22, summary: "", empty: false, emptyReason: null, seeAllHref: "/league/history/matchups", filter: {}, coverage: {} as never },
+          href: "/league/history/matchups?noMercy=1&ownerName=Rod+Sellers",
+        },
+      };
+    };
+
+    const first = await runAdvisorEvidencePath(
+      {
+        message: "Show me my No Mercy wins.",
+        leagueId: "457622",
+        userId: 1,
+        season: 2026,
+        ownerAliases: OWNER_ALIASES,
+      },
+      {
+        tryGallery: tryGallery as never,
+        resolveViewerOwnerName: async () => "Rod Sellers",
+        assemblePackage: async () => {
+          throw new Error("gallery must not assemble historical package");
+        },
+        getHistory: async () => [],
+      },
+    );
+    expect(first.kind).toBe("deterministic");
+    if (first.kind !== "deterministic") return;
+    expect(first.tool).toBe("query_matchup_gallery");
+    expect(first.visual?.type).toBe("matchup_gallery");
+    expect(first.visual?.filters.owner).toBe("Rod Sellers");
+    expect(first.visual?.filters.winsOnly).toBe(true);
+    expect(first.message).toMatch(/22 No Mercy/);
+    expect(getAdvisorConversationContext(1, "457622")?.lastIntent).toBe("matchup_gallery");
+    expect(getAdvisorConversationContext(1, "457622")?.lastGalleryFilter?.noMercy).toBe(true);
+
+    const follow = await runAdvisorEvidencePath(
+      {
+        message: "Show only the playoff ones.",
+        leagueId: "457622",
+        userId: 1,
+        season: 2026,
+        ownerAliases: OWNER_ALIASES,
+      },
+      {
+        tryGallery: tryGallery as never,
+        resolveViewerOwnerName: async () => "Rod Sellers",
+        assemblePackage: async () => {
+          throw new Error("gallery follow-up must not assemble historical package");
+        },
+        getHistory: async () => [],
+      },
+    );
+    expect(follow.kind).toBe("deterministic");
+    if (follow.kind !== "deterministic") return;
+    expect(follow.visual?.filters.phase).toBe("playoffs");
+    expect(calls[1]?.priorFilter).toMatchObject({ noMercy: true, ownerName: "Rod Sellers" });
+
+    const { clearAdvisorConversationContext } = await import("./advisorConversationContext");
+    clearAdvisorConversationContext(1, "457622");
+    expect(getAdvisorConversationContext(1, "457622")).toBeNull();
+
+    const afterClear = await runAdvisorEvidencePath(
+      {
+        message: "Show only the playoff ones.",
+        leagueId: "457622",
+        userId: 1,
+        season: 2026,
+        ownerAliases: OWNER_ALIASES,
+      },
+      {
+        tryGallery: tryGallery as never,
+        resolveViewerOwnerName: async () => "Rod Sellers",
+        assemblePackage: async () => {
+          throw new Error("should not assemble");
+        },
+        getHistory: async () => [],
+      },
+    );
+    expect(afterClear.kind).toBe("deterministic");
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall?.priorFilter).toBeUndefined();
+  });
+
+  it("RFSN-053D unrelated intent clears gallery context", async () => {
+    const { clearAllAdvisorConversationContext, getAdvisorConversationContext } = await import(
+      "./advisorConversationContext"
+    );
+    clearAllAdvisorConversationContext();
+    await runAdvisorEvidencePath(
+      {
+        message: "Show me my No Mercy wins.",
+        leagueId: "457622",
+        userId: 9,
+        season: 2026,
+      },
+      {
+        tryGallery: async () => ({
+          selected: true as const,
+          toolName: "query_matchup_gallery" as const,
+          query: { ownerName: "Rod Sellers", noMercy: true, marginMin: 50, result: "win" as const },
+          preset: "no_mercy",
+          answer: "You have 22 No Mercy Rule victories.",
+          analytics: {} as never,
+          visual: {
+            type: "matchup_gallery",
+            preset: "no_mercy",
+            filters: { owner: "Rod Sellers", marginMin: 50, winsOnly: true },
+            result: {} as never,
+            href: "/league/history/matchups",
+          },
+        }),
+        resolveViewerOwnerName: async () => "Rod Sellers",
+        getHistory: async () => [],
+      },
+    );
+    expect(getAdvisorConversationContext(9, "457622")?.lastGalleryFilter?.noMercy).toBe(true);
+
+    await runAdvisorEvidencePath(
+      {
+        message: "Who has the most championships?",
+        leagueId: "457622",
+        userId: 9,
+        season: 2026,
+      },
+      {
+        assemblePackage: async () =>
+          buildAdvisorEvidencePackage(
+            {
+              message: "Who has the most championships?",
+              leagueId: "457622",
+              scope: LEAGUE_HISTORY,
+              owners: [],
+              plan: LEADERBOARD_PLAN,
+            },
+            baseSources({ championships: champSnap() }),
+          ),
+        getHistory: async () => [],
+      },
+    );
+    expect(getAdvisorConversationContext(9, "457622")?.lastIntent).toBe("championship_leaderboard");
+    expect(getAdvisorConversationContext(9, "457622")?.lastGalleryFilter).toBeUndefined();
+  });
 });

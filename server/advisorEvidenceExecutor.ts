@@ -43,6 +43,13 @@ import {
   setAdvisorConversationContext,
 } from "./advisorConversationContext";
 import { findNamedCareerRecord } from "./advisorCareerQualification";
+import { resolveCurrentOwner } from "./currentOwnerService";
+import {
+  isMatchupGalleryFollowUpAsk,
+  MATCHUP_GALLERY_TOOL_NAME,
+  tryMatchupGalleryToolAnswer,
+} from "./matchupGalleryTool";
+import type { AdvisorVisual } from "./advisorVisual";
 
 export type AdvisorEvidenceTelemetry = {
   resolvedLeagueId: string;
@@ -67,6 +74,7 @@ export type AdvisorEvidencePathResult =
       kind: "deterministic";
       message: string;
       tool?: string;
+      visual?: AdvisorVisual;
       telemetry: AdvisorEvidenceTelemetry;
     }
   | {
@@ -93,6 +101,8 @@ export type AdvisorEvidenceExecutorDeps = {
   getHistory?: typeof getChatHistory;
   getConversation?: typeof getAdvisorConversationContext;
   setConversation?: typeof setAdvisorConversationContext;
+  tryGallery?: typeof tryMatchupGalleryToolAnswer;
+  resolveViewerOwnerName?: (userId: number) => Promise<string | null>;
 };
 
 type MarginStats = {
@@ -861,12 +871,74 @@ export async function runAdvisorEvidencePath(
     }
     owners = merged;
   }
-  const plan = planAdvisorEvidence({
+  let plan = planAdvisorEvidence({
     message: input.message,
     leagueId: input.leagueId,
     scope,
     owners,
   });
+  const galleryFollowUp =
+    convo?.lastIntent === "matchup_gallery" &&
+    Boolean(convo.lastGalleryFilter) &&
+    isMatchupGalleryFollowUpAsk(input.message);
+  if (galleryFollowUp) {
+    plan = {
+      intent: "matchup_gallery",
+      authorities: ["owner_identity", "matchup_history"],
+      deterministicFirst: true,
+      narrativeAllowed: false,
+      requiredEvidence: ["gallery_query"],
+      fallbackToAdvisorContext: false,
+    };
+  }
+
+  if (plan.intent === "matchup_gallery") {
+    const resolveOwner =
+      deps.resolveViewerOwnerName ??
+      (async (userId: number) => {
+        try {
+          const cur = await resolveCurrentOwner({ id: userId });
+          return cur.displayName?.trim() || cur.franchiseName?.trim() || null;
+        } catch {
+          return null;
+        }
+      });
+    const currentOwnerName = await resolveOwner(input.userId);
+    const tryGallery = deps.tryGallery ?? tryMatchupGalleryToolAnswer;
+    const hit = await tryGallery({
+      leagueId: input.leagueId,
+      message: input.message,
+      currentOwnerName,
+      resolvedOwnerNames: owners.map((o) => o.displayName).filter((n): n is string => Boolean(n?.trim())),
+      ownerAliases: input.ownerAliases,
+      priorFilter: convo?.lastIntent === "matchup_gallery" ? convo.lastGalleryFilter : undefined,
+      priorPreset: convo?.lastIntent === "matchup_gallery" ? convo.lastGalleryPreset : undefined,
+      lastIntent: convo?.lastIntent ?? null,
+    });
+    setConvo(input.userId, input.leagueId, {
+      lastResolvedOwners:
+        owners.length >= 1 ? owners : (convo?.lastResolvedOwners ?? []),
+      lastIntent: plan.intent,
+      lastScope: scope,
+      lastLeagueId: String(input.leagueId),
+      lastGalleryFilter: hit?.query ?? null,
+      lastGalleryPreset: hit?.preset ?? null,
+    });
+    return {
+      kind: "deterministic",
+      message: hit?.answer ?? "No recorded games match these filters.",
+      tool: hit?.toolName ?? MATCHUP_GALLERY_TOOL_NAME,
+      visual: hit?.visual,
+      telemetry: buildEvidenceTelemetry({
+        leagueId: input.leagueId,
+        scope,
+        plan,
+        pkg: null,
+        deterministicShortCircuit: true,
+      }),
+    };
+  }
+
   const persistConversation = () => {
     setConvo(input.userId, input.leagueId, {
       lastResolvedOwners:
@@ -874,6 +946,8 @@ export async function runAdvisorEvidencePath(
       lastIntent: plan.intent,
       lastScope: scope,
       lastLeagueId: String(input.leagueId),
+      lastGalleryFilter: null,
+      lastGalleryPreset: null,
     });
   };
 

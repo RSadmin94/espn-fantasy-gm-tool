@@ -81,6 +81,51 @@ export function gallerySeasonBounds(filter: GalleryUiFilter): { from?: number; t
   return { from: filter.seasonFrom, to: filter.seasonTo };
 }
 
+/** RFSN-053D — Advisor visual.filters → 053C UI filter. */
+export function visualFiltersToGalleryUi(filters: {
+  owner?: string;
+  opponent?: string;
+  ownerName?: string;
+  opponentName?: string;
+  season?: number;
+  seasonFrom?: number;
+  seasonTo?: number;
+  week?: number;
+  phase?: "regular" | "playoffs" | "all";
+  result?: "win" | "loss" | "tie" | "any";
+  winsOnly?: boolean;
+  onePoint?: boolean;
+  marginMin?: number;
+  marginMax?: number;
+  scoreMin?: number;
+  scoreMax?: number;
+  noMercy?: boolean;
+  sort?: GallerySort;
+  championshipGames?: boolean;
+}): GalleryUiFilter {
+  const ownerName = filters.ownerName?.trim() || filters.owner?.trim() || undefined;
+  const opponentName = filters.opponentName?.trim() || filters.opponent?.trim() || undefined;
+  const result = filters.winsOnly ? "win" : filters.result;
+  return {
+    ownerName,
+    opponentName,
+    season: filters.season,
+    seasonFrom: filters.seasonFrom,
+    seasonTo: filters.seasonTo,
+    week: filters.week,
+    phase: filters.phase ?? "all",
+    result,
+    onePoint: filters.onePoint,
+    marginMin: filters.marginMin,
+    marginMax: filters.marginMax,
+    scoreMin: filters.scoreMin,
+    scoreMax: filters.scoreMax,
+    noMercy: filters.noMercy,
+    sort: filters.sort,
+    championshipGames: filters.championshipGames,
+  };
+}
+
 export function galleryFilterToQueryInput(filter: GalleryUiFilter): GalleryFilter {
   const seasons = gallerySeasonBounds(filter);
   return {
