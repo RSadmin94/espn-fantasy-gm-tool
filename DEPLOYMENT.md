@@ -2,6 +2,15 @@
 
 Deploy to Railway in one checklist. No manual backend guessing.
 
+**Current FFR environments** (do not use historical `gmwarroom.online` / `cursor/frontend-rebuild-stage1-9b20`):
+
+| Env | Git trigger | Host |
+| --- | --- | --- |
+| Preview | `feature/provider-expansion` | `https://sprint-8-preview.fantasyfootballrivals.com` |
+| Production | `release/promote-provider-expansion-dff6154` | `https://www.fantasyfootballrivals.com` |
+
+**Preview = Git.** Do not `railway up` Preview unless that exact tree is already pushed to `origin/feature/provider-expansion`. Trust health **`buildTime`**, not CLI `gitSha`. Operational SOT: `docs/FFR_PRODUCT_TRACKING.md`.
+
 ---
 
 ## Prerequisites

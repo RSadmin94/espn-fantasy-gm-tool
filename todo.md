@@ -1,5 +1,9 @@
 # ATLANTAS FINEST FF — GM War Room TODO
 
+> **LEGACY PLANNING ONLY — not operational source of truth.**  
+> Archived snapshot of early GM War Room checklists (through ~May 2026). Do not treat open checkboxes as current backlog.  
+> Canonical status, Preview vs Production, roadmap, and RFSNs: [`docs/FFR_PRODUCT_TRACKING.md`](docs/FFR_PRODUCT_TRACKING.md).
+
 ## Infrastructure
 - [x] Project initialization (db, server, user)
 - [x] ESPN credentials stored as secrets (ESPN_S2, ESPN_SWID, ESPN_LEAGUE_ID)

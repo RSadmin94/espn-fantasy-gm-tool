@@ -133,8 +133,9 @@ If **#7 is yes** → stop and explain before coding.
 
 | Doc | Use |
 |-----|-----|
-| `docs/FFR_PRODUCT_TRACKING.md` | Operational SOT — Preview vs Production, RFSNs, roadmap, backlog |
-| `docs/ARCHITECTURE.md` | Pipeline, season discovery, deploy (**deploy-branch/URL section may be stale**; trust tracking doc for env SHAs) |
+| `docs/FFR_PRODUCT_TRACKING.md` | **Canonical operational tracking** (Preview vs Production, RFSNs, roadmap, backlog) |
+| `docs/FFR_PRODUCT_ENCYCLOPEDIA.md` | **Retired stub** — Editions 1.1–1.3 never committed |
+| `docs/ARCHITECTURE.md` | Pipeline, season discovery, deploy targets |
 | `docs/FREEMIUM_GATING_SPEC.md` | Free/paid splits |
 | `server/h2hAuthority.ts` | H2H contract |
 | `server/leagueWeeklyStats.ts` | Weekly stats contract |

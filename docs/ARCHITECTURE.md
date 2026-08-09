@@ -5,19 +5,22 @@
 > (e.g. assuming ESPN's API serves old-season drafts, or assuming one league's season
 > window applies to every league). Check the relevant section here first, then suggest.
 >
-> Last verified: 2026-06-10 against league 457622 (full pass, readiness 100).
+> Operational status (Preview vs Production, RFSNs, releases): **`docs/FFR_PRODUCT_TRACKING.md`**.
+> Last pipeline verify note: 2026-06-10 against league 457622 (full pass, readiness 100).
 > Trade Analyzer Owner Intelligence re-point + dogfood cleanup: 2026-06-21 (see §12).
+> Deploy targets updated: 2026-08-09.
 
 ## 1. Stack & deploy
 
-- **Repo:** `C:\Users\RODERICK\Projects\espn-fantasy-gm-tool` (Windows).
+- **Repo:** `C:\Users\RODERICK\Projects\espn-fantasy-gm-tool-rfsn-recovery` (Windows). GitHub: `RSadmin94/espn-fantasy-gm-tool`.
 - **Stack:** React + TypeScript + tRPC + Drizzle ORM + MySQL (TiDB) on Railway.
-- **Active branch:** `cursor/frontend-rebuild-stage1-9b20` (Railway auto-deploys from this; `origin/main` is never touched).
-- **Two deploy routes — do not confuse them:**
-  - **Web (client/ + server/):** commit + push → Railway redeploys automatically.
-  - **Chrome extension (chrome-extension/):** NOT a Railway deploy. Requires reloading the
-    extension in Chrome. Always bump the version in `manifest.json` so the reload is verifiable.
-- **Live URL:** gmwarroom.online.
+- **Preview branch:** `feature/provider-expansion` → Railway env `sprint-8-preview` → `https://sprint-8-preview.fantasyfootballrivals.com`.
+- **Production branch:** `release/promote-provider-expansion-dff6154` → Railway env `production` → `https://www.fantasyfootballrivals.com`.
+- **Do not** treat `origin/main` or historical branch `cursor/frontend-rebuild-stage1-9b20` as the live deploy source. Legacy hostname `gmwarroom.online` is not the current product URL.
+- **Preview = Git (P0):** do not `railway up` Preview unless that exact tree is already pushed to `origin/feature/provider-expansion`. Trust health **`buildTime`**, not CLI `gitSha`. Details: `docs/FFR_PRODUCT_TRACKING.md` § P0.
+- **Two artifact routes — do not confuse them:**
+  - **Web (client/ + server/):** commit + push to the env’s trigger branch → Railway redeploys.
+  - **Chrome extension (chrome-extension/):** NOT a Railway deploy. Reload in Chrome. Bump `manifest.json` version (currently **1.14.2**).
 
 ## 2. The golden rule — raw cache, then re-derive
 
@@ -190,8 +193,8 @@ person-merge, never from raw season rows or name matching.
   `480452315` (12-team). Always test multi-league assumptions against the smaller one. As of
   2026-06-21 a 12-team **dynasty** league ("Atlants Finest Dynasty", 2023–2026) is also in play.
 - **Live shared session — the browser agent drives Rod's REAL app, not a private instance.**
-  When Claude validates via Claude-in-Chrome, it is operating Rod's live gmwarroom.online
-  session. The **active league is server-side per-user state** (`setActiveLeagueForUser`, §9):
+  When Claude validates via Claude-in-Chrome, it is operating Rod's live
+  `www.fantasyfootballrivals.com` (or Preview) session. The **active league is server-side per-user state** (`setActiveLeagueForUser`, §9):
   if Rod switches the active league in the app (or re-syncs a different league) mid-task, every
   page Claude loads — including the Trade Analyzer — silently resolves against the NEW league.
   Observed 2026-06-21: a dogfood re-run produced "impossible" data (R1 counts collapsed to 1/1,
@@ -216,8 +219,9 @@ person-merge, never from raw season rows or name matching.
   here-string — preserves backticks, `${}`, quotes literally).
 - Rod is non-technical and directs all implementation; he cannot read diffs. Always run
   `pnpm check` before committing web changes, keep changes scoped, and state plainly what changed.
-- Conventional commits; push to `cursor/frontend-rebuild-stage1-9b20`. Extension changes need
-  a `manifest.json` version bump + Chrome reload (not a Railway deploy).
+- Conventional commits; push Preview to `feature/provider-expansion`, Production to
+  `release/promote-provider-expansion-dff6154`. Extension changes need a `manifest.json`
+  version bump + Chrome reload (not a Railway deploy).
 
 ## 12. Trade Analyzer — Owner Intelligence (trusted-source re-point) & dogfood cleanup
 
@@ -282,11 +286,11 @@ Across ~7 trades the usefulness ranking is **Trade Value → Owner Intelligence 
 Trade Fit → everything else.** The on-screen order does not match this. Reordering is a redesign
 decision deliberately deferred — re-run the dogfood on a clean/known league first, then decide.
 
-### 12.6 Commit arc (this work, all on `cursor/frontend-rebuild-stage1-9b20`)
+### 12.6 Commit arc (historical — June 2026, then on `cursor/frontend-rebuild-stage1-9b20`)
 `081c91b` surface owner-intel → `3dd3aa0` suppress false pedigree → `da5e267` Pedigree from
 `computeAllTrophyHistory` → `08e3f62` Behavioral DNA from Activity DNA → `acfcaad` extract shared
 draft-DNA helpers → `0113d8f` Trade Analyzer draft tendency from shared helpers → `c5e800a` dogfood
-cleanup. Live on gmwarroom.online.
+cleanup. Was live on gmwarroom.online. **Current hosts:** Preview / Production per §1.
 
 **Files touched:** `server/tradeIntelligence.ts` (computeOwnerIntelligence, computeChampionshipWindow,
 buildNegotiationAdvice, computeRivalry, `DnaLite`), `server/ownerProfileService.ts` (shared helpers +
@@ -297,5 +301,5 @@ buildOwnerProfilePayload), `server/routers.ts` (`tradeAnalyze`), `server/activit
 do NOT touch valuation / Split Verdict / Championship Context math; run `pnpm check` + relevant
 vitest suites before commit (ignore the pre-existing `mockDraftIntelligence.test.ts` failure —
 missing `client/src/lib/mockDraftUtils`, unrelated); verify deploy by polling
-`https://gmwarroom.online/api/health` for `gitSha` (~2–4 min). Do NOT start Mock Draft Intelligence
+`/api/health` **`buildTime`** on Preview or Production (~2–4 min). Do NOT start Mock Draft Intelligence
 or Trade Reality Simulator.

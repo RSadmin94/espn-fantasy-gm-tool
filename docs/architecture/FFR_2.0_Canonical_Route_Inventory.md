@@ -100,6 +100,8 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/league/history/dynasties` | Archive focus scroll | Dynasty timeline | Yes | — | — |
 | `/league/history/timeline` | Archive focus scroll | Milestones | Yes | — | — |
 | `/league/history/transactions` | `LeagueTransactions` → `Transactions` | Transaction authority | Yes | `/transactions` | `/transactions` → redirect |
+| `/league/history/matchups` | `HistoricalMatchupGalleryPage` | `matchupGallery.query` (053B) | Yes | — | **053C local WIP — not Preview/Production** |
+| `/league/history/matchups/no-mercy` | Gallery No Mercy preset | same + margin ≥ 50 | Yes | — | **053C local WIP — not Preview/Production** |
 | `/league/acquisition-impact` | `LeagueAcquisitionImpact` | Acquisition impact | Yes | `/acquisition-impact` | `/acquisition-impact` → redirect |
 | `/league/commissioner` | `LeagueCommissioner` | Commissioner tools | Yes | `/commissioner-command-center` | `/commissioner-command-center` → redirect |
 | `/history` | `LeagueHistory` | Dynasty Board | Yes | — | Preserved (distinct from HoF archive) |
@@ -118,6 +120,8 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/player-database` | `PlayerDatabase` | Yes | Utility |
 | `/league-data-health` | `LeagueDataHealth` | Yes | Admin utility |
 | `/owner-identity-review` | `OwnerIdentityReview` | Yes | Admin utility |
+| `/rivalry/:shareCode` | `RivalryShare` | Yes | Existing rivalry share (not 053I) |
+| `/m/:shareCode` | Planned hype/share card | — | **053I — not implemented.** Do not treat as live. |
 
 ---
 
