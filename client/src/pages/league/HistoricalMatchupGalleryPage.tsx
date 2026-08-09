@@ -19,6 +19,8 @@ import {
   storyCollectionPath,
   type StoryCollectionId,
 } from "@shared/matchupStoryCollections";
+import { collectionToStoryPackage } from "@shared/historicalStoryPackage";
+import { HistoricalNarrationPanel } from "@/components/share-cards/HistoricalNarrationPanel";
 import {
   galleryFilterToQueryInput,
   noMercyPresetFilter,
@@ -224,6 +226,25 @@ export function HistoricalMatchupGalleryPage() {
           <div className="space-y-4">
             {collection ? (
               <StoryCollectionHeader collection={collection} count={galleryQ.data?.total ?? null} />
+            ) : null}
+            {collection && galleryQ.data ? (
+              <HistoricalNarrationPanel
+                storyPackage={collectionToStoryPackage(collection.id, {
+                  count: galleryQ.data.total,
+                  summary: galleryQ.data.summary,
+                  emptyReason: galleryQ.data.emptyReason,
+                  coverageYears: {
+                    from: galleryQ.data.coverage.seasonFrom,
+                    to: galleryQ.data.coverage.seasonTo,
+                  },
+                  coverageNote: galleryQ.data.coverage.championshipNote,
+                  ownerName: filter.ownerName,
+                  opponentName: filter.opponentName,
+                  leagueName,
+                  featured: galleryQ.data.matchups.slice(0, 5),
+                  provenance: ["storyCollectionPage"],
+                })}
+              />
             ) : null}
             <MatchupGallery
               title={collection ? `${collection.title} gallery` : isNoMercy ? "No Mercy Rule gallery" : "Matchup gallery"}

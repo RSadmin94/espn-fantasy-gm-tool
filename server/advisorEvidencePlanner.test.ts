@@ -288,6 +288,24 @@ describe("planAdvisorEvidence", () => {
     ]);
   });
 
+  it("plans historical narration for story asks (RFSN-053H)", () => {
+    expectPlan("Tell me about this game.", "historical_narration", ["owner_identity", "matchup_history"], {
+      deterministicFirst: true,
+      narrativeAllowed: true,
+    });
+    expectPlan("Why was this important?", "historical_narration", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: true,
+    });
+    expectPlan("Why is this No Mercy?", "historical_narration", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: true,
+    });
+    expectPlan("Explain this rivalry.", "historical_narration", ["owner_identity", "matchup_history"], {
+      narrativeAllowed: true,
+    });
+    expect(plan("Show me my No Mercy wins.").intent).toBe("matchup_gallery");
+    expect(plan("Who has the most championships?").intent).not.toBe("historical_narration");
+  });
+
   it("plans matchup gallery for show-me-games asks (RFSN-053D)", () => {
     expectPlan("Show me all my No Mercy wins.", "matchup_gallery", ["owner_identity", "matchup_history"], {
       narrativeAllowed: false,

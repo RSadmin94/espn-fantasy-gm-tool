@@ -9,7 +9,10 @@ import { formatGalleryScore } from "@/lib/matchupGalleryUi";
 import type { StoryCollectionDefinition } from "@shared/matchupStoryCollections";
 import { storyCollectionHomeHref, storyCollectionPath } from "@shared/matchupStoryCollections";
 import { matchupToShareCard } from "@shared/historicalShareCard";
+import { matchupToStoryPackage } from "@shared/historicalStoryPackage";
 import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
+import { HistoricalNarrationPanel } from "@/components/share-cards/HistoricalNarrationPanel";
+import { ShareCardRenderer } from "@/components/share-cards/HistoricalShareCard";
 
 export function HistoricalMatchupViewer({
   matchup,
@@ -37,6 +40,13 @@ export function HistoricalMatchupViewer({
     href: matchup.viewerHref,
     provenance: ["historicalMatchupViewer"],
   });
+  const storyPackage = matchupToStoryPackage({
+    ...matchup,
+    leagueName,
+    collectionId: collection?.id,
+    coverageNote,
+    provenance: ["historicalMatchupViewer"],
+  });
   return (
     <div data-matchup-viewer data-collection-theme={collection?.id ?? undefined} className={SPACE_SECTION_Y}>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -48,7 +58,13 @@ export function HistoricalMatchupViewer({
         <HistoricalShareCardButton model={shareModel} />
       </div>
 
+      <HistoricalNarrationPanel storyPackage={storyPackage} />
+
       <MatchupGalleryCard matchup={matchup} scoringPrecision={scoringPrecision} collection={collection?.id} />
+
+      <div data-viewer-share-card className="flex justify-center overflow-x-auto rounded-xl border border-border bg-black/40 p-4">
+        <ShareCardRenderer model={shareModel} />
+      </div>
 
       {(leagueName || coverageNote) ? (
         <section data-viewer-meta className={cn("rounded-xl border border-border bg-card", SPACE_CARD)}>

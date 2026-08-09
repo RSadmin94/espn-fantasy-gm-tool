@@ -25,6 +25,8 @@ import {
   type ShareCardScale,
 } from "@shared/shareCardExport";
 import { ShareCardRenderer } from "./HistoricalShareCard";
+import { shareCardToStoryPackage } from "@shared/historicalStoryPackage";
+import { HistoricalNarrationPanel } from "./HistoricalNarrationPanel";
 
 export function HistoricalShareCardModal({
   open,
@@ -180,6 +182,8 @@ export function HistoricalShareCardModal({
           >
             <ShareCardRenderer model={preview} />
           </div>
+
+          <HistoricalNarrationPanel storyPackage={shareCardToStoryPackage(preview)} />
 
           <div className={cn("flex flex-wrap items-center", SPACE_CHIP_GAP)}>
             <button

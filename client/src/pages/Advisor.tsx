@@ -5,6 +5,7 @@ import { V1 } from "@/lib/v1Copy";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { AdvisorMatchupGalleryEmbed } from "@/components/matchup-gallery/AdvisorMatchupGalleryEmbed";
+import { HistoricalNarrationPanel } from "@/components/share-cards/HistoricalNarrationPanel";
 import type { GalleryOwnerOption } from "@/components/matchup-gallery/MatchupGalleryFilters";
 import type { AdvisorVisual } from "../../../server/advisorVisual";
 import { Button } from "@/components/ui/button";
@@ -85,6 +86,7 @@ function MessageBubble({
 }) {
   const isUser = msg.role === "user";
   const galleryVisual = msg.visual?.type === "matchup_gallery" ? msg.visual : undefined;
+  const narrationVisual = msg.visual?.type === "historical_narration" ? msg.visual : undefined;
   return (
     <div className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
       <div className={cn(
@@ -97,7 +99,7 @@ function MessageBubble({
       </div>
       <div className={cn(
         "rounded-2xl px-4 py-3 text-sm leading-relaxed",
-        galleryVisual ? "w-full min-w-0 max-w-full" : "max-w-[82%]",
+        galleryVisual || narrationVisual ? "w-full min-w-0 max-w-full" : "max-w-[82%]",
         isUser
           ? "rounded-tr-sm bg-primary/15 text-foreground"
           : "rounded-tl-sm bg-card border border-border text-foreground"
@@ -117,6 +119,11 @@ function MessageBubble({
                   activeOwnerName={activeOwnerName}
                   leagueContextKey={leagueContextKey}
                 />
+              ) : null}
+              {!isUser && narrationVisual ? (
+                <div className="mt-3" data-advisor-visual="historical_narration">
+                  <HistoricalNarrationPanel narration={narrationVisual.narration} readOnly />
+                </div>
               ) : null}
             </>
           )}

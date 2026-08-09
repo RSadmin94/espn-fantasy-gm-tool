@@ -204,6 +204,7 @@ import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
 import { leagueWireRouter } from "./leagueWireRouter";
 import { matchupGalleryRouter } from "./matchupGalleryRouter";
+import { historicalNarrationRouter } from "./historicalNarrationRouter";
 import { rfsnBroadcastRouter } from "./rfsnBroadcastRouter";
 import { leagueNewsroomRouter } from "./leagueNewsroomRouter";
 import { draftWarRoomRouter }    from "./draftWarRoomRouter";
@@ -772,6 +773,7 @@ export const appRouter = router({
   playerStatsCache: playerStatsCacheRouter,
   leagueWire: leagueWireRouter,
   matchupGallery: matchupGalleryRouter,
+  historicalNarration: historicalNarrationRouter,
   rfsnBroadcast: rfsnBroadcastRouter,
   leagueNewsroom: leagueNewsroomRouter,
   draftWarRoom: draftWarRoomRouter,
