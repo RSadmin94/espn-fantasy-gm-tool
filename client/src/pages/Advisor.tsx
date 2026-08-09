@@ -302,6 +302,7 @@ export function Advisor() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const advisorSessionGenRef = useRef(0);
 
   useEffect(() => {
     if (cachedSeasons.length > 0) {
@@ -311,6 +312,7 @@ export function Advisor() {
   }, [cachedSeasons, leagueContextKey]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesPaneRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const historyQ = trpc.advisor.history.useQuery(withLeagueSalt({ season }, leagueContextKey), {
@@ -343,50 +345,62 @@ export function Advisor() {
 
   const clearMutation = trpc.advisor.clearHistory.useMutation({
     onSuccess: () => {
-      setMessages([]);
       void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
     },
   });
 
-  const chatMutation = trpc.advisor.chat.useMutation({
-    onSuccess: (data) => {
-      const resp = data as { message: string };
-      setMessages((prev) => {
-        const withoutPending = prev.filter((m) => !m.pending);
-        return [...withoutPending, { role: "assistant", content: resp.message }];
-      });
-      void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
-    },
-    onError: (err) => {
-      setMessages((prev) => {
-        const withoutPending = prev.filter((m) => !m.pending);
-        return [
-          ...withoutPending,
-          {
-            role: "assistant",
-            content: err.message.includes("trial")
-              ? "Your free trial has ended. Upgrade to continue using the advisor."
-              : err.message.includes("Rate limit")
-                ? "You've hit the rate limit. Please wait a moment before sending another message."
-                : "Error: " + err.message,
-          },
-        ];
-      });
-    },
-  });
+  const chatMutation = trpc.advisor.chat.useMutation();
 
-  const isSending = chatMutation.isPending;
+  const isClearing = clearMutation.isPending;
+  const isSending = chatMutation.isPending || isClearing;
+
+  function resetAdvisorConversationUi() {
+    advisorSessionGenRef.current += 1;
+    chatMutation.reset();
+    setMessages([]);
+    setInput("");
+    setHistoryLoaded(true);
+    if (messagesPaneRef.current) messagesPaneRef.current.scrollTop = 0;
+  }
 
   function sendMessage(text: string) {
     const msg = text.trim();
     if (!msg || isSending) return;
+    const sessionGen = advisorSessionGenRef.current;
     setInput("");
     setMessages((prev) => [
       ...prev,
       { role: "user", content: msg },
       { role: "assistant", content: "", pending: true },
     ]);
-    chatMutation.mutate(withLeagueSalt({ message: msg, season }, leagueContextKey));
+    chatMutation.mutate(withLeagueSalt({ message: msg, season }, leagueContextKey), {
+      onSuccess: (data) => {
+        if (advisorSessionGenRef.current !== sessionGen) return;
+        const resp = data as { message: string };
+        setMessages((prev) => {
+          const withoutPending = prev.filter((m) => !m.pending);
+          return [...withoutPending, { role: "assistant", content: resp.message }];
+        });
+        void utils.advisor.history.invalidate(withLeagueSalt({ season }, leagueContextKey));
+      },
+      onError: (err) => {
+        if (advisorSessionGenRef.current !== sessionGen) return;
+        setMessages((prev) => {
+          const withoutPending = prev.filter((m) => !m.pending);
+          return [
+            ...withoutPending,
+            {
+              role: "assistant",
+              content: err.message.includes("trial")
+                ? "Your free trial has ended. Upgrade to continue using the advisor."
+                : err.message.includes("Rate limit")
+                  ? "You've hit the rate limit. Please wait a moment before sending another message."
+                  : "Error: " + err.message,
+            },
+          ];
+        });
+      },
+    });
     setTimeout(() => inputRef.current?.focus(), 50);
   }
 
@@ -501,15 +515,20 @@ export function Advisor() {
                   ))}
                 </SelectContent>
               </Select>
-              {messages.length > 0 && (
+              {(messages.length > 0 || isClearing) && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-8 gap-1.5 text-xs text-muted-foreground"
-                  disabled={clearMutation.isPending}
-                  onClick={() => clearMutation.mutate(withLeagueSalt({}, leagueContextKey))}
+                  disabled={isClearing}
+                  data-rfsn-052l
+                  data-advisor-clear
+                  onClick={() => {
+                    resetAdvisorConversationUi();
+                    clearMutation.mutate(withLeagueSalt({}, leagueContextKey));
+                  }}
                 >
-                  {clearMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                  {isClearing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                   Clear
                 </Button>
               )}
@@ -517,7 +536,7 @@ export function Advisor() {
           </div>
 
           {/* Messages */}
-          <div className="h-[420px] space-y-4 overflow-y-auto px-4 py-4">
+          <div ref={messagesPaneRef} className="h-[420px] space-y-4 overflow-y-auto px-4 py-4" data-advisor-messages>
             {historyQ.isLoading && (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -576,7 +595,7 @@ export function Advisor() {
               <Button
                 size="icon"
                 className="h-10 w-10 shrink-0"
-                disabled={!input.trim() || isSending}
+                disabled={!input.trim() || isSending || isClearing}
                 onClick={() => sendMessage(input)}
               >
                 {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
