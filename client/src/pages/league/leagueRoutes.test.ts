@@ -22,6 +22,7 @@ describe("League V2 — Commit 7 route ownership", () => {
     expect(routes).not.toContain("/league/settings");
     expect(routes).not.toContain("/league/transactions");
     expect(routes).toContain("/league/history/transactions");
+    expect(routes).toContain("/league/history/matchups");
   });
 
   it("implements hub and children without placeholders", () => {
@@ -32,6 +33,7 @@ describe("League V2 — Commit 7 route ownership", () => {
       "client/src/pages/league/LeaguePlayoffs.tsx",
       "client/src/pages/league/LeagueStrengthOfSchedule.tsx",
       "client/src/pages/league/LeagueArchiveLayout.tsx",
+      "client/src/pages/league/HistoricalMatchupGalleryPage.tsx",
       "client/src/pages/league/LeagueTransactions.tsx",
       "client/src/pages/league/LeagueAcquisitionImpact.tsx",
       "client/src/pages/league/LeagueCommissioner.tsx",
@@ -49,6 +51,13 @@ describe("League V2 — Commit 7 route ownership", () => {
     expect(hub).toContain("espn.hallOfFame");
     expect(hub).toContain("/league/standings");
     expect(hub).toContain("/league/history");
+    expect(hub).toContain("/league/history/matchups");
+    const galleryPage = fs.readFileSync(
+      path.join(repoRoot, "client/src/pages/league/HistoricalMatchupGalleryPage.tsx"),
+      "utf-8",
+    );
+    expect(galleryPage).toContain("HistoricalMatchupViewer");
+    expect(galleryPage).toContain("/league/history/matchups/no-mercy");
     expect(hub).toContain("/league/history/transactions");
     expect(hub).not.toContain("ChampionshipAuthority");
     expect(hub).not.toContain("buildChampionshipAuthority");

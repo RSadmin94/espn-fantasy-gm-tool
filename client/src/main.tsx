@@ -71,6 +71,10 @@ import { LeaguePlayoffs } from "./pages/league/LeaguePlayoffs";
 import { LeagueStrengthOfSchedule } from "./pages/league/LeagueStrengthOfSchedule";
 import { LeagueArchiveLayout, LeagueArchiveFocus } from "./pages/league/LeagueArchiveLayout";
 import { LeagueTransactions } from "./pages/league/LeagueTransactions";
+import {
+  HistoricalMatchupDetailPage,
+  HistoricalMatchupGalleryPage,
+} from "./pages/league/HistoricalMatchupGalleryPage";
 import { LeagueAcquisitionImpact } from "./pages/league/LeagueAcquisitionImpact";
 import { LeagueCommissioner } from "./pages/league/LeagueCommissioner";
 import { V2PlaceholderRoute } from "./pages/v2/V2PlaceholderRoute";
@@ -317,6 +321,9 @@ const router = createBrowserRouter([
               { path: "/league/history/timeline", element: <LeagueArchiveFocus /> },
             ],
           },
+          { path: "/league/history/matchups", element: <HistoricalMatchupGalleryPage /> },
+          { path: "/league/history/matchups/no-mercy", element: <HistoricalMatchupGalleryPage /> },
+          { path: "/league/history/matchups/:matchupId", element: <HistoricalMatchupDetailPage /> },
           { path: "/league/history/transactions", element: <LeagueTransactions /> },
           { path: "/league/acquisition-impact", element: <LeagueAcquisitionImpact /> },
           { path: "/league/commissioner", element: <LeagueCommissioner /> },

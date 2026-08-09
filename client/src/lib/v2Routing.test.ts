@@ -173,6 +173,9 @@ describe("v2Routing — locked FFR 2.0", () => {
     expect(main).toContain('path: "/league/history/records"');
     expect(main).toContain('path: "/league/history/dynasties"');
     expect(main).toContain('path: "/league/history/timeline"');
+    expect(main).toContain('path: "/league/history/matchups"');
+    expect(main).toContain('path: "/league/history/matchups/no-mercy"');
+    expect(main).toContain('path: "/league/history/matchups/:matchupId"');
     expect(main).toContain('path: "/league/history/transactions"');
     expect(main).toContain("element: <LeagueTransactions />");
     expect(main).toContain('path: "/league/acquisition-impact"');

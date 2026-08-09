@@ -54,7 +54,7 @@ export function selectDraftIntelligenceTool(
 
   const seasons = parseSeasonRange(t);
   const ownerName = opts?.ownerName?.trim() || undefined;
-  const base: DraftIntelligenceQuery = { ...seasons, ownerName, topN: 5 };
+  const base: Omit<DraftIntelligenceQuery, "metric"> = { ...seasons, ownerName, topN: 5 };
 
   const hit = (metric: DraftIntelligenceMetric, extra?: Partial<DraftIntelligenceQuery>) => ({
     toolName: DRAFT_INTELLIGENCE_TOOL_NAME,

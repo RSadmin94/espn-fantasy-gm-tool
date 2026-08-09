@@ -498,6 +498,16 @@ export const V2_DESTINATIONS: V2Destination[] = [
         showInSidebar: true,
       },
       {
+        id: "league-history-matchups",
+        label: "Matchups",
+        navCategory: "league",
+        route: "/league/history/matchups",
+        icon: Swords,
+        requiredPlan: "free",
+        kind: "live",
+        showInSidebar: true,
+      },
+      {
         id: "league-history-transactions",
         label: "Transactions",
         navCategory: "league",
@@ -532,7 +542,7 @@ export const V2_DESTINATIONS: V2Destination[] = [
 ];
 
 /** Extra parameterized routes registered but not shown as separate sidebar rows. */
-export const V2_PARAM_ROUTES: string[] = ["/rivals/owners/:ownerId"];
+export const V2_PARAM_ROUTES: string[] = ["/rivals/owners/:ownerId", "/league/history/matchups/:matchupId"];
 
 function normalizeV2Route(route: string): string {
   if (route.length > 1 && route.endsWith("/")) return route.slice(0, -1);

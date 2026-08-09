@@ -203,6 +203,7 @@ import { buildHallOfFamePayload } from "./hallOfFameService";
 import { playerStatsCacheRouter } from "./playerStatsCacheRouter";
 import { playerStatsRouter } from "./playerStatsRouter";
 import { leagueWireRouter } from "./leagueWireRouter";
+import { matchupGalleryRouter } from "./matchupGalleryRouter";
 import { rfsnBroadcastRouter } from "./rfsnBroadcastRouter";
 import { leagueNewsroomRouter } from "./leagueNewsroomRouter";
 import { draftWarRoomRouter }    from "./draftWarRoomRouter";
@@ -770,6 +771,7 @@ export const appRouter = router({
   playerStats: playerStatsRouter,
   playerStatsCache: playerStatsCacheRouter,
   leagueWire: leagueWireRouter,
+  matchupGallery: matchupGalleryRouter,
   rfsnBroadcast: rfsnBroadcastRouter,
   leagueNewsroom: leagueNewsroomRouter,
   draftWarRoom: draftWarRoomRouter,
