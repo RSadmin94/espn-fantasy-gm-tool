@@ -10,6 +10,8 @@ import { setLastFreeFeature } from "@/lib/lastFreeFeature";
 import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { V1 } from "@/lib/v1Copy";
 import { Loader2, Trophy, Medal, Crown, Landmark, ChevronDown, Skull, ArrowLeftRight, ScrollText, History, Archive, BookOpen } from "lucide-react";
+import { recordToShareCard } from "@shared/historicalShareCard";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 import {
   CinematicPageHeader,
   IntelPageShell,
@@ -821,10 +823,25 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                     ) : null}
                   </p>
                 </div>
-                <div className="flex gap-1 text-3xl sm:text-4xl" aria-hidden>
-                  {Array.from({ length: Math.min(5, leader.titles) }).map((_, i) => (
-                    <span key={i} className="drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]">🏆</span>
-                  ))}
+                <div className="flex flex-col items-start gap-3 sm:items-end">
+                  <div className="flex gap-1 text-3xl sm:text-4xl" aria-hidden>
+                    {Array.from({ length: Math.min(5, leader.titles) }).map((_, i) => (
+                      <span key={i} className="drop-shadow-[0_0_12px_rgba(245,158,11,0.35)]">🏆</span>
+                    ))}
+                  </div>
+                  <HistoricalShareCardButton
+                    model={recordToShareCard({
+                      title: "Hall of Fame",
+                      label: "Championships",
+                      value: `${leader.titles}`,
+                      owner: coLeaders.map((c) => c.displayName).join(" & "),
+                      badges: ["LEAGUE RECORD", "CHAMPIONSHIP"],
+                      href: "/league/history/records",
+                      leagueName: leagueLabel,
+                      theme: "championship",
+                      provenance: ["championshipLeaderboard"],
+                    })}
+                  />
                 </div>
               </div>
             </GoldGlowCard>
@@ -980,6 +997,23 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                     <p className="mt-2 text-3xl font-bold tabular-nums text-amber-200">{hiSeasonPf.pointsFor.toFixed(1)}</p>
                     <p className="mt-2 text-sm font-medium text-zinc-200">{hiSeasonPf.displayName}</p>
                     <p className="mt-1 text-xs text-ink-tertiary">{hiSeasonPf.season} · {hiSeasonPf.games} RS games</p>
+                    <div className="mt-3">
+                      <HistoricalShareCardButton
+                        model={recordToShareCard({
+                          title: "Highest season PF",
+                          label: "League Record",
+                          value: hiSeasonPf.pointsFor.toFixed(1),
+                          owner: hiSeasonPf.displayName,
+                          detail: `${hiSeasonPf.games} RS games`,
+                          season: hiSeasonPf.season,
+                          badges: ["LEAGUE RECORD", "HIGHEST SCORE"],
+                          href: "/league/history/records",
+                          leagueName: leagueLabel,
+                          theme: "cashier",
+                          provenance: ["highestSeasonPf"],
+                        })}
+                      />
+                    </div>
                   </GoldGlowCard>
                 ) : (
                   <UnavailableBlock title="Highest season PF" />
@@ -1021,6 +1055,23 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                     <p className="mt-2 text-3xl font-bold tabular-nums text-amber-200">{hiWeek.score.toFixed(1)} pts</p>
                     <p className="mt-2 text-sm text-zinc-400">{hiWeek.label}</p>
                     <p className="mt-1 text-xs text-ink-tertiary">{hiWeek.season} · week {hiWeek.week}</p>
+                    <div className="mt-3">
+                      <HistoricalShareCardButton
+                        model={recordToShareCard({
+                          title: "Highest single week",
+                          label: "League Record",
+                          value: `${hiWeek.score.toFixed(1)} pts`,
+                          owner: hiWeek.label,
+                          season: hiWeek.season,
+                          week: hiWeek.week,
+                          badges: ["LEAGUE RECORD", "HIGHEST SCORE"],
+                          href: "/league/history/records",
+                          leagueName: leagueLabel,
+                          theme: "statement-wins",
+                          provenance: ["highestSingleWeek"],
+                        })}
+                      />
+                    </div>
                   </GoldGlowCard>
                 ) : (
                   <UnavailableBlock title="Highest single week" />
@@ -1041,6 +1092,24 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                       {blowout.winnerLabel} {blowout.winnerScore} — {blowout.loserScore} {blowout.loserLabel}
                     </p>
                     <p className="mt-1 text-xs text-ink-tertiary">{blowout.season} · week {blowout.week}</p>
+                    <div className="mt-3">
+                      <HistoricalShareCardButton
+                        model={recordToShareCard({
+                          title: "Largest blowout",
+                          label: "Largest Margin",
+                          value: `${blowout.margin.toFixed(1)} pt`,
+                          owner: `${blowout.winnerLabel} def. ${blowout.loserLabel}`,
+                          detail: `${blowout.winnerScore} — ${blowout.loserScore}`,
+                          season: blowout.season,
+                          week: blowout.week,
+                          badges: ["LEAGUE RECORD", "LARGEST MARGIN", "NO MERCY"],
+                          href: "/league/history/records",
+                          leagueName: leagueLabel,
+                          theme: "no-mercy",
+                          provenance: ["largestBlowout"],
+                        })}
+                      />
+                    </div>
                   </GoldGlowCard>
                 ) : null}
                 {closestGame ? (
@@ -1051,6 +1120,24 @@ export function HallOfFame({ scrollToSection }: { scrollToSection?: string } = {
                       {closestGame.homeLabel} {closestGame.homeScore} — {closestGame.awayScore} {closestGame.awayLabel}
                     </p>
                     <p className="mt-1 text-xs text-ink-tertiary">{closestGame.season} · week {closestGame.week}</p>
+                    <div className="mt-3">
+                      <HistoricalShareCardButton
+                        model={recordToShareCard({
+                          title: "Closest game",
+                          label: "Photo Finish",
+                          value: `${closestGame.margin.toFixed(1)} pt`,
+                          owner: `${closestGame.homeLabel} vs ${closestGame.awayLabel}`,
+                          detail: `${closestGame.homeScore} — ${closestGame.awayScore}`,
+                          season: closestGame.season,
+                          week: closestGame.week,
+                          badges: ["LEAGUE RECORD", "CLOSEST", "ONE POINT"],
+                          href: "/league/history/records",
+                          leagueName: leagueLabel,
+                          theme: "closest-calls",
+                          provenance: ["closestGame"],
+                        })}
+                      />
+                    </div>
                   </GoldGlowCard>
                 ) : null}
                 {hiCombined ? (

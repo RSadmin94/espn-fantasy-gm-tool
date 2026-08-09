@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { SPACE_CARD, SPACE_CHIP, SPACE_CHIP_GAP } from "@/lib/density";
 import { TYPE_BADGE } from "@/lib/typeScale";
 import type { StoryCollectionId } from "@shared/matchupStoryCollections";
+import { matchupToShareCard } from "@shared/historicalShareCard";
 import type { GalleryMatchup, ScoringPrecision, GallerySort } from "../../../../server/matchupGalleryQuery";
 import {
   formatGalleryScore,
@@ -11,6 +12,7 @@ import {
   winnerLoserLabels,
   type GalleryBadgeKind,
 } from "@/lib/matchupGalleryUi";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 
 const BADGE_CLASS: Record<GalleryBadgeKind, string> = {
   "NO MERCY": "border-amber-400/40 bg-amber-400/15 text-amber-200",
@@ -40,15 +42,11 @@ export function MatchupGalleryCard({
   const margin = formatGalleryScore(matchup.margin, scoringPrecision);
   const phaseLabel = matchup.phase === "playoffs" ? "Playoffs" : "Regular season";
   const viewHref = matchupViewHref(matchup, { collection });
-
-  const onShare = async () => {
-    try {
-      const url = `${window.location.origin}${viewHref}`;
-      await navigator.clipboard.writeText(url);
-    } catch {
-      /* placeholder — share engine ships later */
-    }
-  };
+  const shareModel = matchupToShareCard(matchup, {
+    collectionId: collection,
+    href: viewHref,
+    provenance: ["matchupGalleryCard"],
+  });
 
   return (
     <article
@@ -133,15 +131,7 @@ export function MatchupGalleryCard({
           >
             View Matchup
           </Link>
-          <button
-            type="button"
-            data-share-placeholder
-            onClick={() => void onShare()}
-            title="Share coming soon"
-            className="inline-flex h-9 items-center rounded-md border border-border px-3 text-sm font-semibold text-foreground hover:bg-muted/40"
-          >
-            Share
-          </button>
+          <HistoricalShareCardButton model={shareModel} />
           <button
             type="button"
             data-screenshot-placeholder

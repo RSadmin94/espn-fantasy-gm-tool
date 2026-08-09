@@ -16,6 +16,8 @@ describe("RFSN-053E Advisor Story Collections", () => {
   it("opens Story Collections from Advisor without a second gallery", () => {
     expect(embed).toContain("StoryCollectionHeader");
     expect(embed).toContain("storyCollectionHref");
+    expect(embed).toContain("collectionToShareCard");
+    expect(embed).toContain("HistoricalShareCardButton");
     expect(embed).toContain("MatchupGallery");
     expect(tool).toContain("inferStoryCollection");
     expect(tool).toContain("heartbreak");

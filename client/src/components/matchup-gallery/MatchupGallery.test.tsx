@@ -118,7 +118,7 @@ describe("MatchupGallery render", () => {
     expect(el.querySelector("[data-matchup-card]")?.textContent).toContain("Rod FC");
     expect(el.querySelector("[data-badge='NO MERCY']")).toBeTruthy();
     expect(el.textContent).toContain("View Matchup");
-    expect(el.querySelector("[data-share-placeholder]")).toBeTruthy();
+    expect(el.querySelector("[data-share-card-open]")).toBeTruthy();
     expect(el.querySelector("[data-screenshot-placeholder]")).toBeTruthy();
     expect((el.querySelector("[data-screenshot-placeholder]") as HTMLButtonElement | null)?.disabled).toBe(true);
     expect(el.querySelector("[data-gallery-presets]")).toBeTruthy();

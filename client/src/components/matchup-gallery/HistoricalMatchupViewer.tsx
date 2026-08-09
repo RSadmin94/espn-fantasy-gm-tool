@@ -8,6 +8,8 @@ import type { ViewerLineupPlayer, ViewerSideLineup } from "../../../../server/ma
 import { formatGalleryScore } from "@/lib/matchupGalleryUi";
 import type { StoryCollectionDefinition } from "@shared/matchupStoryCollections";
 import { storyCollectionHomeHref, storyCollectionPath } from "@shared/matchupStoryCollections";
+import { matchupToShareCard } from "@shared/historicalShareCard";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 
 export function HistoricalMatchupViewer({
   matchup,
@@ -29,13 +31,22 @@ export function HistoricalMatchupViewer({
   collection?: StoryCollectionDefinition | null;
 }) {
   const backHref = collection ? storyCollectionPath(collection.id) : storyCollectionHomeHref();
+  const shareModel = matchupToShareCard(matchup, {
+    collectionId: collection?.id,
+    leagueName,
+    href: matchup.viewerHref,
+    provenance: ["historicalMatchupViewer"],
+  });
   return (
     <div data-matchup-viewer data-collection-theme={collection?.id ?? undefined} className={SPACE_SECTION_Y}>
-      <p className="text-sm text-muted-foreground">
-        <Link to={backHref} className="font-semibold text-foreground underline-offset-2 hover:underline">
-          ← {collection ? collection.title : "Historical Matchups"}
-        </Link>
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">
+          <Link to={backHref} className="font-semibold text-foreground underline-offset-2 hover:underline">
+            ← {collection ? collection.title : "Historical Matchups"}
+          </Link>
+        </p>
+        <HistoricalShareCardButton model={shareModel} />
+      </div>
 
       <MatchupGalleryCard matchup={matchup} scoringPrecision={scoringPrecision} collection={collection?.id} />
 

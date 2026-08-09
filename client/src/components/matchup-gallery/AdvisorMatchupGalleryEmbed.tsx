@@ -14,6 +14,8 @@ import {
   type GalleryUiFilter,
 } from "@/lib/matchupGalleryUi";
 import { getStoryCollection, storyCollectionHref } from "@shared/matchupStoryCollections";
+import { collectionToShareCard } from "@shared/historicalShareCard";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 import type { AdvisorMatchupGalleryVisual } from "../../../../server/advisorVisual";
 import type { GalleryQueryResult } from "../../../../server/matchupGalleryQuery";
 import { MatchupGallery } from "./MatchupGallery";
@@ -87,6 +89,17 @@ export function AdvisorMatchupGalleryEmbed({
           Open Full Gallery
           <ExternalLink className="h-3 w-3" aria-hidden="true" />
         </Link>
+        {collection ? (
+          <HistoricalShareCardButton
+            className="h-8 text-xs"
+            model={collectionToShareCard(collection, {
+              count: result?.total ?? null,
+              summary: result?.summary,
+              href,
+              provenance: ["advisorMatchupGallery"],
+            })}
+          />
+        ) : null}
       </div>
       <div data-advisor-gallery-scroll className="max-h-[560px] overflow-y-auto pr-1">
         {collection ? (

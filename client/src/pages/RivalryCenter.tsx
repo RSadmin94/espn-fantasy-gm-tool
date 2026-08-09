@@ -11,6 +11,8 @@ import {
 } from "@/components/RivalryDossierPanel";
 import { buildDefaultRivalryEligibleOwnerKeys } from "@/lib/rivalryOwnerEligibility";
 import { RivalryShareButton } from "@/components/RivalryShareButton";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
+import { collectionToShareCard } from "@shared/historicalShareCard";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { resolvePaywallCopy } from "@/lib/paywallCopy";
@@ -575,14 +577,26 @@ export function RivalryCenter({
                     <div className="flex items-center gap-2">
                       <HeatBadge label={hero.heatLabel} />
                       {heroRivalKey && (
-                        <RivalryShareButton
-                          leagueId={leagueContextKey}
-                          focalOwnerKey={rodKey}
-                          rivalOwnerKey={heroRivalKey}
-                          ownerAName={rodName}
-                          ownerBName={String(hero.rivalName ?? "Rival")}
-                          heatLabel={hero.heatLabel}
-                        />
+                        <>
+                          <RivalryShareButton
+                            leagueId={leagueContextKey}
+                            focalOwnerKey={rodKey}
+                            rivalOwnerKey={heroRivalKey}
+                            ownerAName={rodName}
+                            ownerBName={String(hero.rivalName ?? "Rival")}
+                            heatLabel={hero.heatLabel}
+                          />
+                          <HistoricalShareCardButton
+                            className="h-8 text-xs"
+                            model={collectionToShareCard("blood-rival", {
+                              href: `/league/history/matchups/c/blood-rival?ownerName=${encodeURIComponent(rodName)}&opponentName=${encodeURIComponent(String(hero.rivalName ?? "Rival"))}`,
+                              ownerName: rodName,
+                              opponentName: String(hero.rivalName ?? "Rival"),
+                              summary: hero.heatLabel ? `${rodName} vs ${hero.rivalName} · ${hero.heatLabel}` : undefined,
+                              provenance: ["rivalryCenter"],
+                            })}
+                          />
+                        </>
                       )}
                     </div>
                   }

@@ -5,6 +5,8 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { Swords, Flame, ShieldAlert, ArrowRight, Loader2 } from "lucide-react";
 import { RivalryShareButton } from "@/components/RivalryShareButton";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
+import { collectionToShareCard } from "@shared/historicalShareCard";
 
 /**
  * RivalrySummaryCard — a lightweight, reusable reference card for surfaces that need
@@ -76,13 +78,24 @@ export function RivalrySummaryCard({ className, title = "Your Top Rivalry" }: { 
             </span>
           )}
           {top.focalKey && top.rivalKey && (
-            <RivalryShareButton
-              leagueId={leagueContextKey}
-              focalOwnerKey={top.focalKey}
-              rivalOwnerKey={top.rivalKey}
-              ownerBName={top.rivalName}
-              heatLabel={top.heatLabel}
-            />
+            <>
+              <RivalryShareButton
+                leagueId={leagueContextKey}
+                focalOwnerKey={top.focalKey}
+                rivalOwnerKey={top.rivalKey}
+                ownerBName={top.rivalName}
+                heatLabel={top.heatLabel}
+              />
+              <HistoricalShareCardButton
+                className="h-8 text-xs"
+                model={collectionToShareCard("blood-rival", {
+                  href: `/league/history/matchups/c/blood-rival?opponentName=${encodeURIComponent(String(top.rivalName ?? ""))}`,
+                  opponentName: top.rivalName,
+                  summary: top.heatLabel ? `Top rival · ${top.heatLabel}` : undefined,
+                  provenance: ["rivalrySummaryCard"],
+                })}
+              />
+            </>
           )}
         </div>
       </div>

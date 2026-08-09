@@ -3,8 +3,10 @@ import { cn } from "@/lib/utils";
 import { SPACE_CARD, SPACE_CARD_GAP, SPACE_CHIP, SPACE_SECTION_Y } from "@/lib/density";
 import { TYPE_BADGE } from "@/lib/typeScale";
 import type { StoryCollectionSummary } from "../../../../server/matchupStoryCollections";
+import { collectionToShareCard } from "@shared/historicalShareCard";
 import { STORY_COLLECTION_ACCENT, STORY_COLLECTION_ICONS } from "./storyCollectionTheme";
 import { SectionLoading } from "@/components/layout";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 
 export function StoryCollectionHome({
   collections,
@@ -30,9 +32,8 @@ export function StoryCollectionHome({
             const Icon = STORY_COLLECTION_ICONS[collection.theme.icon];
             const accent = STORY_COLLECTION_ACCENT[collection.theme.accent];
             return (
-              <Link
+              <article
                 key={collection.id}
-                to={collection.href}
                 data-story-collection-card={collection.id}
                 className={cn(
                   "flex h-full flex-col rounded-xl border bg-card transition-colors",
@@ -63,7 +64,23 @@ export function StoryCollectionHome({
                       ? "Pick a rival"
                       : `${collection.count} games`}
                 </p>
-              </Link>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    to={collection.href}
+                    className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                  >
+                    Open
+                  </Link>
+                  <HistoricalShareCardButton
+                    model={collectionToShareCard(collection, {
+                      count: collection.empty ? 0 : collection.count,
+                      summary: collection.summary,
+                      href: collection.href,
+                      provenance: ["storyCollectionHome"],
+                    })}
+                  />
+                </div>
+              </article>
             );
           })}
         </div>
