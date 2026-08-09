@@ -65,9 +65,10 @@ describe("RFSN-053E Story Collection UI", () => {
     });
     expect(el.querySelector("[data-story-collections]")).toBeTruthy();
     for (const c of STORY_COLLECTIONS) {
-      const card = el.querySelector(`[data-story-collection-card='${c.id}']`) as HTMLAnchorElement | null;
+      const card = el.querySelector(`[data-story-collection-card='${c.id}']`);
       expect(card, c.id).toBeTruthy();
-      expect(card?.getAttribute("href")).toContain(`/league/history/matchups/c/${c.id}`);
+      expect(card?.querySelector(`a[href*='/league/history/matchups/c/${c.id}']`)).toBeTruthy();
+      expect(card?.querySelector("[data-share-card-open]")).toBeTruthy();
       expect(card?.textContent).toContain(c.title);
       expect(card?.textContent).toContain(c.badge);
     }
@@ -130,6 +131,7 @@ describe("RFSN-053E Story Collection UI", () => {
     expect(el.querySelector("[data-collection-badge]")?.textContent).toMatch(/NO MERCY/i);
     expect(el.querySelector("[data-collection-theme='no-mercy']")).toBeTruthy();
     expect(el.querySelector("[data-matchup-viewer]")).toBeTruthy();
+    expect(el.querySelector("[data-share-card-open]")).toBeTruthy();
     expect(el.textContent?.toLowerCase()).not.toContain("ai narrative");
   });
 });

@@ -2,8 +2,10 @@ import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { SPACE_CARD, SPACE_CHIP } from "@/lib/density";
 import { TYPE_BADGE } from "@/lib/typeScale";
-import { storyCollectionHomeHref, type StoryCollectionDefinition } from "@shared/matchupStoryCollections";
+import { storyCollectionHomeHref, storyCollectionPath, type StoryCollectionDefinition } from "@shared/matchupStoryCollections";
+import { collectionToShareCard } from "@shared/historicalShareCard";
 import { STORY_COLLECTION_ACCENT, STORY_COLLECTION_ICONS } from "./storyCollectionTheme";
+import { HistoricalShareCardButton } from "@/components/share-cards/HistoricalShareCardButton";
 
 export function StoryCollectionHeader({
   collection,
@@ -55,6 +57,14 @@ export function StoryCollectionHeader({
                 {count} games
               </span>
             ) : null}
+            <HistoricalShareCardButton
+              className="h-8 text-xs"
+              model={collectionToShareCard(collection, {
+                count,
+                href: storyCollectionPath(collection.id),
+                provenance: ["storyCollectionHeader"],
+              })}
+            />
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{collection.subtitle}</p>
           {!compact ? <p className="mt-2 text-sm text-foreground">{collection.description}</p> : null}
