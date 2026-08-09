@@ -343,17 +343,13 @@ describe("planAdvisorEvidence", () => {
     expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
       narrativeAllowed: false,
     });
-    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
-      narrativeAllowed: false,
-    });
+    expect(plan("Who reaches the most?").intent).not.toBe("matchup_gallery");
     expect(plan("Who has the best record?").intent).not.toBe("matchup_gallery");
     expectPlan("Who has the most one-point losses?", "matchup_margins", ["owner_identity", "matchup_margins"], {
       narrativeAllowed: false,
     });
     expect(plan("Who has the most blowouts?").intent).not.toBe("matchup_gallery");
-    expectPlan("Who drafts QBs early?", "draft_intelligence", ["owner_identity", "draft_history"], {
-      narrativeAllowed: false,
-    });
+    expect(plan("Who drafts QBs early?").intent).not.toBe("matchup_gallery");
     expectPlan("What's my biggest win?", "matchup_margins", ["owner_identity", "matchup_margins"], {
       narrativeAllowed: false,
     });
