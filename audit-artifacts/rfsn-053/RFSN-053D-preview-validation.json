@@ -1,0 +1,152 @@
+{
+  "label": "preview",
+  "host": "sprint-8-preview.fantasyfootballrivals.com",
+  "buildTime": "2026-08-09T14:01:47.305Z",
+  "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+  "pass": 16,
+  "fail": 0,
+  "total": 16,
+  "probes": [
+    {
+      "name": "No Mercy wins",
+      "question": "Show me my No Mercy wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "Rod vs Bruce",
+      "question": "Show Rod vs Bruce",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "Rod Sellers vs Bruce Edwards: 19 recorded meetings from 2011–2025."
+    },
+    {
+      "name": "championship games",
+      "question": "Show me every championship game.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "Championship-game candidates need ESPN playoffTierType coverage. Recorded playoff flags alone are not enough (132/275 unknown tier)."
+    },
+    {
+      "name": "playoff games",
+      "question": "Show me every playoff game.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "275 recorded playoff games from 2010–2025."
+    },
+    {
+      "name": "closest wins",
+      "question": "Show me my closest wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "129 closest recorded games (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "biggest losses",
+      "question": "Show me my biggest losses.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "125 recorded games involving Rod Sellers (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "follow-up playoff filter",
+      "question": "Show only the playoff ones.",
+      "verdict": "PASS",
+      "failures": [],
+      "visualType": "matchup_gallery",
+      "sample": "You have 3 No Mercy Rule victories (recorded playoff matchups from 2012–2025)."
+    },
+    {
+      "name": "follow-up season filter",
+      "question": "Now only 2018.",
+      "verdict": "PASS",
+      "failures": [],
+      "visualType": "matchup_gallery",
+      "sample": "You vs Bruce Edwards: 1 recorded meeting in 2018."
+    },
+    {
+      "name": "Clear conversation",
+      "question": "Now only 2018.",
+      "verdict": "PASS",
+      "failures": [],
+      "intent": "advisor_fallback",
+      "sample": "In 2018, Christian Graham was king of the mountain, snagging the championship with his squad. It’s one of his three titles, emphasizing his place among the league's elite. Bruce Edwards also had a notable year, but he wa"
+    },
+    {
+      "name": "text-only: Who has the most championships?",
+      "question": "Who has the most championships?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": null,
+      "intent": "championship_leaderboard",
+      "sample": "Across recorded championship history from 2009–2025, championship totals: 1. Christian Graham — 3 (2012, 2013, 2018) 2. Demetri Clark — 3 (2014, 2017, 2024) 3. LOZELL STYLES — 3 (2009, 2011, 2021) 4. Bruce Edwards — 2 (2"
+    },
+    {
+      "name": "text-only: Who has the most one-point losses?",
+      "question": "Who has the most one-point losses?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_margins",
+      "intent": "matchup_margins",
+      "sample": "Mark Deroux has the most one-point losses: 4. This was calculated from 1,399 recorded league regular-season matchups from 2010–2025. Using a one-point range of 0.50–1.49 because this league uses decimal scoring. Next: Na"
+    },
+    {
+      "name": "text-only: Who reaches the most?",
+      "question": "Who reaches the most?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "sample": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed."
+    },
+    {
+      "name": "text-only: Who drafts QBs early?",
+      "question": "Who drafts QBs early?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "sample": "Across recorded drafts from 2010–2026, earliest average QB selection: 1. Maurice Welch — round 2.0 (1 QB picks, earliest R2) 2. Steffon Bizzell — round 3.7 (6 QB picks, earliest R1) 3. Nate West — round 4.7 (10 QB picks,"
+    },
+    {
+      "name": "UI embed + Open Full Gallery",
+      "question": "Show me my No Mercy wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "embed=1 href=/league/history/matchups?ownerName=Rod+Sellers&result=win&noMercy=1&marginMin=50 viewLinks=22 Show me my No Mercy wins. You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025). OPEN FULL GALLERY Historical Matchup Gallery 2010–2025 "
+    },
+    {
+      "name": "Open Full Gallery navigation",
+      "question": "/league/history/matchups?ownerName=Rod+Sellers&result=win&noMercy=1&marginMin=50",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "gallery=1"
+    },
+    {
+      "name": "View Matchup",
+      "question": "click first card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "https://sprint-8-preview.fantasyfootballrivals.com/league/history/matchups/4585?season=2025&week=17"
+    }
+  ]
+}

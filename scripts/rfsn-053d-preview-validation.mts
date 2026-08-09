@@ -373,50 +373,57 @@ async function main() {
       void cue;
     }
 
+    await clearHistory(page, ESPN_LEAGUE);
+    await page.waitForTimeout(Math.max(GAP_MS, 8000));
     await page.goto(`${BASE}/advisor`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(3000);
     await page.screenshot({ path: path.join(SHOT_DIR, "advisor-home__1440.png"), fullPage: true });
 
     const input = page.locator("textarea").first();
     await input.fill("Show me my No Mercy wins.");
     await input.press("Enter");
-    await page.waitForTimeout(8000);
+    try {
+      await page.waitForSelector("[data-advisor-visual='matchup_gallery']", { timeout: 45_000 });
+    } catch {
+      /* counted below */
+    }
     const embedVisible = await page.locator("[data-advisor-visual='matchup_gallery']").count();
     const openFull = page.locator("[data-open-full-gallery]");
     const openHref = embedVisible ? await openFull.first().getAttribute("href") : null;
     const viewMatchup = await page.locator("[data-matchup-gallery] a, [data-matchup-card] a").count();
     {
+      const bubbleText = ((await page.locator("[data-advisor-messages]").innerText().catch(() => "")) || "").slice(0, 400);
       const failures: string[] = [];
       if (!embedVisible) failures.push("embedded gallery not rendered");
       if (!openHref?.includes("/league/history/matchups")) failures.push(`Open Full Gallery href=${openHref}`);
+      if (/please wait/i.test(bubbleText)) failures.push("rate limited in UI");
       push({
         name: "UI embed + Open Full Gallery",
         question: "Show me my No Mercy wins.",
         verdict: failures.length ? "FAIL" : "PASS",
         failures,
-        sample: `embed=${embedVisible} href=${openHref ?? "none"} viewLinks=${viewMatchup}`,
+        sample: `embed=${embedVisible} href=${openHref ?? "none"} viewLinks=${viewMatchup} ${bubbleText.replace(/\s+/g, " ").slice(0, 180)}`,
       });
     }
     await page.screenshot({ path: path.join(SHOT_DIR, "advisor-no-mercy-gallery__1440.png"), fullPage: true });
 
-    if (openHref) {
-      await page.goto(`${BASE}${openHref}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-      await page.waitForTimeout(2500);
-      const galleryPage = await page.locator("[data-matchup-gallery]").count();
-      push({
-        name: "Open Full Gallery navigation",
-        question: openHref,
-        verdict: galleryPage ? "PASS" : "FAIL",
-        failures: galleryPage ? [] : ["full gallery page missing data-matchup-gallery"],
-        sample: `gallery=${galleryPage}`,
-      });
-      await page.screenshot({ path: path.join(SHOT_DIR, "open-full-gallery__1440.png"), fullPage: true });
-    }
+    const navHref = openHref || followNoMercy.visual?.href || "/league/history/matchups?noMercy=1";
+    await page.goto(`${BASE}${navHref}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    await page.waitForTimeout(3000);
+    const galleryPage = await page.locator("[data-matchup-gallery]").count();
+    push({
+      name: "Open Full Gallery navigation",
+      question: navHref,
+      verdict: galleryPage ? "PASS" : "FAIL",
+      failures: galleryPage ? [] : ["full gallery page missing data-matchup-gallery"],
+      sample: `gallery=${galleryPage}`,
+    });
+    await page.screenshot({ path: path.join(SHOT_DIR, "open-full-gallery__1440.png"), fullPage: true });
 
     const viewerLink = page.locator("[data-matchup-card] a").first();
     if (await viewerLink.count()) {
       await viewerLink.click();
-      await page.waitForTimeout(2500);
+      await page.waitForTimeout(3000);
       const viewer = await page.locator("[data-historical-viewer], [data-matchup-viewer], h1, h2").count();
       push({
         name: "View Matchup",
