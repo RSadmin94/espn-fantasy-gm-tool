@@ -307,7 +307,7 @@ Stop after each increment. Production only when explicitly asked.
 | **053A/B/C** | no | No | Preview 053C before later increments |
 | **053D–L / MKT-001** | no | No | Not ready |
 
-**Production must not receive** 053 gallery or marketing until explicitly requested. 051 stays closed. **054 is live.**
+**Production must not receive** 053 gallery or marketing until explicitly requested. 051 stays closed. **054 + 054A are live.**
 
 ---
 
