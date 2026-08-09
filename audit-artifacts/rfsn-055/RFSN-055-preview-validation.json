@@ -2,11 +2,11 @@
   "host": "https://sprint-8-preview.fantasyfootballrivals.com",
   "health": {
     "status": "ok",
-    "timestamp": "2026-08-09T10:08:41.624Z",
+    "timestamp": "2026-08-09T10:16:43.505Z",
     "version": "1.0.0",
     "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
     "gitBranch": "feature/provider-expansion",
-    "buildTime": "2026-08-09T10:06:02.242Z",
+    "buildTime": "2026-08-09T10:14:06.089Z",
     "gitIdentitySource": "build-meta",
     "nodeEnv": "production",
     "checks": {
@@ -28,12 +28,8 @@
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
-      "verdict": "FAIL",
-      "failures": [
-        "no recognizable founder owner",
-        "reach/steal answer missing pick or ADP number",
-        "not a deterministic ADP draft-intelligence answer"
-      ]
+      "verdict": "PASS",
+      "failures": []
     },
     {
       "question": "What was the biggest reach ever?",
@@ -42,12 +38,8 @@
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
-      "verdict": "FAIL",
-      "failures": [
-        "no recognizable founder owner",
-        "reach/steal answer missing pick or ADP number",
-        "not a deterministic ADP draft-intelligence answer"
-      ]
+      "verdict": "PASS",
+      "failures": []
     },
     {
       "question": "What was the biggest steal?",
@@ -56,12 +48,8 @@
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
-      "verdict": "FAIL",
-      "failures": [
-        "no recognizable founder owner",
-        "reach/steal answer missing pick or ADP number",
-        "not a deterministic ADP draft-intelligence answer"
-      ]
+      "verdict": "PASS",
+      "failures": []
     },
     {
       "question": "Who drafts QBs early?",
@@ -100,12 +88,8 @@
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
-      "verdict": "FAIL",
-      "failures": [
-        "no recognizable founder owner",
-        "reach/steal answer missing pick or ADP number",
-        "not a deterministic ADP draft-intelligence answer"
-      ]
+      "verdict": "PASS",
+      "failures": []
     },
     {
       "question": "Who gambles the most?",
@@ -114,12 +98,8 @@
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
-      "verdict": "FAIL",
-      "failures": [
-        "no recognizable founder owner",
-        "reach/steal answer missing pick or ADP number",
-        "not a deterministic ADP draft-intelligence answer"
-      ]
+      "verdict": "PASS",
+      "failures": []
     },
     {
       "question": "Who reached the most in 2010?",
