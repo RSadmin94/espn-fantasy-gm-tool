@@ -315,59 +315,27 @@ export function collectPackageNumbers(pkg: HistoricalStoryPackage): number[] {
     push(f.loserScore);
     push(f.margin);
   }
-  numbersFromText(pkg.leagueName, nums);
-  numbersFromText(pkg.collectionTitle ?? "", nums);
-  numbersFromText(pkg.collectionSubtitle ?? "", nums);
-  numbersFromText(pkg.emptyReason ?? "", nums);
-  for (const b of pkg.badges) numbersFromText(b, nums);
-  for (const r of pkg.records) numbersFromText(r, nums);
-  for (const fact of pkg.historicalFacts) numbersFromText(fact, nums);
+  numbersFromText(JSON.stringify(storyPackageHashInput(pkg)), nums);
   return nums;
 }
 
 const ALLOWED_STORY_WORDS = new Set(
   [
-    "week",
-    "weeks",
-    "game",
-    "games",
-    "matchup",
-    "playoff",
-    "playoffs",
-    "championship",
-    "regular",
-    "season",
-    "point",
-    "points",
-    "margin",
-    "score",
-    "victory",
-    "loss",
-    "tie",
-    "record",
-    "league",
-    "fantasy",
-    "football",
-    "rivals",
-    "no",
-    "mercy",
-    "heartbreak",
-    "kids",
-    "blood",
-    "rival",
-    "cashier",
-    "closest",
-    "calls",
-    "statement",
-    "wins",
-    "biggest",
-    "collapses",
-    "glory",
-    "title",
-    "sofia",
-    "coach",
-    "roxanne",
-    "historian",
+    "a", "an", "the", "and", "or", "to", "for", "at", "on", "by", "as", "of", "in", "is", "was", "were",
+    "be", "been", "it", "its", "his", "her", "their", "our", "your", "this", "that", "these", "those",
+    "with", "from", "after", "before", "during", "over", "under", "between", "against", "versus", "vs",
+    "both", "each", "every", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "first", "last", "final", "when", "what", "why", "how", "here", "there", "now", "then", "still",
+    "week", "weeks", "game", "games", "matchup", "matchups", "playoff", "playoffs", "championship",
+    "regular", "season", "point", "points", "margin", "score", "scores", "victory", "loss", "losses",
+    "win", "wins", "tie", "tied", "record", "records", "league", "fantasy", "football", "rivals",
+    "no", "mercy", "rule", "heartbreak", "kids", "blood", "rival", "rivalry", "rivalries", "cashier",
+    "closest", "calls", "call", "statement", "biggest", "collapses", "collapse", "glory", "title",
+    "titles", "champion", "champions", "owner", "owners", "sofia", "coach", "roxanne", "historian",
+    "dominance", "battle", "battles", "epic", "showdown", "showdowns", "history", "historical",
+    "defeat", "defeated", "tells", "story", "stories", "intro", "broadcast", "receipt", "receipts",
+    "printed", "recorded", "blowout", "blowouts", "nailbiter", "continues", "remains", "stands",
+    "falls", "returns", "began", "ended", "cover", "coverage", "years", "year", "finest", "atlantas",
     ...STORY_COLLECTION_IDS.flatMap((id) => id.split("-")),
   ].map((w) => w.toLowerCase()),
 );
@@ -398,6 +366,14 @@ export function narrationAllowedNames(pkg: HistoricalStoryPackage): Set<string> 
   return names;
 }
 
+function yearInCoverage(pkg: HistoricalStoryPackage, year: number): boolean {
+  const from = pkg.coverageYears.from;
+  const to = pkg.coverageYears.to;
+  if (from != null && to != null && year >= from && year <= to) return true;
+  if (pkg.season != null && year === pkg.season) return true;
+  return pkg.featuredMatchups.some((f) => f.season === year);
+}
+
 export function narrationUsesOnlyPackageFacts(
   pkg: HistoricalStoryPackage,
   text: string,
@@ -409,14 +385,15 @@ export function narrationUsesOnlyPackageFacts(
     const v = Number(raw);
     if (!Number.isFinite(v)) continue;
     if (allowedNums.some((n) => Math.abs(n - v) < 1e-9)) continue;
+    if (Number.isInteger(v) && v >= 1900 && v <= 2100 && yearInCoverage(pkg, v)) continue;
     invented.push(raw);
   }
   const allowedNames = narrationAllowedNames(pkg);
-  const nameHits = text.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g) ?? [];
+  const nameHits = text.match(/\b[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+)+\b/g) ?? [];
   for (const hit of nameHits) {
     const lower = hit.toLowerCase();
     if (allowedNames.has(lower)) continue;
-    const parts = lower.split(/\s+/);
+    const parts = lower.split(/[ \t]+/);
     if (parts.every((p) => allowedNames.has(p) || ALLOWED_STORY_WORDS.has(p))) continue;
     invented.push(hit);
   }

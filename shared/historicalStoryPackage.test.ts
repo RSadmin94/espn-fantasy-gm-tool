@@ -78,6 +78,11 @@ describe("RFSN-053H HistoricalStoryPackage", () => {
     expect(fakeYear.invented.join(" ")).toMatch(/1999/);
     const fakeOwner = narrationUsesOnlyPackageFacts(pkg, "Tom Brady also played in this league game.");
     expect(fakeOwner.ok).toBe(false);
+    const titleCase = narrationUsesOnlyPackageFacts(
+      pkg,
+      "The Battle Continues\nNo Mercy Rule dominance in ATLANTAS FINEST FF.",
+    );
+    expect(titleCase.ok).toBe(true);
   });
 
   it("hash input ignores provenance wording differences that are not facts", () => {
