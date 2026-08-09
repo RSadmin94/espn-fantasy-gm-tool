@@ -13,7 +13,8 @@ import {
   tradePartyTeamIds,
 } from "../shared/transactionDisplay";
 
-const PREVIEW_HOST = "sprint-8-preview.fantasyfootballrivals.com";
+const PREVIEW_HOST =
+  process.env.RFSN_056A_HOST?.trim() || "sprint-8-preview.fantasyfootballrivals.com";
 const BASE = `https://${PREVIEW_HOST}`;
 const ESPN_LEAGUE = "457622";
 const SEASON = 2026;
@@ -188,7 +189,10 @@ async function main() {
     };
 
     fs.mkdirSync(OUT_DIR, { recursive: true });
-    fs.writeFileSync(path.join(OUT_DIR, "RFSN-056A-preview-audit.json"), JSON.stringify(summary, null, 2));
+    const outName = PREVIEW_HOST.includes("fantasyfootballrivals.com") && !PREVIEW_HOST.startsWith("sprint-8-preview")
+      ? "RFSN-056A-production-validation.json"
+      : "RFSN-056A-preview-audit.json";
+    fs.writeFileSync(path.join(OUT_DIR, outName), JSON.stringify(summary, null, 2));
     console.log(JSON.stringify({
       rawRowCount: summary.rawRowCount,
       tradeRowCount: summary.tradeRowCount,

@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-09 (RFSN-056A Preview)  
+**Edition:** 2026-08-09 (RFSN-056A Production)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -25,7 +25,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 Stable | Git `ee9ed04` · `buildTime=2026-08-09T09:07:04.929Z` · 051A–D + **054** + **054A** + 052J/K + **052L** |
+| Production | 🟢 Stable | Git `1aa6d28` · `buildTime=2026-08-09T11:19:47.170Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **056A** |
 | Preview | 🟢 Git-aligned | Git `31b6e69` · `buildTime=2026-08-09T10:45:03.298Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **055** + **056A** |
 | GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **055 Draft Intelligence live Preview** (deterministic). **“What's my biggest win?” FAIL**. |
 | RFSN | 🟢 | Live / Stories / Recaps |
@@ -45,7 +45,7 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`ee9ed04`** (cherry-pick of `68fa655`, Git not CLI). Health `buildTime=2026-08-09T09:07:04.929Z` (gitSha still stale `06b35ba`) |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`1aa6d28`** (cherry-pick of `31b6e69`, Git not CLI). Health `buildTime=2026-08-09T11:19:47.170Z` (gitSha still stale `06b35ba`) |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`31b6e69`**. Railway Git SUCCESS `commitHash=31b6e69` / deploy `408fa8c3` (not CLI). Health `buildTime=2026-08-09T10:45:03.298Z` (gitSha still stale `dff6154`) |
 | **Local working tree** | localhost | — | uncommitted | **053C** gallery UI · marketing |
 
@@ -77,17 +77,17 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 | Layer | State |
 | --- | --- |
-| Production | Git **`ee9ed04`** includes 052 A–**L** + **051A–D** + **054** + **054A**. Live `buildTime=2026-08-09T09:07:04.929Z`. |
+| Production | Git **`1aa6d28`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **056A**. Live `buildTime=2026-08-09T11:19:47.170Z`. |
 | Preview | Git tip **`31b6e69`** · `buildTime=2026-08-09T10:45:03.298Z` · **055** + **056A Transactions** live. |
 | Local / unpushed | **053A–C** gallery · marketing. Not Preview, not Production. |
 
-**Headline remaining gaps:** (1) 052K personal “What's my biggest win?” still fails. (2) 055 reach/steal math needs same-season ADP join onto `draft_picks` (Preview currently coverage-honest). (3) 053 gallery still local.
+**Headline remaining gaps:** (1) 052K personal “What's my biggest win?” still fails. (2) 055 reach/steal math needs same-season ADP join onto `draft_picks` (Preview currently coverage-honest). (3) 056A four executed 2026 headers still lack assets. (4) 053 gallery still local.
 
 ---
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` (git `ee9ed04` / buildTime `2026-08-09T09:07:04.929Z`).
+Shipped and live on `www.fantasyfootballrivals.com` (git `1aa6d28` / buildTime `2026-08-09T11:19:47.170Z`).
 
 | Area | What’s in Production |
 | --- | --- |
@@ -101,7 +101,7 @@ Shipped and live on `www.fantasyfootballrivals.com` (git `ee9ed04` / buildTime `
 | Commercial | Free + Rivals Pro Stripe · The League deferred |
 | Extension | GM War Room **v1.14.2** (Chrome; not Railway) |
 
-051A–D typography, **RFSN-054** density, and **054A** compact Live Draft Control are Production.
+051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, and **056A** Transactions executed-trade display are Production.
 
 ---
 
@@ -120,7 +120,7 @@ On Preview **in addition to** Production, unless noted.
 | **054A** Compact Live Draft Control | Live Preview + **Production** | `fa65ab5` / `3bdcd8f3` · `2a80eca` / `3d25ff96` |
 | **052L** Advisor Clear session reset | Live Preview + **Production** | `68fa655` / `ee9ed04` · founder 12/12 both envs |
 | **055** Draft Intelligence Authority | **Live Preview** | Deterministic `draft_intelligence`. Founder 9/9. Reach/steal coverage-honest until pick IDs join ADP. Not Production. |
-| **056A** Transactions missing executed trades | **Live Preview** | Executed filter 5/5 ESPN 457622 2026 (was 1). Grading unchanged. Not Production. |
+| **056A** Transactions missing executed trades | Live Preview + **Production** | Executed filter 5/5 ESPN 457622 2026 both envs. Grading unchanged. |
 | **053A/B/C** Matchup Gallery | **Not on Preview** | Local working tree only |
 
 ---
@@ -137,7 +137,7 @@ On Preview **in addition to** Production, unless noted.
 | **054A** | Compact Live Draft Control (`/rfsn/live` + `/draft/live`) | **Production live** `2a80eca` / `3d25ff96`. |
 | **052L** | GM Advisor Clear = true session reset | **Production live** `ee9ed04` / `buildTime=2026-08-09T09:07:04.929Z`. Preview `68fa655`. 12/12 both. |
 | **055** | Draft Intelligence Authority | **Preview live** `c9284f9` / `buildTime=2026-08-09T10:14:06.089Z`. Founder 9/9. Not Production. |
-| **056A** | Transactions missing executed trades | **Preview live** `31b6e69` / `buildTime=2026-08-09T10:45:03.298Z`. Executed 5/5. Not Production. |
+| **056A** | Transactions missing executed trades | **Production live** `1aa6d28` / `buildTime=2026-08-09T11:19:47.170Z`. Preview `31b6e69`. Executed 5/5 both. |
 | **053A** | Gallery + screenshot architecture | Complete (docs only). |
 | **053B** | `matchupGallery.query` contract | Complete (tests 16/16). Not deployed. |
 | **053C** | Gallery UI `/league/history/matchups` + No Mercy route | Complete locally. Not deployed. |
@@ -195,6 +195,7 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
+| 2026-08-09 | **056A Production.** Cherry-pick `1aa6d28` of `31b6e69` → deploy `b246f95f`. Executed filter 5/5 ESPN 457622. | Production `buildTime=2026-08-09T11:19:47.170Z` · `RFSN-056A-production-validation.md` |
 | 2026-08-09 | **056A Preview.** Git `31b6e69` → deploy `408fa8c3`. Transactions Executed filter 5/5 ESPN 457622 2026 (was 1). Grading unchanged. | Preview `buildTime=2026-08-09T10:45:03.298Z` · `RFSN-056A-preview-validation.md` |
 | 2026-08-09 | **055 Preview.** Git `c9284f9` → deploy `ed72c194`. Draft Intelligence deterministic 9/9 ESPN 457622. Reach/steal coverage-honest (no fake ADP). | Preview `buildTime=2026-08-09T10:14:06.089Z` · `RFSN-055-preview-validation.md` |
 | 2026-08-09 | **052L Production.** Cherry-pick `ee9ed04` of `68fa655`. Founder ESPN 457622 **12/12 PASS**. | Production `buildTime=2026-08-09T09:07:04.929Z` · `RFSN-052L-production-validation.md` |
