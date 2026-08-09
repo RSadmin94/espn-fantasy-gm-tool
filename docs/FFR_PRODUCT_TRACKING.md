@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-09 (RFSN-053C Preview)  
+**Edition:** 2026-08-09 (RFSN-053C Production)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -25,13 +25,13 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 Stable | Git `1aa6d28` · `buildTime=2026-08-09T11:19:47.170Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **056A** |
+| Production | 🟢 Stable | Git `2ad6e04` · `buildTime=2026-08-09T13:17:56.373Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **056A** + **053C** |
 | Preview | 🟢 Git-aligned | Git `539dfea` · `buildTime=2026-08-09T12:50:42.295Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **055** + **056A** + **053C** |
 | GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **055 Draft Intelligence live Preview** (deterministic). **“What's my biggest win?” FAIL**. |
 | RFSN | 🟢 | Live / Stories / Recaps |
 | Typography | 🟢 Production | 051A–D live Preview + Production. **051E closed.** Pinch-zoom on. |
 | UI density | 🟢 Production | **RFSN-054** + **054A** live Preview + Production. Compact Live Draft Control strip. Not typography. |
-| Matchup Gallery | 🟢 Preview | **053C** live Preview (`539dfea`). Not Production. 053D–L remaining (Advisor embed / stories / screenshot engine) |
+| Matchup Gallery | 🟢 Production | **053C** live Preview + **Production** (`2ad6e04`). 053D–L remaining (Advisor embed / stories / screenshot engine) |
 | Mobile | 🟡 Partial | FFR 2.0 responsive IA. RFSN-025 active-draft dock unvalidated |
 | Data Sync | 🟢 | ESPN / Sleeper / Yahoo / workbook paths live |
 | Release Pipeline | 🟢 Preview=Git proven | Push `e48b34e` → Railway Git deploy `0afa371e` SUCCESS. No CLI `railway up`. `gitSha` still stale — trust `buildTime` + Railway `commitHash` |
@@ -45,7 +45,7 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`1aa6d28`** (cherry-pick of `31b6e69`, Git not CLI). Health `buildTime=2026-08-09T11:19:47.170Z` (gitSha still stale `06b35ba`) |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`2ad6e04`** (cherry-pick of `539dfea`, Git not CLI). Health `buildTime=2026-08-09T13:17:56.373Z` (gitSha still stale `06b35ba`) |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`539dfea`**. Railway Git SUCCESS `commitHash=539dfea` / deploy `ba0bbd5a` (not CLI). Health `buildTime=2026-08-09T12:50:42.295Z` (gitSha still stale `dff6154`) |
 | **Local working tree** | localhost | — | uncommitted | marketing |
 
@@ -77,17 +77,17 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 | Layer | State |
 | --- | --- |
-| Production | Git **`1aa6d28`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **056A**. Live `buildTime=2026-08-09T11:19:47.170Z`. |
+| Production | Git **`2ad6e04`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **056A** + **053C**. Live `buildTime=2026-08-09T13:17:56.373Z`. |
 | Preview | Git tip **`539dfea`** · `buildTime=2026-08-09T12:50:42.295Z` · **055** + **056A** + **053C Historical Matchup Gallery**. |
 | Local / unpushed | marketing. Not Preview, not Production. |
 
-**Headline remaining gaps:** (1) 052K personal “What's my biggest win?” still fails. (2) 055 reach/steal math needs same-season ADP join onto `draft_picks` (Preview currently coverage-honest). (3) 056A four executed 2026 headers still lack assets. (4) 053C Preview only — not Production.
+**Headline remaining gaps:** (1) 052K personal “What's my biggest win?” still fails. (2) 055 reach/steal math needs same-season ADP join onto `draft_picks` (Preview currently coverage-honest). (3) 056A four executed 2026 headers still lack assets.
 
 ---
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` (git `1aa6d28` / buildTime `2026-08-09T11:19:47.170Z`).
+Shipped and live on `www.fantasyfootballrivals.com` (git `2ad6e04` / buildTime `2026-08-09T13:17:56.373Z`).
 
 | Area | What’s in Production |
 | --- | --- |
@@ -96,12 +96,12 @@ Shipped and live on `www.fantasyfootballrivals.com` (git `1aa6d28` / buildTime `
 | Rivals | Cast, Owner Dossier, H2H, Rivalries, League Map, Relationships · RFSN-047/048 evidence scope |
 | RFSN | Live, Stories, Recaps (+ deep-link Breaking/Analysts) |
 | Draft | War Room, Live Draft, Mock, Keepers, Draft History · FantasyPros solo mock connector (030C) |
-| League | Standings, Power Rankings, Playoffs, History/HoF/Records/Timeline/Transactions, Commissioner |
+| League | Standings, Power Rankings, Playoffs, History/HoF/Records/Timeline/Transactions, **Historical Matchups (053C)**, Commissioner |
 | Advisor (052 A–L) | Evidence-first planner · H2H + Championship Authority · 052J LOZELL **3 (2009, 2011, 2021)** live · 052K league-wide largest margin live · **052L Clear = true session reset** · personal “my biggest win” still broken · no generic LLM fallback for wired facts |
 | Commercial | Free + Rivals Pro Stripe · The League deferred |
 | Extension | GM War Room **v1.14.2** (Chrome; not Railway) |
 
-051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, and **056A** Transactions executed-trade display are Production.
+051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, **056A** Transactions, and **053C Historical Matchup Gallery** are Production.
 
 ---
 
@@ -121,7 +121,7 @@ On Preview **in addition to** Production, unless noted.
 | **052L** Advisor Clear session reset | Live Preview + **Production** | `68fa655` / `ee9ed04` · founder 12/12 both envs |
 | **055** Draft Intelligence Authority | **Live Preview** | Deterministic `draft_intelligence`. Founder 9/9. Reach/steal coverage-honest until pick IDs join ADP. Not Production. |
 | **056A** Transactions missing executed trades | Live Preview + **Production** | Executed filter 5/5 ESPN 457622 2026 both envs. Grading unchanged. |
-| **053C** Historical Matchup Gallery | **Live Preview** | `539dfea` / `ba0bbd5a` / `buildTime=2026-08-09T12:50:42.295Z`. Founder ESPN 457622 12/12. Not Production. |
+| **053C** Historical Matchup Gallery | Live Preview + **Production** | Preview `539dfea` / `ba0bbd5a`. Production `2ad6e04` / `ad8e93d3` / `buildTime=2026-08-09T13:17:56.373Z`. Founder 12/12 both envs. |
 
 ---
 
@@ -139,8 +139,8 @@ On Preview **in addition to** Production, unless noted.
 | **055** | Draft Intelligence Authority | **Preview live** `c9284f9` / `buildTime=2026-08-09T10:14:06.089Z`. Founder 9/9. Not Production. |
 | **056A** | Transactions missing executed trades | **Production live** `1aa6d28` / `buildTime=2026-08-09T11:19:47.170Z`. Preview `31b6e69`. Executed 5/5 both. |
 | **053A** | Gallery + screenshot architecture | Complete (docs). |
-| **053B** | `matchupGallery.query` contract | **Preview live** with 053C (16/16). Semantics unchanged. |
-| **053C** | Gallery UI + No Mercy + viewer V1 | **Preview live** `539dfea`. Founder 12/12. Not Production. |
+| **053B** | `matchupGallery.query` contract | **Production live** with 053C (16/16). Semantics unchanged. |
+| **053C** | Gallery UI + No Mercy + viewer V1 | **Production live** `2ad6e04` / `buildTime=2026-08-09T13:17:56.373Z`. Founder 12/12 both. |
 | **053D–L** | Advisor embed, stories, screenshot engine, batch | **Not started.** Viewer V1 shipped in 053C. |
 
 No Advisor / Rivalry Center / live Matchups redesign is in progress.
@@ -154,7 +154,7 @@ Stop after each increment. Production only when explicitly asked.
 1. **052K-follow — personal biggest win** — “What's my biggest win?” must resolve founder `my` into margin `ownerName`, not `missingDatasetSentence("matchup margins")`.  
 2. **055 ADP join follow-up (optional)** — same-season pick/ADP math on Preview after `draft_picks.playerId` join is proven. Production only when asked.  
 3. **056A asset reconstruction follow-up (optional)** — 4 executed 2026 headers still lack pick/player items after activity relink.  
-4. ~~**Preview-deploy 053C**~~ **Done** Preview `539dfea` / `buildTime=2026-08-09T12:50:42.295Z`. Not Production.  
+4. ~~**Preview-deploy 053C**~~ **Done** Preview + **Production** `2ad6e04` / `buildTime=2026-08-09T13:17:56.373Z`.  
 5. **RFSN-053D** — Advisor `matchup_gallery` visual return (no Advisor redesign).  
 6. **RFSN-053E** — Advisor “N No Mercy victories” + gallery (route already exists in 053C; remaining = Advisor copy).  
 7. **RFSN-053F** — Rivalry / Owner Dossier gallery presets (link out only).  
@@ -195,6 +195,8 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
+| 2026-08-09 | **053C Production.** Cherry-pick `2ad6e04` of `539dfea` (dropped 055-only `draftIntelligenceTool.ts`) → deploy `ad8e93d3`. Founder ESPN 457622 **12/12 PASS**. | Production `buildTime=2026-08-09T13:17:56.373Z` · `RFSN-053C-production-validation.md` |
+| 2026-08-09 | **053C Preview.** Git `539dfea` → deploy `ba0bbd5a`. Historical Matchup Gallery + viewer V1. Founder ESPN 457622 **12/12 PASS**. | Preview `buildTime=2026-08-09T12:50:42.295Z` · `RFSN-053C-preview-validation.md` |
 | 2026-08-09 | **056A Production.** Cherry-pick `1aa6d28` of `31b6e69` → deploy `b246f95f`. Executed filter 5/5 ESPN 457622. | Production `buildTime=2026-08-09T11:19:47.170Z` · `RFSN-056A-production-validation.md` |
 | 2026-08-09 | **056A Preview.** Git `31b6e69` → deploy `408fa8c3`. Transactions Executed filter 5/5 ESPN 457622 2026 (was 1). Grading unchanged. | Preview `buildTime=2026-08-09T10:45:03.298Z` · `RFSN-056A-preview-validation.md` |
 | 2026-08-09 | **055 Preview.** Git `c9284f9` → deploy `ed72c194`. Draft Intelligence deterministic 9/9 ESPN 457622. Reach/steal coverage-honest (no fake ADP). | Preview `buildTime=2026-08-09T10:14:06.089Z` · `RFSN-055-preview-validation.md` |
@@ -262,7 +264,7 @@ Stop after each increment. Production only when explicitly asked.
 | Deterministic-first Advisor | **Production git** (052 A–K) |
 | Distinct championship vs matchup coverage + partial-legacy | **052J Production live** (LOZELL 3 + 2009 limitation smoke PASS) |
 | Matchup margin largest-win / combined / unsupported upset | **052K Production live** (league-wide PASS; personal biggest-win FAIL) |
-| Matchup Gallery query + UI | **053C Preview live** `539dfea` / `buildTime=2026-08-09T12:50:42.295Z`. Not Production. |
+| Matchup Gallery query + UI | **053C Production live** `2ad6e04` / `buildTime=2026-08-09T13:17:56.373Z`. Preview `539dfea`. |
 | Draft Intelligence Authority | **055 Preview live** — deterministic `draft_intelligence`. Reach/steal coverage-honest until pick IDs join ADP. Not Production. |
 | Preview Git = Preview deploy | **Proven** `e48b34e` → `0afa371e` (2026-08-09) |
 | Product Encyclopedia | **Retired** — this file is permanent operational SOT |
@@ -290,9 +292,9 @@ Stop after each increment. Production only when explicitly asked.
 | 052K | Matchup margin intent expansion | done | **Git Preview** `e48b34e` | **Production live** league-wide PASS · personal biggest-win FAIL |
 | **052L** | Advisor Clear true session reset | done | **Git Preview** `68fa655` | **yes** `ee9ed04` / `buildTime=2026-08-09T09:07:04.929Z` |
 | **055** | Draft Intelligence Authority | done | **Git Preview** `c9284f9` / `ed72c194` | **no** |
-| 053A | Gallery architecture | docs | yes (with 053C) | no |
-| 053B | Gallery query contract | done (16/16) | **yes** `539dfea` | no |
-| **053C** | Historical Matchup Gallery | done | **yes** `539dfea` / `ba0bbd5a` / `buildTime=2026-08-09T12:50:42.295Z` | **no** |
+| 053A | Gallery architecture | docs | yes | **yes** |
+| 053B | Gallery query contract | done (16/16) | **yes** `539dfea` | **yes** `2ad6e04` |
+| **053C** | Historical Matchup Gallery | done | **yes** `539dfea` / `ba0bbd5a` | **yes** `2ad6e04` / `ad8e93d3` / `buildTime=2026-08-09T13:17:56.373Z` |
 
 ---
 
@@ -322,7 +324,7 @@ Stop after each increment. Production only when explicitly asked.
 | **054A compact Live Draft Control** | yes | **Shipped** `2a80eca` / `3d25ff96` | Closed |
 | **052L Clear reset** | yes `68fa655` | **Shipped** `ee9ed04` | Preview + Production 12/12 |
 | **055 Draft Intelligence** | yes `c9284f9` | **No** | Preview 9/9. Reach/steal coverage-honest. Production on explicit ask. |
-| **053C gallery** | yes `539dfea` | **No** | Preview 12/12 ESPN 457622. Production on explicit ask. |
+| **053C gallery** | yes `539dfea` | **Shipped** `2ad6e04` / `ad8e93d3` | Preview + Production 12/12 ESPN 457622 |
 | **053D–L / MKT-001** | no | No | Not ready |
 
 **Production must not receive** 053 gallery or marketing until explicitly requested. 051 stays closed. **054 + 054A + 052L are live.**
@@ -335,7 +337,7 @@ Stop after each increment. Production only when explicitly asked.
 2. **051 numbering is now locked** (A Foundation → E Closeout). Older audit text may still say “051C scale” / “next 051D measure”; those aliases map to **051D readability** and **cancelled census** respectively. Density follow-up is **RFSN-054**, not 051F.
 3. **052 Production close artifact still documents LOZELL = 2.** That snapshot is historical (`06b35ba`, 2026-08-08). Do not rewrite it. Current Production live probe: LOZELL **3 (2009, 2011, 2021)**.
 4. **Preview=Git is proven** (`e48b34e` → `0afa371e`). Health `gitSha` still stale (`dff6154`) on Git deploys — do not use it as the alignment signal.
-5. **053C routes** are live on Preview (`/league/history/matchups`, `/no-mercy`, `/:matchupId`). Not Production.
+5. **053C routes** are live on Preview + **Production** (`/league/history/matchups`, `/no-mercy`, `/:matchupId`).
 6. **053E** remaining work is Advisor copy, not the No Mercy route (already in 053C).
 7. **`todo.md`** is legacy planning only (banner added). Not SOT.
 8. **`railway down` is not a cancel.** 2026-08-09 it removed the serving SUCCESS deploy (`0b79799b`) and left Production 404 until `redeploy --from-source` (`fea8db3c`). Stuck INITIALIZING `670a86c2` is gone.
@@ -345,7 +347,7 @@ Stop after each increment. Production only when explicitly asked.
 ## Recommendations still open
 
 1. Fix 052K personal biggest-win (`my` → margin `ownerName`) and re-smoke Production only when asked.
-2. Next increment is **052K-follow**, **055 ADP-join follow-up**, or **053D Advisor gallery visual** — explicit ask only; Git push only, no `railway up`. Do not promote 053C until asked.
+2. Next increment is **052K-follow**, **055 ADP-join follow-up**, or **053D Advisor gallery visual** — explicit ask only; Git push only, no `railway up`.
 3. When 053 ships to Preview/Production, flip route inventory rows from WIP → live (including `/m/:shareCode` at 053I).
 4. Extension version stays a dashboard footnote (v1.14.2); bump here when the zip ships.
 5. Never use `railway down` against a serving SUCCESS to clear INITIALIZING.

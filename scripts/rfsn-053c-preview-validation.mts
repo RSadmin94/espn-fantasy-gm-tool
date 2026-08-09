@@ -12,10 +12,11 @@ const PREVIEW_HOST =
   process.env.RFSN_053C_HOST?.trim() || "sprint-8-preview.fantasyfootballrivals.com";
 const BASE = `https://${PREVIEW_HOST}`;
 const ESPN_LEAGUE = "457622";
+const LABEL = /www\.fantasyfootballrivals\.com/i.test(PREVIEW_HOST) ? "production" : "preview";
 const OUT_DIR = path.resolve("audit-artifacts/rfsn-053");
-const OUT_MD = path.join(OUT_DIR, "RFSN-053C-preview-validation.md");
-const OUT_JSON = path.join(OUT_DIR, "RFSN-053C-preview-validation.json");
-const SHOT_DIR = path.join(OUT_DIR, "screenshots-053c-preview");
+const OUT_MD = path.join(OUT_DIR, `RFSN-053C-${LABEL}-validation.md`);
+const OUT_JSON = path.join(OUT_DIR, `RFSN-053C-${LABEL}-validation.json`);
+const SHOT_DIR = path.join(OUT_DIR, `screenshots-053c-${LABEL}`);
 const VIEWPORTS = [
   { name: "1920", width: 1920, height: 1080 },
   { name: "1440", width: 1440, height: 900 },
@@ -312,7 +313,7 @@ async function main() {
   };
   fs.writeFileSync(OUT_JSON, JSON.stringify(report, null, 2));
   const md = [
-    "# RFSN-053C Preview validation",
+    `# RFSN-053C ${LABEL} validation`,
     "",
     `- Host: \`${PREVIEW_HOST}\``,
     `- League: ESPN \`${ESPN_LEAGUE}\``,
