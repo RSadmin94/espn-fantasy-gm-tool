@@ -186,6 +186,9 @@ export function clearShareCardPngCacheForTests(): void {
 }
 
 export function registerShareCardPng(app: Express): void {
+  app.get("/api/share-card/png", (_req: Request, res: Response) => {
+    res.status(405).json({ error: SHARE_CARD_EXPORT_ERROR });
+  });
   app.post("/api/share-card/png", async (req: Request, res: Response) => {
     try {
       const auth = getAuth(req);
@@ -205,7 +208,7 @@ export function registerShareCardPng(app: Express): void {
       res.setHeader("X-Share-Card-Cache", out.cacheHit ? "hit" : "miss");
       res.setHeader("X-Share-Card-Key", out.key);
       res.setHeader("X-Share-Card-Renderer", SHARE_CARD_RENDERER_VERSION);
-      res.status(200).send(out.png);
+      res.status(200).end(out.png);
     } catch (err) {
       console.error("[share-card-png]", err instanceof Error ? err.stack || err.message : err);
       if (!res.headersSent) {

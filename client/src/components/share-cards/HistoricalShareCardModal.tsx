@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -52,6 +52,10 @@ export function HistoricalShareCardModal({
     () => (model ? withShareCardPresentation(model, { theme, layout }) : null),
     [model, theme, layout],
   );
+  const previewRef = useRef(preview);
+  const scaleRef = useRef(scale);
+  previewRef.current = preview;
+  scaleRef.current = scale;
 
   if (!model || !preview) return null;
 
@@ -70,17 +74,20 @@ export function HistoricalShareCardModal({
     if (downloading) return;
     setDownloading(true);
     try {
+      const exportModel = previewRef.current;
+      const exportScale = scaleRef.current;
+      if (!exportModel) throw new Error(SHARE_CARD_EXPORT_ERROR);
       const res = await fetch("/api/share-card/png", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ model: preview, scale }),
+        body: JSON.stringify({ model: exportModel, scale: exportScale }),
       });
       if (!res.ok) throw new Error(SHARE_CARD_EXPORT_ERROR);
       const blob = await res.blob();
       if (!blob.size) throw new Error(SHARE_CARD_EXPORT_ERROR);
       const headerName = res.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1];
-      const filename = headerName || shareCardExportFilename(preview);
+      const filename = headerName || shareCardExportFilename(exportModel);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

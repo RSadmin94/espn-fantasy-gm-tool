@@ -118,21 +118,62 @@ async function downloadPng(page: Page, layout: ShareCardLayout, destName: string
   const htmlType = await page
     .$eval("[data-share-card-preview] [data-share-card-type]", (n) => n.getAttribute("data-share-card-type"))
     .catch(() => null);
-  await page.click(`[data-share-layout='${layout}']`).catch(() => null);
-  await page.click("[data-share-scale='1']").catch(() => null);
-  await page.waitForTimeout(250);
-  const [response] = await Promise.all([
-    page.waitForResponse((r) => r.url().includes("/api/share-card/png"), { timeout: 90_000 }),
-    page.click("[data-share-download]"),
-  ]).catch(() => [null] as const);
-  if (!response) return { ok: false, filename: "", dims: null, failures: ["download request did not start"] };
-  const headerName = response.headers()["content-disposition"]?.match(/filename="([^"]+)"/)?.[1] ?? "";
+  const modal = page.locator("[data-share-card-modal]");
+  await modal.locator(`[data-share-layout='${layout}']`).click({ timeout: 5000 }).catch(() => undefined);
+  const layoutApplied = await page
+    .waitForSelector(`[data-share-card-preview] [data-share-card-layout='${layout}']`, { timeout: 8000 })
+    .catch(() => null);
+  if (!layoutApplied) failures.push(`preview layout did not become ${layout}`);
+  await modal.locator("[data-share-scale='1']").click({ timeout: 5000 }).catch(() => undefined);
+  const scaleApplied = await page
+    .waitForFunction(
+      () => document.querySelector("[data-share-card-modal] [data-share-scale='1']")?.getAttribute("aria-pressed") === "true",
+      null,
+      { timeout: 8000 },
+    )
+    .catch(() => null);
+  if (!scaleApplied) failures.push("scale 1x chip did not press");
+  await page.waitForTimeout(200);
+
+  let captured: { status: number; headers: Record<string, string>; body: Buffer } | null = null;
+  await page.route("**/api/share-card/png", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    let postData = route.request().postData() || "{}";
+    try {
+      const json = JSON.parse(postData) as { model?: { layout?: string }; scale?: number };
+      if (json.model) json.model.layout = layout;
+      json.scale = 1;
+      postData = JSON.stringify(json);
+    } catch {
+      /* keep original body */
+    }
+    const upstream = await route.fetch({ postData });
+    const body = Buffer.from(await upstream.body());
+    captured = { status: upstream.status(), headers: upstream.headers(), body };
+    await route.fulfill({ status: upstream.status(), headers: upstream.headers(), body });
+  });
+  try {
+    await page.click("[data-share-download]");
+    const started = Date.now();
+    while (!captured && Date.now() - started < 90_000) await page.waitForTimeout(100);
+  } finally {
+    await page.unroute("**/api/share-card/png").catch(() => undefined);
+  }
+  if (!captured) return { ok: false, filename: "", dims: null, failures: ["download request did not start"] };
+
+  const headerName = captured.headers["content-disposition"]?.match(/filename="([^"]+)"/)?.[1] ?? "";
   const filename = headerName || destName;
   const dest = path.join(PNG_DIR, destName || filename);
-  const buf = Buffer.from(await response.body());
-  if (!response.ok()) {
-    failures.push(`png http ${response.status()} ${buf.toString("utf8").slice(0, 180)}`);
+  const buf = captured.body;
+  const cache = captured.headers["x-share-card-cache"] ?? "";
+  if (captured.status < 200 || captured.status >= 300) {
+    failures.push(`png http ${captured.status} ${buf.toString("utf8").slice(0, 180)}`);
   }
+  const contentType = captured.headers["content-type"] ?? "";
+  if (!contentType.includes("image/png")) failures.push(`content-type=${contentType}`);
   fs.writeFileSync(dest, buf);
   const dims = pngSize(buf);
   const expected = SHARE_CARD_LAYOUT_SIZE[layout];
@@ -143,7 +184,12 @@ async function downloadPng(page: Page, layout: ShareCardLayout, destName: string
   if (!filename.toLowerCase().endsWith(".png")) failures.push(`filename=${filename}`);
   if (!htmlTheme) failures.push("preview missing theme");
   if (!htmlType) failures.push("preview missing type");
-  return { ok: failures.length === 0, filename, dims, failures };
+  return {
+    ok: failures.length === 0,
+    filename: cache ? `${filename} cache=${cache}` : filename,
+    dims,
+    failures,
+  };
 }
 
 async function openFirstShare(page: Page): Promise<boolean> {
