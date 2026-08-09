@@ -26,6 +26,7 @@ describe("RFSN-053G PNG export wiring", () => {
     expect(png).toContain("shareCardCacheKey");
     expect(read("nixpacks.toml")).toContain("chromium");
     expect(png).toContain("SHARE_CARD_EXPORT_ERROR");
+    expect(png).toContain('app.get("/api/share-card/png"');
     expect(png).not.toMatch(/resvg|satori/i);
     expect(renderer).toContain("data-share-card-root");
     expect(modal).toContain("/api/share-card/png");
