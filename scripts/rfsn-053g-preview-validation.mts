@@ -112,20 +112,28 @@ async function downloadPng(page: Page, layout: ShareCardLayout, destName: string
   if (!(await page.$("[data-share-card-modal]"))) {
     return { ok: false, filename: "", dims: null, failures: ["modal not open"] };
   }
-  const htmlTheme = await page.$eval("[data-share-card-preview] [data-share-card-theme]", (n) => n.getAttribute("data-share-card-theme")).catch(() => null);
-  const htmlType = await page.$eval("[data-share-card-preview] [data-share-card-type]", (n) => n.getAttribute("data-share-card-type")).catch(() => null);
-  const htmlBadges = await page.$$eval("[data-share-card-preview] [data-share-record-badge]", (els) => els.map((e) => e.getAttribute("data-share-record-badge"))).catch(() => []);
+  const htmlTheme = await page
+    .$eval("[data-share-card-preview] [data-share-card-theme]", (n) => n.getAttribute("data-share-card-theme"))
+    .catch(() => null);
+  const htmlType = await page
+    .$eval("[data-share-card-preview] [data-share-card-type]", (n) => n.getAttribute("data-share-card-type"))
+    .catch(() => null);
   await page.click(`[data-share-layout='${layout}']`).catch(() => null);
   await page.click("[data-share-scale='1']").catch(() => null);
-  const [download] = await Promise.all([
-    page.waitForEvent("download", { timeout: 90_000 }),
+  await page.waitForTimeout(250);
+  const [response] = await Promise.all([
+    page.waitForResponse((r) => r.url().includes("/api/share-card/png"), { timeout: 90_000 }),
     page.click("[data-share-download]"),
   ]).catch(() => [null] as const);
-  if (!download) return { ok: false, filename: "", dims: null, failures: ["download did not start"] };
-  const filename = download.suggestedFilename();
+  if (!response) return { ok: false, filename: "", dims: null, failures: ["download request did not start"] };
+  const headerName = response.headers()["content-disposition"]?.match(/filename="([^"]+)"/)?.[1] ?? "";
+  const filename = headerName || destName;
   const dest = path.join(PNG_DIR, destName || filename);
-  await download.saveAs(dest);
-  const buf = fs.readFileSync(dest);
+  const buf = Buffer.from(await response.body());
+  if (!response.ok()) {
+    failures.push(`png http ${response.status()} ${buf.toString("utf8").slice(0, 180)}`);
+  }
+  fs.writeFileSync(dest, buf);
   const dims = pngSize(buf);
   const expected = SHARE_CARD_LAYOUT_SIZE[layout];
   if (!dims) failures.push("not a png");
@@ -133,18 +141,9 @@ async function downloadPng(page: Page, layout: ShareCardLayout, destName: string
     failures.push(`dims ${dims.width}x${dims.height} != ${expected.width}x${expected.height}`);
   }
   if (!filename.toLowerCase().endsWith(".png")) failures.push(`filename=${filename}`);
-  const previewText = ((await page.locator("[data-share-card-preview]").innerText().catch(() => "")) || "").slice(0, 200);
   if (!htmlTheme) failures.push("preview missing theme");
   if (!htmlType) failures.push("preview missing type");
-  return {
-    ok: failures.length === 0,
-    filename,
-    dims,
-    failures: failures.length
-      ? failures
-      : [],
-    ...( { sample: undefined } as { sample?: string } ),
-  } as { ok: boolean; filename: string; dims: { width: number; height: number } | null; failures: string[]; htmlTheme?: string; htmlType?: string; htmlBadges?: string[]; previewText?: string; dest?: string };
+  return { ok: failures.length === 0, filename, dims, failures };
 }
 
 async function openFirstShare(page: Page): Promise<boolean> {
@@ -220,24 +219,22 @@ async function main() {
       push({ name: `PNG ${row.id} ${row.layout}`, verdict: failures.length ? "FAIL" : "PASS", failures, sample });
     }
 
-    await page.goto(`${BASE}/league/history/records`, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await page.waitForSelector("[data-share-card-open][data-share-card-type='record']", { timeout: 45_000 }).catch(() => null);
-    const recordOpened = await openFirstShare(page);
-    const recordFail: string[] = [];
-    if (!recordOpened) recordFail.push("record Share Card missing");
-    else {
-      const dl = await downloadPng(page, "landscape", "league-record-landscape.png");
-      recordFail.push(...dl.failures);
-      await closeShare(page);
-      push({
-        name: "PNG league record / HoF",
-        verdict: recordFail.length ? "FAIL" : "PASS",
-        failures: recordFail,
-        sample: dl.filename,
-      });
-    }
-    if (!recordOpened) {
-      push({ name: "PNG league record / HoF", verdict: "FAIL", failures: recordFail });
+    for (const row of [
+      { href: "/league/history/records", file: "league-record-landscape.png", name: "PNG league record" },
+      { href: "/league/history/hall-of-fame", file: "hall-of-fame-landscape.png", name: "PNG hall of fame" },
+    ] as const) {
+      await page.goto(`${BASE}${row.href}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await page.waitForSelector("[data-share-card-open][data-share-card-type='record']", { timeout: 45_000 }).catch(() => null);
+      const opened = await openFirstShare(page);
+      const fail: string[] = [];
+      if (!opened) fail.push("record Share Card missing");
+      else {
+        const dl = await downloadPng(page, "landscape", row.file);
+        fail.push(...dl.failures);
+        await closeShare(page);
+        push({ name: row.name, verdict: fail.length ? "FAIL" : "PASS", failures: fail, sample: dl.filename });
+      }
+      if (!opened) push({ name: row.name, verdict: "FAIL", failures: fail });
     }
 
     await clearHistory(page, ESPN_LEAGUE);

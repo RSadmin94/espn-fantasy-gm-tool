@@ -22,7 +22,9 @@ describe("RFSN-053G PNG export wiring", () => {
     expect(html).not.toMatch(/<svg xmlns/);
     expect(png).toContain("buildShareCardExportHtml");
     expect(png).toContain("playwright");
+    expect(png).toContain("resolveChromiumExecutable");
     expect(png).toContain("shareCardCacheKey");
+    expect(read("nixpacks.toml")).toContain("chromium");
     expect(png).toContain("SHARE_CARD_EXPORT_ERROR");
     expect(png).not.toMatch(/resvg|satori/i);
     expect(renderer).toContain("data-share-card-root");
