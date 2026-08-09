@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   V2_DESTINATIONS,
   V2_NAV_CATEGORY_ORDER,
+  V2_PARAM_ROUTES,
   assertLockedV2NavigationInvariants,
   buildV2NavGroups,
   getAllV2Destinations,
@@ -73,6 +74,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
       "Records",
       "Dynasties",
       "Timeline",
+      "Matchups",
       "Transactions",
     ]);
   });
@@ -162,6 +164,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
       "/league/history/records",
       "/league/history/dynasties",
       "/league/history/timeline",
+      "/league/history/matchups",
       "/league/history/transactions",
       "/league/acquisition-impact",
       "/league/commissioner",
@@ -169,6 +172,8 @@ describe("v2Navigation — locked FFR 2.0", () => {
     for (const route of required) {
       expect(routes).toContain(route);
     }
+    expect(V2_PARAM_ROUTES).toContain("/league/history/matchups/:matchupId");
+    expect(routes).toContain("/league/history/matchups/:matchupId");
   });
 
   it("points Home sidebar to canonical /home; Draft destinations are live", () => {
@@ -313,6 +318,7 @@ describe("v2Navigation — locked FFR 2.0", () => {
       "/league/history/records",
       "/league/history/dynasties",
       "/league/history/timeline",
+      "/league/history/matchups",
       "/league/history/transactions",
     ]);
     for (const child of history.children ?? []) {

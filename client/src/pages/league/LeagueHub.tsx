@@ -13,6 +13,7 @@ import {
   Trophy,
   ArrowLeftRight,
   Gem,
+  Swords,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -28,6 +29,7 @@ const DESTINATIONS = [
   { label: "Records", href: "/league/history/records", hint: "Record book", icon: Trophy },
   { label: "Dynasties", href: "/league/history/dynasties", hint: "Legacy spans", icon: Building2 },
   { label: "Timeline", href: "/league/history/timeline", hint: "Milestones", icon: History },
+  { label: "Matchups", href: "/league/history/matchups", hint: "Historical matchup gallery", icon: Swords },
   { label: "Transactions", href: "/league/history/transactions", hint: "Factual trade archive", icon: ArrowLeftRight },
   { label: "Acquisition Impact", href: "/league/acquisition-impact", hint: "Post-draft impact", icon: ShoppingCart },
   { label: "Commissioner", href: "/league/commissioner", hint: "League command", icon: Shield },
