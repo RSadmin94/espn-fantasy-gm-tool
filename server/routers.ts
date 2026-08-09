@@ -10581,41 +10581,12 @@ Provide:
           classifyAdvisorQuestionDetailed,
           listAdvisorOwnerAliases,
         } = await import("./advisorQuestionClassify");
-        const ownerAliases = await listAdvisorOwnerAliases(userId, season);
+        const ownerAliases = await listAdvisorOwnerAliases(userId, season, chatLeagueId);
         const classification = classifyAdvisorQuestionDetailed(input.message, {
           ownerAliases,
         }).category;
         const startedAt = Date.now();
 
-        // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
-        {
-          const { tryMatchupMarginToolAnswer } = await import("./matchupMarginTool");
-          const marginAnswer = await tryMatchupMarginToolAnswer({
-            leagueId: chatLeagueId,
-            message: input.message,
-          });
-          if (marginAnswer) {
-            await addChatMessage(userId, "assistant", marginAnswer.answer, season, chatLeagueId);
-            recordUsage({ userId, callType: "advisor", tokensUsed: 0 });
-            return {
-              message: marginAnswer.answer,
-              tool: marginAnswer.toolName,
-              meta: {
-                classification,
-                systemChars: 0,
-                systemApproxTok: 0,
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: 0,
-                model: null,
-                llmInvoked: false,
-                latencyMs: Date.now() - startedAt,
-              },
-            };
-          }
-        }
-
-        const { buildAdvisorSystemPrompt } = await import("./advisorContextBuilder");
         const gmMemory = await getUserMemory(userId);
         let gmMemoryBlock: string | undefined;
         if (gmMemory) {
@@ -10629,14 +10600,39 @@ Provide:
           if (gmMemory.notes) memParts.push(`GM Notes: ${gmMemory.notes}`);
           if (memParts.length > 0) gmMemoryBlock = memParts.join("\n");
         }
-        const leagueContext = await buildAdvisorSystemPrompt(season, gmMemoryBlock, userId, input.message);
-        const history = await getChatHistory(userId, season, chatLeagueId);
-        const messages: Message[] = [
-          { role: "system", content: leagueContext },
-          ...history.slice(-20).map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
-          { role: "user", content: input.message },
-        ];
 
+        const { runAdvisorEvidencePath } = await import("./advisorEvidenceExecutor");
+        const path = await runAdvisorEvidencePath({
+          message: input.message,
+          leagueId: chatLeagueId,
+          userId,
+          season,
+          ownerAliases,
+          gmMemoryBlock,
+        });
+
+        if (path.kind === "deterministic") {
+          await addChatMessage(userId, "assistant", path.message, season, chatLeagueId);
+          recordUsage({ userId, callType: "advisor", tokensUsed: 0 });
+          return {
+            message: path.message,
+            tool: path.tool,
+            meta: {
+              classification,
+              systemChars: 0,
+              systemApproxTok: 0,
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: 0,
+              model: null,
+              llmInvoked: false,
+              latencyMs: Date.now() - startedAt,
+              ...path.telemetry,
+            },
+          };
+        }
+
+        const messages: Message[] = path.messages;
         const response = await invokeLLM({
           messages,
           callType: "advisor",
@@ -10645,9 +10641,8 @@ Provide:
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");
         await addChatMessage(userId, "assistant", assistantMessage, season, chatLeagueId);
-        // Record usage for rate limiter
         recordUsage({ userId, callType: "advisor", tokensUsed: response.usage?.total_tokens ?? 0 });
-        const systemChars = leagueContext.length;
+        const systemChars = typeof messages[0]?.content === "string" ? messages[0].content.length : 0;
         const { ENV } = await import("./_core/env");
         return {
           message: assistantMessage,
@@ -10661,6 +10656,7 @@ Provide:
             model: response.model ?? (ENV.openaiModel || "gpt-4o"),
             llmInvoked: true,
             latencyMs: Date.now() - startedAt,
+            ...path.telemetry,
           },
         };
       }),

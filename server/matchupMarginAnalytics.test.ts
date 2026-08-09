@@ -316,6 +316,71 @@ describe("RFSN-049 League AI tool selection", () => {
     expect(selectMatchupMarginTool("Who should I start this week at WR?")).toBeNull();
   });
 
+  it("RFSN-052K: largest margin of victory is not one-point losses", () => {
+    const shot = selectMatchupMarginTool(
+      "who has the largest margin of victory in a single game",
+    );
+    expect(shot?.query).toMatchObject({
+      metric: "largest_margin",
+      aggregation: "single_game",
+    });
+    expect(shot?.query.marginExact).toBeUndefined();
+
+    const board = selectMatchupMarginTool("Who has the largest margin of victory?");
+    expect(board?.query).toMatchObject({
+      metric: "largest_margin",
+      aggregation: "owner_max",
+    });
+
+    const history = selectMatchupMarginTool(
+      "What was the largest margin of victory in league history?",
+    );
+    expect(history?.query).toMatchObject({
+      metric: "largest_margin",
+      aggregation: "single_game",
+    });
+
+    const mine = selectMatchupMarginTool("What's my biggest win?", {
+      resolvedOwnerNames: ["Christian Graham"],
+    });
+    expect(mine?.query).toMatchObject({
+      metric: "largest_margin",
+      aggregation: "single_game",
+      personalAsk: true,
+      ownerName: "Christian Graham",
+    });
+
+    const vs = selectMatchupMarginTool("What's Rod's biggest win over Bruce?");
+    expect(vs?.query).toMatchObject({
+      metric: "largest_margin",
+      aggregation: "single_game",
+      ownerName: "Rod",
+      opponentName: "Bruce",
+    });
+
+    expect(selectMatchupMarginTool("biggest blowout")?.query.metric).toBe("largest_margin");
+    expect(selectMatchupMarginTool("most dominant win")?.query.metric).toBe("largest_margin");
+    expect(selectMatchupMarginTool("highest combined score")?.query.metric).toBe(
+      "highest_combined_score",
+    );
+    expect(selectMatchupMarginTool("lowest winning score")?.query.metric).toBe(
+      "lowest_winning_score",
+    );
+    expect(selectMatchupMarginTool("largest upset")?.query.metric).toBe("largest_upset");
+    expect(selectMatchupMarginTool("biggest halftime deficit")?.query.metric).toBe(
+      "largest_halftime_deficit",
+    );
+
+    expect(selectMatchupMarginTool("Who has the most blowout wins by 50+?")?.query).toMatchObject({
+      metric: "wins_by_margin",
+      marginMin: 50,
+    });
+    expect(selectMatchupMarginTool("Who has the most one-point losses?")?.query).toMatchObject({
+      metric: "losses_by_margin",
+      marginExact: 1,
+    });
+  });
+
   it("returns deterministic answer without generic fallback when data exists", async () => {
     const out = await tryMatchupMarginToolAnswer({
       leagueId: "457622",

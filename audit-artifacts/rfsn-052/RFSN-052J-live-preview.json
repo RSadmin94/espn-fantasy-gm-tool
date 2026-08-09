@@ -1,0 +1,219 @@
+{
+  "validationRun": 2,
+  "authoritative": true,
+  "score": "8 PASS / 0 FAIL",
+  "supersedes": {
+    "run": 1,
+    "buildTime": "2026-08-09T01:12:45.396Z",
+    "score": "5 PASS / 3 FAIL",
+    "note": "SUPERSEDED. Do not cite as the 052J Preview outcome. Archive: RFSN-052J-live-preview-run1-superseded.md. Three limitation asks (2009 RS record, championship score, Week 8) hit LLM before season_matchup_detail fix.",
+    "artifact": "audit-artifacts/rfsn-052/RFSN-052J-live-preview-run1-superseded.md"
+  },
+  "previewHost": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T01:20:38.806Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T01:18:53.684Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "hof2009": {
+    "season": 2009,
+    "championTeam": "NEW YORK TRUTITANS",
+    "runnerUpTeam": "Dallas D_Wink_Star",
+    "thirdTeam": "Team Graham",
+    "resolvedChampionOwnerKey": "id:{AE295BDF-FC02-479E-969E-0E712690503C}",
+    "resolvedChampionDisplay": "LOZELL STYLES",
+    "resolvedRunnerUpOwnerKey": "id:{C300FD29-76C4-4FF0-8C91-A4F7BC17ADF2}",
+    "resolvedRunnerUpDisplay": "Steffon Bizzell",
+    "resolvedThirdOwnerKey": "id:{DE1D22CC-4F17-4463-B090-E06E460C5F1F}",
+    "resolvedThirdDisplay": "Jan Graham"
+  },
+  "hofLb": [
+    {
+      "ownerKey": "id:{0C4B6DC7-265E-4A23-99DE-2B67369E9141}",
+      "displayName": "Christian Graham",
+      "titles": 3,
+      "titleSeasons": [
+        2018,
+        2013,
+        2012
+      ]
+    },
+    {
+      "ownerKey": "id:{96E5F3A7-0AB6-4DF1-AE89-E64CAF4A400B}",
+      "displayName": "Demetri Clark",
+      "titles": 3,
+      "titleSeasons": [
+        2024,
+        2017,
+        2014
+      ]
+    },
+    {
+      "ownerKey": "id:{AE295BDF-FC02-479E-969E-0E712690503C}",
+      "displayName": "LOZELL STYLES",
+      "titles": 3,
+      "titleSeasons": [
+        2021,
+        2011,
+        2009
+      ]
+    },
+    {
+      "ownerKey": "id:{34381793-095A-4099-B91E-04FB92B016A7}",
+      "displayName": "Bruce Edwards",
+      "titles": 2,
+      "titleSeasons": [
+        2023,
+        2016
+      ]
+    },
+    {
+      "ownerKey": "id:{B7DED29D-BF48-441C-91B8-34CCFBB09271}",
+      "displayName": "Randy Broner Jr",
+      "titles": 2,
+      "titleSeasons": [
+        2020,
+        2019
+      ]
+    },
+    {
+      "ownerKey": "id:{6042EE3C-4B54-42BE-A2A7-52E939D2C706}",
+      "displayName": "Rod Sellers",
+      "titles": 2,
+      "titleSeasons": [
+        2025,
+        2010
+      ]
+    },
+    {
+      "ownerKey": "id:{F468B611-D262-466C-992F-23D7360C5CC0}",
+      "displayName": "Nate West",
+      "titles": 1,
+      "titleSeasons": [
+        2015
+      ]
+    },
+    {
+      "ownerKey": "id:{82E515D1-73FF-466C-A7A8-099B050278B5}",
+      "displayName": "steven hibbard",
+      "titles": 1,
+      "titleSeasons": [
+        2022
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "question": "How many championships does LOZELL STYLES have?",
+      "answer": "Across recorded championship history from 2009–2025, LOZELL STYLES has 3 championships (2009, 2011, 2021).",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who has the most championships?",
+      "answer": "Across recorded championship history from 2009–2025, championship totals:\n1. Christian Graham — 3 (2012, 2013, 2018)\n2. Demetri Clark — 3 (2014, 2017, 2024)\n3. LOZELL STYLES — 3 (2009, 2011, 2021)\n4. Bruce Edwards — 2 (2016, 2023)\n5. Randy Broner Jr — 2 (2019, 2020)\n6. Rod Sellers — 2 (2010, 2025)\n7. Nate West — 1 (2015)\n8. steven hibbard — 1 (2022)",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who was runner-up in 2009?",
+      "answer": "Across recorded championship history from 2009–2025, the 2009 runner-up is Steffon Bizzell.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who finished third in 2009?",
+      "answer": "Across recorded championship history from 2009–2025, the 2009 third-place finisher is Jan Graham.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "What was LOZELL’s 2009 regular-season record?",
+      "answer": "2009 is preserved as a partial legacy season. The recorded data includes final podium placement, but detailed matchup history is unavailable.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "What was the 2009 championship score?",
+      "answer": "2009 is preserved as a partial legacy season. The recorded data includes final podium placement, but detailed matchup history is unavailable.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who did LOZELL play in Week 8 of 2009?",
+      "answer": "2009 is preserved as a partial legacy season. The recorded data includes final podium placement, but detailed matchup history is unavailable.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Compare Demetri Clark and LOZELL STYLES.",
+      "answer": "Across recorded meetings from 2010–2025, Demetri Clark vs LOZELL STYLES:\nRegular season: tied 10–10–0 (20 games).\nPlayoffs: Demetri Clark leads 5–1–0 (6 games).\nMeetings: 26.\nPlayoff eliminations: Demetri Clark has eliminated LOZELL STYLES 5 times; LOZELL STYLES has eliminated Demetri Clark 1 time.\nRecent regular-season (last 5): 2–3–0 (5 games).\nCurrent streak: Demetri Clark, 1-game win streak.\nClosest game: 2013 week 1, 135.5–136 (margin 0.5).\nBiggest blowout: 2015 week 16 (playoffs), 110–166 (margin 56, LOZELL STYLES).\nNot all-time. Recorded meeting coverage is 2010–2025.",
+      "tool": null,
+      "verdict": "PASS",
+      "failures": []
+    }
+  ],
+  "connections": [
+    {
+      "id": 2,
+      "provider": "espn",
+      "leagueId": "480452315",
+      "leagueName": "Atlantas Finest Dynasty League",
+      "season": 2026,
+      "isActive": false,
+      "selectedTeamId": 7,
+      "selectedOwnerName": "Rod Sellers",
+      "syncStatus": "ok",
+      "lastSyncedAt": "2026-06-30T01:56:49.000Z",
+      "isSetupComplete": true
+    },
+    {
+      "id": 4,
+      "provider": "espn",
+      "leagueId": "158918",
+      "leagueName": "Teco's Fantasy Football League",
+      "season": 2026,
+      "isActive": false,
+      "selectedTeamId": 6,
+      "selectedOwnerName": "Rod Sellers",
+      "syncStatus": "ok",
+      "lastSyncedAt": "2026-06-30T01:56:45.000Z",
+      "isSetupComplete": true
+    },
+    {
+      "id": 1,
+      "provider": "espn",
+      "leagueId": "457622",
+      "leagueName": "ATLANTAS FINEST FF",
+      "season": 2026,
+      "isActive": true,
+      "selectedTeamId": 11,
+      "selectedOwnerName": "Rod Sellers",
+      "syncStatus": "ok",
+      "lastSyncedAt": "2026-07-19T06:13:44.000Z",
+      "isSetupComplete": true
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { ADVISOR_NAME_STOP } from "./advisorScopeResolver";
+
 /**
  * Lightweight Advisor question classification for context trimming.
  * Does not change model, persona, or retrieval architecture — only which
@@ -173,6 +175,7 @@ export function findMentionedOwners(
     const sorted = [...owner.aliases].sort((a, b) => b.length - a.length);
     for (const alias of sorted) {
       if (alias.length < 3) continue;
+      if (ADVISOR_NAME_STOP.has(alias.toLowerCase())) continue;
       const re = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "i");
       if (re.test(t)) {
         hits.push(owner);
@@ -190,16 +193,21 @@ export function findMentionedOwners(
 export async function listAdvisorOwnerAliases(
   userId?: number,
   season = 2025,
+  leagueId?: string | null,
 ): Promise<AdvisorOwnerAlias[]> {
   try {
     const { getCachedView, resolveActiveLeagueId, getAllCachedSeasons } = await import(
       "./db"
     );
-    const { leagueId: lid } = await resolveActiveLeagueId(
-      { user: userId != null ? { id: userId } : undefined },
-      null,
-      season,
-    );
+    let lid = leagueId?.trim() || "";
+    if (!lid) {
+      const resolved = await resolveActiveLeagueId(
+        { user: userId != null ? { id: userId } : undefined },
+        null,
+        season,
+      );
+      lid = String(resolved.leagueId ?? "");
+    }
     if (!lid) return [];
     const leagueKey = String(lid).slice(0, 32);
     const seasons = await getAllCachedSeasons(undefined, userId);
@@ -258,11 +266,34 @@ export async function listAdvisorOwnerAliases(
       }
     }
 
+    try {
+      const { buildOwnerIdentityAuthority } = await import("./ownerIdentityAuthority");
+      const identity = await buildOwnerIdentityAuthority(String(lid));
+      for (const p of identity.listPersons()) {
+        const memberId = p.canonicalPersonId.startsWith("id:")
+          ? p.canonicalPersonId.slice(3)
+          : p.canonicalPersonId;
+        if (!memberId) continue;
+        let entry = byMember.get(memberId);
+        if (!entry) {
+          entry = { displayName: p.canonicalName, aliases: new Set() };
+          byMember.set(memberId, entry);
+        }
+        pushAlias(entry.aliases, p.canonicalName);
+        const first = p.canonicalName.split(/\s+/)[0] ?? "";
+        if (first.length >= 3 && !ADVISOR_NAME_STOP.has(first.toLowerCase())) {
+          pushAlias(entry.aliases, first);
+        }
+      }
+    } catch {
+      /* identity optional — cache aliases still apply */
+    }
+
     return [...byMember.entries()]
       .map(([memberId, v]) => ({
         memberId,
         displayName: v.displayName,
-        aliases: [...v.aliases],
+        aliases: [...v.aliases].filter((a) => !ADVISOR_NAME_STOP.has(a.toLowerCase())),
       }))
       .filter((o) => o.aliases.length > 0);
   } catch {

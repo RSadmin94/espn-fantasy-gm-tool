@@ -133,7 +133,8 @@ If **#7 is yes** → stop and explain before coding.
 
 | Doc | Use |
 |-----|-----|
-| `docs/ARCHITECTURE.md` | Pipeline, season discovery, deploy |
+| `docs/FFR_PRODUCT_TRACKING.md` | Operational SOT — Preview vs Production, RFSNs, roadmap, backlog |
+| `docs/ARCHITECTURE.md` | Pipeline, season discovery, deploy (**deploy-branch/URL section may be stale**; trust tracking doc for env SHAs) |
 | `docs/FREEMIUM_GATING_SPEC.md` | Free/paid splits |
 | `server/h2hAuthority.ts` | H2H contract |
 | `server/leagueWeeklyStats.ts` | Weekly stats contract |

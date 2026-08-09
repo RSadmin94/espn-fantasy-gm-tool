@@ -7,9 +7,11 @@
  * Authentication: reads the same session cookie used by tRPC.
  * Body: { message: string, season?: number }
  *
+ * Same evidence path as tRPC advisor.chat (RFSN-052E).
+ *
  * Response: text/event-stream
  *   data: {"delta":"..."}   — text chunk
- *   data: {"done":true}     — stream complete
+ *   data: {"done":true, "meta":{...}} — stream complete (+ evidence telemetry)
  *   data: {"error":"..."}   — error occurred
  */
 
@@ -17,7 +19,6 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { sdk } from "./_core/sdk";
 import { invokeLLMStream } from "./_core/llm";
-import { buildAdvisorMessages } from "./advisorContextBuilder";
 import { addChatMessage, getUserMemory, persistLlmUsage, resolveActiveLeagueId, sanitizeAdvisorChatLeagueId } from "./db";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 
@@ -84,23 +85,6 @@ export function registerAdvisorStreamRoute(app: Express) {
       // Persist the user message before answering
       await addChatMessage(user.id, "user", message, season, chatLeagueId);
 
-      // RFSN-049: deterministic matchup-margin tool short-circuit (no LLM filler).
-      {
-        const { tryMatchupMarginToolAnswer } = await import("./matchupMarginTool");
-        const marginAnswer = await tryMatchupMarginToolAnswer({
-          leagueId: chatLeagueId,
-          message,
-        });
-        if (marginAnswer) {
-          sendEvent({ delta: marginAnswer.answer, tool: marginAnswer.toolName });
-          await addChatMessage(user.id, "assistant", marginAnswer.answer, season, chatLeagueId);
-          recordUsage({ userId: user.id, callType: "advisor", tokensUsed: 0 });
-          sendEvent({ done: true });
-          return;
-        }
-      }
-
-      // Fetch GM memory and build memory block
       const gmMem = await getUserMemory(user.id);
       let gmMemoryBlock: string | undefined;
       if (gmMem) {
@@ -114,19 +98,30 @@ export function registerAdvisorStreamRoute(app: Express) {
         if (gmMem.notes) parts.push(`GM Notes: ${gmMem.notes}`);
         if (parts.length > 0) gmMemoryBlock = parts.join("\n");
       }
-      // Build messages (same context as tRPC advisor.chat)
-      const messages = await buildAdvisorMessages({
+
+      const { listAdvisorOwnerAliases } = await import("./advisorQuestionClassify");
+      const ownerAliases = await listAdvisorOwnerAliases(user.id, season, chatLeagueId);
+      const { runAdvisorEvidencePath } = await import("./advisorEvidenceExecutor");
+      const path = await runAdvisorEvidencePath({
+        message,
+        leagueId: chatLeagueId,
         userId: user.id,
         season,
-        userMessage: message,
+        ownerAliases,
         gmMemoryBlock,
-        leagueId: chatLeagueId,
       });
 
-      // Stream the response
+      if (path.kind === "deterministic") {
+        sendEvent({ delta: path.message, tool: path.tool, meta: path.telemetry });
+        await addChatMessage(user.id, "assistant", path.message, season, chatLeagueId);
+        recordUsage({ userId: user.id, callType: "advisor", tokensUsed: 0 });
+        sendEvent({ done: true, meta: path.telemetry });
+        return;
+      }
+
       let fullResponse = "";
       for await (const chunk of invokeLLMStream({
-        messages,
+        messages: path.messages,
         callType: "advisor",
         persistUsage: (u) => persistLlmUsage({ userId: user!.id, ...u }),
       })) {
@@ -134,13 +129,9 @@ export function registerAdvisorStreamRoute(app: Express) {
         sendEvent({ delta: chunk });
       }
 
-      // Persist the complete assistant message
       await addChatMessage(user.id, "assistant", fullResponse || "No response generated.", season, chatLeagueId);
-
-      // Record usage for rate limiter (token count not available from stream, use estimate)
       recordUsage({ userId: user.id, callType: "advisor", tokensUsed: Math.ceil(fullResponse.length / 4) });
-
-      sendEvent({ done: true });
+      sendEvent({ done: true, meta: path.telemetry });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : "Stream error";
       console.error("[AdvisorStream] Error:", errMsg);

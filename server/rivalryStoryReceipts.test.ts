@@ -68,6 +68,19 @@ const emptyChampionship: ChampionshipAuthority = {
   unresolvedSeasons: [],
   fallbackLabel: "",
   canonicalKeyForOwnerId: () => "",
+  runnerUpKeyBySeason: new Map(),
+  runnerUpNameBySeason: new Map(),
+  thirdPlaceKeyBySeason: new Map(),
+  thirdPlaceNameBySeason: new Map(),
+  coverageBySeason: new Map(),
+  partialLegacySeasons: [],
+  fullSeasons: [],
+  championshipCoverageStart: null,
+  championshipCoverageEnd: null,
+  matchupCoverageStart: null,
+  matchupCoverageEnd: null,
+  runnerUpSeasonsByKey: new Map(),
+  thirdPlaceSeasonsByKey: new Map(),
 };
 
 function context(overrides: Partial<RivalryStoryReceiptContext> = {}): RivalryStoryReceiptContext {
