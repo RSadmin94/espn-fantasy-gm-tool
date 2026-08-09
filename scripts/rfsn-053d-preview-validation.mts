@@ -350,6 +350,7 @@ async function main() {
 
     const textOnly = [
       ["Who has the most championships?", "championships"],
+      ["Who has the most blowouts?", "blowout"],
       ["Who has the most one-point losses?", "one-point"],
       ["Who reaches the most?", "reach"],
       ["Who drafts QBs early?", "qb|quarterback|draft"],
