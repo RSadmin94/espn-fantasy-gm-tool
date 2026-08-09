@@ -1,0 +1,160 @@
+{
+  "label": "preview",
+  "host": "https://sprint-8-preview.fantasyfootballrivals.com",
+  "health": {
+    "status": "ok",
+    "timestamp": "2026-08-09T16:41:06.431Z",
+    "version": "1.0.0",
+    "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
+    "gitBranch": "feature/provider-expansion",
+    "buildTime": "2026-08-09T16:34:43.599Z",
+    "gitIdentitySource": "build-meta",
+    "nodeEnv": "production",
+    "checks": {
+      "DATABASE_URL": "ok",
+      "JWT_SECRET": "ok",
+      "ESPN_LEAGUE_ID": "ok",
+      "ESPN_S2": "ok",
+      "ESPN_SWID": "ok",
+      "CREDENTIAL_ENCRYPTION_KEY": "ok",
+      "LLM_PROVIDER(openai)": "ok",
+      "database": "ok"
+    }
+  },
+  "passed": 22,
+  "failed": 0,
+  "probes": [
+    {
+      "name": "collections catalog",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "no-mercy:22, heartbreak:4, championship:0, blood-rival:0, closest-calls:254, statement-wins:129, biggest-collapses:125, cashier:70"
+    },
+    {
+      "name": "count no-mercy",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=22 query=22 empty=none"
+    },
+    {
+      "name": "count heartbreak",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=4 query=4 empty=none"
+    },
+    {
+      "name": "count championship",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=0 query=0 empty=insufficient_playoff_tier"
+    },
+    {
+      "name": "count blood-rival",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=0 query=19 empty=none"
+    },
+    {
+      "name": "count closest-calls",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=254 query=254 empty=none"
+    },
+    {
+      "name": "count statement-wins",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=129 query=129 empty=none"
+    },
+    {
+      "name": "count biggest-collapses",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=125 query=125 empty=none"
+    },
+    {
+      "name": "count cashier",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "collection=70 query=70 empty=none"
+    },
+    {
+      "name": "gallery home Story Collections",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "cards=8"
+    },
+    {
+      "name": "open no-mercy",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/no-mercy?ownerName=Rod+Sellers&result=win&noMercy=1&marginMin=50&collection=no-mercy"
+    },
+    {
+      "name": "open heartbreak",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/heartbreak"
+    },
+    {
+      "name": "open championship",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/championship"
+    },
+    {
+      "name": "open blood-rival",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/blood-rival?ownerName=Rod%20Sellers&opponentName=Bruce%20Edwards"
+    },
+    {
+      "name": "open closest-calls",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/closest-calls"
+    },
+    {
+      "name": "open statement-wins",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/statement-wins"
+    },
+    {
+      "name": "open cashier",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/c/cashier"
+    },
+    {
+      "name": "viewer collection badge",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "/league/history/matchups/4585?season=2025&week=17&collection=no-mercy"
+    },
+    {
+      "name": "Advisor No Mercy",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "Advisor Heartbreak",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "You have 4 one-point games (a final margin from 0.50 to 1.49 points; recorded regular-season and playoff matchups from 2012–2024)."
+    },
+    {
+      "name": "Advisor Blood Rival",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "Rod Sellers vs Bruce Edwards: 19 recorded meetings from 2011–2025."
+    },
+    {
+      "name": "Advisor follow-up 2018",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "You vs Bruce Edwards: 1 recorded meeting in 2018."
+    }
+  ]
+}

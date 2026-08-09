@@ -256,6 +256,7 @@ async function main() {
 
     await page.goto(`${BASE}/league/history/matchups`, { waitUntil: "domcontentloaded", timeout: 60_000 });
     await page.waitForSelector("[data-story-collections]", { timeout: 45_000 }).catch(() => null);
+    await page.waitForSelector("[data-story-collection-card]", { timeout: 45_000 }).catch(() => null);
     const homeOk = Boolean(await page.$("[data-story-collections]"));
     const cardCount = await page.$$eval("[data-story-collection-card]", (els) => els.length).catch(() => 0);
     push({
