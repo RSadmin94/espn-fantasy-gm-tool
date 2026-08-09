@@ -1,9 +1,11 @@
 /**
- * RFSN-053D/E — Advisor visual payload contract.
+ * RFSN-053D/E/H — Advisor visual payload contract.
  * Additive on deterministic Advisor replies. UI embeds the 053C gallery.
- * 053E adds optional Story Collection id for branded gallery replies.
+ * 053E adds optional Story Collection id. 053H adds narration (style only).
  */
 import type { StoryCollectionId } from "@shared/matchupStoryCollections";
+import type { HistoricalNarration } from "@shared/historicalNarration";
+import type { NarrationVoice } from "@shared/historicalStoryPackage";
 import type { GalleryQueryResult, GallerySort } from "./matchupGalleryQuery";
 
 export type AdvisorGalleryPreset =
@@ -54,4 +56,12 @@ export type AdvisorMatchupGalleryVisual = {
   collection?: StoryCollectionId;
 };
 
-export type AdvisorVisual = AdvisorMatchupGalleryVisual;
+export type AdvisorHistoricalNarrationVisual = {
+  type: "historical_narration";
+  voice: NarrationVoice;
+  narration: HistoricalNarration;
+  href?: string;
+  collection?: StoryCollectionId | null;
+};
+
+export type AdvisorVisual = AdvisorMatchupGalleryVisual | AdvisorHistoricalNarrationVisual;

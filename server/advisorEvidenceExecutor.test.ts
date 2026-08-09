@@ -472,8 +472,10 @@ describe("runAdvisorEvidencePath", () => {
     if (first.kind !== "deterministic") return;
     expect(first.tool).toBe("query_matchup_gallery");
     expect(first.visual?.type).toBe("matchup_gallery");
-    expect(first.visual?.filters.owner).toBe("Rod Sellers");
-    expect(first.visual?.filters.winsOnly).toBe(true);
+    if (first.visual?.type === "matchup_gallery") {
+      expect(first.visual.filters.owner).toBe("Rod Sellers");
+      expect(first.visual.filters.winsOnly).toBe(true);
+    }
     expect(first.message).toMatch(/22 No Mercy/);
     expect(getAdvisorConversationContext(1, "457622")?.lastIntent).toBe("matchup_gallery");
     expect(getAdvisorConversationContext(1, "457622")?.lastGalleryFilter?.noMercy).toBe(true);
@@ -497,7 +499,10 @@ describe("runAdvisorEvidencePath", () => {
     );
     expect(follow.kind).toBe("deterministic");
     if (follow.kind !== "deterministic") return;
-    expect(follow.visual?.filters.phase).toBe("playoffs");
+    expect(follow.visual?.type).toBe("matchup_gallery");
+    if (follow.visual?.type === "matchup_gallery") {
+      expect(follow.visual.filters.phase).toBe("playoffs");
+    }
     expect(calls[1]?.priorFilter).toMatchObject({ noMercy: true, ownerName: "Rod Sellers" });
 
     const { clearAdvisorConversationContext } = await import("./advisorConversationContext");

@@ -130,6 +130,7 @@ describe("ShareCardRenderer", () => {
     render(createElement(HistoricalShareCardModal, { open: true, onOpenChange: () => undefined, model }));
     const root = document.body;
     expect(root.querySelector("[data-share-card-modal]")).toBeTruthy();
+    expect(root.querySelector("[data-historical-narration]")).toBeTruthy();
     expect(root.querySelector("[data-share-card-preview] [data-share-card-theme='no-mercy']")).toBeTruthy();
     expect((root.querySelector("[data-share-download]") as HTMLButtonElement | null)?.disabled).toBe(false);
     expect(root.querySelector("[data-share-copy-link]")).toBeTruthy();

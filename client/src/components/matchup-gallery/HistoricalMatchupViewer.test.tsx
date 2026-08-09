@@ -106,6 +106,8 @@ describe("HistoricalMatchupViewer", () => {
       );
     });
     expect(el.querySelector("[data-matchup-viewer]")).toBeTruthy();
+    expect(el.querySelector("[data-historical-narration]")).toBeTruthy();
+    expect(el.querySelector("[data-viewer-share-card]")).toBeTruthy();
     expect(el.querySelector("[data-share-card-open]")).toBeTruthy();
     expect(el.textContent).toContain("Rod Sellers");
     expect(el.textContent).toContain("Bruce Edwards");

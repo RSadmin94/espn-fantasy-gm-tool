@@ -49,6 +49,10 @@ import {
   MATCHUP_GALLERY_TOOL_NAME,
   tryMatchupGalleryToolAnswer,
 } from "./matchupGalleryTool";
+import {
+  HISTORICAL_NARRATION_TOOL_NAME,
+  tryHistoricalNarrationToolAnswer,
+} from "./historicalNarrationTool";
 import type { AdvisorVisual } from "./advisorVisual";
 
 export type AdvisorEvidenceTelemetry = {
@@ -102,6 +106,7 @@ export type AdvisorEvidenceExecutorDeps = {
   getConversation?: typeof getAdvisorConversationContext;
   setConversation?: typeof setAdvisorConversationContext;
   tryGallery?: typeof tryMatchupGalleryToolAnswer;
+  tryNarration?: typeof tryHistoricalNarrationToolAnswer;
   resolveViewerOwnerName?: (userId: number) => Promise<string | null>;
 };
 
@@ -907,6 +912,51 @@ export async function runAdvisorEvidencePath(
       narrativeAllowed: false,
       requiredEvidence: ["gallery_query"],
       fallbackToAdvisorContext: false,
+    };
+  }
+
+  if (plan.intent === "historical_narration") {
+    const resolveOwner =
+      deps.resolveViewerOwnerName ??
+      (async (userId: number) => {
+        try {
+          const cur = await resolveCurrentOwner({ id: userId });
+          return cur.displayName?.trim() || cur.franchiseName?.trim() || null;
+        } catch {
+          return null;
+        }
+      });
+    const currentOwnerName = await resolveOwner(input.userId);
+    const tryNarration = deps.tryNarration ?? tryHistoricalNarrationToolAnswer;
+    const hit = await tryNarration({
+      leagueId: input.leagueId,
+      message: input.message,
+      currentOwnerName,
+      leagueName: input.leagueName,
+      ownerAliases: input.ownerAliases,
+      priorFilter: convo?.lastGalleryFilter ?? undefined,
+    });
+    setConvo(input.userId, input.leagueId, {
+      lastResolvedOwners:
+        owners.length >= 1 ? owners : (convo?.lastResolvedOwners ?? []),
+      lastIntent: plan.intent,
+      lastScope: scope,
+      lastLeagueId: String(input.leagueId),
+      lastGalleryFilter: hit?.galleryFilter ?? convo?.lastGalleryFilter ?? null,
+      lastGalleryPreset: convo?.lastGalleryPreset ?? null,
+    });
+    return {
+      kind: "deterministic",
+      message: hit?.answer ?? "Unable to generate narration.",
+      tool: hit?.toolName ?? HISTORICAL_NARRATION_TOOL_NAME,
+      visual: hit?.visual,
+      telemetry: buildEvidenceTelemetry({
+        leagueId: input.leagueId,
+        scope,
+        plan,
+        pkg: null,
+        deterministicShortCircuit: true,
+      }),
     };
   }
 
