@@ -1,0 +1,158 @@
+{
+  "label": "production",
+  "host": "www.fantasyfootballrivals.com",
+  "buildTime": "2026-08-09T14:32:05.217Z",
+  "gitSha": "06b35ba363463669a9fbd5901b8d73e20e4d42a1",
+  "pass": 17,
+  "fail": 0,
+  "total": 17,
+  "probes": [
+    {
+      "name": "No Mercy wins",
+      "question": "Show me my No Mercy wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "Rod vs Bruce",
+      "question": "Show Rod vs Bruce",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "Rod Sellers vs Bruce Edwards: 19 recorded meetings from 2011–2025."
+    },
+    {
+      "name": "championship games",
+      "question": "Show me every championship game.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "Championship-game candidates need ESPN playoffTierType coverage. Recorded playoff flags alone are not enough (132/275 unknown tier)."
+    },
+    {
+      "name": "playoff games",
+      "question": "Show me every playoff game.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "275 recorded playoff games from 2010–2025."
+    },
+    {
+      "name": "closest wins",
+      "question": "Show me my closest wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "129 closest recorded games (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "biggest losses",
+      "question": "Show me my biggest losses.",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_gallery",
+      "intent": "matchup_gallery",
+      "visualType": "matchup_gallery",
+      "sample": "125 recorded games involving Rod Sellers (recorded regular-season and playoff matchups from 2010–2025)."
+    },
+    {
+      "name": "follow-up playoff filter",
+      "question": "Show only the playoff ones.",
+      "verdict": "PASS",
+      "failures": [],
+      "visualType": "matchup_gallery",
+      "sample": "You have 3 No Mercy Rule victories (recorded playoff matchups from 2012–2025)."
+    },
+    {
+      "name": "follow-up season filter",
+      "question": "Now only 2018.",
+      "verdict": "PASS",
+      "failures": [],
+      "visualType": "matchup_gallery",
+      "sample": "You vs Bruce Edwards: 1 recorded meeting in 2018."
+    },
+    {
+      "name": "Clear conversation",
+      "question": "Now only 2018.",
+      "verdict": "PASS",
+      "failures": [],
+      "intent": "advisor_fallback",
+      "sample": "Let's rewind to the 2018 season: - Christian Graham took home the championship, clinching his third title with aplomb, and solidifying his dynasty status with wins in 2012, 2013, and 2018. - Bruce Edwards finished as a r"
+    },
+    {
+      "name": "text-only: Who has the most championships?",
+      "question": "Who has the most championships?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": null,
+      "intent": "championship_leaderboard",
+      "sample": "Across recorded championship history from 2009–2025, championship totals: 1. Christian Graham — 3 (2012, 2013, 2018) 2. Demetri Clark — 3 (2014, 2017, 2024) 3. LOZELL STYLES — 3 (2009, 2011, 2021) 4. Bruce Edwards — 2 (2"
+    },
+    {
+      "name": "text-only: Who has the most blowouts?",
+      "question": "Who has the most blowouts?",
+      "verdict": "PASS",
+      "failures": [],
+      "intent": "advisor_fallback",
+      "sample": "Unfortunately, I don't have specific data on blowout victories, as my data set focuses on standings, championships, and managerial behavior rather than individual match scores. If blowout performance is tracked within AT"
+    },
+    {
+      "name": "text-only: Who has the most one-point losses?",
+      "question": "Who has the most one-point losses?",
+      "verdict": "PASS",
+      "failures": [],
+      "tool": "query_matchup_margins",
+      "intent": "matchup_margins",
+      "sample": "Mark Deroux has the most one-point losses: 4. This was calculated from 1,399 recorded league regular-season matchups from 2010–2025. Using a one-point range of 0.50–1.49 because this league uses decimal scoring. Next: Na"
+    },
+    {
+      "name": "text-only: Who reaches the most?",
+      "question": "Who reaches the most?",
+      "verdict": "PASS",
+      "failures": [],
+      "intent": "draft_history",
+      "sample": "Christian Graham is noted for consistently reaching for players most often in the draft."
+    },
+    {
+      "name": "text-only: Who drafts QBs early?",
+      "question": "Who drafts QBs early?",
+      "verdict": "PASS",
+      "failures": [],
+      "intent": "advisor_fallback",
+      "sample": "In ATLANTAS FINEST FF, Christian Graham is known for drafting quarterbacks earlier than most. His aggressive approach in prioritizing QBs has often set the tone for his championship-winning seasons. While most managers f"
+    },
+    {
+      "name": "UI embed + Open Full Gallery",
+      "question": "Show me my No Mercy wins.",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "embed=1 href=/league/history/matchups?ownerName=Rod+Sellers&result=win&noMercy=1&marginMin=50 viewLinks=22 Show me my No Mercy wins. You have 22 No Mercy Rule victories (recorded regular-season and playoff matchups from 2010–2025). OPEN FULL GALLERY Historical Matchup Gallery 2010–2025 "
+    },
+    {
+      "name": "Open Full Gallery navigation",
+      "question": "/league/history/matchups?ownerName=Rod+Sellers&result=win&noMercy=1&marginMin=50",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "gallery=1"
+    },
+    {
+      "name": "View Matchup",
+      "question": "click first card",
+      "verdict": "PASS",
+      "failures": [],
+      "sample": "https://www.fantasyfootballrivals.com/league/history/matchups/4585?season=2025&week=17"
+    }
+  ]
+}
