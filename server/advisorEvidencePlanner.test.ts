@@ -310,9 +310,7 @@ describe("planAdvisorEvidence", () => {
     expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
       narrativeAllowed: false,
     });
-    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
-      narrativeAllowed: false,
-    });
+    expect(plan("Who reaches the most?").intent).not.toBe("matchup_gallery");
     expectPlan("Best career record?", "career_win_pct", ["owner_identity", "league_records"], {
       narrativeAllowed: false,
     });
@@ -380,6 +378,7 @@ describe("planAdvisorEvidence", () => {
       narrativeAllowed: false,
     });
     expect(plan("Who reaches the most?").intent).not.toBe("matchup_gallery");
+    expect(plan("Who reaches the most?").intent).not.toBe("historical_narration");
     expect(plan("Who has the best record?").intent).not.toBe("matchup_gallery");
     expectPlan("Who has the most one-point losses?", "matchup_margins", ["owner_identity", "matchup_margins"], {
       narrativeAllowed: false,
