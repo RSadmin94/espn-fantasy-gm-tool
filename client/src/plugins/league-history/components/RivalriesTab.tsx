@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { TYPE_KICKER, TYPE_META } from "@/lib/typeScale";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { RivalryDossierPanel } from "@/components/RivalryDossierPanel";
@@ -211,7 +212,7 @@ export function RivalriesTab({
                   <CardContent className="space-y-3 p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">vs</div>
+                        <div className={TYPE_KICKER}>vs</div>
                         <div className="flex items-center gap-1.5">
                           <span className="font-semibold text-foreground">{rival}</span>
                           {(() => {
@@ -253,7 +254,7 @@ export function RivalriesTab({
                             style={{ width: `${winFrac}%` }}
                           />
                         </div>
-                        <div className="flex justify-between text-[11px] text-muted-foreground">
+                        <div className={`flex justify-between ${TYPE_META} text-ink-secondary`}>
                           <span>{winFrac.toFixed(0)}% win rate</span>
                           <span>
                             {total} game{total !== 1 ? "s" : ""}

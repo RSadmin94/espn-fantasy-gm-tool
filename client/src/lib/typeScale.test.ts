@@ -3,10 +3,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TYPE_BADGE, TYPE_CAPTION, TYPE_KICKER, TYPE_META, TYPE_SECTION } from "./typeScale";
 
-describe("RFSN-054B type scale floors", () => {
-  it("keeps badges/kickers on the 12px token, not arbitrary px", () => {
+describe("RFSN-054B/054C type scale floors", () => {
+  it("keeps badge/kicker size at 12px and raises kicker contrast only", () => {
     expect(TYPE_BADGE).toContain("text-2xs");
     expect(TYPE_KICKER).toContain("text-2xs");
+    expect(TYPE_KICKER).toContain("text-ink-secondary");
+    expect(TYPE_KICKER).not.toContain("text-ink-tertiary");
     expect(TYPE_BADGE).not.toMatch(/text-\[\d+px\]/);
     expect(TYPE_KICKER).not.toMatch(/text-\[\d+px\]/);
   });

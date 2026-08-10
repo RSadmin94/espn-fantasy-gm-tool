@@ -20,6 +20,7 @@ import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from "@/components/layout";
+import { TYPE_BADGE } from "@/lib/typeScale";
 
 const DESTINATIONS = [
   { label: "Live Draft", href: "/draft/live", hint: "RFSN draft or connected-league real draft → booth", icon: Radio },
@@ -100,7 +101,7 @@ export function DraftHub() {
         subtitle="Prepare, execute, understand, and review the draft."
         className="mb-5"
         meta={
-          <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className={`rounded-full border border-border px-2.5 py-0.5 ${TYPE_BADGE} uppercase tracking-wider text-ink-secondary`}>
             {season}
           </span>
         }

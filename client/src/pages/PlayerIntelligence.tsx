@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { TYPE_CAPTION, TYPE_KICKER, TYPE_META } from "@/lib/typeScale";
 import {
   Loader2, Search, ArrowLeft, Trophy, ArrowRightLeft,
   Lock, Users, BookOpen, X,
@@ -24,7 +25,7 @@ const POS_PILL: Record<string, string> = {
 function PosPill({ pos }: { pos: string }) {
   const cls = POS_PILL[pos] ?? "bg-zinc-800 text-zinc-300 border border-zinc-700";
   return (
-    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase", cls)}>
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold uppercase", cls)}>
       {pos || "—"}
     </span>
   );
@@ -63,7 +64,7 @@ function Tag({ children, color = "zinc" }: { children: React.ReactNode; color?: 
     zinc:  "bg-zinc-800 text-zinc-300 border-zinc-700",
   }[color];
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[10px] font-semibold", c)}>
+    <span className={cn("inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-2xs font-semibold", c)}>
       {children}
     </span>
   );
@@ -96,8 +97,8 @@ function SectionTitle({ icon, children, sub }: { icon: React.ReactNode; children
   return (
     <div className="mb-3 flex items-center gap-2">
       <span className="text-zinc-400">{icon}</span>
-      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">{children}</span>
-      {sub && <span className="ml-auto text-[10px] text-ink-tertiary">{sub}</span>}
+      <span className="text-xs font-semibold uppercase tracking-wider text-ink-secondary">{children}</span>
+      {sub && <span className={`ml-auto ${TYPE_META} text-ink-secondary`}>{sub}</span>}
     </div>
   );
 }
@@ -267,7 +268,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
             ].map(s => (
               <div key={s.lbl} className="rounded-lg bg-zinc-800/60 px-3 py-2">
                 <div className="text-lg font-bold text-zinc-100">{s.val}</div>
-                <div className="text-[10px] uppercase tracking-wide text-ink-secondary">{s.lbl}</div>
+                <div className={`${TYPE_KICKER}`}>{s.lbl}</div>
               </div>
             ))}
           </div>
@@ -279,7 +280,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
         <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-900/80 p-5">
           <SectionTitle icon={<BookOpen className="h-4 w-4" />}>League story</SectionTitle>
           <p className="text-sm leading-relaxed text-zinc-300 italic">{d.story}</p>
-          <p className="mt-2 text-[10px] text-ink-tertiary">Auto-generated from draft, trade, keeper, and medal data · No AI</p>
+          <p className={`mt-2 ${TYPE_CAPTION} text-ink-secondary`}>Auto-generated from draft, trade, keeper, and medal data · No AI</p>
         </div>
       )}
 
@@ -401,7 +402,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                     <ArrowRightLeft className="h-3.5 w-3.5 shrink-0 text-red-400" />
                     <span className="flex-1 text-zinc-200 truncate">{row.toOwner}</span>
                     {row.processedDate && (
-                      <span className="text-ink-tertiary text-[10px] shrink-0">
+                      <span className={`text-ink-secondary ${TYPE_META} shrink-0`}>
                         {new Date(row.processedDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                       </span>
                     )}
@@ -436,7 +437,7 @@ function ProfileView({ playerName, onBack }: { playerName: string; onBack: () =>
                         <td className="py-2 text-zinc-200">{row.ownerName || "—"}</td>
                         <td className="py-2 text-center">
                           <span className={cn(
-                            "rounded border px-1.5 py-0.5 text-[10px] font-semibold",
+                            "rounded border px-1.5 py-0.5 text-2xs font-semibold",
                             row.round <= 3 ? "border-lime-700 bg-lime-900/30 text-lime-300" :
                             row.round <= 6 ? "border-amber-700 bg-amber-900/30 text-amber-300" :
                             "border-zinc-700 bg-zinc-800 text-zinc-300"

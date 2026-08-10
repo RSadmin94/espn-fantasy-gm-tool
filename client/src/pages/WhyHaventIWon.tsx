@@ -415,7 +415,7 @@ export function WhyHaventIWon() {
                             <>
                               <button
                                 onClick={() => setOpenReason((cur) => (cur === f.id ? null : f.id))}
-                                className="mt-2 text-[11px] font-bold uppercase tracking-widest text-white/45 underline-offset-2 hover:underline"
+                                className="mt-2 text-label font-bold uppercase tracking-widest text-ink-secondary underline-offset-2 hover:underline"
                               >
                                 {openReason === f.id ? "Hide evidence" : "Evidence"}
                               </button>
@@ -462,7 +462,7 @@ export function WhyHaventIWon() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-bold text-white/90">{m.title}</div>
-                          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide", m.impact === "high" ? "bg-red-500/15 text-red-300" : m.impact === "medium" ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-white/60")}>{m.impact}</span>
+                          <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide", m.impact === "high" ? "bg-red-500/15 text-red-300" : m.impact === "medium" ? "bg-amber-500/15 text-amber-300" : "bg-white/10 text-white/70")}>{m.impact}</span>
                         </div>
                         <p className="mt-1 text-[14px] text-white/55">{m.detail}</p>
                       </div>
@@ -601,7 +601,7 @@ export function WhyHaventIWon() {
                 <div className="flex items-center gap-5 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
                   <div className="text-center">
                     <div className={cn("text-[56px] font-black leading-none tabular-nums", scoreColor(readiness.score))}>{readiness.score}</div>
-                    <div className="text-[11px] uppercase tracking-wide text-white/40">out of 100</div>
+                    <div className="text-label uppercase tracking-wide text-ink-secondary">out of 100</div>
                   </div>
                   <div className="flex-1">
                     <div className={cn("text-[18px] font-extrabold", TIER_COLOR[readiness.tier] ?? "text-white/80")}>{readiness.tier}</div>

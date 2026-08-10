@@ -46,7 +46,7 @@ import {
 
 // ── theme (matches Command Dashboard / Rivalry Center) ───────────────────────
 const TEXT = "#f3f8ff";
-const MUTED = "var(--color-muted-foreground)";
+const MUTED = "var(--color-ink-secondary)";
 const GOLD = "#f5c518";
 const ACCENT = "#a3e635";
 const GREEN = "#a3e635";
@@ -1870,9 +1870,9 @@ export function RivalryDossierPanel({
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={pd.chartSeries} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                    <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 9 }} interval="preserveStartEnd" />
-                    <YAxis domain={["auto", "auto"]} tick={{ fill: MUTED, fontSize: 10 }} width={36} />
-                    <Tooltip contentStyle={{ background: "#1f1624", border: "1px solid rgba(255,255,255,0.1)", fontSize: 11 }} labelStyle={{ color: MUTED }} />
+                    <XAxis dataKey="label" tick={{ fill: MUTED, fontSize: 12 }} interval="preserveStartEnd" />
+                    <YAxis domain={["auto", "auto"]} tick={{ fill: MUTED, fontSize: 12 }} width={40} />
+                    <Tooltip contentStyle={{ background: "#1f1624", border: "1px solid rgba(255,255,255,0.1)", fontSize: 13 }} labelStyle={{ color: MUTED }} />
                     <Line type="monotone" dataKey="ownerScore" name={pd.focalDisplayName} stroke={CHART_FOCAL} dot={false} strokeWidth={2} />
                     <Line type="monotone" dataKey="opponentScore" name={pd.opponentDisplayName} stroke={CHART_OPP} dot={false} strokeWidth={2} />
                   </LineChart>

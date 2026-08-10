@@ -52,7 +52,7 @@ export function RfsnTicker({ items, upNextTeam, className }: RfsnTickerProps) {
         </p>
       </div>
       {upNextTeam && (
-        <p className="hidden shrink-0 border-l border-white/10 pl-3 text-label uppercase tracking-wide text-white/40 md:block">
+        <p className="hidden shrink-0 border-l border-white/10 pl-3 text-label uppercase tracking-wide text-ink-secondary md:block">
           Up next{" "}
           <span className="font-bold text-emerald-400/90">{upNextTeam}</span>
         </p>

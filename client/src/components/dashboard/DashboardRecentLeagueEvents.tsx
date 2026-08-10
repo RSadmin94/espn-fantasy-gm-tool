@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { Loader2 } from "lucide-react";
+import { TYPE_CAPTION, TYPE_META } from "@/lib/typeScale";
 
 type Props = {
   /** Seasons to pull from `gmTransactions` (most recent activity first after merge). */
@@ -68,11 +69,11 @@ export function DashboardRecentLeagueEvents({ seasons, enabled = true }: Props) 
         >
           <div className="flex items-start justify-between gap-2">
             <span className="text-xs font-semibold uppercase tracking-wide text-amber-400/90">{r.eventType}</span>
-            <span className="shrink-0 text-[10px] text-muted-foreground">{formatWhen(r.processedMs)}</span>
+            <span className={`shrink-0 ${TYPE_META} text-ink-secondary`}>{formatWhen(r.processedMs)}</span>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-foreground">{r.teamLabel}</p>
           <p
-            className={`mt-0.5 text-[11px] text-muted-foreground ${
+            className={`mt-0.5 ${TYPE_CAPTION} text-ink-secondary ${
               r.eventType === "Trade completed" && r.playersLine.includes("\n")
                 ? "line-clamp-4 whitespace-pre-line"
                 : "line-clamp-2"
@@ -80,7 +81,7 @@ export function DashboardRecentLeagueEvents({ seasons, enabled = true }: Props) 
           >
             {r.playersLine}
           </p>
-          <p className="mt-1 text-[10px] text-muted-foreground">Season {r.season}</p>
+          <p className={`mt-1 ${TYPE_META} text-ink-secondary`}>Season {r.season}</p>
         </li>
       ))}
     </ul>

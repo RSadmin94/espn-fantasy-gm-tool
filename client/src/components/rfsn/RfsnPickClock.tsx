@@ -77,9 +77,9 @@ export function RfsnPickClock({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden />
       <div className="flex items-baseline gap-1.5">
-        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">Round</span>
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Round</span>
         <span className="font-extrabold tabular-nums text-base">{round}</span>
-        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary ml-2">Pick</span>
+        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary ml-2">Pick</span>
         <span className="font-extrabold tabular-nums text-base">
           {overallPick}
           {totalPicks ? <span className="opacity-50">/{totalPicks}</span> : null}
@@ -88,7 +88,7 @@ export function RfsnPickClock({
 
       {state !== "complete" && (
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-2xs font-semibold uppercase tracking-wide text-ink-tertiary shrink-0">On the clock</span>
+          <span className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary shrink-0">On the clock</span>
           <span className="font-semibold truncate text-sm">{onClockTeam}</span>
           {onClockOwner ? <span className="text-label text-ink-secondary truncate hidden sm:inline">{onClockOwner}</span> : null}
         </div>

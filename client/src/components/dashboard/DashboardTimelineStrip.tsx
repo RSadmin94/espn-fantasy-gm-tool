@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { V1 } from "@/lib/v1Copy";
 import { Loader2 } from "lucide-react";
+import { TYPE_BADGE, TYPE_CAPTION, TYPE_META } from "@/lib/typeScale";
 
 export type TimelineChamp = {
   season: number;
@@ -26,7 +27,7 @@ export function DashboardTimelineStrip({
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="h-4 w-0.5 rounded-full bg-amber-500" aria-hidden />
-            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+            <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-ink-secondary">
               {V1.home.championsTimeline}
             </h2>
           </div>
@@ -63,15 +64,15 @@ export function DashboardTimelineStrip({
                 >
                   <span
                     className={cn(
-                      "text-[10px] font-black tabular-nums tracking-widest",
-                      row.isCurrentSeason ? "text-violet-300" : "text-muted-foreground",
+                      `${TYPE_META} font-black tabular-nums tracking-widest`,
+                      row.isCurrentSeason ? "text-violet-300" : "text-ink-secondary",
                     )}
                   >
                     {row.season}
                   </span>
                   <div
                     className={cn(
-                      "flex h-12 w-12 items-center justify-center rounded-full border text-[11px] font-bold",
+                      `flex h-12 w-12 items-center justify-center rounded-full border ${TYPE_BADGE}`,
                       row.isCurrentSeason
                         ? "border-violet-400/50 bg-violet-500/15 text-violet-100"
                         : "border-amber-500/30 bg-amber-500/10 text-amber-100",
@@ -79,7 +80,7 @@ export function DashboardTimelineStrip({
                   >
                     {isFuture ? "?" : mark}
                   </div>
-                  <p className="line-clamp-3 min-h-[2.5rem] text-[10px] font-medium leading-tight text-muted-foreground">
+                  <p className={`line-clamp-3 min-h-[2.5rem] ${TYPE_CAPTION} font-medium leading-tight text-ink-secondary`}>
                     {row.label}
                   </p>
                 </div>

@@ -407,7 +407,7 @@ function SubscriptionSection() {
                   >
                     <div className="font-bold text-foreground">{BILLING_COPY.annualLabel}</div>
                     <div className="text-muted-foreground">{BILLING_COPY.annualPriceLabel}</div>
-                    <div className="mt-0.5 text-[10px] font-semibold text-primary">
+                    <div className="mt-0.5 text-caption font-semibold text-primary">
                       {BILLING_COPY.annualEquivalentLabel} · {BILLING_COPY.annualSavingsLabel}
                     </div>
                   </button>

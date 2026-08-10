@@ -8,6 +8,7 @@ import { LeagueKeeperForecast } from "@/pages/LeagueKeeperForecast";
 import { KeeperAdvisor } from "@/pages/KeeperAdvisor";
 import { CinematicPageHeader, IntelPageShell } from "@/components/layout";
 import { cn } from "@/lib/utils";
+import { TYPE_BADGE } from "@/lib/typeScale";
 
 type KeeperTab = "forecast" | "advisor";
 
@@ -29,7 +30,7 @@ export function DraftKeepers() {
         subtitle="Keeper preparation and decision support — forecast and advisor in one place."
         className="mb-4"
         meta={
-          <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className={`rounded-full border border-border px-2.5 py-0.5 ${TYPE_BADGE} uppercase tracking-wider text-ink-secondary`}>
             {active.label}
           </span>
         }

@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { TYPE_BADGE, TYPE_CAPTION, TYPE_META } from "@/lib/typeScale";
 import { Radio, ArrowRight, TrendingUp, Swords } from "lucide-react";
 
 interface TeamSide { name: string; score: number }
@@ -37,21 +38,21 @@ function WireCard({ report }: { report: MatchupReport }) {
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
           <div className="font-bold text-foreground text-xs truncate">{report.winner.name}</div>
-          <div className="text-muted-foreground text-xs truncate">{report.loser.name}</div>
+          <div className="text-ink-secondary text-xs truncate">{report.loser.name}</div>
         </div>
         <div className="text-right shrink-0">
           <div className="font-black text-lime-400 text-sm tabular-nums">{report.winner.score.toFixed(2)}</div>
-          <div className="text-muted-foreground text-xs tabular-nums">{report.loser.score.toFixed(2)}</div>
+          <div className="text-ink-secondary text-xs tabular-nums">{report.loser.score.toFixed(2)}</div>
         </div>
         {badge && (
-          <span className={cn("text-[9px] font-black uppercase border px-1.5 py-0.5 rounded ml-1 shrink-0", badge.cls)}>
+          <span className={cn(TYPE_BADGE, "uppercase border px-1.5 py-0.5 rounded ml-1 shrink-0", badge.cls)}>
             {badge.label}
           </span>
         )}
       </div>
 
       {/* Icons row */}
-      <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+      <div className={cn("flex items-center gap-3 text-ink-secondary", TYPE_META)}>
         {report.rivalryNote && (
           <span className="flex items-center gap-1 text-violet-500">
             <Swords className="h-2.5 w-2.5" />
@@ -98,19 +99,19 @@ export function LeagueWireNewsFeed() {
           <Radio className="h-3.5 w-3.5 text-lime-400 shrink-0" />
           <div className="min-w-0">
             <span className="text-sm font-black text-foreground tracking-tight block">RFSN</span>
-            <span className="text-[10px] text-muted-foreground font-medium block truncate">
+            <span className={cn(TYPE_CAPTION, "text-ink-secondary font-medium block truncate")}>
               Latest league stories and weekly coverage
             </span>
           </div>
           {latest && (
-            <span className="text-[10px] text-muted-foreground font-medium shrink-0 hidden sm:inline">
+            <span className={cn(TYPE_META, "text-ink-secondary font-medium shrink-0 hidden sm:inline")}>
               · S{latest.season} Wk{latest.week}
             </span>
           )}
         </div>
         <Link
           to="/rfsn"
-          className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          className={cn("flex items-center gap-1 text-ink-secondary hover:text-foreground transition-colors shrink-0", TYPE_META)}
         >
           View all <ArrowRight className="h-3 w-3" />
         </Link>

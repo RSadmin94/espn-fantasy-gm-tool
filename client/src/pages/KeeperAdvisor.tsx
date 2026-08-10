@@ -116,7 +116,7 @@ function KeeperDNA({ pool, ownerFilter }: { pool: KeeperPoolRow[]; ownerFilter: 
         </div>
         <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">Your Keeper DNA</h3>
       </div>
-      <p className="mb-4 text-[11px] text-ink-secondary">Insights from your historical keeper patterns.</p>
+      <p className="mb-4 text-caption text-ink-secondary">Insights from your historical keeper patterns.</p>
 
       <div className="space-y-3">
         {[
@@ -167,7 +167,7 @@ function AIInsight({ valuations, ownerFilter }: { valuations: KeeperValuation[];
         <Sparkles className="h-4 w-4 text-amber-400/60" />
       </div>
       <p className="text-sm leading-relaxed text-amber-100/90">{insight}</p>
-      <p className="mt-2 text-[10px] text-amber-700/80">
+      <p className="mt-2 text-caption text-amber-200/80">
         Deterministic · No LLM · {eliteCount} elite-value {eliteCount === 1 ? "keeper" : "keepers"}
       </p>
     </div>
@@ -426,7 +426,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
             </Select>
           </div>
 
-          <div className="ml-auto flex items-center gap-1.5 text-[10px] text-ink-tertiary">
+          <div className="ml-auto flex items-center gap-1.5 text-caption text-ink-secondary">
             <Info className="h-3 w-3" />
             Savings = keeper round − ADP round · ranked best value first
           </div>
@@ -503,7 +503,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                                           : "Mark as keeper"
                                   }
                                   className={cn(
-                                    "inline-flex items-center rounded-md border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide transition-colors",
+                                    "inline-flex items-center rounded-md border px-2.5 py-1 text-2xs font-bold uppercase tracking-wide transition-colors",
                                     isSel
                                       ? "border-lime-600 bg-lime-600/20 text-lime-300 hover:bg-lime-600/30"
                                       : disabled
@@ -519,7 +519,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                                     onChange={(e) => setPick(v, Number(e.target.value))}
                                     disabled={setManual.isPending}
                                     title="Which of this team's picks in the keeper's round to use (for teams holding multiple picks in that round)"
-                                    className="rounded border border-zinc-700 bg-zinc-800/60 px-1 py-0.5 text-[10px] text-zinc-300"
+                                    className="rounded border border-zinc-700 bg-zinc-800/60 px-1 py-0.5 text-label text-zinc-200"
                                   >
                                     <option value={0}>Auto (later pick)</option>
                                     <option value={1}>1st pick</option>
@@ -535,7 +535,7 @@ export function KeeperAdvisor({ embedded = false }: { embedded?: boolean } = {})
                           {/* Player + owner + pos/nfl */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
-                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-[11px] font-bold text-zinc-300">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-2xs font-bold text-zinc-200">
                                 {v.playerName.split(" ").map(w => w[0]).slice(0, 2).join("")}
                               </div>
                               <div className="min-w-0">

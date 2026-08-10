@@ -115,7 +115,7 @@ export function MiniTable({
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[280px] text-left">
         <thead>
-          <tr className="border-b border-border bg-foreground/[0.02] text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border bg-foreground/[0.02] text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
             {columns.map((c) => (
               <th key={c} className={cn(cell, "font-semibold")}>
                 {c}
