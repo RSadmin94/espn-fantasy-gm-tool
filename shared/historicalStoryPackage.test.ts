@@ -7,6 +7,7 @@ import {
   collectPackageNumbers,
   collectionToStoryPackage,
   matchupToStoryPackage,
+  narrationDoesNotAlterPackageFacts,
   narrationUsesOnlyPackageFacts,
   parseHistoricalStoryPackage,
   shareCardToStoryPackage,
@@ -85,6 +86,35 @@ describe("RFSN-053H HistoricalStoryPackage", () => {
     expect(titleCase.ok).toBe(true);
     const heartbreak = collectionToStoryPackage("heartbreak", { count: 4, leagueName: "ATLANTAS FINEST FF" });
     expect(narrationUsesOnlyPackageFacts(heartbreak, "Margins from 0.50 to 1.5 in four Heartbreak Kids games.").ok).toBe(true);
+  });
+
+  it("does not allow season, week, or margin to change", () => {
+    const pkg = matchupToStoryPackage({
+      matchupId: 88,
+      season: 2025,
+      week: 12,
+      phase: "regular",
+      isChampionshipGame: false,
+      homeDisplayName: "Rod Sellers",
+      awayDisplayName: "Bruce Edwards",
+      homeScore: 162.8,
+      awayScore: 104.4,
+      margin: 58.4,
+      winnerPersonId: "id:rod",
+      homePersonId: "id:rod",
+      awayPersonId: "id:bruce",
+      winnerDisplayName: "Rod Sellers",
+      leagueName: "ATLANTAS FINEST FF",
+      collectionId: "no-mercy",
+    });
+    const exact = narrationDoesNotAlterPackageFacts(
+      pkg,
+      "Week 12 marked a decisive 2025 win. Margin: 58.4. Score 162.8–104.4.",
+    );
+    expect(exact.ok).toBe(true);
+    expect(narrationDoesNotAlterPackageFacts(pkg, "Week 13 marked a decisive win. Margin: 58.4.").ok).toBe(false);
+    expect(narrationDoesNotAlterPackageFacts(pkg, "Week 12 in 2024. Margin: 58.4.").ok).toBe(false);
+    expect(narrationDoesNotAlterPackageFacts(pkg, "Week 12. Margin: 60.").ok).toBe(false);
   });
 
   it("hash input ignores provenance wording differences that are not facts", () => {

@@ -424,3 +424,59 @@ export function narrationUsesOnlyPackageFacts(
   return { ok: invented.length === 0, invented };
 }
 
+/** If the copy mentions season / week / margin / score, those values must match the package exactly. */
+export function narrationDoesNotAlterPackageFacts(
+  pkg: HistoricalStoryPackage,
+  text: string,
+): { ok: boolean; altered: string[] } {
+  const altered: string[] = [];
+  const weeks = new Set<number>();
+  if (pkg.week != null) weeks.add(pkg.week);
+  for (const f of pkg.featuredMatchups) weeks.add(f.week);
+  if (weeks.size) {
+    for (const m of text.matchAll(/\bweeks?\s+(\d+)\b/gi)) {
+      const w = Number(m[1]);
+      if (!weeks.has(w)) altered.push(`week ${w}`);
+    }
+  }
+  const seasons = new Set<number>();
+  if (pkg.season != null) seasons.add(pkg.season);
+  for (const f of pkg.featuredMatchups) seasons.add(f.season);
+  if (pkg.coverageYears.from != null) seasons.add(pkg.coverageYears.from);
+  if (pkg.coverageYears.to != null) seasons.add(pkg.coverageYears.to);
+  if (seasons.size) {
+    for (const m of text.matchAll(/\b((?:19|20)\d{2})\b/g)) {
+      const y = Number(m[1]);
+      if (!seasons.has(y) && !yearInCoverage(pkg, y)) altered.push(String(y));
+    }
+  }
+  const margins = new Set<number>();
+  if (pkg.margin != null) margins.add(pkg.margin);
+  for (const f of pkg.featuredMatchups) margins.add(f.margin);
+  const marginOk = (v: number) => [...margins].some((x) => Math.abs(x - v) < 1e-9);
+  if (margins.size) {
+    for (const m of text.matchAll(/\bmargin[:\s]+(\d+(?:\.\d+)?)/gi)) {
+      if (!marginOk(Number(m[1]))) altered.push(`margin ${m[1]}`);
+    }
+    for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*(?:point|pt)s?\s+margin/gi)) {
+      if (!marginOk(Number(m[1]))) altered.push(`margin ${m[1]}`);
+    }
+  }
+  const scorePairs: Array<[number, number]> = [];
+  if (pkg.winnerScore != null && pkg.loserScore != null) scorePairs.push([pkg.winnerScore, pkg.loserScore]);
+  for (const f of pkg.featuredMatchups) scorePairs.push([f.winnerScore, f.loserScore]);
+  if (scorePairs.length) {
+    for (const m of text.matchAll(/(\d+(?:\.\d+)?)\s*[–\-]\s*(\d+(?:\.\d+)?)/g)) {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      const ok = scorePairs.some(
+        ([w, l]) =>
+          (Math.abs(w - a) < 1e-9 && Math.abs(l - b) < 1e-9) ||
+          (Math.abs(w - b) < 1e-9 && Math.abs(l - a) < 1e-9),
+      );
+      if (!ok) altered.push(`score ${m[1]}-${m[2]}`);
+    }
+  }
+  return { ok: altered.length === 0, altered };
+}
+

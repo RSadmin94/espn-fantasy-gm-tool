@@ -367,6 +367,21 @@ describe("planAdvisorEvidence", () => {
     });
     expect(plan("Show me my No Mercy wins.").intent).toBe("matchup_gallery");
     expect(plan("Who has the most championships?").intent).not.toBe("historical_narration");
+    expect(plan("Who reaches the most?").intent).not.toBe("historical_narration");
+    expect(plan("Best career record?").intent).not.toBe("historical_narration");
+    expect(plan("Biggest blowout?").intent).not.toBe("historical_narration");
+    expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Best career record?", "career_win_pct", ["owner_identity", "league_records"], {
+      narrativeAllowed: false,
+    });
+    expectPlan("Biggest blowout?", "matchup_margins", ["owner_identity", "matchup_margins"], {
+      narrativeAllowed: false,
+    });
   });
 
   it("plans matchup gallery for show-me-games asks (RFSN-053D)", () => {

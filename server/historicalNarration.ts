@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import { invokeLLM } from "./_core/llm";
 import {
   NARRATION_PROMPT_VERSION,
+  narrationDoesNotAlterPackageFacts,
   narrationUsesOnlyPackageFacts,
   storyPackageHashInput,
   type HistoricalStoryPackage,
@@ -124,14 +125,22 @@ export async function narrateHistoricalStory(
 
   const impl = llmImpl ?? defaultLlm;
   let narration = await impl(pkg, voice);
-  let grounded = narrationUsesOnlyPackageFacts(pkg, narrationCorpus(narration));
+  const check = (n: HistoricalNarration) => {
+    const corpus = narrationCorpus(n);
+    const invented = narrationUsesOnlyPackageFacts(pkg, corpus);
+    const altered = narrationDoesNotAlterPackageFacts(pkg, corpus);
+    return { invented, altered, ok: invented.ok && altered.ok };
+  };
+  let grounded = check(narration);
   if (!grounded.ok && !llmImpl) {
-    console.warn("[historical-narration] retry after invented facts", grounded.invented);
-    narration = await defaultLlm(pkg, voice, grounded.invented);
-    grounded = narrationUsesOnlyPackageFacts(pkg, narrationCorpus(narration));
+    const hints = [...grounded.invented.invented, ...grounded.altered.altered];
+    console.warn("[historical-narration] retry after invented/altered facts", hints);
+    narration = await defaultLlm(pkg, voice, hints);
+    grounded = check(narration);
   }
   if (!grounded.ok) {
-    console.error("[historical-narration] invented facts", grounded.invented);
+    console.error("[historical-narration] invented facts", grounded.invented.invented);
+    console.error("[historical-narration] altered facts", grounded.altered.altered);
     throw new Error(NARRATION_EXPORT_ERROR);
   }
   remember(key, narration);
