@@ -100,7 +100,12 @@ async function main() {
       await page.setViewportSize({ width, height: 1080 });
       for (const [route, name] of PAGES) {
         await page.goto(`${BASE}${route}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-        await page.waitForTimeout(4000);
+        if (name === "owners") {
+          await page.waitForSelector("[data-owner-profiles-mode] button", { timeout: 60_000 }).catch(() => null);
+          await page.waitForTimeout(1200);
+        } else {
+          await page.waitForTimeout(8000);
+        }
         const meta = await page.evaluate(() => ({
           path: location.pathname,
           overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
@@ -109,13 +114,15 @@ async function main() {
         await page.screenshot({ path: path.join(OUT, `${name}__${width}.png`), fullPage: false });
 
         if (name === "owners") {
-          const href = await page.evaluate(() => {
-            const a = document.querySelector<HTMLAnchorElement>('a[href^="/rivals/owners/"]');
-            return a?.getAttribute("href") ?? null;
+          const clicked = await page.evaluate(() => {
+            const btn = document.querySelector<HTMLButtonElement>("[data-owner-profiles-mode] button");
+            btn?.click();
+            return Boolean(btn);
           });
-          if (href) {
-            await page.goto(`${BASE}${href}`, { waitUntil: "domcontentloaded", timeout: 90_000 });
-            await page.waitForTimeout(4500);
+          if (clicked) {
+            await page.waitForURL((u) => /\/rivals\/owners\/[^/]+/.test(u.pathname), { timeout: 45_000 }).catch(() => null);
+            await page.waitForSelector("text=Executive Summary", { timeout: 45_000 }).catch(() => null);
+            await page.waitForTimeout(1500);
             const dmeta = await page.evaluate(() => ({
               path: location.pathname,
               overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth + 2,
@@ -123,7 +130,7 @@ async function main() {
             notes.push(`dossier__${width}: ${JSON.stringify(dmeta)}`);
             await page.screenshot({ path: path.join(OUT, `dossier__${width}.png`), fullPage: false });
           } else {
-            notes.push(`dossier__${width}: SKIP no owner href`);
+            notes.push(`dossier__${width}: SKIP no owner button`);
           }
         }
       }

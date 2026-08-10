@@ -1,0 +1,67 @@
+phase=before
+buildTime=2026-08-10T00:35:48.767Z
+gitSha=dff6154ca3a6f1e7713c9e4f5d1b681a76007b95
+owners__1920: {"path":"/rivals/owners","overflowX":false}
+dossier__1920: SKIP no owner href
+rivalries__1920: {"path":"/rivals/rivalries","overflowX":false}
+advisor__1920: {"path":"/my-team/advisor","overflowX":false}
+historical-matchups__1920: {"path":"/league/history/matchups","overflowX":false}
+matchup__1920: {"path":"/my-team/matchup","overflowX":false}
+records__1920: {"path":"/league/history/records","overflowX":false}
+hall-of-fame__1920: {"path":"/league/history/hall-of-fame","overflowX":false}
+commissioner__1920: {"path":"/league/commissioner","overflowX":false}
+stories__1920: {"path":"/rfsn/stories","overflowX":false}
+draft-live__1920: {"path":"/draft/live","overflowX":false}
+draft-mock__1920: {"path":"/draft/mock","overflowX":false}
+transactions__1920: {"path":"/league/history/transactions","overflowX":false}
+championship-path__1920: {"path":"/my-team/championship-path","overflowX":false}
+roster__1920: {"path":"/my-team/roster","overflowX":false}
+trades__1920: {"path":"/my-team/trades","overflowX":false}
+owners__1600: {"path":"/rivals/owners","overflowX":false}
+dossier__1600: SKIP no owner href
+rivalries__1600: {"path":"/rivals/rivalries","overflowX":false}
+advisor__1600: {"path":"/my-team/advisor","overflowX":false}
+historical-matchups__1600: {"path":"/league/history/matchups","overflowX":false}
+matchup__1600: {"path":"/my-team/matchup","overflowX":false}
+records__1600: {"path":"/league/history/records","overflowX":false}
+hall-of-fame__1600: {"path":"/league/history/hall-of-fame","overflowX":false}
+commissioner__1600: {"path":"/league/commissioner","overflowX":false}
+stories__1600: {"path":"/rfsn/stories","overflowX":false}
+draft-live__1600: {"path":"/draft/live","overflowX":false}
+draft-mock__1600: {"path":"/draft/mock","overflowX":false}
+transactions__1600: {"path":"/league/history/transactions","overflowX":false}
+championship-path__1600: {"path":"/my-team/championship-path","overflowX":false}
+roster__1600: {"path":"/my-team/roster","overflowX":false}
+trades__1600: {"path":"/my-team/trades","overflowX":false}
+owners__1440: {"path":"/rivals/owners","overflowX":false}
+dossier__1440: SKIP no owner href
+rivalries__1440: {"path":"/rivals/rivalries","overflowX":false}
+advisor__1440: {"path":"/my-team/advisor","overflowX":false}
+historical-matchups__1440: {"path":"/league/history/matchups","overflowX":false}
+matchup__1440: {"path":"/my-team/matchup","overflowX":false}
+records__1440: {"path":"/league/history/records","overflowX":false}
+hall-of-fame__1440: {"path":"/league/history/hall-of-fame","overflowX":false}
+commissioner__1440: {"path":"/league/commissioner","overflowX":false}
+stories__1440: {"path":"/rfsn/stories","overflowX":false}
+draft-live__1440: {"path":"/draft/live","overflowX":false}
+draft-mock__1440: {"path":"/draft/mock","overflowX":false}
+transactions__1440: {"path":"/league/history/transactions","overflowX":false}
+championship-path__1440: {"path":"/my-team/championship-path","overflowX":false}
+roster__1440: {"path":"/my-team/roster","overflowX":false}
+trades__1440: {"path":"/my-team/trades","overflowX":false}
+owners__1366: {"path":"/rivals/owners","overflowX":false}
+dossier__1366: SKIP no owner href
+rivalries__1366: {"path":"/rivals/rivalries","overflowX":false}
+advisor__1366: {"path":"/my-team/advisor","overflowX":false}
+historical-matchups__1366: {"path":"/league/history/matchups","overflowX":false}
+matchup__1366: {"path":"/my-team/matchup","overflowX":false}
+records__1366: {"path":"/league/history/records","overflowX":false}
+hall-of-fame__1366: {"path":"/league/history/hall-of-fame","overflowX":false}
+commissioner__1366: {"path":"/league/commissioner","overflowX":false}
+stories__1366: {"path":"/rfsn/stories","overflowX":false}
+draft-live__1366: {"path":"/draft/live","overflowX":false}
+draft-mock__1366: {"path":"/draft/mock","overflowX":false}
+transactions__1366: {"path":"/league/history/transactions","overflowX":false}
+championship-path__1366: {"path":"/my-team/championship-path","overflowX":false}
+roster__1366: {"path":"/my-team/roster","overflowX":false}
+trades__1366: {"path":"/my-team/trades","overflowX":false}
