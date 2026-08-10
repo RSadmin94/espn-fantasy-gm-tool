@@ -16,3 +16,12 @@ export const TYPE_KICKER = "text-2xs font-semibold uppercase tracking-wide text-
 export const TYPE_META = "text-label font-medium leading-snug";
 export const TYPE_CAPTION = "text-caption leading-relaxed";
 export const TYPE_SECTION = "text-[15px] font-semibold leading-snug tracking-tight";
+
+/**
+ * RFSN-054D scoped floors — Trade Analyzer / GM Advisor / Championship Path / Draft History only.
+ * Do not change TYPE_BADGE/KICKER/META/CAPTION/SECTION. Use with [data-rfsn-054d] or explicitly.
+ */
+export const TYPE_READABLE_META = "text-label leading-snug";
+export const TYPE_READABLE_LABEL = "text-caption font-medium leading-snug";
+export const TYPE_READABLE_BODY = "text-[15px] leading-relaxed";
+export const TYPE_READABLE_SECTION = "text-base font-semibold leading-snug tracking-tight";

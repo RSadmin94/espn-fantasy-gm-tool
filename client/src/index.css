@@ -816,6 +816,30 @@ input:focus-visible, textarea:focus-visible {
     0 0 22px rgba(217, 70, 239, 0.1);
 }
 
+/* RFSN-054D — scoped readable floors on four surfaces only. Global --text-* tokens unchanged. */
+[data-rfsn-054d] {
+  --rfsn-054d-meta: 0.8125rem; /* 13px */
+  --rfsn-054d-label: 0.875rem; /* 14px */
+  --rfsn-054d-body: 0.9375rem; /* 15px */
+}
+[data-rfsn-054d] .text-2xs,
+[data-rfsn-054d] .type-badge,
+[data-rfsn-054d] .type-kicker {
+  font-size: var(--rfsn-054d-meta);
+  line-height: 1.35;
+}
+[data-rfsn-054d] .text-xs,
+[data-rfsn-054d] .text-label,
+[data-rfsn-054d] .type-meta {
+  font-size: var(--rfsn-054d-label);
+  line-height: 1.4;
+}
+[data-rfsn-054d] .text-sm,
+[data-rfsn-054d] .text-caption {
+  font-size: var(--rfsn-054d-body);
+  line-height: 1.5;
+}
+
 @keyframes rfsn-phrase-fade-in {
   from { opacity: 0; transform: translate3d(0, 4px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }

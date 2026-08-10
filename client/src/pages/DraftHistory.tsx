@@ -375,7 +375,7 @@ export function DraftHistory() {
     isLegacySeason && !useManusPath && !useLegacyPath && !isLoading;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 px-1 pb-12">
+    <div data-rfsn-054d className="mx-auto max-w-6xl space-y-6 px-1 pb-12">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
         <p className="mt-1 text-sm text-muted-foreground">

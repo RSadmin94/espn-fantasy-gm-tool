@@ -5,6 +5,7 @@ import { V1 } from "@/lib/v1Copy";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { TYPE_READABLE_BODY, TYPE_READABLE_LABEL, TYPE_READABLE_META, TYPE_READABLE_SECTION } from "@/lib/typeScale";
 import { useUpgradeDialog } from "@/hooks/useUpgradeDialog";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { PlayoffPositionTruthPanel } from "@/components/PlayoffPositionTruthPanel";
@@ -37,7 +38,7 @@ function Section({ icon, title, subtitle, children }: { icon: ReactNode; title: 
         <span className="text-lime-400">{icon}</span>
         <div>
           <h2 className="text-[20px] font-extrabold leading-tight tracking-tight">{title}</h2>
-          {subtitle && <p className="text-[13px] text-ink-secondary">{subtitle}</p>}
+          {subtitle && <p className={cn(TYPE_READABLE_LABEL, "text-ink-secondary")}>{subtitle}</p>}
         </div>
       </div>
       {children}
@@ -52,11 +53,11 @@ function GapBar({ position, ownerAvg, championAvg, gap }: { position: string; ow
   const deficit = gap > 0;
   return (
     <div className="py-2">
-      <div className="mb-1 flex items-center justify-between text-[13px]">
+      <div className={cn("mb-1 flex items-center justify-between", TYPE_READABLE_LABEL)}>
         <span className="font-bold text-white/85">{position}</span>
         <span className={cn("tabular-nums font-semibold", deficit ? "text-amber-300" : "text-lime-400")}>
           {ownerAvg} <span className="text-ink-tertiary">vs</span> {championAvg}
-          <span className="ml-2 text-[12px]">{deficit ? `−${gap}` : `+${Math.abs(gap)}`}</span>
+          <span className={cn("ml-2", TYPE_READABLE_META)}>{deficit ? `−${gap}` : `+${Math.abs(gap)}`}</span>
         </span>
       </div>
       <div className="relative h-3 overflow-hidden rounded-full bg-white/[0.06]">
@@ -71,7 +72,7 @@ function MiniCard({ icon, label, children, tone = "neutral" }: { icon: ReactNode
   const border = tone === "warn" ? "border-red-400/20 bg-red-500/[0.05]" : tone === "good" ? "border-lime-400/20 bg-lime-500/[0.05]" : "border-white/[0.06] bg-white/[0.02]";
   return (
     <div className={cn("rounded-xl border p-4", border)}>
-      <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-tertiary">
+      <div className={cn("mb-1 flex items-center gap-2 font-semibold uppercase tracking-wide text-ink-secondary", TYPE_READABLE_LABEL)}>
         <span className="text-white/55">{icon}</span> {label}
       </div>
       {children}
@@ -188,19 +189,19 @@ export function ChampionshipDiagnosis() {
     <Section icon={<Activity className="h-5 w-5" />} title="Championship Benchmark" subtitle={mode === "why-you-won" ? "Where your title profile still trails the champion average" : "How your starters measure against the average champion, position by position"}>
       {positional.length > 0 ? (
         <div className="space-y-1">
-          <p className="mb-1 text-[12px] uppercase tracking-wide text-ink-tertiary">Starter points/game by position · amber line = champion benchmark</p>
+          <p className={cn("mb-1 uppercase tracking-wide text-ink-secondary", TYPE_READABLE_LABEL)}>Starter points/game by position · amber line = champion benchmark</p>
           {positional.map((g: any) => (
             <GapBar key={g.position} position={g.position} ownerAvg={g.ownerAvg} championAvg={g.championAvg} gap={g.gap} />
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-ink-secondary">Position scoring populates once weekly player stats are synced.</div>
+        <div className={cn("rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-ink-secondary", TYPE_READABLE_BODY)}>Position scoring populates once weekly player stats are synced.</div>
       )}
       {readiness?.components?.length > 0 && (
         <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {readiness.components.map((c: any) => (
             <div key={c.key} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
-              <div className="mb-1.5 flex items-center justify-between text-[12px]">
+              <div className={cn("mb-1.5 flex items-center justify-between", TYPE_READABLE_LABEL)}>
                 <span className="font-semibold text-white/70">{c.label}</span>
                 <span className="tabular-nums font-bold text-white/85">{c.score}<span className="text-ink-tertiary"> · {Math.round(c.weight * 100)}%</span></span>
               </div>
@@ -224,31 +225,31 @@ export function ChampionshipDiagnosis() {
 
   const titleGapSection = (
       <Section icon={<Target className="h-5 w-5" />} title="Title Gap Summary" subtitle="The clearest read on how far you are from a championship">
-              {cr?.careerStory && <p className="mb-4 text-[15px] leading-relaxed text-white/75">{cr.careerStory}</p>}
+              {cr?.careerStory && <p className={cn("mb-4 text-white/80", TYPE_READABLE_BODY)}>{cr.careerStory}</p>}
               <div className="grid gap-3 sm:grid-cols-3">
                 <MiniCard icon={<ArrowUpCircle className="h-4 w-4" />} label="Biggest Gap" tone="warn">
                   {biggestGap ? (
                     <>
                       <div className="text-[26px] font-black text-amber-300">{biggestGap.position}</div>
-                      <p className="mt-1 text-[13px] text-white/55">−{biggestGap.gap} pts/game ({biggestGap.gapPct}%) vs champ {biggestGap.championAvg}</p>
+                      <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>−{biggestGap.gap} pts/game ({biggestGap.gapPct}%) vs champ {biggestGap.championAvg}</p>
                     </>
-                  ) : <p className="text-[13px] text-lime-400">Matches champions at every position.</p>}
+                  ) : <p className={cn("text-lime-400", TYPE_READABLE_BODY)}>Matches champions at every position.</p>}
                 </MiniCard>
                 <MiniCard icon={<Gauge className="h-4 w-4" />} label="Championship Readiness" tone={readiness && readiness.score >= 70 ? "good" : "neutral"}>
                   {readiness ? (
                     <>
                       <div className="text-[26px] font-black text-white/90">{readiness.score}<span className="text-[15px] text-ink-tertiary">/100</span></div>
-                      <p className="mt-1 text-[13px] text-white/55">{readiness.tier}</p>
+                      <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>{readiness.tier}</p>
                     </>
-                  ) : <p className="text-[13px] text-ink-secondary">Needs more synced history.</p>}
+                  ) : <p className={cn("text-ink-secondary", TYPE_READABLE_BODY)}>Needs more synced history.</p>}
                 </MiniCard>
                 <MiniCard icon={<Trophy className="h-4 w-4" />} label={snapshot && snapshot.championshipDrought > 0 ? "Title Drought" : "Career Titles"}>
                   {snapshot ? (
                     <>
                       <div className="text-[26px] font-black text-white/90">{snapshot.championshipDrought > 0 ? snapshot.championshipDrought : snapshot.titles}</div>
-                      <p className="mt-1 text-[13px] text-white/55">{snapshot.championshipDrought > 0 ? "seasons since your last title" : (snapshot.titles === 1 ? "championship" : "championships")}</p>
+                      <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>{snapshot.championshipDrought > 0 ? "seasons since your last title" : (snapshot.titles === 1 ? "championship" : "championships")}</p>
                     </>
-                  ) : <p className="text-[13px] text-ink-secondary">—</p>}
+                  ) : <p className={cn("text-ink-secondary", TYPE_READABLE_BODY)}>—</p>}
                 </MiniCard>
               </div>
             </Section>
@@ -256,7 +257,7 @@ export function ChampionshipDiagnosis() {
   const blockersSection = (
       <Section icon={<TrendingDown className="h-5 w-5" />} title={mode === "why-you-won" ? "Historical Context" : "Historical Blockers"} subtitle={mode === "why-you-won" ? "What you had to overcome on the way to the title" : blockersLabel}>
               {blockers.length === 0 ? (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-ink-secondary">No clear blockers in the synced history.</div>
+                <div className={cn("rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-ink-secondary", TYPE_READABLE_BODY)}>No clear blockers in the synced history.</div>
               ) : (
                 <ol className="space-y-2.5">
                   {blockers.slice(0, 6).map((b: any, i: number) => {
@@ -267,10 +268,10 @@ export function ChampionshipDiagnosis() {
                           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-400/15 text-[13px] font-bold text-violet-300">{i + 1}</span>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-3">
-                              <p className="text-[15px] font-bold text-white/90">{b.headline}</p>
-                              {sev > 0 && <span className="shrink-0 text-[12px] font-semibold tabular-nums text-amber-300">{sev}</span>}
+                              <p className={cn(TYPE_READABLE_SECTION, "font-bold text-white/90")}>{b.headline}</p>
+                              {sev > 0 && <span className={cn("shrink-0 font-semibold tabular-nums text-amber-300", TYPE_READABLE_META)}>{sev}</span>}
                             </div>
-                            {b.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/55">{b.detail}</p>}
+                            {b.detail && <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>{b.detail}</p>}
                           </div>
                         </div>
                       </li>
@@ -290,7 +291,7 @@ export function ChampionshipDiagnosis() {
                 return (
                   <ul className="mt-3 space-y-2">
                     {obstacles.slice(0, 4).map((o: any, i: number) => (
-                      <li key={o.id ?? i} className="flex gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-[13px] text-white/70">
+                      <li key={o.id ?? i} className={cn("flex gap-2 rounded-lg border border-white/[0.05] bg-white/[0.02] px-3 py-2 text-white/80", TYPE_READABLE_BODY)}>
                         <span className="mt-0.5 text-amber-300">›</span>
                         <span><span className="font-semibold text-white/85">{o.headline}</span>{o.detail ? ` — ${o.detail}` : ""}</span>
                       </li>
@@ -308,7 +309,7 @@ export function ChampionshipDiagnosis() {
                     <Crown className="h-5 w-5 text-lime-400" />
                     <div>
                       <div className="text-[16px] font-black text-white/90">{cp.closestChampion.ownerName}</div>
-                      <p className="text-[13px] text-white/55">{cp.closestChampion.season} champion · the archetype to emulate</p>
+                      <p className={cn("text-ink-secondary", TYPE_READABLE_LABEL)}>{cp.closestChampion.season} champion · the archetype to emulate</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -320,7 +321,7 @@ export function ChampionshipDiagnosis() {
                 <SectionLoading
                   size="sm"
                   message="Finding your closest champion…"
-                  className="mb-4 text-[13px] text-ink-tertiary"
+                  className={cn("mb-4 text-ink-secondary", TYPE_READABLE_LABEL)}
                 />
               ) : null}
 
@@ -331,23 +332,23 @@ export function ChampionshipDiagnosis() {
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[13px] font-bold text-lime-400">{m.rank ?? i + 1}</span>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-[15px] font-bold text-white/90">{m.title}</p>
+                          <p className={cn(TYPE_READABLE_SECTION, "font-bold text-white/90")}>{m.title}</p>
                           {m.impact && <span className={cn("rounded-md border px-1.5 py-0.5 text-label font-bold uppercase tracking-wide", IMPACT_TONE[m.impact] ?? IMPACT_TONE.low)}>{m.impact}</span>}
                         </div>
-                        {m.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/55">{m.detail}</p>}
+                        {m.detail && <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>{m.detail}</p>}
                       </div>
                     </li>
                   ))}
                 </ol>
               ) : (
-                cr?.titlePath?.summary && <p className="text-[14px] text-ink-secondary">{cr.titlePath.summary}</p>
+                cr?.titlePath?.summary && <p className={cn("text-ink-secondary", TYPE_READABLE_BODY)}>{cr.titlePath.summary}</p>
               )}
 
               {cp?.championshipProfile?.available && (
                 <details className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                  <summary className="cursor-pointer px-4 py-3 text-[13px] font-semibold text-white/70">Champion benchmark by season ▾</summary>
+                  <summary className={cn("cursor-pointer px-4 py-3 font-semibold text-white/80", TYPE_READABLE_LABEL)}>Champion benchmark by season ▾</summary>
                   <div className="overflow-x-auto px-4 pb-4">
-                    <table className="w-full border-collapse text-[13px]">
+                    <table className={cn("w-full border-collapse", TYPE_READABLE_LABEL)}>
                       <thead>
                         <tr className="text-ink-tertiary">
                           <th className="px-3 py-2 text-left font-semibold">Season · Champion</th>
@@ -377,28 +378,28 @@ export function ChampionshipDiagnosis() {
               {readiness?.topActions?.length > 0 ? (
                 <ol className="space-y-2">
                   {readiness.topActions.map((a: string, i: number) => (
-                    <li key={i} className="flex gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-[15px] text-white/85">
+                    <li key={i} className={cn("flex gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 text-white/85", TYPE_READABLE_BODY)}>
                       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-lime-400/15 text-[13px] font-bold text-lime-400">{i + 1}</span>
                       <span>{a}</span>
                     </li>
                   ))}
                 </ol>
               ) : (
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-[14px] text-ink-secondary">Action plan populates once readiness scoring has enough synced data.</div>
+                <div className={cn("rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 text-center text-ink-secondary", TYPE_READABLE_BODY)}>Action plan populates once readiness scoring has enough synced data.</div>
               )}
             </Section>
   );
   const edgeSection = (
       <Section icon={<Crown className="h-5 w-5" />} title="Your Championship Edge" subtitle="The dimensions where your profile out-performs the field — how you got here">
-        <p className="mb-4 text-[15px] leading-relaxed text-white/80">
+        <p className={cn("mb-4 text-white/80", TYPE_READABLE_BODY)}>
           You won because your profile carried title-winning traits — not because every position was perfect.
         </p>
-        {cr?.careerStory && <p className="mb-4 text-[13px] leading-relaxed text-white/55">{cr.careerStory}</p>}
+        {cr?.careerStory && <p className={cn("mb-4 text-ink-secondary", TYPE_READABLE_BODY)}>{cr.careerStory}</p>}
         {edgeComponents.length > 0 && (
           <div className="grid gap-2.5 sm:grid-cols-3">
             {edgeComponents.map((c: any) => (
               <div key={c.key} className="rounded-xl border border-lime-400/20 bg-lime-500/[0.06] p-4">
-                <div className="mb-1.5 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-tertiary">
+                <div className={cn("mb-1.5 flex items-center gap-2 font-semibold uppercase tracking-wide text-ink-secondary", TYPE_READABLE_LABEL)}>
                   <ShieldCheck className="h-4 w-4 text-lime-400" /> {c.label}
                 </div>
                 <div className="text-[30px] font-black tabular-nums text-lime-300">{c.score}<span className="text-[14px] text-ink-tertiary">/100</span></div>
@@ -408,12 +409,12 @@ export function ChampionshipDiagnosis() {
         )}
         {edgeDrivers.length > 0 && (
           <div className="mt-5">
-            <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-ink-tertiary">Why it mattered</p>
+            <p className={cn("mb-2 font-semibold uppercase tracking-wide text-ink-secondary", TYPE_READABLE_LABEL)}>Why it mattered</p>
             <ul className="space-y-2">
               {edgeDrivers.map((d: any, i: number) => (
                 <li key={d.id ?? i} className="rounded-xl border border-lime-400/15 bg-lime-500/[0.04] p-4">
-                  <p className="text-[15px] font-bold text-white/90">{d.headline}</p>
-                  {d.detail && <p className="mt-1 text-[13px] leading-relaxed text-white/60">{d.detail}</p>}
+                  <p className={cn(TYPE_READABLE_SECTION, "font-bold text-white/90")}>{d.headline}</p>
+                  {d.detail && <p className={cn("mt-1 text-ink-secondary", TYPE_READABLE_BODY)}>{d.detail}</p>}
                 </li>
               ))}
             </ul>
@@ -425,6 +426,7 @@ export function ChampionshipDiagnosis() {
   return (
     <>
     {upgradeDialog}
+    <div data-rfsn-054d>
     <IntelPageShell
       minHeight="screen"
       width="diagnosis"
@@ -515,12 +517,13 @@ export function ChampionshipDiagnosis() {
             </>
           )}
 
-          <p className="px-1 text-[12px] text-ink-tertiary">
+          <p className={cn("px-1 text-ink-secondary", TYPE_READABLE_LABEL)}>
             Every number is computed deterministically from real league history — matchups, standings, drafts, championships, and champion starter scoring. No projections. Champion benchmark = average of league champions' starter scoring by position.
           </p>
         </>
       )}
     </IntelPageShell>
+    </div>
     </>
   );
 }
