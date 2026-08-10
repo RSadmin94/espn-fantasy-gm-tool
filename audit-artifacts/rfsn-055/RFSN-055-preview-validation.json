@@ -2,11 +2,11 @@
   "host": "https://sprint-8-preview.fantasyfootballrivals.com",
   "health": {
     "status": "ok",
-    "timestamp": "2026-08-09T10:16:43.505Z",
+    "timestamp": "2026-08-10T02:39:11.690Z",
     "version": "1.0.0",
     "gitSha": "dff6154ca3a6f1e7713c9e4f5d1b681a76007b95",
     "gitBranch": "feature/provider-expansion",
-    "buildTime": "2026-08-09T10:14:06.089Z",
+    "buildTime": "2026-08-10T02:35:56.593Z",
     "gitIdentitySource": "build-meta",
     "nodeEnv": "production",
     "checks": {
@@ -24,7 +24,7 @@
     {
       "question": "Who reaches the most?",
       "kind": "adp",
-      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "answer": "Across recorded ADP-joined drafts from 2018–2024, reach frequency (picks earlier than ADP by the phase threshold):\n1. Mark Deroux — 34 reaches / 49 ADP-joined picks (69%)\n2. Christian Graham — 34 reaches / 56 ADP-joined picks (61%)\n3. Randy Broner Jr — 31 reaches / 59 ADP-joined picks (53%)\n4. LOZELL STYLES — 31 reaches / 55 ADP-joined picks (56%)\n5. Marlon Moore — 30 reaches / 46 ADP-joined picks (65%)\nDraft reach data is available from 2018–2024; earlier draft boards (2010–2025) are preserved without reliable ADP.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -32,9 +32,9 @@
       "failures": []
     },
     {
-      "question": "What was the biggest reach ever?",
+      "question": "Biggest reach?",
       "kind": "adp",
-      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "answer": "Across recorded ADP-joined drafts from 2018–2024, the largest reach was Sheldon deRoux selecting Isiah Pacheco at pick 10 (ADP 139.3, 129.3 picks early) in 2024.\nDraft reach data is available from 2018–2024; earlier draft boards (2010–2025) are preserved without reliable ADP.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -42,9 +42,9 @@
       "failures": []
     },
     {
-      "question": "What was the biggest steal?",
+      "question": "Biggest steal?",
       "kind": "adp",
-      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "answer": "Across recorded ADP-joined drafts from 2018–2024, largest steals (later than ADP):\n1. Maurice Welch selecting Kareem Hunt at pick 182 (ADP 8.9, 173.1 picks late) in 2018\n2. Bruce Edwards selecting Antonio Gibson at pick 152 (ADP 39.0, 113.0 picks late) in 2021\n3. Bruce Edwards selecting Matt Gay at pick 180 (ADP 75.1, 104.9 picks late) in 2021\n4. Mark Deroux selecting Antonio Gibson at pick 155 (ADP 56.9, 98.1 picks late) in 2020\n5. Demetri Clark selecting Unknown at pick 175 (ADP 77.9, 97.1 picks late) in 2018\nDraft reach data is available from 2018–2024; earlier draft boards (2010–2025) are preserved without reliable ADP.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -52,9 +52,9 @@
       "failures": []
     },
     {
-      "question": "Who drafts QBs early?",
+      "question": "Who drafts quarterbacks early?",
       "kind": "board",
-      "answer": "Across recorded drafts from 2010–2026, earliest average QB selection:\n1. Maurice Welch — round 2.0 (1 QB picks, earliest R2)\n2. Steffon Bizzell — round 3.7 (6 QB picks, earliest R1)\n3. Nate West — round 4.7 (10 QB picks, earliest R2)\n4. LOZELL STYLES — round 5.3 (7 QB picks, earliest R1)\n5. Randy Broner Jr — round 5.5 (8 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "answer": "Across recorded drafts from 2010–2025, earliest average QB selection:\n1. Maurice Welch — round 2.0 (1 QB picks, earliest R2)\n2. Steffon Bizzell — round 3.7 (6 QB picks, earliest R1)\n3. Nate West — round 4.7 (10 QB picks, earliest R2)\n4. LOZELL STYLES — round 5.3 (7 QB picks, earliest R1)\n5. Randy Broner Jr — round 5.5 (8 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2025.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -62,9 +62,9 @@
       "failures": []
     },
     {
-      "question": "Who waits on QB?",
+      "question": "Who waits on quarterback?",
       "kind": "board",
-      "answer": "Across recorded drafts from 2010–2026, latest average QB selection:\n1. Jan Graham — round 9.0 (2 QB picks, earliest R6)\n2. Tony Dorsey — round 8.7 (3 QB picks, earliest R5)\n3. teco Browning — round 8.3 (3 QB picks, earliest R8)\n4. Sheldon deRoux — round 8.0 (10 QB picks, earliest R1)\n5. Christian Graham — round 7.8 (9 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "answer": "Across recorded drafts from 2010–2025, latest average QB selection:\n1. Jan Graham — round 9.0 (2 QB picks, earliest R6)\n2. Tony Dorsey — round 8.7 (3 QB picks, earliest R5)\n3. teco Browning — round 8.3 (3 QB picks, earliest R8)\n4. Sheldon deRoux — round 8.0 (10 QB picks, earliest R1)\n5. Christian Graham — round 7.8 (9 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2025.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -72,9 +72,9 @@
       "failures": []
     },
     {
-      "question": "Who loves RBs?",
+      "question": "Who drafts running backs early?",
       "kind": "board",
-      "answer": "Across recorded drafts from 2010–2026, earliest average RB selection:\n1. Tony Dorsey — round 3.0 (5 RB picks, earliest R1)\n2. teco Browning — round 3.4 (7 RB picks, earliest R2)\n3. Vince Sellers — round 3.8 (4 RB picks, earliest R2)\n4. Steffon Bizzell — round 4.1 (8 RB picks, earliest R1)\n5. steven hibbard — round 4.4 (14 RB picks, earliest R1)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      "answer": "Across recorded drafts from 2010–2025, earliest average RB selection:\n1. Tony Dorsey — round 3.0 (5 RB picks, earliest R1)\n2. teco Browning — round 3.4 (7 RB picks, earliest R2)\n3. Vince Sellers — round 3.8 (4 RB picks, earliest R2)\n4. Steffon Bizzell — round 4.1 (8 RB picks, earliest R1)\n5. steven hibbard — round 4.4 (14 RB picks, earliest R1)\nNot all-time. Recorded draft coverage is 2010–2025.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -82,9 +82,9 @@
       "failures": []
     },
     {
-      "question": "Who drafts safest?",
-      "kind": "adp",
-      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "question": "Who drafts wide receivers early?",
+      "kind": "board",
+      "answer": "Across recorded drafts from 2010–2025, earliest average WR selection:\n1. Jan Graham — round 2.0 (2 WR picks, earliest R1)\n2. Tony Dorsey — round 3.8 (4 WR picks, earliest R2)\n3. LOZELL STYLES — round 4.3 (34 WR picks, earliest R1)\n4. Marcus Reese — round 4.7 (3 WR picks, earliest R1)\n5. Mark Deroux — round 4.8 (31 WR picks, earliest R1)\nNot all-time. Recorded draft coverage is 2010–2025.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -92,9 +92,19 @@
       "failures": []
     },
     {
-      "question": "Who gambles the most?",
+      "question": "Who follows ADP the closest?",
       "kind": "adp",
-      "answer": "Recorded draft history covers 2010–2026. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "answer": "Across recorded ADP-joined drafts from 2018–2024, closest to ADP (lowest average |ADP − pick|):\n1. teco Browning — avg |ADP − pick| 23.2 (20 ADP-joined picks)\n2. Tony Dorsey — avg |ADP − pick| 25.2 (10 ADP-joined picks)\n3. Jan Graham — avg |ADP − pick| 30.1 (11 ADP-joined picks)\n4. Rod Sellers — avg |ADP − pick| 32.5 (45 ADP-joined picks)\n5. Randy Broner Jr — avg |ADP − pick| 32.9 (59 ADP-joined picks)\nDraft reach data is available from 2018–2024; earlier draft boards (2010–2025) are preserved without reliable ADP.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "Who ignores ADP the most?",
+      "kind": "adp",
+      "answer": "Across recorded ADP-joined drafts from 2018–2024, farthest from ADP (highest average |ADP − pick|):\n1. Vince Sellers — avg |ADP − pick| 46.2 (19 ADP-joined picks)\n2. Jan Graham — avg |ADP − pick| 44.8 (38 ADP-joined picks)\n3. Maurice Welch — avg |ADP − pick| 44.1 (9 ADP-joined picks)\n4. Sheldon deRoux — avg |ADP − pick| 42.1 (47 ADP-joined picks)\n5. steven hibbard — avg |ADP − pick| 39.7 (44 ADP-joined picks)\nDraft reach data is available from 2018–2024; earlier draft boards (2010–2025) are preserved without reliable ADP.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
@@ -105,6 +115,16 @@
       "question": "Who reached the most in 2010?",
       "kind": "thin-adp",
       "answer": "Recorded draft history covers 2010. ADP is not available for those seasons, so reach and steal rankings cannot be computed.",
+      "tool": "query_draft_intelligence",
+      "intent": "draft_intelligence",
+      "llmInvoked": false,
+      "verdict": "PASS",
+      "failures": []
+    },
+    {
+      "question": "and who waits on quarterback? (follow-up)",
+      "kind": "board",
+      "answer": "Across recorded drafts from 2010–2025, latest average QB selection:\n1. Jan Graham — round 9.0 (2 QB picks, earliest R6)\n2. Tony Dorsey — round 8.7 (3 QB picks, earliest R5)\n3. teco Browning — round 8.3 (3 QB picks, earliest R8)\n4. Sheldon deRoux — round 8.0 (10 QB picks, earliest R1)\n5. Christian Graham — round 7.8 (9 QB picks, earliest R2)\nNot all-time. Recorded draft coverage is 2010–2025.",
       "tool": "query_draft_intelligence",
       "intent": "draft_intelligence",
       "llmInvoked": false,
