@@ -8,7 +8,7 @@ import { AlertCircle, Loader2, Gem, Landmark, Hourglass, TrendingUp, Scale, Buil
 
 // ── theme (matches the rest of GM War Room) ─────────────────────────────────
 const TEXT = "var(--color-foreground)";
-const MUTED = "var(--color-muted-foreground)";
+const MUTED = "var(--color-ink-secondary)";
 const LINE = "color-mix(in oklch, var(--color-foreground) 7%, transparent)";
 const PAGEBG: React.CSSProperties = {
   background:
@@ -45,11 +45,11 @@ interface TeamRow {
 function AxisBar({ label, pct, color }: { label: string; pct: number; color: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[10px] font-bold uppercase tracking-wide w-10" style={{ color: MUTED }}>{label}</span>
+      <span className="text-2xs font-bold uppercase tracking-wide w-10" style={{ color: MUTED }}>{label}</span>
       <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "color-mix(in oklch, var(--color-foreground) 8%, transparent)" }}>
         <div className="h-full rounded-full" style={{ width: `${Math.max(2, pct)}%`, background: color }} />
       </div>
-      <span className="text-[11px] font-extrabold tabular-nums w-9 text-right" style={{ color: TEXT }}>{Math.round(pct)}</span>
+      <span className="text-label font-extrabold tabular-nums w-9 text-right" style={{ color: TEXT }}>{Math.round(pct)}</span>
     </div>
   );
 }
@@ -57,7 +57,7 @@ function AxisBar({ label, pct, color }: { label: string; pct: number; color: str
 function BadgeChip({ badge, size = "md" }: { badge: BadgeT; size?: "sm" | "md" }) {
   const meta = BADGE_META[badge.key] ?? { color: MUTED, icon: Gem };
   const Icon = meta.icon;
-  const pad = size === "sm" ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-[13px]";
+  const pad = size === "sm" ? "px-2 py-1 text-2xs" : "px-3 py-1.5 text-[13px]";
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full font-extrabold ${pad}`}
@@ -78,7 +78,7 @@ function Legend() {
           <div key={k} className="flex items-center gap-2 rounded-[10px] px-3 py-2" style={{ background: "color-mix(in oklch, var(--color-foreground) 3%, transparent)", border: `1px solid ${LINE}` }}>
             <Icon className="h-4 w-4" style={{ color: meta.color }} />
             <span className="text-[12px] font-extrabold" style={{ color: meta.color }}>{k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}</span>
-            <span className="text-[11px]" style={{ color: MUTED }}>{meta.blurb}</span>
+            <span className="text-caption" style={{ color: MUTED }}>{meta.blurb}</span>
           </div>
         );
       })}
@@ -166,7 +166,7 @@ export default function DynastyPowerRankings() {
         )}
 
         {teams.length > 0 && (
-          <p className="mt-5 text-[11px] leading-relaxed" style={{ color: MUTED }}>
+          <p className="mt-5 text-caption leading-relaxed" style={{ color: MUTED }}>
             <span style={{ color: NOW_COLOR, fontWeight: 800 }}>Now</span> = starting-lineup strength ·{" "}
             <span style={{ color: LATER_COLOR, fontWeight: 800 }}>Later</span> = 50% current dynasty value + 50% future keeper value.
             Both are league percentiles; the identity badge follows from where a team lands on the two.

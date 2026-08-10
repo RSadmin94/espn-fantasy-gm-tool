@@ -112,7 +112,7 @@ function parseDraftRecapText(text: string): { rows: ParsedPickInput[]; error: st
 function PosBadge({ pos }: { pos: string | null | undefined }) {
   const p = (pos || "?").toUpperCase();
   return (
-    <span className="inline-flex rounded border border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
+    <span className="inline-flex rounded border border-border bg-muted/40 px-1.5 py-0.5 text-2xs font-semibold uppercase text-ink-secondary">
       {p}
     </span>
   );
@@ -505,7 +505,7 @@ export function DraftHistory() {
             <CardDescription>
               Paste rows from the ESPN Draft Recap page for {season}. The Fantasy Team column is the
               canonical owner truth — team names are stored exactly as captured.
-              <span className="mt-1 block font-mono text-[11px]">
+              <span className="mt-1 block font-mono text-caption text-ink-secondary">
                 Expected columns (tab-separated): Overall · Round · Pick · Player · Position · NFL
                 Team · Fantasy Team
               </span>

@@ -139,7 +139,7 @@ export function LeagueKeeperForecast({ embedded = false }: { embedded?: boolean 
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide", STATUS_STYLE[r.status])}>
+                        <span className={cn("inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-2xs font-bold uppercase tracking-wide", STATUS_STYLE[r.status])}>
                           {r.status} <span className="opacity-70">{r.confidence}%</span>
                         </span>
                       </td>

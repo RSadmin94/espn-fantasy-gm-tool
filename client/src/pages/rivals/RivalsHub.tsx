@@ -11,6 +11,7 @@ import { castMemberDossierOwnerKey, rivalsOwnerDossierPath } from "@/lib/ownerId
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { OwnerBehaviorDnaInsight } from "@/components/rivals/OwnerBehaviorDnaInsight";
 import { CinematicPageHeader, IntelPageShell, IntelPanel, SectionLoading } from "@/components/layout";
+import { TYPE_BADGE, TYPE_CAPTION, TYPE_KICKER } from "@/lib/typeScale";
 
 const DESTINATIONS = [
   { label: "The Cast", href: "/rivals/cast", hint: "League characters", icon: Clapperboard },
@@ -76,7 +77,7 @@ export function RivalsHub() {
         subtitle={`${leagueName} — who they are, how they behave, and what history you share.`}
         className="mb-5"
         meta={
-          <span className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+          <span className={`rounded-full border border-border px-2.5 py-0.5 ${TYPE_BADGE} uppercase tracking-wider text-ink-secondary`}>
             {activeCount ? `${activeCount} owners` : "League cast"}
           </span>
         }
@@ -93,7 +94,7 @@ export function RivalsHub() {
         {(topRival?.rivalName || !loading) && (
           <section className="space-y-2">
             <div className="flex items-end justify-between gap-3">
-              <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+              <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">
                 Featured rival
               </h2>
               <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
@@ -116,7 +117,7 @@ export function RivalsHub() {
         {/* Cast preview */}
         <section className="space-y-2">
           <div className="flex items-end justify-between gap-3">
-            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">The Cast</h2>
+            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">The Cast</h2>
             <Link to="/rivals/cast" className="text-xs font-medium text-violet-400 hover:text-violet-300">
               Full cast →
             </Link>
@@ -133,12 +134,12 @@ export function RivalsHub() {
                   to={rivalsOwnerDossierPath(castMemberDossierOwnerKey(m))}
                   className="rounded-xl border border-border/70 bg-card/40 px-3 py-3 transition-colors hover:border-violet-500/40 hover:bg-card/70"
                 >
-                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-300/90">
+                  <div className={`${TYPE_KICKER} text-violet-300/90`}>
                     {m.archetype}
                   </div>
                   <div className="mt-1 text-sm font-bold text-foreground">
                     {m.ownerName}
-                    {m.isYou ? <span className="ml-2 text-[10px] font-black text-lime-400">YOU</span> : null}
+                    {m.isYou ? <span className={`ml-2 ${TYPE_BADGE} font-black text-lime-400`}>YOU</span> : null}
                   </div>
                 </Link>
               ))}
@@ -152,7 +153,7 @@ export function RivalsHub() {
         {/* H2H snapshot */}
         <section className="space-y-2">
           <div className="flex items-end justify-between gap-3">
-            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">
               Head-to-head snapshot
             </h2>
             <Link to="/rivals/rivalries" className="text-xs font-medium text-violet-400 hover:text-violet-300">
@@ -206,7 +207,7 @@ export function RivalsHub() {
 
         {/* Destination links */}
         <section className="space-y-2 border-t border-border/60 pt-4">
-          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">
             Explore Rivals
           </h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,7 +220,7 @@ export function RivalsHub() {
                 <d.icon className="h-4 w-4 shrink-0 text-violet-300" />
                 <div className="min-w-0">
                   <div className="text-sm font-semibold text-foreground">{d.label}</div>
-                  <div className="text-[11px] text-muted-foreground">{d.hint}</div>
+                  <div className={`${TYPE_CAPTION} text-ink-secondary`}>{d.hint}</div>
                 </div>
               </Link>
             ))}

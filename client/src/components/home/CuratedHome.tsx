@@ -7,6 +7,7 @@ import { LeagueWireNewsFeed } from "@/components/dashboard/LeagueWireNewsFeed";
 import { RivalrySummaryCard } from "@/components/RivalrySummaryCard";
 import { IntelPageShell } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { TYPE_CAPTION, TYPE_KICKER, TYPE_META } from "@/lib/typeScale";
 
 export type CuratedHomeProps = {
   welcomeName: string;
@@ -74,11 +75,11 @@ export function CuratedHome({
     >
       <header className="flex flex-wrap items-end justify-between gap-3 border-b border-border/60 pb-4">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Home</p>
+          <p className={TYPE_KICKER}>Home</p>
           <h1 className="mt-1 text-2xl font-black tracking-tight text-foreground sm:text-3xl">
             {welcomeName ? `Welcome back, ${welcomeName}` : "Welcome back"}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-ink-secondary">
             {leagueName}
             {weekLabel ? ` · ${weekLabel}` : ""}
           </p>
@@ -116,19 +117,19 @@ export function CuratedHome({
             <div className="flex flex-wrap gap-x-6 gap-y-3">
               {recordLine ? (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Record</p>
+                  <p className={TYPE_KICKER}>Record</p>
                   <p className="mt-1 text-lg font-bold tabular-nums text-foreground">{recordLine}</p>
                 </div>
               ) : null}
               {rankLine ? (
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Standing</p>
+                  <p className={TYPE_KICKER}>Standing</p>
                   <p className="mt-1 text-lg font-bold text-foreground">{rankLine}</p>
                 </div>
               ) : null}
               {nextMatchupLine ? (
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Next matchup</p>
+                  <p className={TYPE_KICKER}>Next matchup</p>
                   <p className="mt-1 text-sm font-semibold text-foreground">{nextMatchupLine}</p>
                 </div>
               ) : null}
@@ -251,11 +252,11 @@ export function CuratedHome({
             >
               <Users className="h-3.5 w-3.5 text-muted-foreground" />
               <span>{item.label}</span>
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.hint}</span>
+              <span className={`${TYPE_META} uppercase tracking-wide text-ink-secondary`}>{item.hint}</span>
             </Link>
           ))}
         </div>
-        <p className="text-[11px] text-muted-foreground">Season {season}</p>
+        <p className={`${TYPE_CAPTION} text-ink-secondary`}>Season {season}</p>
       </section>
     </IntelPageShell>
   );

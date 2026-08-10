@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { TYPE_CAPTION, TYPE_KICKER } from "@/lib/typeScale";
 import type { StandingsSeasonEntry } from "../utils/seasonTabChampions";
 
 type SeasonRow = { owner: string } & StandingsSeasonEntry;
@@ -73,22 +74,22 @@ export function SeasonExplorerTab({
 
             <div className="flex gap-3">
               <div className="flex-1 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3 text-center">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-yellow-400">Champion</div>
+                <div className={`mb-1 ${TYPE_KICKER} text-yellow-400`}>Champion</div>
                 <div className="font-bold text-yellow-300">{medalChampion ?? "—"}</div>
               </div>
               <div className="flex-1 rounded-lg border border-slate-400/15 bg-slate-400/10 p-3 text-center">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Runner-Up</div>
+                <div className={`mb-1 ${TYPE_KICKER} text-slate-300`}>Runner-Up</div>
                 <div className="font-semibold text-slate-300">{medalRunnerUp ?? "—"}</div>
               </div>
               {medalThird ? (
                 <div className="flex-1 rounded-lg border border-amber-600/30 bg-amber-700/15 p-3 text-center">
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-amber-500">Third</div>
+                  <div className={`mb-1 ${TYPE_KICKER} text-amber-400`}>Third</div>
                   <div className="font-semibold text-amber-400">{medalThird}</div>
                 </div>
               ) : null}
               {showTopScorer && topScorer ? (
                 <div className="flex-1 rounded-lg border border-violet-500/15 bg-violet-500/10 p-3 text-center">
-                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-violet-400">Top Scorer</div>
+                  <div className={`mb-1 ${TYPE_KICKER} text-violet-400`}>Top Scorer</div>
                   <div className="font-semibold text-violet-300">{topScorer.owner}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">{topScorer.pointsFor.toFixed(1)} pts</div>
                 </div>
@@ -97,13 +98,13 @@ export function SeasonExplorerTab({
 
             <div>
               <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+                <div className={`${TYPE_KICKER}`}>
                   Final Standings
                 </div>
                 {seasonRows[0]?.recordBasis === "pf_only" ? (
-                  <span className="text-[10px] text-muted-foreground">PF / PA only (no RS matchup record in DB)</span>
+                  <span className={`${TYPE_CAPTION} text-ink-secondary`}>PF / PA only (no RS matchup record in DB)</span>
                 ) : (
-                  <span className="text-[10px] text-muted-foreground">Reg. season W–L–T (completed RS matchups)</span>
+                  <span className={`${TYPE_CAPTION} text-ink-secondary`}>Reg. season W–L–T (completed RS matchups)</span>
                 )}
               </div>
               <div className="space-y-1">

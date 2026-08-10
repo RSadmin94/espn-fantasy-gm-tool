@@ -188,7 +188,7 @@
     box-shadow: 0 0 32px -12px color-mix(in oklch, var(--color-brand-gold) 22%, transparent);
   }
 
-  /* RFSN-054B composite type — size tokens plus weight/tracking. */
+  /* RFSN-054B/054C composite type — size tokens plus weight/tracking. */
   .type-badge {
     font-size: var(--text-2xs);
     line-height: var(--text-2xs--line-height);
@@ -201,7 +201,7 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--color-ink-tertiary);
+    color: var(--color-ink-secondary);
   }
   .type-meta {
     font-size: var(--text-label);

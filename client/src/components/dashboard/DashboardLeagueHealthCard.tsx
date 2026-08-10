@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { TYPE_CAPTION, TYPE_KICKER } from "@/lib/typeScale";
 
 export type LeagueOverviewPayload = {
   readinessScore: number;
@@ -27,7 +28,7 @@ function BarRow({ label, pct, tone }: { label: string; pct: number | null; tone:
   const w = pct == null || !Number.isFinite(pct) ? 0 : Math.max(0, Math.min(100, pct));
   return (
     <div className="space-y-1">
-      <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
         <span>{label}</span>
         <span className="tabular-nums text-foreground">{pct == null ? "—" : `${Math.round(w)}%`}</span>
       </div>
@@ -48,8 +49,8 @@ export function DashboardLeagueHealthCard({
   if (isLoading) {
     return (
       <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.25)]">
-        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
-        <div className="mt-6 flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+        <p className={`${TYPE_KICKER} text-lime-400/90`}>League health</p>
+        <div className="mt-6 flex flex-1 items-center justify-center gap-2 text-sm text-ink-secondary">
           <Loader2 className="h-4 w-4 animate-spin" /> Loading…
         </div>
       </div>
@@ -59,8 +60,8 @@ export function DashboardLeagueHealthCard({
   if (!data) {
     return (
       <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_28px_-12px_rgba(163,230,53,0.2)]">
-        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
-        <div className="mt-4 flex flex-1 flex-col justify-center text-sm text-muted-foreground">
+        <p className={`${TYPE_KICKER} text-lime-400/90`}>League health</p>
+        <div className="mt-4 flex flex-1 flex-col justify-center text-sm text-ink-secondary">
           <p className="font-medium text-foreground">Not Yet Available</p>
           <p className="mt-1 text-xs text-muted-foreground">League overview could not be loaded.</p>
         </div>
@@ -92,8 +93,8 @@ export function DashboardLeagueHealthCard({
     <div className="flex min-h-[220px] flex-col rounded-xl border border-lime-500/20 bg-card/95 p-5 shadow-[0_0_32px_-12px_rgba(163,230,53,0.28)]">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-lime-400/90">League health</p>
-          <p className="mt-1 text-xs text-muted-foreground">Readiness &amp; coverage</p>
+          <p className={`${TYPE_KICKER} text-lime-400/90`}>League health</p>
+          <p className="mt-1 text-xs text-ink-secondary">Readiness &amp; coverage</p>
         </div>
         <div className="relative h-16 w-16 shrink-0">
           <div
@@ -106,7 +107,7 @@ export function DashboardLeagueHealthCard({
             <span className="text-lg font-black tabular-nums leading-none text-lime-300">
               {readiness != null ? readiness : "—"}
             </span>
-            <span className="text-2xs font-bold uppercase tracking-wider text-muted-foreground">ready</span>
+            <span className="text-2xs font-bold uppercase tracking-wider text-ink-secondary">ready</span>
           </div>
         </div>
       </div>
@@ -116,12 +117,12 @@ export function DashboardLeagueHealthCard({
         <BarRow label="Matchup coverage" pct={matchupCoverage} tone="emerald" />
         <BarRow label="Owner resolution (2018+)" pct={ownerResolution} tone="emerald" />
         <div className="space-y-1">
-          <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="flex justify-between gap-2 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
             <span>Scoring accuracy</span>
-            <span className="text-muted-foreground">Not Yet Available</span>
+            <span className="text-ink-secondary">Not Yet Available</span>
           </div>
           <div className="h-1.5 rounded-full bg-foreground/[0.04]" />
-          <p className="text-2xs leading-snug text-muted-foreground">
+          <p className={`${TYPE_CAPTION} leading-snug text-ink-secondary`}>
             No league-wide scoring-accuracy series is exposed on this endpoint.
           </p>
         </div>
@@ -133,7 +134,7 @@ export function DashboardLeagueHealthCard({
       >
         Data health detail →
       </Link>
-      <p className="mt-1 text-2xs text-muted-foreground">
+      <p className="mt-1 text-2xs text-ink-secondary">
         Score: {readiness ?? "—"}/100 · Matchup coverage: {matchupCoverage != null ? `${matchupCoverage}%` : "—"} · Source: dataHealth.leagueOverview
       </p>
     </div>

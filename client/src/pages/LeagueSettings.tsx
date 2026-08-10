@@ -174,7 +174,7 @@ export function LeagueSettings() {
                     <td className="py-1.5 pr-4 font-mono text-zinc-300">{row.cached !== null ? row.cached : <span className="text-amber-400">missing</span>}</td>
                     <td className="py-1.5 pr-4 font-mono text-zinc-100 font-bold">{row.displayed}</td>
                     <td className="py-1.5">
-                      <span className={cn("px-1.5 py-0.5 rounded text-[9px] font-bold uppercase", row.status === "live" ? "bg-lime-500/20 text-lime-300" : "bg-amber-500/20 text-amber-300")}>
+                      <span className={cn("px-1.5 py-0.5 rounded text-2xs font-bold uppercase", row.status === "live" ? "bg-lime-500/20 text-lime-300" : "bg-amber-500/20 text-amber-300")}>
                         {row.status}
                       </span>
                     </td>

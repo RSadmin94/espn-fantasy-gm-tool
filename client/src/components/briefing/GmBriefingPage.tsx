@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { IntelPageShell } from "@/components/layout";
+import { TYPE_BADGE, TYPE_KICKER } from "@/lib/typeScale";
 import { DashboardRecentLeagueEvents } from "@/components/dashboard/DashboardRecentLeagueEvents";
 import { FirstWowMomentCard } from "@/components/onboarding/FirstWowMomentCard";
 import { type MarqueeTeam, type ScoreboardLite } from "@/components/dashboard/DashboardMatchupMarquee";
@@ -278,7 +279,7 @@ function RivalCard({
         ))}
       </ul>
       {rival.heatLabel ? (
-        <span className="mt-3 inline-flex w-fit items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-bold text-red-300">
+        <span className={`mt-3 inline-flex w-fit items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 ${TYPE_BADGE} text-red-300`}>
           <Flame className="h-3 w-3" /> Heat: {rival.heatLabel}
         </span>
       ) : null}
@@ -351,7 +352,7 @@ function ActionCenterStrip({
 }: Pick<GmBriefingPageProps, "opponentName" | "outlookPct" | "isInSeason" | "syncReady">) {
   return (
     <section className="rounded-xl border border-border/50 bg-muted/20 px-4 py-3">
-      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className={`font-mono ${TYPE_KICKER}`}>
         Action Center
       </p>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-foreground/80">
@@ -386,7 +387,7 @@ function ComingNext({ comingNext, hasAccess, onUnlock, pending }: {
   if (hasAccess) return null;
   return (
     <section className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] px-4 py-4">
-      <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-amber-400/90">
+      <p className={`font-mono ${TYPE_KICKER} text-amber-400/90`}>
         {BRIEFING.comingNext}
       </p>
       <p className="mt-2 text-[14px] text-foreground/85">{comingNext.teaser}</p>
@@ -531,7 +532,7 @@ export function GmBriefingPage(props: GmBriefingPageProps) {
       />
 
       <section className="space-y-3">
-        <p className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+        <p className={`font-mono ${TYPE_KICKER}`}>
           League Activity
         </p>
         <DashboardRecentLeagueEvents seasons={props.eventSeasons} />

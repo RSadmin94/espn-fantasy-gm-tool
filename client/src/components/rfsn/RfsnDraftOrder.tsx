@@ -36,7 +36,7 @@ export function RfsnDraftOrder({
       aria-label="Draft order"
       data-rfsn-focus-dim
     >
-      <h2 className="border-b border-white/10 px-2.5 py-2 text-2xs font-black uppercase tracking-[0.22em] text-white/40">
+      <h2 className="border-b border-white/10 px-2.5 py-2 text-2xs font-black uppercase tracking-[0.22em] text-ink-secondary">
         Draft Order
       </h2>
       <ul className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
@@ -50,7 +50,7 @@ export function RfsnDraftOrder({
               slot.isComplete && !slot.isOnClock && "opacity-45",
             )}
           >
-            <span className="w-9 shrink-0 font-mono text-label text-white/45">{slot.pickLabel}</span>
+            <span className="w-9 shrink-0 font-mono text-label text-ink-secondary">{slot.pickLabel}</span>
             <span
               className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-2xs font-black text-white/80",

@@ -109,20 +109,20 @@ export function LeagueHub() {
         ) : null}
 
         <section className="space-y-2">
-          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">
             League identity
           </h2>
           <IntelPanel variant="card" className="grid gap-3 px-4 py-4 sm:grid-cols-3">
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Name</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Name</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{leagueName ?? "—"}</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Coverage</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Coverage</p>
               <p className="mt-1 text-sm font-semibold text-foreground">{seasonSpanDisplay ?? "—"}</p>
             </div>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">League age</p>
+              <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">League age</p>
               <p className="mt-1 text-sm font-semibold text-foreground">
                 {leagueAge != null ? `${leagueAge} seasons` : "—"}
               </p>
@@ -172,7 +172,7 @@ export function LeagueHub() {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+          <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-ink-secondary">
             Archive & administration
           </h2>
           <div className="grid gap-2 sm:grid-cols-2">

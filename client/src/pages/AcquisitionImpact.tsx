@@ -54,7 +54,7 @@ function ImpactMeter({ value, label }: { value: number; label: string }) {
         </svg>
         <div className="absolute inset-0 flex items-center justify-center text-[24px] font-black tabular-nums">{value}</div>
       </div>
-      <div className="mt-1 text-[11px] uppercase tracking-wide text-white/45">{label}</div>
+      <div className="mt-1 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{label}</div>
     </div>
   );
 }
@@ -62,11 +62,11 @@ function ImpactMeter({ value, label }: { value: number; label: string }) {
 function StatCard({ icon, label, value, sub }: { icon: ReactNode; label: string; value: ReactNode; sub?: string }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
-      <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-white/45">
+      <div className="mb-1 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-ink-secondary">
         <span className="text-white/55">{icon}</span> {label}
       </div>
       <div className="text-[26px] font-black tabular-nums text-white/90">{value}</div>
-      {sub && <div className="mt-0.5 text-[12px] text-white/45">{sub}</div>}
+      {sub && <div className="mt-0.5 text-[12px] text-ink-secondary">{sub}</div>}
     </div>
   );
 }
