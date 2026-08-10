@@ -33,7 +33,9 @@ export type DraftIntelligenceMetric =
   | "wr_timing"
   | "rookie_preference"
   | "average_draft_value"
-  | "draft_aggression";
+  | "draft_aggression"
+  | "adp_follow"
+  | "adp_ignore";
 
 export type DraftTimingDirection = "early" | "late";
 export type DraftAggressionMode = "gambles" | "safest";
@@ -78,6 +80,7 @@ export type OwnerReachRow = {
   reachCount: number;
   avgReachDelta: number | null;
   avgValueDelta: number | null;
+  avgAbsDelta: number | null;
 };
 
 export type OwnerTimingRow = {
@@ -124,6 +127,8 @@ const ADP_METRICS = new Set<DraftIntelligenceMetric>([
   "reach_frequency",
   "average_draft_value",
   "draft_aggression",
+  "adp_follow",
+  "adp_ignore",
 ]);
 
 export function draftIntelligenceNeedsAdp(metric: DraftIntelligenceMetric): boolean {
@@ -221,6 +226,7 @@ function ownerReachRows(scored: ScoredDraftPick[]): OwnerReachRow[] {
         reachCount: 0,
         avgReachDelta: null,
         avgValueDelta: null,
+        avgAbsDelta: null,
       };
       by.set(key, row);
     }
@@ -230,12 +236,14 @@ function ownerReachRows(scored: ScoredDraftPick[]): OwnerReachRow[] {
     if (p.classification?.isReach) row.reachCount += 1;
     row.avgReachDelta = (row.avgReachDelta ?? 0) + p.reachDelta;
     row.avgValueDelta = (row.avgValueDelta ?? 0) + (p.stealDelta ?? 0);
+    row.avgAbsDelta = (row.avgAbsDelta ?? 0) + Math.abs(p.reachDelta);
   }
   return [...by.values()]
     .map((r) => ({
       ...r,
       avgReachDelta: r.adpPickCount ? r.avgReachDelta! / r.adpPickCount : null,
       avgValueDelta: r.adpPickCount ? r.avgValueDelta! / r.adpPickCount : null,
+      avgAbsDelta: r.adpPickCount ? r.avgAbsDelta! / r.adpPickCount : null,
     }))
     .filter((r) => r.adpPickCount > 0)
     .sort((a, b) => (b.avgReachDelta ?? -999) - (a.avgReachDelta ?? -999));
@@ -519,6 +527,28 @@ export function computeDraftIntelligence(
       const lines = rows.slice(0, topN).map((r, i) => {
         const avg = r.avgReachDelta != null ? r.avgReachDelta.toFixed(1) : "?";
         return `${i + 1}. ${r.ownerName} — avg reach ${avg}, ${r.reachCount} reaches / ${r.adpPickCount} ADP-joined picks`;
+      });
+      empty.formattedAnswer = `${acrossAdp}, ${label}:\n${lines.join("\n")}\n${adpNote}`;
+      return empty;
+    }
+    case "adp_follow":
+    case "adp_ignore": {
+      const ignore = query.metric === "adp_ignore";
+      const rows = [...ownerReach].sort((a, b) =>
+        ignore
+          ? (b.avgAbsDelta ?? -999) - (a.avgAbsDelta ?? -999)
+          : (a.avgAbsDelta ?? 999) - (b.avgAbsDelta ?? 999),
+      );
+      if (!rows.length) {
+        empty.formattedAnswer = `${acrossAdp}, no owner ADP-joined picks were recorded.\n${adpNote}`;
+        return empty;
+      }
+      const label = ignore
+        ? "farthest from ADP (highest average |ADP − pick|)"
+        : "closest to ADP (lowest average |ADP − pick|)";
+      const lines = rows.slice(0, topN).map((r, i) => {
+        const avg = r.avgAbsDelta != null ? r.avgAbsDelta.toFixed(1) : "?";
+        return `${i + 1}. ${r.ownerName} — avg |ADP − pick| ${avg} (${r.adpPickCount} ADP-joined picks)`;
       });
       empty.formattedAnswer = `${acrossAdp}, ${label}:\n${lines.join("\n")}\n${adpNote}`;
       return empty;

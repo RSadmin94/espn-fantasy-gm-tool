@@ -21,7 +21,7 @@ Undrafted ESPN sentinel ADP (~170) is rejected.
 - Reach / steal / average reach / frequency / value / aggression require a **same-season** ADP join.
 - QB / RB / WR timing, philosophy, and first-time draftees use the recorded draft board only.
 - One season’s ADP is never applied to another season.
-- Current/prior calendar year may warm from the same live ESPN offense ADP feed War Room uses, then persist durable last-good. Historical seasons stay board-only unless that season’s ADP row exists.
+- Same-season ESPN offense ADP only (War Room `leaguedefaults/3` feed). Durable per season; never apply year X ADP to year Y. Sentinel ~170 feeds are not persisted. Seasons without usable ADP stay coverage-honest.
 - If ADP is missing: return **coverage years**, never “this league lacks draft strategy.”
 - Partial ADP: `Draft reach data is available from X–Y; earlier draft boards (A–B) are preserved without reliable ADP.`
 

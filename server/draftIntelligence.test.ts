@@ -11,7 +11,11 @@ import {
   scoreDraftPicks,
   type DraftPickEvidence,
 } from "./draftIntelligence";
-import { selectDraftIntelligenceTool } from "./draftIntelligenceTool";
+import {
+  attachSameSeasonAdp,
+  resolveEspnPlayerIdFromRawPick,
+  selectDraftIntelligenceTool,
+} from "./draftIntelligenceTool";
 
 function pick(over: Partial<DraftPickEvidence> & Pick<DraftPickEvidence, "season" | "overallPick" | "ownerName">): DraftPickEvidence {
   return {
@@ -79,6 +83,26 @@ const BOARD: DraftPickEvidence[] = [
   }),
 ];
 
+describe("RFSN-055 same-season ADP join", () => {
+  it("recovers ESPN playerId from rawPick when the column is empty", () => {
+    expect(resolveEspnPlayerIdFromRawPick(JSON.stringify({ playerId: 4362628 }), null)).toBe(4362628);
+    expect(resolveEspnPlayerIdFromRawPick("{}", 3117251)).toBe(3117251);
+    expect(resolveEspnPlayerIdFromRawPick("{}", 0)).toBeNull();
+    expect(resolveEspnPlayerIdFromRawPick(null, null)).toBeNull();
+  });
+
+  it("never applies another season's ADP map", () => {
+    const picks: DraftPickEvidence[] = [
+      pick({ season: 2025, overallPick: 1, ownerName: "Rod", playerId: 101, playerName: "Chase" }),
+    ];
+    const adp2026 = new Map([["101", 12]]);
+    const joined = attachSameSeasonAdp(picks, new Map([[2026, adp2026]]));
+    expect(joined[0]?.adp).toBeNull();
+    const same = attachSameSeasonAdp(picks, new Map([[2025, adp2026]]));
+    expect(same[0]?.adp).toBe(12);
+  });
+});
+
 describe("RFSN-055 reach convention", () => {
   it("uses ADP − actual pick (positive = reach)", () => {
     expect(computeReachDelta(12, 28)).toBe(16);
@@ -135,6 +159,21 @@ describe("selectDraftIntelligenceTool", () => {
       metric: "draft_aggression",
       aggressionMode: "gambles",
     });
+    expect(selectDraftIntelligenceTool("Who drafts running backs early?")?.query).toMatchObject({
+      metric: "rb_timing",
+      timingDirection: "early",
+    });
+    expect(selectDraftIntelligenceTool("Who drafts wide receivers early?")?.query).toMatchObject({
+      metric: "wr_timing",
+      timingDirection: "early",
+    });
+    expect(selectDraftIntelligenceTool("Who waits on quarterback?")?.query).toMatchObject({
+      metric: "qb_timing",
+      timingDirection: "late",
+    });
+    expect(selectDraftIntelligenceTool("Who follows ADP the closest?")?.query.metric).toBe("adp_follow");
+    expect(selectDraftIntelligenceTool("Who ignores ADP the most?")?.query.metric).toBe("adp_ignore");
+    expect(selectDraftIntelligenceTool("and who waits on quarterback?")?.query.metric).toBe("qb_timing");
   });
 
   it("does not treat coaching as draft intelligence", () => {
@@ -232,5 +271,16 @@ describe("computeDraftIntelligence", () => {
   it("coverageYears formats single and range", () => {
     expect(coverageYears(2025, 2025)).toBe("2025");
     expect(coverageYears(2010, 2025)).toBe("2010–2025");
+  });
+
+  it("ranks closest vs farthest from ADP without inventing a personality", () => {
+    const follow = computeDraftIntelligence(BOARD, { metric: "adp_follow" });
+    const ignore = computeDraftIntelligence(BOARD, { metric: "adp_ignore" });
+    expect(follow.formattedAnswer).toMatch(/closest to ADP/i);
+    expect(ignore.formattedAnswer).toMatch(/farthest from ADP/i);
+    expect(follow.ownerReach.some((r) => r.avgAbsDelta != null)).toBe(true);
+    expect(follow.formattedAnswer).not.toMatch(/personality|gambler|madman/i);
+    expect(draftIntelligenceNeedsAdp("adp_follow")).toBe(true);
+    expect(draftIntelligenceNeedsAdp("adp_ignore")).toBe(true);
   });
 });

@@ -39,13 +39,14 @@ type ProbeRow = {
 
 const QUESTIONS: Array<{ question: string; kind: ProbeRow["kind"] }> = [
   { question: "Who reaches the most?", kind: "adp" },
-  { question: "What was the biggest reach ever?", kind: "adp" },
-  { question: "What was the biggest steal?", kind: "adp" },
-  { question: "Who drafts QBs early?", kind: "board" },
-  { question: "Who waits on QB?", kind: "board" },
-  { question: "Who loves RBs?", kind: "board" },
-  { question: "Who drafts safest?", kind: "adp" },
-  { question: "Who gambles the most?", kind: "adp" },
+  { question: "Biggest reach?", kind: "adp" },
+  { question: "Biggest steal?", kind: "adp" },
+  { question: "Who drafts quarterbacks early?", kind: "board" },
+  { question: "Who waits on quarterback?", kind: "board" },
+  { question: "Who drafts running backs early?", kind: "board" },
+  { question: "Who drafts wide receivers early?", kind: "board" },
+  { question: "Who follows ADP the closest?", kind: "adp" },
+  { question: "Who ignores ADP the most?", kind: "adp" },
   { question: "Who reached the most in 2010?", kind: "thin-adp" },
 ];
 
@@ -95,7 +96,7 @@ function failuresFor(kind: ProbeRow["kind"], message: string, tool?: string, llm
       failures.push("reach/steal answer missing pick or ADP number");
     }
     if (
-      !/draft reach data is available|adp-joined|avg reach|reach frequency|largest reach|largest steal/i.test(
+      !/draft reach data is available|adp-joined|avg reach|reach frequency|largest reach|largest steal|closest to adp|farthest from adp|avg \|adp/i.test(
         message,
       )
     ) {
@@ -269,6 +270,29 @@ async function main() {
         }`,
       );
     }
+
+    await waitGap();
+    const follow = await chat(page, ESPN_LEAGUE, "and who waits on quarterback?");
+    lastAt = Date.now();
+    const followFailures = failuresFor("board", follow.message, follow.tool, follow.llmInvoked);
+    if (follow.intent && follow.intent !== "draft_intelligence") {
+      followFailures.push(`intent ${follow.intent}, expected draft_intelligence`);
+    }
+    rows.push({
+      question: "and who waits on quarterback? (follow-up)",
+      kind: "board",
+      answer: follow.message,
+      tool: follow.tool,
+      intent: follow.intent,
+      llmInvoked: follow.llmInvoked,
+      verdict: followFailures.length ? "FAIL" : "PASS",
+      failures: followFailures,
+    });
+    console.log(
+      `${followFailures.length ? "FAIL" : "PASS"} | follow-up waits on QB\n  ${(follow.message || "").replace(/\s+/g, " ").slice(0, 320)}${
+        followFailures.length ? `\n  !! ${followFailures.join("; ")}` : ""
+      }`,
+    );
   } finally {
     await browser.close();
   }

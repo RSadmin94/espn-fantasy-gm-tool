@@ -7,7 +7,7 @@
 import { and, eq } from "drizzle-orm";
 import { gmDraftPicks, gmTeams } from "../drizzle/schema";
 import { getDb } from "./db";
-import { loadDurableEspnOffenseAdp } from "./espnOffenseAdpDurableStore";
+import { ensureSameSeasonEspnOffenseAdp } from "./espnOffenseAdpSameSeason";
 import { resolveDraftRound } from "../shared/reachClassification";
 import {
   computeDraftIntelligence,
@@ -84,6 +84,16 @@ export function selectDraftIntelligenceTool(
   if (/\baverage draft value\b|\bavg draft value\b|\bbest draft value\b/.test(t)) {
     return hit("average_draft_value");
   }
+  if (
+    /\bfollows? adp\b|\bclosest to adp\b|\bmost adp[- ]faithful\b|\bwho (?:drafts?|stays?|sticks?) (?:closest )?to adp\b/.test(
+      t,
+    )
+  ) {
+    return hit("adp_follow");
+  }
+  if (/\bignores? adp\b|\bfarthest from adp\b|\bleast adp[- ]faithful\b|\bwho ignores adp the most\b/.test(t)) {
+    return hit("adp_ignore");
+  }
   if (/\bwho (?:drafts?|picks?) safest\b|\bsafest drafter\b|\bwho drafts? safe\b/.test(t)) {
     return hit("draft_aggression", { aggressionMode: "safest" satisfies DraftAggressionMode });
   }
@@ -102,10 +112,18 @@ export function selectDraftIntelligenceTool(
   ) {
     return hit("qb_timing", { timingDirection: "early" satisfies DraftTimingDirection });
   }
-  if (/\bloves? rbs?\b|\brb[- ]first\b|\bdrafts? rbs? early\b|\bwho (?:drafts?|takes?) rbs? early\b/.test(t)) {
+  if (
+    /\bloves? rbs?\b|\brb[- ]first\b|\bdrafts? (?:running backs?|rbs?) early\b|\bwho (?:drafts?|takes?|picks?) (?:running backs?|rbs?) early\b/.test(
+      t,
+    )
+  ) {
     return hit("rb_timing", { timingDirection: "early" satisfies DraftTimingDirection });
   }
-  if (/\bloves? wrs?\b|\bwr[- ]heavy\b|\bdrafts? wrs? early\b|\bwho (?:drafts?|takes?) wrs? early\b/.test(t)) {
+  if (
+    /\bloves? wrs?\b|\bwr[- ]heavy\b|\bdrafts? (?:wide ?receivers?|wrs?) early\b|\bwho (?:drafts?|takes?|picks?) (?:wide ?receivers?|wrs?) early\b/.test(
+      t,
+    )
+  ) {
     return hit("wr_timing", { timingDirection: "early" satisfies DraftTimingDirection });
   }
   if (/\balways drafts? rookies?\b|\brookie preference\b|\bwho drafts? rookies?\b|\bloves? rookies?\b/.test(t)) {
@@ -118,6 +136,34 @@ export function selectDraftIntelligenceTool(
     return hit("position_tendencies");
   }
   return null;
+}
+
+/** ESPN playerId from the normalized column, else rawPick. Never invents an id. */
+export function resolveEspnPlayerIdFromRawPick(
+  rawPick: string | null | undefined,
+  columnId?: number | null,
+): number | null {
+  if (columnId != null && Number.isFinite(columnId) && columnId > 0) return columnId;
+  if (!rawPick?.trim()) return null;
+  try {
+    const j = JSON.parse(rawPick) as { playerId?: unknown; player?: { id?: unknown } };
+    const pid = Number(j.playerId ?? j.player?.id ?? 0);
+    return Number.isFinite(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Attach ADP only from the pick's own season map. */
+export function attachSameSeasonAdp(
+  picks: DraftPickEvidence[],
+  adpBySeason: Map<number, Map<string, number>>,
+): DraftPickEvidence[] {
+  return picks.map((p) => {
+    const pid = p.playerId != null && p.playerId > 0 ? String(p.playerId) : "";
+    const adp = pid ? adpBySeason.get(p.season)?.get(pid) ?? null : null;
+    return { ...p, adp: isUsableAdp(adp) ? adp : null };
+  });
 }
 
 export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPickEvidence[]> {
@@ -135,6 +181,7 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
       playerName: gmDraftPicks.playerName,
       position: gmDraftPicks.position,
       isKeeper: gmDraftPicks.isKeeper,
+      rawPick: gmDraftPicks.rawPick,
       ownerName: gmTeams.ownerName,
       ownerId: gmTeams.ownerId,
       teamName: gmTeams.name,
@@ -151,46 +198,35 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
     .where(eq(gmDraftPicks.leagueId, lid));
 
   const teamsBySeason = new Map<number, Set<number>>();
+  const seasonsWithIds = new Set<number>();
   for (const r of rows) {
     if (!teamsBySeason.has(r.season)) teamsBySeason.set(r.season, new Set());
     if (r.teamId > 0) teamsBySeason.get(r.season)!.add(r.teamId);
+    if (resolveEspnPlayerIdFromRawPick(r.rawPick, r.playerId) != null) seasonsWithIds.add(r.season);
   }
 
   const adpBySeason = new Map<number, Map<string, number>>();
-  const ingestSeason = async (season: number) => {
-    if (adpBySeason.has(season)) return;
-    try {
-      const durable = await loadDurableEspnOffenseAdp(season);
-      if (!durable) return;
-      const map = new Map<string, number>();
-      for (const [pid, info] of durable) {
-        if (isUsableAdp(info.adp)) map.set(String(pid), info.adp);
+  await Promise.all(
+    [...seasonsWithIds].map(async (season) => {
+      try {
+        const durable = await ensureSameSeasonEspnOffenseAdp(season);
+        if (!durable) return;
+        const map = new Map<string, number>();
+        for (const [pid, info] of durable) {
+          if (isUsableAdp(info.adp)) map.set(String(pid), info.adp);
+        }
+        if (map.size) adpBySeason.set(season, map);
+      } catch {
+        /* season ADP optional */
       }
-      if (map.size) adpBySeason.set(season, map);
-    } catch {
-      /* season ADP optional */
-    }
-  };
-  for (const season of teamsBySeason.keys()) {
-    await ingestSeason(season);
-  }
-
-  // Current / prior calendar year only: same live ESPN offense ADP War Room uses.
-  // Never apply that map to any other draft-board season.
-  const calendarYear = new Date().getFullYear();
-  const liveCandidates = [calendarYear, calendarYear - 1].filter((y) => teamsBySeason.has(y));
-  if (liveCandidates.some((y) => !adpBySeason.has(y))) {
-    try {
-      const { getEspnPlayerInfoMap } = await import("./playerStatsRouter");
-      await getEspnPlayerInfoMap();
-      for (const season of liveCandidates) await ingestSeason(season);
-    } catch {
-      /* live ESPN ADP optional */
-    }
-  }
+    }),
+  );
 
   const out: DraftPickEvidence[] = [];
   for (const r of rows) {
+    const playerId = resolveEspnPlayerIdFromRawPick(r.rawPick, r.playerId);
+    const playerName = String(r.playerName || "").trim();
+    if (!playerId && !playerName) continue;
     const teams = teamsBySeason.get(r.season)?.size ?? 0;
     const round = resolveDraftRound({
       pickNumber: r.overallPick,
@@ -198,7 +234,7 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
       existingRound: r.roundId > 0 ? r.roundId : null,
     });
     const ownerName = String(r.ownerName || r.teamName || "").trim() || `Team ${r.teamId}`;
-    const pid = r.playerId != null && r.playerId > 0 ? String(r.playerId) : "";
+    const pid = playerId != null ? String(playerId) : "";
     const adp = pid ? adpBySeason.get(r.season)?.get(pid) ?? null : null;
     out.push({
       season: r.season,
@@ -207,11 +243,11 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
       teamId: r.teamId,
       ownerName,
       ownerKey: String(r.ownerId || "").trim() || ownerName,
-      playerId: r.playerId,
-      playerName: String(r.playerName || "Unknown").trim(),
+      playerId,
+      playerName: playerName || "Unknown",
       position: String(r.position || "").trim(),
       isKeeper: Boolean(r.isKeeper),
-      adp,
+      adp: isUsableAdp(adp) ? adp : null,
       numberOfTeams: teams || undefined,
     });
   }

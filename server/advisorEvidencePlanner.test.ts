@@ -258,6 +258,37 @@ describe("planAdvisorEvidence", () => {
       "owner_identity",
       "draft_history",
     ], { narrativeAllowed: false });
+    expectPlan("Who drafts running backs early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts wide receivers early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who waits on quarterback?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who follows ADP the closest?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who ignores ADP the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+  });
+
+  it("keeps draft-intelligence follow-ups deterministic (RFSN-055)", () => {
+    expectPlan("and who waits on quarterback?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false, deterministicFirst: true, fallback: false });
+    expectPlan("Biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false, deterministicFirst: true, fallback: false });
   });
 
   it("does not turn two named owners + draft metric into H2H", () => {

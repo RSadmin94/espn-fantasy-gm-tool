@@ -262,6 +262,26 @@ describe("formatDeterministicAdvisorAnswer", () => {
     expect(out?.message).toMatch(/2024–2025/);
     expect(out?.message).not.toMatch(/lacks draft strategy/i);
   });
+
+  it("keeps a draft-intelligence follow-up on query_draft_intelligence (RFSN-055)", () => {
+    const pkg = buildAdvisorEvidencePackage(
+      {
+        message: "and who waits on quarterback?",
+        leagueId: "457622",
+        scope: LEAGUE_HISTORY,
+        owners: [],
+        plan: DRAFT_INTEL_PLAN,
+      },
+      baseSources({
+        draftAnswer:
+          "Across recorded drafts from 2010–2026, latest average QB selection:\n1. Jan Graham — round 9.0 (2 QB picks, earliest R6)\nNot all-time. Recorded draft coverage is 2010–2026.",
+      }),
+    );
+    const out = formatDeterministicAdvisorAnswer(pkg);
+    expect(out?.tool).toBe("query_draft_intelligence");
+    expect(out?.message).toMatch(/Jan Graham/);
+    expect(out?.message).not.toMatch(/lacks draft strategy/i);
+  });
 });
 
 describe("formatH2HAdvisorAnswer", () => {
