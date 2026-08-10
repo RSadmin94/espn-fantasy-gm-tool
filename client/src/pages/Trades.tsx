@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { TYPE_READABLE_SECTION } from "@/lib/typeScale";
 import { V1 } from "@/lib/v1Copy";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -625,7 +626,7 @@ function RosterPicker({
   return (
     <Card className="flex-1">
       <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+        <CardTitle className={cn(TYPE_READABLE_SECTION, "text-muted-foreground uppercase tracking-wide")}>
           {label}
         </CardTitle>
         <Select
@@ -1152,7 +1153,7 @@ export function Trades() {
   }, [teamAId, teamBId, sideAHasItems, sideBHasItems]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div data-rfsn-054d className="mx-auto max-w-5xl space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-foreground">{V1.features.tradeIntelligence}</h1>

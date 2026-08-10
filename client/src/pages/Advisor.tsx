@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
+import { TYPE_READABLE_SECTION } from "@/lib/typeScale";
 import { V1 } from "@/lib/v1Copy";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
@@ -138,7 +139,7 @@ function InsightCard({ icon, tag, children }: { icon: React.ReactNode; tag: stri
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary">
+        <div className={cn("flex items-center gap-2 uppercase tracking-wider text-primary", TYPE_READABLE_SECTION)}>
           {icon}
           {tag}
         </div>
@@ -184,7 +185,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
   if (loading) {
     return (
       <div className="rounded-2xl border border-border bg-card p-6">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        <div className={cn("flex items-center gap-2 uppercase tracking-widest text-muted-foreground", TYPE_READABLE_SECTION)}>
           <Swords className="h-4 w-4" /> Biggest Threat
         </div>
         <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -215,7 +216,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
       className="relative overflow-hidden rounded-2xl border p-6"
       style={{ borderColor: c.ring, background: `linear-gradient(135deg, ${c.bg}, transparent 62%)` }}
     >
-      <div className="flex items-center gap-2 text-[15px] font-bold uppercase tracking-widest" style={{ color: c.text }}>
+      <div className={cn("flex items-center gap-2 font-bold uppercase tracking-widest", TYPE_READABLE_SECTION)} style={{ color: c.text }}>
         <Swords className="h-4 w-4" /> Biggest Threat
       </div>
 
@@ -498,10 +499,10 @@ export function Advisor() {
     ". Here are today's insights.";
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 pb-10">
+    <div data-rfsn-054d className="mx-auto flex w-full max-w-5xl flex-col gap-5 pb-10">
       {/* Hero */}
       <div className="rounded-2xl border border-border bg-gradient-to-b from-card to-background p-6">
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+        <div className={cn("flex items-center gap-2 uppercase tracking-widest text-primary", TYPE_READABLE_SECTION)}>
           <Dna className="h-4 w-4" />
           {V1.features.advisor}
         </div>
@@ -558,7 +559,7 @@ export function Advisor() {
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">Ask {V1.features.advisor}</span>
+              <span className={cn(TYPE_READABLE_SECTION, "text-foreground")}>Ask {V1.features.advisor}</span>
             </div>
             <div className="flex items-center gap-2">
               <Select value={String(season)} onValueChange={(v) => setSeason(Number(v))}>
