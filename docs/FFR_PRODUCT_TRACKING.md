@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-10 (RFSN-054D Targeted Font Readability Preview)  
+**Edition:** 2026-08-10 (RFSN-054D Targeted Font Readability Production)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -25,11 +25,11 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 Stable | Git `0acba88` · `buildTime=2026-08-10T05:25:02.999Z` · 051A–D + **054** + **054A** + **054B** + **054C** + 052J/K + **052L** + **056A** + **053C–H** |
+| Production | 🟢 Stable | Git `a51491b` · `buildTime=2026-08-10T07:39:05.771Z` · 051A–D + **054** + **054A** + **054B** + **054C** + **054D** + 052J/K + **052L** + **056A** + **053C–H** |
 | Preview | 🟢 Git-aligned | Git `9d67df5` · `buildTime=2026-08-10T07:14:01.824Z` · 051A–D + **054** + **054A** + **054B** + **054C** + **054D** + 052J/K + **052L** + **055** + **056A** + **053C–H** |
 | GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **053D gallery visuals live Preview + Production**. **053H narration live Preview + Production**. **055 Draft Intelligence live Preview only** (same-season ADP join **2018–2024**, founder **11/11**). **“What's my biggest win?” FAIL**. |
 | RFSN | 🟢 | Live / Stories / Recaps |
-| Typography | 🟢 | 051A–D + **054B** floors + **054C** cert live Preview + **Production**. **054D** targeted fonts Preview only (Trades / Advisor / Championship Path / Draft History). §5.1 gate. No new census. |
+| Typography | 🟢 | 051A–D + **054B** floors + **054C** cert + **054D** targeted fonts live Preview + **Production**. §5.1 gate. No new census. |
 | UI density | 🟢 Production | **RFSN-054** + **054A** live Preview + Production. Compact Live Draft Control strip. Not typography. |
 | Matchup Gallery | 🟢 | **053C–H** live Preview + **Production**. **054B/054C** typography live both envs. **055** Draft Intelligence remains Preview only. |
 | Mobile | 🟡 Partial | FFR 2.0 responsive IA. RFSN-025 active-draft dock unvalidated |
@@ -45,7 +45,7 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`0acba88`** (054C cherry-pick of `2ae5822` + §5.1 gate, no 055, Git not CLI). Health `buildTime=2026-08-10T05:25:02.999Z` (gitSha still stale `06b35ba`) · deploy `5df0b165` |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`a51491b`** (054D cherry-pick of `9d67df5`, no 055, Git not CLI). Health `buildTime=2026-08-10T07:39:05.771Z` (gitSha still stale `06b35ba`) · deploy `1db54037` |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`9d67df5`**. Railway Git SUCCESS deploy `345767c7` (not CLI). Health `buildTime=2026-08-10T07:14:01.824Z` (gitSha still stale `dff6154`) |
 | **Local working tree** | localhost | — | uncommitted | marketing |
 
@@ -77,7 +77,7 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 | Layer | State |
 | --- | --- |
-| Production | Git **`0acba88`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **054B** + **054C** + **056A** + **053C–H**. Live `buildTime=2026-08-10T05:25:02.999Z`. |
+| Production | Git **`a51491b`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **054B** + **054C** + **054D** + **056A** + **053C–H**. Live `buildTime=2026-08-10T07:39:05.771Z`. |
 | Preview | Git tip **`9d67df5`** · `buildTime=2026-08-10T07:14:01.824Z` · **054B** + **054C** + **054D** + **055** + **056A** + **053C–H**. |
 | Local / unpushed | marketing. Not Preview, not Production. |
 
@@ -87,7 +87,7 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` (git `0acba88` / buildTime `2026-08-10T05:25:02.999Z`).
+Shipped and live on `www.fantasyfootballrivals.com` (git `a51491b` / buildTime `2026-08-10T07:39:05.771Z`).
 
 | Area | What’s in Production |
 | --- | --- |
@@ -101,7 +101,7 @@ Shipped and live on `www.fantasyfootballrivals.com` (git `0acba88` / buildTime `
 | Commercial | Free + Rivals Pro Stripe · The League deferred |
 | Extension | GM War Room **v1.14.2** (Chrome; not Railway) |
 
-051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, **054B** desktop typography floors, **054C** readability certification (§5.1 permanent gate), **056A** Transactions, **053C–H** Historical Matchup Gallery through AI narration are Production. **055** Draft Intelligence remains Preview only. No new typography census.
+051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, **054B** desktop typography floors, **054C** readability certification (§5.1 permanent gate), **054D** targeted fonts, **056A** Transactions, **053C–H** Historical Matchup Gallery through AI narration are Production. **055** Draft Intelligence remains Preview only. No new typography census.
 
 ---
 
@@ -120,7 +120,7 @@ On Preview **in addition to** Production, unless noted.
 | **054A** Compact Live Draft Control | Live Preview + **Production** | `fa65ab5` / `3bdcd8f3` · `2a80eca` / `3d25ff96` |
 | **054B** Desktop Typography Accessibility | Live Preview + **Production** | Preview `0319cbc` / `7bc37a74`. Production `e954c66` / `4b0f5a71` / `buildTime=2026-08-10T01:51:36.392Z`. Floors 12/13/14/15. Not density. |
 | **054C** Human Readability Certification | Live Preview + **Production** | Preview `2ae5822` / `8626c29d`. Production `0acba88` / `5df0b165` / `buildTime=2026-08-10T05:25:02.999Z`. Leave / size / contrast. §5.1 permanent gate. |
-| **054D** Targeted Font Readability | **Live Preview** | Trades / Advisor / Championship Path / Draft History only. Scoped `[data-rfsn-054d]`. Not Production. Founder visual review before promote. |
+| **054D** Targeted Font Readability | Live Preview + **Production** | Preview `9d67df5` / `345767c7`. Production `a51491b` / `1db54037` / `buildTime=2026-08-10T07:39:05.771Z`. Scoped `[data-rfsn-054d]`. |
 | **052L** Advisor Clear session reset | Live Preview + **Production** | `68fa655` / `ee9ed04` · founder 12/12 both envs |
 | **055** Draft Intelligence Authority | **Live Preview** | Deterministic `draft_intelligence`. Same-season ESPN ADP join **2018–2024**. Founder **11/11**. 2010/2025 coverage-honest. Not Production. |
 | **056A** Transactions missing executed trades | Live Preview + **Production** | Executed filter 5/5 ESPN 457622 2026 both envs. Grading unchanged. |
@@ -145,7 +145,7 @@ On Preview **in addition to** Production, unless noted.
 | **054A** | Compact Live Draft Control (`/rfsn/live` + `/draft/live`) | **Production live** `2a80eca` / `3d25ff96`. |
 | **054B** | Desktop Typography Accessibility Pass | **Production live** `e954c66` / `buildTime=2026-08-10T01:51:36.392Z`. Preview `0319cbc`. Raise undersized text only. Not density. |
 | **054C** | Human Readability Certification | **Production live** `0acba88` / `buildTime=2026-08-10T05:25:02.999Z`. Preview `2ae5822`. Leave / size / contrast. §5.1 permanent gate. No new census. |
-| **054D** | Targeted Font Readability | **Preview live** `9d67df5` / `345767c7` / `buildTime=2026-08-10T07:14:01.824Z`. Four surfaces only. Not Production. |
+| **054D** | Targeted Font Readability | **Production live** `a51491b` / `buildTime=2026-08-10T07:39:05.771Z`. Preview `9d67df5`. Four surfaces only. §5.1 targeted fix. |
 | **052L** | GM Advisor Clear = true session reset | **Production live** `ee9ed04` / `buildTime=2026-08-09T09:07:04.929Z`. Preview `68fa655`. 12/12 both. |
 | **055** | Draft Intelligence Authority | **Preview live** `cf52461` / `dc3238e1` / `buildTime=2026-08-10T02:35:56.593Z`. Founder **11/11**. Same-season ADP 2018–2024. Not Production. |
 | **056A** | Transactions missing executed trades | **Production live** `1aa6d28` / `buildTime=2026-08-09T11:19:47.170Z`. Preview `31b6e69`. Executed 5/5 both. |
@@ -178,7 +178,7 @@ Stop after each increment. Production only when explicitly asked.
 9. ~~**RFSN-053H**~~ **Done Preview + Production** `7565ace` / founder **9/9**. No video/TTS.  
 10. ~~**RFSN-054B**~~ **Done Preview + Production** `e954c66` / `buildTime=2026-08-10T01:51:36.392Z`. Desktop typography floors. Not density.  
 10b. ~~**RFSN-054C**~~ **Done Preview + Production** `0acba88` / `buildTime=2026-08-10T05:25:02.999Z`. Readability certification. Permanent §5.1 gate. No new census.  
-10c. **RFSN-054D** Targeted fonts — **Preview live** `9d67df5`. Trades / Advisor / Championship Path / Draft History. Founder visual review before Production.  
+10c. ~~**RFSN-054D**~~ **Done Preview + Production** `a51491b` / `buildTime=2026-08-10T07:39:05.771Z`. Targeted fonts on four surfaces. No new census.  
 11. **RFSN-053I** — Public sharing.  
 12. **RFSN-053J** — Viewer screenshot engine.  
 13. **RFSN-053K** — Batch + ZIP + scheduled job.  
@@ -214,7 +214,8 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
-| 2026-08-10 | **054D Preview.** Git `9d67df5` → deploy `345767c7`. Targeted fonts on Trades / Advisor / Championship Path / Draft History. overflowX false 1366–1920. Not Production. | Preview `buildTime=2026-08-10T07:14:01.824Z` · `RFSN-054D-preview-validation.md` |
+| 2026-08-10 | **054D Production.** Cherry-pick `a51491b` of `9d67df5` (no 055) → deploy `1db54037`. Wrap/overflow smoke **PASS** (Trades, Advisor, Championship Path, Draft History). | Production `buildTime=2026-08-10T07:39:05.771Z` · `RFSN-054D-production-validation.md` |
+| 2026-08-10 | **054D Preview.** Git `9d67df5` → deploy `345767c7`. Targeted fonts on Trades / Advisor / Championship Path / Draft History. overflowX false 1366–1920. | Preview `buildTime=2026-08-10T07:14:01.824Z` · `RFSN-054D-preview-validation.md` |
 | 2026-08-10 | **054C Production.** Cherry-pick `0acba88` of `2ae5822` + §5.1 gate (no 055) → deploy `5df0b165`. Wrap/overflow smoke **PASS** (Dossier, Advisor, Gallery, Live Draft, Transactions). Permanent readability gate. | Production `buildTime=2026-08-10T05:25:02.999Z` · `RFSN-054C-production-validation.md` |
 | 2026-08-10 | **054C Preview.** Git `2ae5822` → deploy `8626c29d`. Human readability certification (leave / size / contrast). 1440 overflowX false. | Preview `buildTime=2026-08-10T04:51:13.444Z` · `RFSN-054C-preview-validation.md` |
 | 2026-08-10 | **055 Preview corrections.** Git `cf52461` → deploy `dc3238e1`. Same-season ESPN ADP join 2018–2024. Founder ESPN 457622 **11/11 PASS**. Not Production. | Preview `buildTime=2026-08-10T02:35:56.593Z` · `RFSN-055-preview-validation.md` |
@@ -321,7 +322,7 @@ Stop after each increment. Production only when explicitly asked.
 | **054A** | Compact Live Draft Control | done | yes `fa65ab5` / `3bdcd8f3` | **yes** `2a80eca` / `3d25ff96` |
 | **054B** | Desktop Typography Accessibility | done | **yes** `0319cbc` / `7bc37a74` / `buildTime=2026-08-10T01:12:42.709Z` | **yes** `e954c66` / `4b0f5a71` / `buildTime=2026-08-10T01:51:36.392Z` |
 | **054C** | Human Readability Certification | done | **yes** `2ae5822` / `8626c29d` | **yes** `0acba88` / `5df0b165` / `buildTime=2026-08-10T05:25:02.999Z` |
-| **054D** | Targeted Font Readability | done | **Git Preview** `9d67df5` / `345767c7` | **no** |
+| **054D** | Targeted Font Readability | done | **yes** `9d67df5` / `345767c7` | **yes** `a51491b` / `1db54037` / `buildTime=2026-08-10T07:39:05.771Z` |
 | 052 A–I | GM Advisor historical intelligence | done | yes | yes (closed 08-08) |
 | 052J | Partial-legacy championships | done | **Git Preview** `e48b34e` | **Production live** LOZELL 3 + 2009 limitation PASS |
 | 052K | Matchup margin intent expansion | done | **Git Preview** `e48b34e` | **Production live** league-wide PASS · personal biggest-win FAIL |
@@ -363,7 +364,7 @@ Stop after each increment. Production only when explicitly asked.
 | **054A compact Live Draft Control** | yes | **Shipped** `2a80eca` / `3d25ff96` | Closed |
 | **054B desktop typography** | yes `0319cbc` | **Shipped** `e954c66` / `4b0f5a71` / `buildTime=2026-08-10T01:51:36.392Z` | Floors 12/13/14/15. Not density. Wrap/crowd smoke PASS. |
 | **054C readability cert** | yes `2ae5822` | **Shipped** `0acba88` / `5df0b165` / `buildTime=2026-08-10T05:25:02.999Z` | Leave / size / contrast. §5.1 permanent gate. Wrap/overflow PASS. |
-| **054D targeted fonts** | yes `9d67df5` | **No** | Four surfaces only. overflowX false. Founder visual review then Production on ask. |
+| **054D targeted fonts** | yes `9d67df5` | **Shipped** `a51491b` / `1db54037` / `buildTime=2026-08-10T07:39:05.771Z` | Four surfaces only. overflowX false. §5.1 targeted fix. |
 | **052L Clear reset** | yes `68fa655` | **Shipped** `ee9ed04` | Preview + Production 12/12 |
 | **055 Draft Intelligence** | yes `cf52461` / **11/11** | **No** | Same-season ESPN ADP 2018–2024. 2010/2025 coverage-honest. Production on explicit ask. |
 | **053C gallery** | yes `539dfea` | **Shipped** `2ad6e04` / `ad8e93d3` | Preview + Production 12/12 ESPN 457622 |
@@ -374,7 +375,7 @@ Stop after each increment. Production only when explicitly asked.
 | **053H AI narration** | yes `1885bc8` / **7/7** + pre-promote **9/9** | **Shipped** `7565ace` / founder **9/9** | Story Package → LLM style. No video/TTS |
 | **053I / MKT-001** | no | No | Not ready |
 
-**Production must not receive** marketing, **055 Draft Intelligence**, or **054D** until explicitly requested. 051 stays closed. **054 + 054A + 054B + 054C + 052L + 056A + 053C–H are live.**
+**Production must not receive** marketing or **055 Draft Intelligence** until explicitly requested. 051 stays closed. **054 + 054A + 054B + 054C + 054D + 052L + 056A + 053C–H are live.**
 
 ---
 
@@ -385,7 +386,7 @@ Stop after each increment. Production only when explicitly asked.
 3. **052 Production close artifact still documents LOZELL = 2.** That snapshot is historical (`06b35ba`, 2026-08-08). Do not rewrite it. Current Production live probe: LOZELL **3 (2009, 2011, 2021)**.
 4. **Preview=Git is proven** (`e48b34e` → `0afa371e`). Health `gitSha` still stale (`dff6154`) on Git deploys — do not use it as the alignment signal.
 5. **053C routes** are live on Preview + **Production** (`/league/history/matchups`, `/no-mercy`, `/:matchupId`).
-6. **053E–H** are live Preview + **Production**. **054B** floors + **054C** readability certification are live Preview + **Production** (`0acba88`). **054D** targeted fonts and **055** Draft Intelligence remain **Preview only**. Championship Glory stays honest-empty on ESPN 457622 (`insufficient_playoff_tier`). Blood Rival home count is “Pick a rival” until an opponent is named. LLM never computes stats.
+6. **053E–H** are live Preview + **Production**. **054B** floors + **054C** cert + **054D** targeted fonts are live Preview + **Production** (`a51491b`). **055** Draft Intelligence remains **Preview only**. Championship Glory stays honest-empty on ESPN 457622 (`insufficient_playoff_tier`). Blood Rival home count is “Pick a rival” until an opponent is named. LLM never computes stats.
 7. **`todo.md`** is legacy planning only (banner added). Not SOT.
 8. **`railway down` is not a cancel.** 2026-08-09 it removed the serving SUCCESS deploy (`0b79799b`) and left Production 404 until `redeploy --from-source` (`fea8db3c`). Stuck INITIALIZING `670a86c2` is gone.
 
@@ -394,7 +395,7 @@ Stop after each increment. Production only when explicitly asked.
 ## Recommendations still open
 
 1. Fix 052K personal biggest-win (`my` → margin `ownerName`) and re-smoke Production only when asked.
-2. Next increment is **053I public sharing** or **052K-follow** — explicit ask only; Git push only, no `railway up`. Do not promote **055** or **054D** until founder visual review + explicit ask. No new typography census — targeted readability fixes only (§5.1). No video/TTS.
+2. Next increment is **053I public sharing** or **052K-follow** — explicit ask only; Git push only, no `railway up`. Do not promote **055** until asked. No new typography census — targeted readability fixes only (§5.1). No video/TTS.
 3. When 053 ships to Preview/Production, flip route inventory rows from WIP → live (including `/m/:shareCode` at 053I).
 4. Extension version stays a dashboard footnote (v1.14.2); bump here when the zip ships.
 5. Never use `railway down` against a serving SUCCESS to clear INITIALIZING.
