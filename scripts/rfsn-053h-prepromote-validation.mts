@@ -1,7 +1,8 @@
 /**
- * RFSN-053H — Pre-promote gates. Preview only. ESPN 457622.
+ * RFSN-053H — Pre-promote / Production gates. ESPN 457622.
  *
  *   npx tsx scripts/rfsn-053h-prepromote-validation.mts
+ *   $env:RFSN_053H_HOST="www.fantasyfootballrivals.com"; $env:RFSN_053H_LABEL="production"; npx tsx scripts/rfsn-053h-prepromote-validation.mts
  */
 import "dotenv/config";
 import fs from "node:fs";
@@ -18,8 +19,9 @@ const PREVIEW_HOST =
 const BASE = `https://${PREVIEW_HOST}`;
 const ESPN_LEAGUE = "457622";
 const OUT_DIR = path.resolve("audit-artifacts/rfsn-053");
-const OUT_MD = path.join(OUT_DIR, "RFSN-053H-prepromote-validation.md");
-const OUT_JSON = path.join(OUT_DIR, "RFSN-053H-prepromote-validation.json");
+const LABEL = process.env.RFSN_053H_LABEL?.trim() || "prepromote";
+const OUT_MD = path.join(OUT_DIR, `RFSN-053H-${LABEL}-validation.md`);
+const OUT_JSON = path.join(OUT_DIR, `RFSN-053H-${LABEL}-validation.json`);
 const GAP_MS = 8000;
 const VOICES = ["historian", "cashier", "coach"] as const;
 const DETERMINISTIC_ASKS = [
@@ -269,7 +271,7 @@ async function main() {
   const passed = probes.filter((p) => p.verdict === "PASS").length;
   const failed = probes.filter((p) => p.verdict === "FAIL").length;
   const md = [
-    `# RFSN-053H pre-promote validation`,
+    `# RFSN-053H ${LABEL} validation`,
     "",
     `- Host: ${BASE}`,
     `- League: ESPN ${ESPN_LEAGUE}`,

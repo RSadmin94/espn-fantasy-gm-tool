@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-10 (RFSN-054B Preview)  
+**Edition:** 2026-08-10 (RFSN-053H Production)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -25,13 +25,13 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 Stable | Git `798aa8a` · `buildTime=2026-08-09T14:32:05.217Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **056A** + **053C** + **053D** |
+| Production | 🟢 Stable | Git `7565ace` · `buildTime=2026-08-10T01:37:52.826Z` · 051A–D + **054** + **054A** + 052J/K + **052L** + **056A** + **053C** + **053D** + **053E** + **053F** + **053G** + **053H** |
 | Preview | 🟢 Git-aligned | Git `0319cbc` · `buildTime=2026-08-10T01:12:42.709Z` · 051A–D + **054** + **054A** + **054B** + 052J/K + **052L** + **055** + **056A** + **053C** + **053D** + **053E** + **053F** + **053G** + **053H** |
-| GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **053D gallery visuals live Preview + Production**. **053H narration live Preview only**. **055 Draft Intelligence live Preview only**. **“What's my biggest win?” FAIL**. |
+| GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **053D gallery visuals live Preview + Production**. **053H narration live Preview + Production**. **055 Draft Intelligence live Preview only**. **“What's my biggest win?” FAIL**. |
 | RFSN | 🟢 | Live / Stories / Recaps |
 | Typography | 🟢 / 🟡 | 051A–D live Preview + Production. **054B desktop accessibility floors live Preview only.** 051E closed. Pinch-zoom on. |
 | UI density | 🟢 Production | **RFSN-054** + **054A** live Preview + Production. Compact Live Draft Control strip. Not typography. |
-| Matchup Gallery | 🟢 / 🟡 | **053C** + **053D** live Preview + **Production**. **053E** + **053F** + **053G** + **053H narration live Preview only** (`1885bc8`). Not Production. |
+| Matchup Gallery | 🟢 | **053C–H** live Preview + **Production** (`7565ace`). **054B** typography and **055** Draft Intelligence remain Preview only. |
 | Mobile | 🟡 Partial | FFR 2.0 responsive IA. RFSN-025 active-draft dock unvalidated |
 | Data Sync | 🟢 | ESPN / Sleeper / Yahoo / workbook paths live |
 | Release Pipeline | 🟢 Preview=Git proven | Push `e48b34e` → Railway Git deploy `0afa371e` SUCCESS. No CLI `railway up`. `gitSha` still stale — trust `buildTime` + Railway `commitHash` |
@@ -45,7 +45,7 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`798aa8a`** (053D cherry-pick of `dc912a8` + Production-safe tests, Git not CLI). Health `buildTime=2026-08-09T14:32:05.217Z` (gitSha still stale `06b35ba`) · deploy `9f2d70ff` |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | Git **`7565ace`** (053E–H cherry-pick + Production-safe tests, no 055/054B, Git not CLI). Health `buildTime=2026-08-10T01:37:52.826Z` (gitSha still stale `06b35ba`) · deploy `92fdaa64` |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | Git **`0319cbc`**. Railway Git SUCCESS deploy `7bc37a74` (not CLI). Health `buildTime=2026-08-10T01:12:42.709Z` (gitSha still stale `dff6154`) |
 | **Local working tree** | localhost | — | uncommitted | marketing |
 
@@ -77,7 +77,7 @@ Fantasy Football Rivals is a **live production product** (Clerk auth, multi-leag
 
 | Layer | State |
 | --- | --- |
-| Production | Git **`798aa8a`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **056A** + **053C** + **053D**. Live `buildTime=2026-08-09T14:32:05.217Z`. |
+| Production | Git **`7565ace`** includes 052 A–**L** + **051A–D** + **054** + **054A** + **056A** + **053C–H**. Live `buildTime=2026-08-10T01:37:52.826Z`. |
 | Preview | Git tip **`0319cbc`** · `buildTime=2026-08-10T01:12:42.709Z` · **054B** + **055** + **056A** + **053C–H**. |
 | Local / unpushed | marketing. Not Preview, not Production. |
 
@@ -101,7 +101,7 @@ Shipped and live on `www.fantasyfootballrivals.com` (git `798aa8a` / buildTime `
 | Commercial | Free + Rivals Pro Stripe · The League deferred |
 | Extension | GM War Room **v1.14.2** (Chrome; not Railway) |
 
-051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, **056A** Transactions, **053C Historical Matchup Gallery**, and **053D Advisor gallery visuals** are Production. **054B** desktop typography floors are Preview only.
+051A–D typography, **RFSN-054** density, **054A** compact Live Draft Control, **056A** Transactions, **053C–H** Historical Matchup Gallery through AI narration are Production. **054B** desktop typography floors and **055** Draft Intelligence are Preview only.
 
 ---
 
@@ -124,10 +124,10 @@ On Preview **in addition to** Production, unless noted.
 | **056A** Transactions missing executed trades | Live Preview + **Production** | Executed filter 5/5 ESPN 457622 2026 both envs. Grading unchanged. |
 | **053C** Historical Matchup Gallery | Live Preview + **Production** | Preview `539dfea` / `ba0bbd5a`. Production `2ad6e04` / `ad8e93d3` / `buildTime=2026-08-09T13:17:56.373Z`. Founder 12/12 both envs. |
 | **053D** Advisor visual gallery | Live Preview + **Production** | Preview `dc912a8` / `3ebed032`. Production `798aa8a` / `9f2d70ff` / `buildTime=2026-08-09T14:32:05.217Z`. Founder 16/16 Preview · **17/17 Production**. |
-| **053E** Historical Story Collections | **Live Preview** | Git `eca6da1` / deploy `874954b5` / `buildTime=2026-08-09T16:34:43.599Z`. Founder ESPN 457622 **22/22**. Not Production. |
-| **053F** Premium Historical Share Cards | **Live Preview** | Git `e6c0cf7` / deploy `5af3da2f` / `buildTime=2026-08-09T19:12:00.470Z`. Founder ESPN 457622 **10/10**. HTML renderer. Not Production. |
-| **053G** Share Card PNG Export | **Live Preview** | Git `0c5d94a` / deploy `d3518077` / `buildTime=2026-08-09T20:34:42.594Z`. Founder ESPN 457622 **9/9**. Snapshots ShareCardRenderer. Not Production. |
-| **053H** AI Historical Narration | **Live Preview** | Git `1885bc8` / deploy `f462ca69` / `buildTime=2026-08-10T00:29:07.185Z`. Founder ESPN 457622 **7/7** + pre-promote **9/9**. LLM narrates Story Package only. Not Production. |
+| **053E** Historical Story Collections | Live Preview + **Production** | Production `7565ace` / `92fdaa64` / `buildTime=2026-08-10T01:37:52.826Z`. Preview `eca6da1`. Founder 22/22 Preview. |
+| **053F** Premium Historical Share Cards | Live Preview + **Production** | Production `7565ace`. Preview `e6c0cf7` / **10/10**. One ShareCardModel + renderer. |
+| **053G** Share Card PNG Export | Live Preview + **Production** | Production `7565ace`. Preview `0c5d94a` / **9/9**. Nixpacks Chromium. |
+| **053H** AI Historical Narration | Live Preview + **Production** | Production `7565ace` / `92fdaa64` / founder **9/9**. Preview `1885bc8` / 7/7 + pre-promote 9/9. Story Package → LLM style. No video/TTS. |
 
 ---
 
@@ -149,10 +149,10 @@ On Preview **in addition to** Production, unless noted.
 | **053B** | `matchupGallery.query` contract | **Production live** with 053C (16/16). Semantics unchanged. |
 | **053C** | Gallery UI + No Mercy + viewer V1 | **Production live** `2ad6e04` / `buildTime=2026-08-09T13:17:56.373Z`. Founder 12/12 both. |
 | **053D** | Advisor `matchup_gallery` visual | **Production live** `798aa8a` / `buildTime=2026-08-09T14:32:05.217Z`. Founder 17/17. Closed. |
-| **053E** | Historical Story Collections | **Preview live** `eca6da1` / `buildTime=2026-08-09T16:34:43.599Z`. Founder 22/22. Not Production. |
-| **053F** | Premium Historical Share Cards | **Preview live** `e6c0cf7` / `buildTime=2026-08-09T19:12:00.470Z`. Founder 10/10. One ShareCardModel + renderer. Not Production. |
-| **053G** | Share Card PNG Export | **Preview live** `0c5d94a` / `buildTime=2026-08-09T20:34:42.594Z`. Founder 9/9. Playwright snapshot of ShareCardRenderer. Not Production. |
-| **053H** | AI Historical Narration | **Preview live** `1885bc8` / `buildTime=2026-08-10T00:29:07.185Z`. Founder 7/7 + pre-promote **9/9**. Story Package → prompt → LLM. No video/TTS. Not Production. |
+| **053E** | Historical Story Collections | **Production live** `7565ace` / `buildTime=2026-08-10T01:37:52.826Z`. Preview `eca6da1`. |
+| **053F** | Premium Historical Share Cards | **Production live** `7565ace`. Preview `e6c0cf7`. One ShareCardModel + renderer. |
+| **053G** | Share Card PNG Export | **Production live** `7565ace`. Preview `0c5d94a`. Nixpacks Chromium. |
+| **053H** | AI Historical Narration | **Production live** `7565ace` / founder **9/9**. Preview `1885bc8`. Story Package → LLM style. No video/TTS. |
 | **053I** | Public sharing | **Not started.** |
 
 No Advisor / Rivalry Center / live Matchups redesign is in progress.
@@ -168,10 +168,10 @@ Stop after each increment. Production only when explicitly asked.
 3. **056A asset reconstruction follow-up (optional)** — 4 executed 2026 headers still lack pick/player items after activity relink.  
 4. ~~**Preview-deploy 053C**~~ **Done** Preview + **Production** `2ad6e04` / `buildTime=2026-08-09T13:17:56.373Z`.  
 5. ~~**RFSN-053D**~~ **Done Preview + Production** `798aa8a` / `buildTime=2026-08-09T14:32:05.217Z`. Founder 17/17.  
-6. ~~**RFSN-053E**~~ **Done Preview** `eca6da1` / `buildTime=2026-08-09T16:34:43.599Z`. Founder 22/22. Not Production.  
-7. ~~**RFSN-053F**~~ **Done Preview** `e6c0cf7` / `buildTime=2026-08-09T19:12:00.470Z`. Founder 10/10. Not Production.  
-8. ~~**RFSN-053G**~~ **Done Preview** `0c5d94a` / `buildTime=2026-08-09T20:34:42.594Z`. Founder 9/9. Not Production.  
-9. ~~**RFSN-053H**~~ **Done Preview** `1885bc8` / `buildTime=2026-08-10T00:29:07.185Z`. Founder 7/7 + pre-promote 9/9. Not Production. No video/TTS.  
+6. ~~**RFSN-053E**~~ **Done Preview + Production** `7565ace` / `buildTime=2026-08-10T01:37:52.826Z`.  
+7. ~~**RFSN-053F**~~ **Done Preview + Production** `7565ace`.  
+8. ~~**RFSN-053G**~~ **Done Preview + Production** `7565ace`. Nixpacks Chromium.  
+9. ~~**RFSN-053H**~~ **Done Preview + Production** `7565ace` / founder **9/9**. No video/TTS.  
 10. ~~**RFSN-054B**~~ **Done Preview** `0319cbc` / `buildTime=2026-08-10T01:12:42.709Z`. Desktop typography floors. Not Production. Not density.  
 11. **RFSN-053I** — Public sharing.  
 12. **RFSN-053J** — Viewer screenshot engine.  
@@ -188,7 +188,7 @@ Stop after each increment. Production only when explicitly asked.
 
 | Item | Notes |
 | --- | --- |
-| Historical Matchup Gallery remaining | 053I–L (public share next). 053E + 053F + **053G** + **053H Preview only**. |
+| Historical Matchup Gallery remaining | 053I–L (public share next). **053E–H live Production.** |
 | Soundtrack / marketing assets | `scripts/marketing/we-got-the-tape/` · RFSN-MKT-001 · Preview/local only |
 | RFSN-025 | Mobile dock active-draft validation |
 | RFSN-026 | Synthetic ADP classification |
@@ -208,6 +208,7 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
+| 2026-08-10 | **053H Production.** Cherry-pick 053E–H + Production-safe tests `7565ace` (no 055/054B) → deploy `92fdaa64`. Founder ESPN 457622 **9/9 PASS**. | Production `buildTime=2026-08-10T01:37:52.826Z` · `RFSN-053H-production-validation.md` |
 | 2026-08-09 | **053H pre-promote.** Git `1885bc8` → deploy `f462ca69`. Facts/voices/cache/deterministic asks **9/9 PASS** ESPN 457622. Not Production. | Preview `buildTime=2026-08-10T00:29:07.185Z` · `RFSN-053H-prepromote-validation.md` |
 | 2026-08-09 | **053H Preview.** Git `ff01f17` → deploy `d2d4e865`. AI Historical Narration from HistoricalStoryPackage (voices Sofia/Coach/Roxanne/Cashier/Historian). Founder ESPN 457622 **7/7 PASS**. No video/TTS/public share. Not Production. | Preview `buildTime=2026-08-09T23:47:19.209Z` · `RFSN-053H-preview-validation.md` |
 | 2026-08-09 | **053G Preview.** Git `0c5d94a` → deploy `d3518077`. Share Card PNG export snapshots ShareCardRenderer (1×/2×/4×, hash cache). Founder ESPN 457622 **9/9 PASS**. Not Production. | Preview `buildTime=2026-08-09T20:34:42.594Z` · `RFSN-053G-preview-validation.md` |
@@ -317,10 +318,10 @@ Stop after each increment. Production only when explicitly asked.
 | 053B | Gallery query contract | done (16/16) | **yes** `539dfea` | **yes** `2ad6e04` |
 | **053C** | Historical Matchup Gallery | done | **yes** `539dfea` / `ba0bbd5a` | **yes** `2ad6e04` / `ad8e93d3` / `buildTime=2026-08-09T13:17:56.373Z` |
 | **053D** | Advisor gallery visual | done | **yes** `dc912a8` / `3ebed032` / `buildTime=2026-08-09T14:01:47.305Z` | **yes** `798aa8a` / `9f2d70ff` / `buildTime=2026-08-09T14:32:05.217Z` |
-| **053E** | Historical Story Collections | done Preview | **yes** `eca6da1` / `874954b5` / `buildTime=2026-08-09T16:34:43.599Z` | **no** |
-| **053F** | Premium Historical Share Cards | done Preview | **yes** `e6c0cf7` / `5af3da2f` / `buildTime=2026-08-09T19:12:00.470Z` | **no** |
-| **053G** | Share Card PNG Export | done Preview | **yes** `0c5d94a` / `d3518077` / `buildTime=2026-08-09T20:34:42.594Z` | **no** |
-| **053H** | AI Historical Narration | done Preview | **yes** `1885bc8` / `f462ca69` / `buildTime=2026-08-10T00:29:07.185Z` | **no** |
+| **053E** | Historical Story Collections | done | **yes** `eca6da1` / `874954b5` | **yes** `7565ace` / `92fdaa64` / `buildTime=2026-08-10T01:37:52.826Z` |
+| **053F** | Premium Historical Share Cards | done | **yes** `e6c0cf7` / `5af3da2f` | **yes** `7565ace` |
+| **053G** | Share Card PNG Export | done | **yes** `0c5d94a` / `d3518077` | **yes** `7565ace` |
+| **053H** | AI Historical Narration | done | **yes** `1885bc8` / `f462ca69` / pre-promote 9/9 | **yes** `7565ace` / `92fdaa64` / founder **9/9** |
 
 ---
 
@@ -329,7 +330,7 @@ Stop after each increment. Production only when explicitly asked.
 | ID | Title | Blocked on |
 | --- | --- | --- |
 | **052K-follow** | Personal “What's my biggest win?” | Owner resolution into `query_matchup_margins` |
-| **053I** | Public sharing | 053H Preview live. No video/TTS. Production of 053E–H on explicit ask. |
+| **053I** | Public sharing | 053E–H live Production. No video/TTS. |
 | 025 / 026 | Mobile dock / synthetic ADP | Backlog |
 | 030B remainder | FP multiplayer evidence + type freeze | Authenticated MUD session |
 
@@ -352,13 +353,13 @@ Stop after each increment. Production only when explicitly asked.
 | **055 Draft Intelligence** | yes `c9284f9` | **No** | Preview 9/9. Reach/steal coverage-honest. Production on explicit ask. |
 | **053C gallery** | yes `539dfea` | **Shipped** `2ad6e04` / `ad8e93d3` | Preview + Production 12/12 ESPN 457622 |
 | **053D Advisor gallery visual** | yes `dc912a8` | **Shipped** `798aa8a` / `9f2d70ff` / `buildTime=2026-08-09T14:32:05.217Z` | Preview 16/16 · Production 17/17 ESPN 457622 |
-| **053E Story Collections** | yes `eca6da1` / **22/22** | **No** | Preview only. Production on explicit ask. |
-| **053F Share Cards** | yes `e6c0cf7` / **10/10** | **No** | Preview only. HTML renderer. Production on explicit ask. |
-| **053G PNG export** | yes `0c5d94a` / **9/9** | **No** | Preview only. Snapshots ShareCardRenderer. Production on explicit ask. |
-| **053H AI narration** | yes `1885bc8` / **7/7** + pre-promote **9/9** | **No** | Preview only. Story Package → LLM style. No video/TTS. Production on explicit ask. |
+| **053E Story Collections** | yes `eca6da1` / **22/22** | **Shipped** `7565ace` | Preview + Production |
+| **053F Share Cards** | yes `e6c0cf7` / **10/10** | **Shipped** `7565ace` | One ShareCardModel + renderer |
+| **053G PNG export** | yes `0c5d94a` / **9/9** | **Shipped** `7565ace` | Snapshots ShareCardRenderer. Nixpacks Chromium |
+| **053H AI narration** | yes `1885bc8` / **7/7** + pre-promote **9/9** | **Shipped** `7565ace` / founder **9/9** | Story Package → LLM style. No video/TTS |
 | **053I / MKT-001** | no | No | Not ready |
 
-**Production must not receive** marketing, **055 Draft Intelligence**, or **054B typography** until explicitly requested. 051 stays closed. **054 + 054A + 052L + 056A + 053C + 053D are live.**
+**Production must not receive** marketing, **055 Draft Intelligence**, or **054B typography** until explicitly requested. 051 stays closed. **054 + 054A + 052L + 056A + 053C–H are live.**
 
 ---
 
@@ -369,7 +370,7 @@ Stop after each increment. Production only when explicitly asked.
 3. **052 Production close artifact still documents LOZELL = 2.** That snapshot is historical (`06b35ba`, 2026-08-08). Do not rewrite it. Current Production live probe: LOZELL **3 (2009, 2011, 2021)**.
 4. **Preview=Git is proven** (`e48b34e` → `0afa371e`). Health `gitSha` still stale (`dff6154`) on Git deploys — do not use it as the alignment signal.
 5. **053C routes** are live on Preview + **Production** (`/league/history/matchups`, `/no-mercy`, `/:matchupId`).
-6. **053E** Story Collections, **053F** Share Cards, **053G** PNG export, and **053H** narration are **Preview only** (`1885bc8`). **054B** typography floors are **Preview only** (`0319cbc`). Championship Glory stays honest-empty on ESPN 457622 (`insufficient_playoff_tier`). Blood Rival home count is “Pick a rival” until an opponent is named. Download and Narrate are live on Preview. LLM never computes stats.
+6. **053E–H** are live Preview + **Production** (`7565ace`). **054B** typography floors and **055** Draft Intelligence remain **Preview only**. Championship Glory stays honest-empty on ESPN 457622 (`insufficient_playoff_tier`). Blood Rival home count is “Pick a rival” until an opponent is named. LLM never computes stats.
 7. **`todo.md`** is legacy planning only (banner added). Not SOT.
 8. **`railway down` is not a cancel.** 2026-08-09 it removed the serving SUCCESS deploy (`0b79799b`) and left Production 404 until `redeploy --from-source` (`fea8db3c`). Stuck INITIALIZING `670a86c2` is gone.
 
@@ -378,7 +379,7 @@ Stop after each increment. Production only when explicitly asked.
 ## Recommendations still open
 
 1. Fix 052K personal biggest-win (`my` → margin `ownerName`) and re-smoke Production only when asked.
-2. Next increment is **053I public sharing**, **052K-follow**, or **055 ADP-join follow-up** — explicit ask only; Git push only, no `railway up`. Do not promote **053E/F/G/H** or **054B** until asked. No video/TTS.
+2. Next increment is **053I public sharing**, **052K-follow**, or **055 ADP-join follow-up** — explicit ask only; Git push only, no `railway up`. Do not promote **054B** or **055** until asked. No video/TTS.
 3. When 053 ships to Preview/Production, flip route inventory rows from WIP → live (including `/m/:shareCode` at 053I).
 4. Extension version stays a dashboard footnote (v1.14.2); bump here when the zip ships.
 5. Never use `railway down` against a serving SUCCESS to clear INITIALIZING.
