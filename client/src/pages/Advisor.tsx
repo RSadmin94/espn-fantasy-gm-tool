@@ -215,7 +215,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
       className="relative overflow-hidden rounded-2xl border p-6"
       style={{ borderColor: c.ring, background: `linear-gradient(135deg, ${c.bg}, transparent 62%)` }}
     >
-      <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest" style={{ color: c.text }}>
+      <div className="flex items-center gap-2 text-[15px] font-bold uppercase tracking-widest" style={{ color: c.text }}>
         <Swords className="h-4 w-4" /> Biggest Threat
       </div>
 
@@ -223,7 +223,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
         <div className="min-w-0">
           <h2 className="text-2xl font-black tracking-tight text-foreground">{threat.ownerName}</h2>
           <span
-            className="mt-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide"
+            className="mt-1.5 inline-flex items-center rounded-full px-2.5 py-0.5 text-label font-bold uppercase tracking-wide"
             style={{ color: c.text, background: c.bg, border: `1px solid ${c.ring}` }}
           >
             {threat.threatLevel}
@@ -236,7 +236,7 @@ function BiggestThreatCard({ data, loading }: { data: ThreatData | undefined; lo
           >
             <span className="text-2xl font-black tabular-nums">{threat.threatScore}</span>
           </div>
-          <span className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">Threat / 100</span>
+          <span className="mt-1 text-2xs font-semibold uppercase tracking-wider text-ink-tertiary">Threat / 100</span>
         </div>
       </div>
 

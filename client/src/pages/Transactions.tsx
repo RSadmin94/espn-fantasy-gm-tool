@@ -1239,7 +1239,7 @@ export function Transactions() {
           </div>
 
           <div className="flex w-44 flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Type</span>
+            <span className="text-label font-medium text-ink-secondary">Type</span>
             <Select value={typeFilter} onValueChange={setTypeFilter}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>{TX_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
@@ -1247,7 +1247,7 @@ export function Transactions() {
           </div>
 
           <div className="flex w-40 flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Trade Status</span>
+            <span className="text-label font-medium text-ink-secondary">Trade Status</span>
             <Select value={tradeStatusFilter} onValueChange={v => setTradeStatusFilter(v as TradeStatusFilter)}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -1260,7 +1260,7 @@ export function Transactions() {
           </div>
 
           <div className="flex w-48 flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Team</span>
+            <span className="text-label font-medium text-ink-secondary">Team</span>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
               <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="All teams" /></SelectTrigger>
               <SelectContent>
@@ -1271,7 +1271,7 @@ export function Transactions() {
           </div>
 
           <div className="relative flex min-w-36 flex-1 flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Search</span>
+            <span className="text-label font-medium text-ink-secondary">Search</span>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input className="h-9 pl-8 text-sm" placeholder="Search player…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -1301,7 +1301,7 @@ export function Transactions() {
                 ) : (
                   pipeline.kept.slice(0, 20).map((k) => (
                     <li key={`kept-${k.key}`}>
-                      <span className="font-mono text-[11px] text-foreground/90">{k.key.slice(0, 8)}</span>
+                      <span className="font-mono text-2xs text-foreground/90">{k.key.slice(0, 8)}</span>
                       {" · "}
                       {k.types.join("/")} · teams {k.teams.join("/") || "—"} · assets {k.assetCount}
                       {k.executed ? " · EXECUTED" : ""} · {k.reason}
@@ -1318,7 +1318,7 @@ export function Transactions() {
                 ) : (
                   pipeline.filtered.slice(0, 20).map((f) => (
                     <li key={`filt-${f.key}`}>
-                      <span className="font-mono text-[11px] text-foreground/90">{f.key.slice(0, 8)}</span>
+                      <span className="font-mono text-2xs text-foreground/90">{f.key.slice(0, 8)}</span>
                       {" · "}
                       {f.types.join("/")} · {f.reason}
                     </li>

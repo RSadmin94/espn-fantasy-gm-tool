@@ -19,7 +19,7 @@ export function MatchupGalleryPresets({
   const active = activeGalleryPreset(filter, isNoMercyRoute);
   return (
     <section data-gallery-presets aria-label="Quick presets">
-      <h2 className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+      <h2 className="mb-2 text-[15px] font-bold uppercase tracking-[0.14em] text-ink-secondary">
         Quick presets
       </h2>
       <div className={cn("flex flex-wrap", SPACE_CHIP_GAP)}>

@@ -131,7 +131,7 @@ function InlineMetric({
       <span className="text-2xs font-bold uppercase tracking-wider text-ink-secondary shrink-0">
         {label}
       </span>
-      <span className="truncate text-[11px] font-semibold text-zinc-100 tabular-nums">
+      <span className="truncate text-label font-semibold text-zinc-100 tabular-nums">
         {value}
       </span>
     </div>
@@ -159,7 +159,7 @@ export function LiveDraftControlPanel({
   return (
     <div
       className={cn(
-        "mb-2 sticky top-16 z-10 rounded-md border border-emerald-500/25 bg-emerald-500/[0.04] text-[11px] text-zinc-300 backdrop-blur-md",
+        "mb-2 sticky top-16 z-10 rounded-md border border-emerald-500/25 bg-emerald-500/[0.04] text-label text-ink-secondary backdrop-blur-md",
         SPACE_STRIP,
       )}
       data-live-draft-control

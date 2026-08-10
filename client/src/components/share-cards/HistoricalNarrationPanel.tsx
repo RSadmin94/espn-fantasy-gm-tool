@@ -81,8 +81,8 @@ export function HistoricalNarrationPanel({
       className={cn("rounded-xl border border-border bg-card", SPACE_CARD)}
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Story</h2>
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{voiceLabel}</span>
+        <h2 className="text-[15px] font-bold uppercase tracking-[0.14em] text-ink-secondary">Story</h2>
+        <span className="text-label font-semibold uppercase tracking-[0.14em] text-ink-tertiary">{voiceLabel}</span>
       </div>
 
       {!readOnly ? (

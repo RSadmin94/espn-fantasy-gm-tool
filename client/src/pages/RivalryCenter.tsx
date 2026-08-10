@@ -193,7 +193,7 @@ function HeatBadge({ label }: { label?: string }) {
   const h = HEAT[label ?? "Cold"] ?? HEAT.Cold;
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-label font-bold uppercase tracking-wider"
       style={{ color: h.c, border: `1px solid ${h.c}55`, background: `${h.c}14` }}
     >
       <Flame className="h-3 w-3" /> {h.label}
@@ -511,7 +511,7 @@ export function RivalryCenter({
           <Panel>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="flex-1">
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: ACCENT }}>
+                <div className="flex items-center gap-2 text-label font-bold uppercase tracking-[0.3em]" style={{ color: ACCENT }}>
                   <Swords className="h-4 w-4" /> Records Locked
                 </div>
                 <h3 className="mt-2 text-2xl font-black leading-tight">
@@ -608,7 +608,7 @@ export function RivalryCenter({
                       <span style={{ color: ACCENT }}>{String(hero.rivalName ?? "Rival")}</span>
                     </h3>
                     {hero.revengeAchieved === false && !rivalryGated && n(hero.playoffEliminations) > 0 && (
-                      <span className="mt-2 inline-block text-[11px] font-bold uppercase tracking-wider" style={{ color: RED }}>
+                      <span className="mt-2 inline-block text-label font-bold uppercase tracking-wider" style={{ color: RED }}>
                         Revenge pending
                       </span>
                     )}
@@ -631,7 +631,7 @@ export function RivalryCenter({
                       if (hero.lastMatchupSeason) why.push(`Most recent meeting: ${hero.lastMatchupSeason}`);
                       return (
                         <div className="mt-4">
-                          <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this is your hottest rivalry</div>
+                          <div className="text-label font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this is your hottest rivalry</div>
                           <ul className="mt-2 space-y-1">
                             {why.map((line) => (
                               <li key={line} className="flex items-start gap-2 text-[14px]" style={{ color: "color-mix(in oklch, var(--color-foreground) 80%, transparent)" }}>
@@ -661,12 +661,12 @@ export function RivalryCenter({
                     </div>
                   </div>
                   <div className={cn(SUB_CLASS, "flex shrink-0 flex-col items-center justify-center px-8 py-6")}>
-                    <div className="text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Rivalry Score</div>
+                    <div className="text-label font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Rivalry Score</div>
                     <div className="text-6xl font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</div>
                     {!rivalryGated && (
                       <button
                         onClick={() => setShowScoreMath((v) => !v)}
-                        className="mt-1 text-[11px] font-bold uppercase tracking-widest underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline"
+                        className="mt-1 text-label font-bold uppercase tracking-widest underline-offset-2 hover:underline focus-visible:outline-none focus-visible:underline"
                         style={{ color: MUTED }}
                       >
                         {showScoreMath ? "Hide" : "Why?"}
@@ -676,7 +676,7 @@ export function RivalryCenter({
                 </div>
                 {showScoreMath && !rivalryGated && (
                   <div className={cn(SUB_CLASS, "mt-4 p-4")}>
-                    <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this score?</div>
+                    <div className="mb-3 text-label font-bold uppercase tracking-[0.3em]" style={{ color: MUTED }}>Why this score?</div>
                     <div className="space-y-1.5 text-sm">
                       {([
                         ["Head-to-head losses", n(hero.h2hLosses), 8],
@@ -695,7 +695,7 @@ export function RivalryCenter({
                       <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>Total</span>
                       <span className="text-lg font-black" style={{ color: GOLD }}>{n(hero.rivalryScore)}</span>
                     </div>
-                    <div className="mt-2 text-[11px]" style={{ color: MUTED }}>
+                    <div className="mt-2 text-label" style={{ color: MUTED }}>
                       Heat thresholds: Cold &lt;30 · Simmering 30 · Heated 60 · Burning 100 · Inferno 150 — you're <span style={{ color: GOLD }}>{String(hero.heatLabel)}</span>
                     </div>
                   </div>
@@ -738,7 +738,7 @@ export function RivalryCenter({
                         </div>
                         <div className="shrink-0 text-right">
                           <div className="text-3xl font-black" style={{ color: GOLD }}>{lp.score}</div>
-                          <div className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>score</div>
+                          <div className="text-2xs uppercase tracking-widest" style={{ color: MUTED }}>score</div>
                         </div>
                         <ChevronRight className="h-5 w-5 shrink-0 opacity-40 transition group-hover:translate-x-0.5 group-hover:opacity-90" />
                       </button>
@@ -785,7 +785,7 @@ export function RivalryCenter({
                         <div className="flex items-center gap-2">
                           <span className="truncate text-lg font-bold">{rodName} <span style={{ color: MUTED }}>vs</span> {String(p.rivalName ?? "Rival")}</span>
                           {isLocked ? (
-                            <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white/60">
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/15 px-2 py-0.5 text-2xs font-bold uppercase tracking-wider text-white/60">
                               <Lock className="h-3 w-3" /> Locked
                             </span>
                           ) : (
@@ -815,7 +815,7 @@ export function RivalryCenter({
                         ) : (
                           <>
                             <div className="text-3xl font-black" style={{ color: GOLD }}>{n(p.rivalryScore)}</div>
-                            <div className="text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>score</div>
+                            <div className="text-2xs uppercase tracking-widest" style={{ color: MUTED }}>score</div>
                           </>
                         )}
                       </div>
@@ -840,7 +840,7 @@ export function RivalryCenter({
                       onClick={() => setOpen({ focalKey: m.aKey, focalName: m.a, rivalKey: m.bKey, rivalName: m.b })}
                       className={cn(SUB_CLASS, "p-4 text-left transition-all duration-150 hover:brightness-125 hover:ring-1 hover:ring-foreground/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#a3e635]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background")}
                     >
-                      <div className="text-[11px] font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
+                      <div className="text-label font-bold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{m.title}</div>
                       <div className="mt-1 text-lg font-black leading-tight">{m.a} <span style={{ color: MUTED }}>vs</span> {m.b}</div>
                       <div className="mt-1 text-xs" style={{ color: MUTED }}>{m.detail}</div>
                     </button>
@@ -965,7 +965,7 @@ export function RivalryCenter({
                       <div key={i} className={cn(SUB_CLASS, "p-4")}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold uppercase tracking-widest" style={{ color: MUTED }}>{r.season ?? "—"}</span>
-                          <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
+                          <span className="text-2xs font-bold uppercase tracking-wider" style={{ color: r.tone === "good" ? GOLD : RED }}>{r.impact}</span>
                         </div>
                         <p className="mt-2 text-[15px] leading-snug">{r.evidence}</p>
                       </div>
@@ -1022,7 +1022,7 @@ export function RivalryCenter({
                         <div key={i} className={cn(SUB_CLASS, "flex items-center gap-3 p-3")}>
                           <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ background: `${GOLD}1a`, color: GOLD }}>{x.icon}</span>
                           <div className="min-w-0">
-                            <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: GOLD }}>{x.t}</div>
+                            <div className="text-label font-bold uppercase tracking-widest" style={{ color: GOLD }}>{x.t}</div>
                             <div className="truncate font-bold">{String(x.who)}</div>
                             <div className="text-xs" style={{ color: MUTED }}>{x.d}</div>
                           </div>
@@ -1053,7 +1053,7 @@ export function RivalryCenter({
             <div className="sticky top-0 z-10 flex items-center justify-between rounded-t-2xl border-b px-5 py-3" style={{ borderColor: LINE, background: INK }}>
               <div className="flex items-center gap-2" style={{ color: ACCENT }}>
                 <Swords className="h-4 w-4" />
-                <span className="text-[11px] font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
+                <span className="text-label font-bold uppercase tracking-[0.35em]">Rivalry Dossier</span>
                 <span className="text-sm font-bold" style={{ color: TEXT }}>· {open.focalName ?? rodName} vs {open.rivalName}</span>
               </div>
               <button onClick={() => setOpen(null)} className="flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: LINE, color: TEXT }} aria-label="Close">
@@ -1089,7 +1089,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-2">
         {cellsFree.map(([k, v], i) => (
           <div key={i} className={cn(SUB_CLASS, "px-3 py-3")}>
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
+            <div className="text-2xs font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
             <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
           </div>
         ))}
@@ -1114,7 +1114,7 @@ function HeroStrip({ p, gated, yearsActive }: { p: Pair; gated?: boolean; yearsA
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-5">
       {cells.map(([k, v], i) => (
         <div key={i} className={cn(SUB_CLASS, "px-3 py-3")}>
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
+          <div className="text-2xs font-bold uppercase tracking-[0.18em]" style={{ color: MUTED }}>{k}</div>
           <div className="mt-1 text-xl font-black" style={{ color: TEXT }}>{v}</div>
         </div>
       ))}

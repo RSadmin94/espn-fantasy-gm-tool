@@ -68,29 +68,29 @@ export function HistoricalMatchupViewer({
 
       {(leagueName || coverageNote) ? (
         <section data-viewer-meta className={cn("rounded-xl border border-border bg-card", SPACE_CARD)}>
-          <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">League</h2>
+          <h2 className="text-[15px] font-bold uppercase tracking-[0.14em] text-ink-secondary">League</h2>
           <dl className={cn("mt-3 grid gap-3 sm:grid-cols-2", SPACE_CARD_GAP)}>
             {leagueName ? (
               <div>
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">League</dt>
+                <dt className="text-label font-semibold uppercase tracking-wide text-ink-secondary">League</dt>
                 <dd className="text-sm font-semibold text-foreground">{leagueName}</dd>
               </div>
             ) : null}
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Season / week</dt>
+              <dt className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Season / week</dt>
               <dd className="text-sm font-semibold text-foreground">
                 {matchup.season} · Week {matchup.week}
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Phase</dt>
+              <dt className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Phase</dt>
               <dd className="text-sm font-semibold text-foreground">
                 {matchup.phase === "playoffs" ? "Playoffs" : "Regular season"}
               </dd>
             </div>
             {coverageNote ? (
               <div className="sm:col-span-2">
-                <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coverage</dt>
+                <dt className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Coverage</dt>
                 <dd className="text-sm text-foreground">{coverageNote}</dd>
               </div>
             ) : null}
@@ -137,7 +137,7 @@ function SideLineupPanel({
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-base font-bold text-foreground">{side.ownerName}</h3>
-          {side.teamName ? <p className="truncate text-xs text-muted-foreground">{side.teamName}</p> : null}
+          {side.teamName ? <p className="truncate text-sm text-ink-secondary">{side.teamName}</p> : null}
         </div>
         <p className="text-xl font-black tabular-nums text-foreground">
           {formatGalleryScore(side.score, scoringPrecision)}
@@ -173,7 +173,7 @@ function PlayerGroup({
 }) {
   return (
     <div className="mt-4">
-      <h4 className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{title}</h4>
+      <h4 className="text-[15px] font-bold uppercase tracking-[0.14em] text-ink-secondary">{title}</h4>
       {players.length === 0 ? (
         <p className="mt-2 text-sm text-muted-foreground">None recorded.</p>
       ) : (

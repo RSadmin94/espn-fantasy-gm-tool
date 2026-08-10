@@ -921,7 +921,7 @@ function TradeResults({
                     <td className="py-2 pr-3 font-medium text-foreground">
                       {name}
                       {isWinner && (
-                        <span className="ml-2 text-2xs font-semibold uppercase tracking-wide text-emerald-400">Winner</span>
+                        <span className="ml-2 text-label font-semibold uppercase tracking-wide text-emerald-400">Winner</span>
                       )}
                     </td>
                     <td className="py-2 pr-3 text-right font-mono tabular-nums">{Math.round(given)}</td>

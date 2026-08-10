@@ -229,7 +229,7 @@ export function MatchupGalleryFilters({
 function FilterField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block space-y-1.5">
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{label}</span>
       {children}
     </label>
   );

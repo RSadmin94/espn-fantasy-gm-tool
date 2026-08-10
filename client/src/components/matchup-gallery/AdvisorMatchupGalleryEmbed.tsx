@@ -83,7 +83,7 @@ export function AdvisorMatchupGalleryEmbed({
           to={href}
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-3 py-1.5",
-            "text-xs font-semibold uppercase tracking-wide text-foreground hover:border-primary/40 hover:bg-primary/10",
+            "text-label font-semibold uppercase tracking-wide text-foreground hover:border-primary/40 hover:bg-primary/10",
           )}
         >
           Open Full Gallery
