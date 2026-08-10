@@ -208,7 +208,7 @@ export function HistoricalMatchupGalleryPage() {
         className="mb-5"
         meta={
           leagueName ? (
-            <span className="rounded-full border border-border px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full border border-border px-2.5 py-1 text-label font-bold uppercase tracking-wider text-ink-secondary">
               {leagueName}
             </span>
           ) : null
@@ -298,7 +298,7 @@ export function HistoricalMatchupDetailPage() {
         className="mb-5"
         meta={
           leagueName ? (
-            <span className="rounded-full border border-border px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            <span className="rounded-full border border-border px-2.5 py-1 text-label font-bold uppercase tracking-wider text-ink-secondary">
               {leagueName}
             </span>
           ) : null

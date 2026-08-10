@@ -55,7 +55,7 @@ export function MatchupGalleryCard({
       data-championship={matchup.isChampionshipGame ? "true" : "false"}
       className={cn("flex h-full flex-col rounded-xl border border-border bg-card", SPACE_CARD)}
     >
-      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-label font-semibold uppercase tracking-wide text-ink-secondary">
         <span>{matchup.season}</span>
         <span aria-hidden="true">·</span>
         <span>Week {matchup.week}</span>
@@ -91,7 +91,7 @@ export function MatchupGalleryCard({
           score={homeScore}
           isWinner={matchup.winnerPersonId === matchup.homePersonId}
         />
-        <div className="pt-6 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground">
+        <div className="pt-6 text-center text-2xs font-bold uppercase tracking-wider text-ink-tertiary">
           vs
         </div>
         <SideColumn
@@ -180,7 +180,7 @@ function SideColumn({
           <p className={cn("truncate text-base font-semibold text-foreground", isWinner && "text-primary")}>
             {ownerName}
           </p>
-          {team ? <p className="truncate text-xs text-muted-foreground">{team}</p> : null}
+          {team ? <p className="truncate text-sm text-ink-secondary">{team}</p> : null}
         </div>
       </div>
       <p className={cn("mt-2 text-2xl font-black tabular-nums text-foreground", isWinner && "text-primary")}>

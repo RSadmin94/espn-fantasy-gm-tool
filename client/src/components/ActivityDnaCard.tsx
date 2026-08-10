@@ -67,7 +67,7 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
           <Activity className="h-4 w-4 text-lime-400/80" aria-hidden />
           Activity DNA
         </div>
-        <p className="text-[13px] text-muted-foreground">Not enough league history yet.</p>
+        <p className="text-sm text-ink-secondary">Not enough league history yet.</p>
       </div>
     );
   }
@@ -93,7 +93,7 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
         </div>
         <span
           className={cn(
-            "rounded-full border px-2.5 py-0.5 text-[11px] font-medium",
+            "rounded-full border px-2.5 py-0.5 text-label font-medium",
             confidenceClasses(data.confidence),
           )}
         >
@@ -104,11 +104,11 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
       {/* Primary / Secondary */}
       <div className="mb-5 grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-lime-400/20 bg-lime-400/[0.06] px-3 py-2.5">
-          <div className="text-[11px] uppercase tracking-wide text-lime-300/70">Primary DNA</div>
+          <div className="text-label font-semibold uppercase tracking-wide text-lime-300/80">Primary DNA</div>
           <div className="text-[17px] font-extrabold leading-tight text-lime-300">{data.primaryDNA}</div>
         </div>
         <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-3 py-2.5">
-          <div className="text-[11px] uppercase tracking-wide text-violet-300/70">Secondary DNA</div>
+          <div className="text-label font-semibold uppercase tracking-wide text-violet-300/80">Secondary DNA</div>
           <div className="text-[17px] font-extrabold leading-tight text-violet-300">{data.secondaryDNA}</div>
         </div>
       </div>
@@ -117,14 +117,14 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
       <div className="space-y-2.5">
         {bars.map((b) => (
           <div key={b.key} className="flex items-center gap-3">
-            <div className="w-32 shrink-0 text-[12px] text-foreground">{b.label}</div>
+            <div className="w-32 shrink-0 text-sm text-foreground">{b.label}</div>
             <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
               <div
                 className={cn("h-full rounded-full", barColor(b.label))}
                 style={{ width: `${Math.max(0, Math.min(100, b.score))}%` }}
               />
             </div>
-            <div className="w-8 shrink-0 text-right text-[12px] font-semibold tabular-nums text-foreground">
+            <div className="w-8 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">
               {b.score}
             </div>
           </div>
@@ -136,7 +136,7 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
         {PENDING.map((p) => (
           <span
             key={p.key}
-            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] text-muted-foreground"
+            className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-label text-ink-secondary"
             title="Requires deeper player-linking data (Phase 2)"
           >
             {p.label}
@@ -148,12 +148,12 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
       {/* Evidence chips */}
       {Array.isArray(data.evidence) && data.evidence.length > 0 && (
         <div className="mt-4">
-          <div className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Evidence</div>
+          <div className="mb-2 text-label font-semibold uppercase tracking-wide text-ink-secondary">Evidence</div>
           <div className="flex flex-col gap-1.5">
             {data.evidence.map((e: string, i: number) => (
               <div
                 key={i}
-                className="rounded-lg border border-border bg-muted px-3 py-1.5 text-[12px] text-muted-foreground"
+                className="rounded-lg border border-border bg-muted px-3 py-1.5 text-sm text-ink-secondary"
               >
                 {e}
               </div>
@@ -163,7 +163,7 @@ export function ActivityDnaCard({ ownerKey }: { ownerKey?: string }) {
       )}
 
       {/* Limitation / status note */}
-      <p className="mt-4 flex items-start gap-1.5 text-[11px] leading-snug text-muted-foreground">
+      <p className="mt-4 flex items-start gap-1.5 text-caption leading-snug text-ink-tertiary">
         <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
         <span>
           Deterministic classification from {data.seasons} season{data.seasons === 1 ? "" : "s"} of transaction and

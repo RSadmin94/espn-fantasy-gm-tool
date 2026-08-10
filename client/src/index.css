@@ -72,13 +72,14 @@
    * Readable minimums — prefer these over raw text-[8px]/[9px]/[10px]/[11px].
    * Line heights are paired here so Tailwind generates the complete utility;
    * do not re-declare these class names in @layer utilities.
-   * RFSN-051C: 11px only for uppercase badges/kickers; real data ≥12px.
+   * RFSN-054B desktop accessibility: tiny metadata ≥12px, labels ≥13px,
+   * secondary body ≥14px. Do not use these tokens for page titles or large metrics.
    */
-  --text-2xs: 0.6875rem;   /* 11px — smallest labels / badges */
+  --text-2xs: 0.75rem;     /* 12px — tiny metadata / badges / kickers */
   --text-2xs--line-height: 1.3;
-  --text-label: 0.75rem;   /* 12px — metadata, table headers, kickers */
+  --text-label: 0.8125rem; /* 13px — labels, table headers, secondary stats */
   --text-label--line-height: 1.35;
-  --text-caption: 0.8125rem; /* 13px — secondary body / help */
+  --text-caption: 0.875rem; /* 14px — secondary body / help */
   --text-caption--line-height: 1.45;
 
   /* Intel page backgrounds (replaces duplicated PAGEBG constants) */
@@ -187,7 +188,7 @@
     box-shadow: 0 0 32px -12px color-mix(in oklch, var(--color-brand-gold) 22%, transparent);
   }
 
-  /* RFSN-051C composite type — size tokens plus weight/tracking. */
+  /* RFSN-054B composite type — size tokens plus weight/tracking. */
   .type-badge {
     font-size: var(--text-2xs);
     line-height: var(--text-2xs--line-height);

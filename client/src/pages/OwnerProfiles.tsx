@@ -209,7 +209,7 @@ function OwnerTradeHistoryCard({
     <ProfileShellCard
       title="Trade History"
       right={
-        <span className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
+        <span className="text-label font-semibold uppercase tracking-wide text-ink-secondary">
           {dossierActiveSeason} season
         </span>
       }
@@ -229,14 +229,14 @@ function OwnerTradeHistoryCard({
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Trade record</div>
+              <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Trade record</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-zinc-100">
                 {hist.wins}–{hist.losses}{hist.ties > 0 ? `–${hist.ties}` : ""}
               </div>
               <div className="mt-1 text-xs text-ink-secondary">{hist.tradeCount} completed trade{hist.tradeCount === 1 ? "" : "s"}</div>
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Net value</div>
+              <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Net value</div>
               <div
                 className={cn(
                   "mt-1 text-lg font-bold tabular-nums",
@@ -256,7 +256,7 @@ function OwnerTradeHistoryCard({
             <div className="space-y-2 text-sm">
               {hist.biggestWin && (
                 <div className="rounded-lg border border-lime-500/20 bg-lime-500/5 px-3 py-2">
-                  <div className="text-2xs font-semibold uppercase tracking-wide text-lime-400/90">Biggest win</div>
+                  <div className="text-label font-semibold uppercase tracking-wide text-lime-400/90">Biggest win</div>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-300">
                     +{Math.round(hist.biggestWin.margin)} value vs{" "}
                     {tradeOpponentName(hist.biggestWin, hist.biggestWin.sideA.ownerKey === profileLookupKey ? "A" : "B")}
@@ -265,7 +265,7 @@ function OwnerTradeHistoryCard({
               )}
               {hist.biggestLoss && (
                 <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-                  <div className="text-2xs font-semibold uppercase tracking-wide text-red-400/90">Biggest loss</div>
+                  <div className="text-label font-semibold uppercase tracking-wide text-red-400/90">Biggest loss</div>
                   <p className="mt-1 text-xs leading-relaxed text-zinc-300">
                     −{Math.round(hist.biggestLoss.margin)} value vs{" "}
                     {tradeOpponentName(hist.biggestLoss, hist.biggestLoss.sideA.ownerKey === profileLookupKey ? "A" : "B")}
@@ -276,7 +276,7 @@ function OwnerTradeHistoryCard({
           )}
 
           <div>
-            <p className="mb-2 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Recent completed trades</p>
+            <p className="mb-2 text-label font-semibold uppercase tracking-wide text-ink-secondary">Recent completed trades</p>
             <div className="space-y-2">
               {(hist.recentTrades ?? hist.trades ?? []).map((entry: any) => {
                 const trade = entry.trade;
@@ -296,7 +296,7 @@ function OwnerTradeHistoryCard({
                       </div>
                       <span
                         className={cn(
-                          "rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide",
+                          "rounded border px-1.5 py-0.5 text-label font-semibold uppercase tracking-wide",
                           tradeResultClasses(entry.result),
                         )}
                       >
@@ -436,7 +436,7 @@ function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: 
         <div>
           <p className="font-bold text-sm text-[#f3f8ff]">{o.ownerName}</p>
           {!isLocked && o.currentTeam ? (
-            <p className="text-xs text-[#8b97a8] mt-0.5">{o.currentTeam}</p>
+            <p className="text-caption text-ink-secondary mt-0.5">{o.currentTeam}</p>
           ) : null}
         </div>
         <div className="flex gap-1 flex-wrap justify-end">
@@ -451,7 +451,7 @@ function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: 
         </div>
       </div>
       {!isLocked ? (
-        <div className="mt-2 flex gap-3 text-xs text-ink-secondary">
+        <div className="mt-2 flex gap-3 text-sm text-ink-secondary">
           {!isPreview && (
             <>
               <span>{num(o.totalWins)}–{num(o.totalLosses)}</span>
@@ -461,7 +461,7 @@ function OwnerCard({ o, selected, onClick, onLockedClick }: { o: any; selected: 
           <span>{Array.isArray(o.seasons) ? o.seasons.length : 0} season{(Array.isArray(o.seasons) ? o.seasons.length : 0) !== 1 ? "s" : ""}</span>
         </div>
       ) : (
-        <p className="mt-2 text-xs text-ink-secondary">Unlock Rivals Pro to scout this manager.</p>
+        <p className="mt-2 text-sm text-ink-secondary">Unlock Rivals Pro to scout this manager.</p>
       )}
       </IntelPanel>
     </button>
@@ -555,7 +555,7 @@ function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefi
   const accent = DYN_BADGE_ACCENT[row.badge.key] ?? "#94a3b8";
   const bar = (label: string, value: number, color: string) => (
     <div className="flex items-center gap-2">
-      <span className="w-9 shrink-0 text-2xs font-semibold uppercase tracking-wider text-ink-secondary">{label}</span>
+      <span className="w-9 shrink-0 text-label font-semibold uppercase tracking-wider text-ink-secondary">{label}</span>
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
         <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, num(value)))}%`, background: color }} />
       </div>
@@ -574,9 +574,9 @@ function DynastyIdentityStrip({ row }: { row: DynastyIdentityRow | null | undefi
             {row.badge.icon}
           </div>
           <div className="min-w-0">
-            <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-secondary">Dynasty Identity</div>
+            <div className="text-label font-semibold uppercase tracking-[0.14em] text-ink-secondary">Dynasty Identity</div>
             <div className="text-sm font-bold tracking-tight" style={{ color: accent }}>{row.badge.label}</div>
-            <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">{row.badge.explanation}</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-ink-secondary">{row.badge.explanation}</p>
           </div>
         </div>
         <div className="w-full space-y-1.5 sm:w-64 sm:shrink-0">
@@ -661,9 +661,9 @@ function RivalWhyBlock({
   if (!reason && bullets.length === 0) return null;
   return (
     <div className="mt-3 border-t border-white/[0.06] pt-2.5">
-      <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Why?</div>
+      <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Why?</div>
       {explanation.headline ? (
-        <div className="mt-1 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
+        <div className="mt-1 text-label font-semibold uppercase tracking-wide text-ink-secondary">
           {explanation.headline}
         </div>
       ) : null}
@@ -694,7 +694,7 @@ function DossierSectionHeader({
   accent?: string;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-ink-secondary">
+    <div className="mb-3 flex items-center gap-2 text-[15px] font-bold uppercase tracking-[0.14em] text-ink-secondary">
       <span style={{ color: accent }}>{icon}</span>
       {title}
     </div>
@@ -731,7 +731,7 @@ function DossierSectionNav({ mode }: { mode: OwnerProfilesMode }) {
             <button
               type="button"
               onClick={() => dossierScrollTo(item.id)}
-              className="rounded-lg px-3 py-1.5 text-label font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
+              className="rounded-lg px-3 py-1.5 text-caption font-semibold uppercase tracking-wide text-ink-secondary transition-colors hover:bg-white/[0.06] hover:text-zinc-100"
             >
               {item.label}
             </button>
@@ -787,15 +787,15 @@ function CompareOwnersPanel({
       ) : peer ? (
         <div className="overflow-x-auto p-4">
           <div className="grid min-w-[300px] grid-cols-[minmax(7.5rem,1fr)_1fr_1fr] gap-x-2 gap-y-1">
-            <div className="py-2 text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Metric</div>
+            <div className="py-2 text-label font-semibold uppercase tracking-wide text-ink-secondary">Metric</div>
             <div
-              className="truncate py-2 text-2xs font-semibold uppercase tracking-wide text-lime-400/90"
+              className="truncate py-2 text-label font-semibold uppercase tracking-wide text-lime-400/90"
               title={headerDisplayName}
             >
               {headerDisplayName}
             </div>
             <div
-              className="truncate py-2 text-2xs font-semibold uppercase tracking-wide text-amber-400/90"
+              className="truncate py-2 text-label font-semibold uppercase tracking-wide text-amber-400/90"
               title={compareWith}
             >
               {compareWith}
@@ -1353,33 +1353,33 @@ function ProfilePanel({
             </div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Legacy rank</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Legacy rank</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {legacyRank != null ? `#${legacyRank}` : "—"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Intelligence score</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Intelligence score</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {intelligenceScore != null ? intelligenceScore : "—"}
                   {intelligenceScore != null && (
                     <span className="text-sm font-semibold text-ink-secondary"> / 100</span>
                   )}
                 </div>
-                <div className="mt-0.5 text-label text-ink-secondary">
+                <div className="mt-0.5 text-caption text-ink-secondary">
                   {intelligenceScore != null ? "Relative to league leader" : "Not enough data"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Overall record</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Overall record</div>
                 <div className="mt-1 text-xl font-extrabold tabular-nums text-zinc-100">
                   {num(snap.totalWins)}–{num(snap.totalLosses)}
                   {num(snap.totalTies) > 0 ? `–${num(snap.totalTies)}` : ""}
                 </div>
-                <div className="mt-0.5 text-label text-ink-secondary">{pct(num(snap.winPct))} win · RS matchups</div>
+                <div className="mt-0.5 text-caption text-ink-secondary">{pct(num(snap.winPct))} win · RS matchups</div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5 sm:col-span-2 lg:col-span-3">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Current season snapshot</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Current season snapshot</div>
                 <div className="mt-1 text-sm font-semibold text-zinc-100">
                   {currentSeasonRow
                     ? `${currentSeasonRow.season} · ${str(currentSeasonRow.teamName)} · ${currentSeasonRow.wins}–${currentSeasonRow.losses}${num(currentSeasonRow.ties) ? `–${num(currentSeasonRow.ties)}` : ""}`
@@ -1395,7 +1395,7 @@ function ProfilePanel({
         {!gated ? (
           <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-5 py-3">
             <GitCompare className="h-4 w-4 shrink-0 text-violet-400/90" aria-hidden />
-            <span className="text-xs font-semibold text-zinc-400">{lens.compareLabel}</span>
+            <span className="text-caption font-semibold text-ink-secondary">{lens.compareLabel}</span>
             <select
               id="owner-compare-hero-select"
               aria-label="Compare with another owner"
@@ -1456,7 +1456,7 @@ function ProfilePanel({
           <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{lens.dnaEyebrow}</p>
+                <p className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{lens.dnaEyebrow}</p>
                 {selfLens ? (
                   <>
                     <p className="mt-2 text-lg font-extrabold tracking-tight text-zinc-50">
@@ -1483,7 +1483,7 @@ function ProfilePanel({
                 )}
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
-                <p className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{lens.draftDnaEyebrow}</p>
+                <p className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{lens.draftDnaEyebrow}</p>
                 <StatRow label="Draft style" value={draftStyle || "—"} />
                 <StatRow label="Open-draft picks" value={num(draft.totalPicks)} />
                 <StatRow label="Top positions" value={mostDraftedPos.slice(0, 3).join(" › ") || "—"} />
@@ -1581,7 +1581,7 @@ function ProfilePanel({
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[240px] text-left text-sm">
                     <thead>
-                      <tr className="border-b border-white/[0.08] text-2xs font-semibold uppercase tracking-wide text-ink-secondary">
+                      <tr className="border-b border-white/[0.08] text-label font-semibold uppercase tracking-wide text-ink-secondary">
                         <th className="py-2 pr-2">Position</th>
                         <th className="py-2 pr-2">Avg round</th>
                         <th className="py-2 text-right">Share</th>
@@ -1656,7 +1656,7 @@ function ProfilePanel({
                 </div>
                 <div className="min-w-0 text-center sm:text-left">
                   <p className="text-sm font-semibold text-amber-200">{lens.positionShareTitle}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  <p className="mt-1 text-sm leading-relaxed text-ink-secondary">
                     {topSharePos
                       ? `${String(topSharePos[0]).toUpperCase()} has the largest recorded share at ${pct(num(topSharePos[1]))} of picks.`
                       : "No position share values on file for this profile."}
@@ -1669,7 +1669,7 @@ function ProfilePanel({
                 </div>
                 <div className="min-w-0 text-center sm:text-left">
                   <p className="text-sm font-semibold text-amber-200">Most-drafted order</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  <p className="mt-1 text-sm leading-relaxed text-ink-secondary">
                     {mostDraftedPos.length > 0
                       ? `Profile mostDraftedPos order: ${mostDraftedPos.join(" → ")}.`
                       : earliestAvgPos
@@ -1684,7 +1684,7 @@ function ProfilePanel({
                 </div>
                 <div className="min-w-0 text-center sm:text-left">
                   <p className="text-sm font-semibold text-amber-200">Rounds 1–3 (earlyPos)</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  <p className="mt-1 text-sm leading-relaxed text-ink-secondary">
                     {earlyLead && earlyTotal > 0
                       ? `${String(earlyLead[0]).toUpperCase()}: ${num(earlyLead[1])} pick(s) in rounds 1–3 out of ${earlyTotal} early-round picks (earlyPos).`
                       : "No early-round (1–3) pick counts in earlyPos."}
@@ -1755,17 +1755,17 @@ function ProfilePanel({
           {acqFocal ? (
             <div className="mb-4 grid gap-2 sm:grid-cols-3">
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Acquisition impact</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Acquisition impact</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-lime-300">{num(acqFocal.acquisitionImpactScore)}</div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Points per start</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Points per start</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">
                   {acqFocal.pointsPerStart != null ? num(acqFocal.pointsPerStart).toFixed(1) : "—"}
                 </div>
               </div>
               <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2">
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">Qualified seasons</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">Qualified seasons</div>
                 <div className="mt-1 text-lg font-extrabold tabular-nums text-zinc-100">{num(acqFocal.qualifiedSeasons)}</div>
               </div>
             </div>
@@ -1910,12 +1910,12 @@ function ProfilePanel({
               </tbody>
             </table>
             {num(intelDiag.unresolvedMatchups) > 0 && (
-              <p className="mt-2 text-xs text-muted-foreground/60">
+              <p className="mt-2 text-sm text-ink-tertiary">
                 ℹ {num(intelDiag.unresolvedMatchups)} games excluded — opponent owner could not be resolved.
               </p>
             )}
             {num(intelDiag.recentGamesOmittedScores) > 0 && (
-              <p className="mt-1 text-xs text-amber-200/80">
+              <p className="mt-1 text-sm text-amber-200/80">
                 ℹ {num(intelDiag.recentGamesOmittedScores)} recent meeting
                 {num(intelDiag.recentGamesOmittedScores) !== 1 ? "s" : ""} omit box scores (0–0 in DB); result still shown
                 where available.
@@ -1941,11 +1941,11 @@ function ProfilePanel({
           <DossierSectionHeader icon={<Clapperboard className="h-4 w-4" />} title={lens.sectionRivalries} accent="#f472b6" />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{lens.historicalRivalLabel}</div>
+              <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{lens.historicalRivalLabel}</div>
               {historicalRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{historicalRival.opponentOwner}</div>
-                  <div className="mt-1 text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                  <div className="mt-1 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
                     {historicalIsActive ? lens.historicalActiveCue : lens.historicalRetiredCue}
                   </div>
                   <div className="mt-1 text-xs text-ink-secondary">
@@ -1964,11 +1964,11 @@ function ProfilePanel({
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{lens.currentRivalLabel}</div>
+              <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{lens.currentRivalLabel}</div>
               {currentRival ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{currentRival.opponentOwner}</div>
-                  <div className="mt-1 text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                  <div className="mt-1 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
                     {lens.historicalActiveCue}
                   </div>
                   <div className="mt-1 text-xs text-ink-secondary">
@@ -1989,11 +1989,11 @@ function ProfilePanel({
               )}
             </div>
             <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-3 sm:col-span-2 lg:col-span-1">
-              <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{lens.toughestLabel}</div>
+              <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{lens.toughestLabel}</div>
               {biggestThreat ? (
                 <>
                   <div className="mt-1 text-lg font-bold text-zinc-100">{biggestThreat.opponentOwner}</div>
-                  <div className="mt-1 text-2xs font-semibold uppercase tracking-wide text-ink-tertiary">
+                  <div className="mt-1 text-label font-semibold uppercase tracking-wide text-ink-tertiary">
                     {lens.historicalActiveCue}
                   </div>
                   <div className="mt-1 text-xs text-ink-secondary">
@@ -2072,7 +2072,7 @@ function ProfilePanel({
             {[...careerTimeline].reverse().map((ev, i) => (
               <div key={`${ev.season}-${ev.label}-${i}`} className="relative pb-4 last:pb-0">
                 <span className="absolute -left-[1.3rem] top-1.5 h-2 w-2 rounded-full bg-[#f5c65a]/80 ring-2 ring-[#110c14]" aria-hidden />
-                <div className="text-2xs font-semibold uppercase tracking-wide text-ink-secondary">{ev.season}</div>
+                <div className="text-label font-semibold uppercase tracking-wide text-ink-secondary">{ev.season}</div>
                 <div className="text-sm font-semibold text-zinc-100">{ev.label}</div>
                 <div className="text-xs text-ink-secondary">{ev.detail}</div>
               </div>
@@ -2084,7 +2084,7 @@ function ProfilePanel({
       {/* ── 8. Developer ─────────────────────────────────────────────────────── */}
       <Collapsible open={developerOpen} onOpenChange={setDeveloperOpen}>
         <IntelPanel variant="warm" className="overflow-hidden">
-          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.14em] text-ink-tertiary transition-colors hover:bg-white/[0.03]">
+          <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-[15px] font-bold uppercase tracking-[0.14em] text-ink-tertiary transition-colors hover:bg-white/[0.03]">
             <span>Developer sections</span>
             <ChevronDown
               className={cn("h-4 w-4 shrink-0 text-ink-secondary transition-transform", developerOpen && "rotate-180")}
@@ -2569,11 +2569,11 @@ export function OwnerProfiles({
               const remaining = Number((listQ.data as any)?.lockedOwners ?? Math.max(0, totalOwners - rows.length));
               return (
                 <>
-                  <div className="px-1 pb-1 text-2xs font-semibold uppercase tracking-[0.16em] text-ink-secondary">You</div>
+                  <div className="px-1 pb-1 text-label font-semibold uppercase tracking-[0.16em] text-ink-secondary">You</div>
                   {viewerRow && renderCard(viewerRow, "gated-you")}
                   {rivalRow && (
                     <>
-                      <div className="mt-4 px-1 pb-1 text-2xs font-semibold uppercase tracking-[0.16em] text-[#a3e635]">Your Biggest Rival</div>
+                      <div className="mt-4 px-1 pb-1 text-label font-semibold uppercase tracking-[0.16em] text-[#a3e635]">Your Biggest Rival</div>
                       {renderCard(rivalRow, "gated-rival")}
                     </>
                   )}

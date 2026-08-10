@@ -283,7 +283,7 @@ export function Matchups() {
             <Card key={m.id} className="overflow-hidden border-border/80">
               <CardContent className="p-0">
                 {m.isPlayoff && (
-                  <div className="border-b border-border/60 bg-muted/30 px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <div className="border-b border-border/60 bg-muted/30 px-3 py-1 text-center text-label font-semibold uppercase tracking-wide text-ink-secondary">
                     Playoffs
                   </div>
                 )}
@@ -291,7 +291,7 @@ export function Matchups() {
                   <TeamColumn side={m.home} score={m.homeScore} align="right" isWinner={homeWon} />
 
                   <div className="flex flex-col items-center justify-center px-2 py-2 sm:min-w-[4rem]">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-ink-tertiary">
                       vs
                     </span>
                     <div
@@ -321,17 +321,17 @@ export function Matchups() {
                     <span className={cn(awayWon && "text-primary")}>{fmtScore(m.awayScore)}</span>
                   </div>
                   {!m.isCompleted && (
-                    <span className="text-[10px] font-semibold uppercase text-amber-500">Live</span>
+                    <span className="text-label font-semibold uppercase text-amber-500">Live</span>
                   )}
                 </div>
 
                 {m.isCompleted && (
-                  <div className="hidden border-t border-border/50 bg-muted/15 px-2 py-1.5 text-center text-[10px] text-muted-foreground sm:block">
+                  <div className="hidden border-t border-border/50 bg-muted/15 px-2 py-1.5 text-center text-caption text-ink-secondary sm:block">
                     {tie ? "Tie game" : homeWon ? `${m.home.teamName} wins` : `${m.away.teamName} wins`}
                   </div>
                 )}
                 {!m.isCompleted && (
-                  <div className="hidden border-t border-border/50 bg-amber-500/5 px-2 py-1.5 text-center text-[10px] font-semibold uppercase text-amber-600 sm:block">
+                  <div className="hidden border-t border-border/50 bg-amber-500/5 px-2 py-1.5 text-center text-label font-semibold uppercase text-amber-600 sm:block">
                     Matchup in progress
                   </div>
                 )}

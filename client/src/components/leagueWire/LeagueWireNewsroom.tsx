@@ -459,7 +459,7 @@ export function LeagueWireNewsroom({
                 <h1 className="text-3xl md:text-4xl font-black tracking-tight text-[#f3f8ff] leading-none">
                   {copy.mastheadTitle}
                 </h1>
-                <p className="text-label text-[#8b97a8] uppercase tracking-[0.2em] font-bold mt-1">
+                <p className="text-label text-ink-secondary uppercase tracking-[0.2em] font-bold mt-1">
                   {copy.mastheadSubtitle(leagueName)}
                 </p>
               </div>
@@ -467,12 +467,12 @@ export function LeagueWireNewsroom({
 
             <div className="flex items-center gap-0 mt-4 border-b border-white/[0.06] -mb-[1px]">
               <button onClick={() => { setView("feed"); setSelectedSeason(null); }}
-                className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+                className={cn("px-4 py-2 text-label font-bold uppercase tracking-wider border-b-2 transition-colors",
                   view === "feed" ? "border-[#f3f8ff] text-[#f3f8ff]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
                 <Radio className="h-3 w-3 inline mr-1.5" />Latest News
               </button>
               <button onClick={() => setView("archive")}
-                className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+                className={cn("px-4 py-2 text-label font-bold uppercase tracking-wider border-b-2 transition-colors",
                   view === "archive" ? "border-[#a3e635] text-[#a3e635]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
                 <BookOpen className="h-3 w-3 inline mr-1.5" />Historical Archive
               </button>
@@ -484,12 +484,12 @@ export function LeagueWireNewsroom({
       {hideMasthead && (
         <div className="flex items-center gap-0 mb-6 border-b border-white/[0.06] -mb-[1px]">
           <button onClick={() => { setView("feed"); setSelectedSeason(null); }}
-            className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+            className={cn("px-4 py-2 text-label font-bold uppercase tracking-wider border-b-2 transition-colors",
               view === "feed" ? "border-[#f3f8ff] text-[#f3f8ff]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
             <Radio className="h-3 w-3 inline mr-1.5" />Latest News
           </button>
           <button onClick={() => setView("archive")}
-            className={cn("px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors",
+            className={cn("px-4 py-2 text-label font-bold uppercase tracking-wider border-b-2 transition-colors",
               view === "archive" ? "border-[#a3e635] text-[#a3e635]" : "border-transparent text-[#8b97a8] hover:text-[#dbe4f0]")}>
             <BookOpen className="h-3 w-3 inline mr-1.5" />Historical Archive
           </button>
@@ -499,7 +499,7 @@ export function LeagueWireNewsroom({
       <div className={cn(embedded ? "space-y-6" : "px-0 py-6 space-y-6")}>
         {view === "archive" && (
           <div>
-            <p className="text-xs text-[#8b97a8] mb-3 uppercase tracking-[0.2em] font-bold">Select Season</p>
+            <p className="text-label text-ink-secondary mb-3 uppercase tracking-[0.2em] font-bold">Select Season</p>
             <div className="flex flex-wrap gap-2">
               {(seasons as number[]).map(s => (
                 <button key={s} onClick={() => setSelectedSeason(s)}
@@ -521,7 +521,7 @@ export function LeagueWireNewsroom({
           <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">
             <div className={cn("flex items-center gap-2 border-b border-white/[0.06]", SPACE_CARD)}>
               <Radio className="h-3.5 w-3.5 text-[#a3e635] animate-pulse" />
-              <span className="text-xs font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
+              <span className="text-[15px] font-black text-[#f3f8ff] uppercase tracking-wider">Live Wire</span>
               <span className="text-label text-ink-tertiary">Season {latestWireWeek?.season} · Week {latestWireWeek?.week}</span>
             </div>
             <div className={cn("grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 p-3 bg-transparent", SPACE_CARD_GAP)}>
@@ -529,12 +529,12 @@ export function LeagueWireNewsroom({
                 <div key={r.matchupId} className={cn("rounded-lg bg-white/[0.03] border border-white/[0.06]", SPACE_CARD)}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
+                      <div className="text-sm font-bold text-zinc-100 truncate max-w-[140px]">{r.winner.name}</div>
                       <div className="text-label text-ink-secondary truncate max-w-[140px]">{r.loser?.name}</div>
                     </div>
                     <div className="text-right shrink-0">
                       <div className="text-sm font-black text-lime-400 tabular-nums">{r.winner.score.toFixed(2)}</div>
-                      <div className="text-xs text-ink-secondary tabular-nums">{r.loser?.score.toFixed(2)}</div>
+                      <div className="text-sm text-ink-secondary tabular-nums">{r.loser?.score.toFixed(2)}</div>
                     </div>
                   </div>
                   <p className={cn("text-label text-ink-secondary line-clamp-2 leading-relaxed", SPACE_META)}>{r.shortRecap?.split(".")[0]}.</p>
@@ -560,7 +560,7 @@ export function LeagueWireNewsroom({
         ) : (
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <h2 className="text-xs font-black uppercase tracking-[0.2em] text-[#8b97a8]">
+              <h2 className="text-[15px] font-black uppercase tracking-[0.2em] text-ink-secondary">
                 {view === "archive" && selectedSeason ? `${selectedSeason} Season Archive` : "Latest Stories"}
               </h2>
               <div className="flex-1 h-px bg-zinc-800/60" />
@@ -620,7 +620,7 @@ export function LeagueWireNewsroom({
           <div className="rounded-xl border border-zinc-800/60 bg-zinc-900/20 p-4">
             <div className="flex items-center gap-2 mb-3">
               <Archive className="h-3.5 w-3.5 text-ink-secondary" />
-              <span className="text-xs font-black uppercase tracking-wider text-ink-secondary">Historical Archive</span>
+              <span className="text-[15px] font-black uppercase tracking-wider text-ink-secondary">Historical Archive</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {(seasons as number[]).map(s => (

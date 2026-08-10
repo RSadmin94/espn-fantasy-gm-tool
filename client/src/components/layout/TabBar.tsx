@@ -95,7 +95,7 @@ export function TabBar({
             aria-selected={active}
             onClick={() => onChange(tab.id)}
             className={cn(
-              "flex min-w-0 items-center justify-center gap-2 border-b-2 py-3.5 text-[10px] font-bold uppercase tracking-[0.1em] transition-colors sm:text-xs",
+              "flex min-w-0 items-center justify-center gap-2 border-b-2 py-3.5 text-label font-bold uppercase tracking-[0.1em] transition-colors sm:text-sm",
               layout === "wrap" && "flex-1 basis-[45%] sm:basis-0",
               layout === "inline" && "px-4 py-2 tracking-wider",
               active
