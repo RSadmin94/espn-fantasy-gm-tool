@@ -111,6 +111,22 @@ See `docs/DECISION_LOG.md` and `docs/V1_COMMERCIAL_PRICING.md`.
 - **Decontaminated weekly stats only** — all new weekly consumers go through `getLeagueWeeklyStats`.
 - **Commits/deploys** — only when explicitly requested.
 
+### 5.1 UI readability release gate (RFSN-054C)
+
+Application-wide seated-desktop readability is **closed**. Do not start another typography census or global token bump.
+
+**Gate:** from a normal seated position at 100% browser zoom on a 24–32" desktop monitor, every important piece of information must be readable without leaning, zooming, or increasing OS scaling.
+
+Classify every new or changed text element:
+
+1. **Already readable** → leave it alone.
+2. **Too small** → increase size.
+3. **Readable size but low contrast** → keep the size, increase contrast.
+
+Do not make text larger when the real problem is light gray on a dark background. 054B floors (12 / 13 / 14 / 15) remain the minimum. `density.ts` is spacing, not typography. Share-card PNG chrome is a graphic export hash — do not casually resize.
+
+**Targeted fixes only** when a specific page or component fails this gate.
+
 ---
 
 ## 6. Pre-implementation checklist (required)
@@ -123,9 +139,10 @@ Before writing code for a **major** Rivalry Center change, answer in the open:
 4. **Gating** — What crosses the free/paid wire? Is redaction server-side?
 5. **Story** — What is the one-sentence receipt? Is this a dashboard in disguise?
 6. **Sample size** — Do new labels/badges gate on `n`?
-7. **Conflict** — Does this task conflict with any section above?
+7. **Readability** — Do new/changed text elements pass §5.1? Classify leave / size / contrast. No global token bump.
+8. **Conflict** — Does this task conflict with any section above?
 
-If **#7 is yes** → stop and explain before coding.
+If **#8 is yes** → stop and explain before coding.
 
 ---
 
