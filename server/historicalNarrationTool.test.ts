@@ -36,6 +36,9 @@ describe("RFSN-053H advisor narration gate", () => {
     expect(isHistoricalNarrationAsk("Explain this rivalry.")).toBe(true);
     expect(isHistoricalNarrationAsk("Show me my No Mercy wins.")).toBe(false);
     expect(isHistoricalNarrationAsk("Who has the most championships?")).toBe(false);
+    expect(isHistoricalNarrationAsk("Who reaches the most?")).toBe(false);
+    expect(isHistoricalNarrationAsk("Best career record?")).toBe(false);
+    expect(isHistoricalNarrationAsk("Biggest blowout?")).toBe(false);
     expect(isHistoricalNarrationAsk("Tell me about the league")).toBe(false);
     expect(inferNarrationCollection("Why is this No Mercy?")).toBe("no-mercy");
     expect(inferNarrationCollection("Explain this rivalry")).toBe("blood-rival");

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { collectionToStoryPackage, matchupToStoryPackage } from "@shared/historicalStoryPackage";
-import { NARRATION_EXPORT_ERROR } from "@shared/historicalNarration";
+import { NARRATION_EXPORT_ERROR, narrationCorpus } from "@shared/historicalNarration";
 import {
   clearHistoricalNarrationCacheForTests,
   narrateHistoricalStory,
@@ -84,5 +84,43 @@ describe("RFSN-053H narration cache", () => {
     expect(retryCalls.n).toBe(1);
     expect(ok.cacheHit).toBe(false);
     expect(ok.narration.headline).toBe("The Cashier");
+  });
+
+  it("keeps 58.4 / 2025 / week 12 identical across voices and caches the same voice", async () => {
+    let calls = 0;
+    setHistoricalNarrationLlmForTests(async (pkg, voice) => {
+      calls += 1;
+      const facts = `Season ${pkg.season}. Week ${pkg.week}. Margin: ${pkg.margin}. Score ${pkg.winnerScore}–${pkg.loserScore}.`;
+      if (voice === "historian") {
+        return { headline: "Decisive chapter", subheadline: "Week 12", intro: "Week 12 marked one of the most decisive victories in league history.", story: facts, closing: "The record stands.", voice };
+      }
+      if (voice === "cashier") {
+        return { headline: "Receipt", subheadline: "58.4", intro: "Receipt printed. Margin: 58.4. Payment collected.", story: facts, closing: "Closed.", voice };
+      }
+      return { headline: "Finish", subheadline: "Week 12", intro: "That's how you finish a football game.", story: facts, closing: "That's the tape.", voice };
+    });
+    const pkg = matchupToStoryPackage({
+      ...matchup(),
+      homeScore: 162.8,
+      awayScore: 104.4,
+      margin: 58.4,
+      collectionId: "no-mercy",
+      leagueName: "ATLANTAS FINEST FF",
+    });
+    const historian = await narrateHistoricalStory(pkg, "historian");
+    const cashier = await narrateHistoricalStory(pkg, "cashier");
+    const coach = await narrateHistoricalStory(pkg, "coach");
+    const historianAgain = await narrateHistoricalStory(pkg, "historian");
+    expect(calls).toBe(3);
+    expect(historianAgain.cacheHit).toBe(true);
+    expect(historian.narration.intro).not.toBe(cashier.narration.intro);
+    expect(cashier.narration.intro).not.toBe(coach.narration.intro);
+    for (const n of [historian, cashier, coach]) {
+      const corpus = narrationCorpus(n.narration);
+      expect(corpus).toMatch(/2025/);
+      expect(corpus).toMatch(/\b12\b/);
+      expect(corpus).toMatch(/58\.4/);
+      expect(corpus).not.toMatch(/\b1999\b/);
+    }
   });
 });

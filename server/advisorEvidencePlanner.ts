@@ -194,6 +194,7 @@ function isCareerWinPctAsk(t: string): boolean {
   return (
     /\b(best|highest) (?:career )?win(?:ning)? (?:percentage|pct|rate)\b/.test(t) ||
     /\bcareer winning percentage\b/.test(t) ||
+    /\bbest career record\b/.test(t) ||
     /\bmost efficient\b/.test(t) ||
     /\befficient (?:owner|gm|manager)\b/.test(t)
   );

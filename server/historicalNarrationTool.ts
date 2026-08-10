@@ -25,6 +25,8 @@ export function isHistoricalNarrationAsk(message: string): boolean {
   if (!t) return false;
   if (/\btell me about (?:our |the )?league\b/.test(t)) return false;
   if (/\bwho has (the )?most\b/.test(t) || /\bbest record\b/.test(t)) return false;
+  if (/\bwho reaches\b/.test(t) || /\breaches the most\b/.test(t)) return false;
+  if (/\bbest career record\b/.test(t) || /\bbiggest blowout\b/.test(t)) return false;
   if (/\bshow me\b/.test(t) || /\blist (all|every|my)\b/.test(t) || /\bevery game\b/.test(t)) return false;
   if (/\btell me about this\b/.test(t)) return true;
   if (/\bwhy was this important\b/.test(t)) return true;
