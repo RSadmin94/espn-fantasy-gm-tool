@@ -356,6 +356,8 @@ const ALLOWED_STORY_WORDS = new Set(
     "many", "much", "more", "most", "decade", "decades", "grudge", "grudges", "match", "matches",
     "unyielding", "force", "forces", "maestro", "unrelenting", "perspective", "perspectives",
     "boy", "listen", "look", "here", "now", "then", "still", "again", "never", "always",
+    "we", "you", "they", "us", "them", "dominant", "fashion", "enforced", "decisive", "titans",
+    "formidable", "competitors", "annals", "hopes", "etching", "ages", "prepared", "entered",
     ...STORY_COLLECTION_IDS.flatMap((id) => id.split("-")),
   ].map((w) => w.toLowerCase()),
 );
