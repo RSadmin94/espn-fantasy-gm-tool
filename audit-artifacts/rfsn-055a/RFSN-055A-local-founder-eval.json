@@ -1,0 +1,827 @@
+{
+  "leagueId": "457622",
+  "seasons": {
+    "2010": {
+      "timingMsReported": 739,
+      "wallMs": 739,
+      "ownerCount": 1,
+      "draftNightSeasonAvailable": false,
+      "draftNightCoverageReason": "Historical ADP unavailable for this season.",
+      "draftRealitySeasonAvailable": false,
+      "draftRealityCoverageReason": "Draft Reality coverage starts in 2018.",
+      "focal": {
+        "ownerName": "Team 0",
+        "teamId": 0,
+        "draftNight": {
+          "available": false,
+          "grade": null,
+          "reason": "Historical ADP unavailable for this season.",
+          "valueScore": null,
+          "pickCount": 160,
+          "adpPickCount": 0,
+          "biggestReach": null,
+          "biggestSteal": null
+        },
+        "draftReality": {
+          "available": false,
+          "draftGrade": null,
+          "reason": "Draft Reality coverage starts in 2018.",
+          "simulatedRank": null,
+          "teamCount": null,
+          "simulatedRecord": null,
+          "actualRecord": null,
+          "winDifference": null,
+          "rosterMgmtGrade": null
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "Team 0",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": "— (Draft Reality coverage starts in 2018.)",
+          "mgmt": null
+        }
+      ]
+    },
+    "2017": {
+      "timingMsReported": 108,
+      "wallMs": 108,
+      "ownerCount": 1,
+      "draftNightSeasonAvailable": false,
+      "draftNightCoverageReason": "Historical ADP unavailable for this season.",
+      "draftRealitySeasonAvailable": false,
+      "draftRealityCoverageReason": "Draft Reality coverage starts in 2018.",
+      "focal": {
+        "ownerName": "Team 0",
+        "teamId": 0,
+        "draftNight": {
+          "available": false,
+          "grade": null,
+          "reason": "Historical ADP unavailable for this season.",
+          "valueScore": null,
+          "pickCount": 196,
+          "adpPickCount": 0,
+          "biggestReach": null,
+          "biggestSteal": null
+        },
+        "draftReality": {
+          "available": false,
+          "draftGrade": null,
+          "reason": "Draft Reality coverage starts in 2018.",
+          "simulatedRank": null,
+          "teamCount": null,
+          "simulatedRecord": null,
+          "actualRecord": null,
+          "winDifference": null,
+          "rosterMgmtGrade": null
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "Team 0",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": "— (Draft Reality coverage starts in 2018.)",
+          "mgmt": null
+        }
+      ]
+    },
+    "2018": {
+      "timingMsReported": 858,
+      "wallMs": 860,
+      "ownerCount": 14,
+      "draftNightSeasonAvailable": true,
+      "draftNightCoverageReason": null,
+      "draftRealitySeasonAvailable": false,
+      "draftRealityCoverageReason": "Draft Reality could not be joined to this draft board.",
+      "focal": {
+        "ownerName": "Rod Sellers",
+        "teamId": 11,
+        "draftNight": {
+          "available": true,
+          "grade": "A",
+          "reason": null,
+          "valueScore": 0.7092727272727273,
+          "pickCount": 11,
+          "adpPickCount": 11,
+          "biggestReach": {
+            "playerName": "Larry Fitzgerald",
+            "pick": 19,
+            "adp": 32.4,
+            "delta": 13.399999999999999,
+            "round": 2
+          },
+          "biggestSteal": {
+            "playerName": "Unknown",
+            "pick": 104,
+            "adp": 44.5,
+            "delta": 59.5,
+            "round": 8
+          }
+        },
+        "draftReality": {
+          "available": false,
+          "draftGrade": null,
+          "reason": "Draft Reality could not be joined to this draft board.",
+          "simulatedRank": null,
+          "teamCount": null,
+          "simulatedRecord": null,
+          "actualRecord": null,
+          "winDifference": null,
+          "rosterMgmtGrade": null
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "LOZELL STYLES",
+          "night": "C",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Demetri Clark",
+          "night": "A",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Steffon Bizzell",
+          "night": "B",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Rod Sellers",
+          "night": "A",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Christian Graham",
+          "night": "C",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Mark Deroux",
+          "night": "D",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Randy Broner Jr",
+          "night": "C",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Bruce Edwards",
+          "night": "B",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Jan Graham",
+          "night": "D",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "steven hibbard",
+          "night": "B",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Maurice Welch",
+          "night": "C",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Marlon Moore",
+          "night": "D",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "Sheldon deRoux",
+          "night": "B",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        },
+        {
+          "ownerName": "teco Browning",
+          "night": "F",
+          "results": "— (Draft Reality could not be joined to this draft board.)",
+          "mgmt": null
+        }
+      ],
+      "nightEvidence": {
+        "ownerName": "Rod Sellers",
+        "season": 2018,
+        "usableAdpPicks": [
+          {
+            "playerName": "Le'Veon Bell",
+            "pick": 14,
+            "round": 1,
+            "adp": 20.7,
+            "stealDelta": -6.699999999999999,
+            "reachDelta": 6.699999999999999,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Larry Fitzgerald",
+            "pick": 19,
+            "round": 2,
+            "adp": 32.4,
+            "stealDelta": -13.399999999999999,
+            "reachDelta": 13.399999999999999,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Devonta Freeman",
+            "pick": 20,
+            "round": 2,
+            "adp": 25.7,
+            "stealDelta": -5.699999999999999,
+            "reachDelta": 5.699999999999999,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Golden Tate",
+            "pick": 38,
+            "round": 3,
+            "adp": 49.2,
+            "stealDelta": -11.200000000000003,
+            "reachDelta": 11.200000000000003,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Tom Brady",
+            "pick": 45,
+            "round": 4,
+            "adp": 23.7,
+            "stealDelta": 21.3,
+            "reachDelta": -21.3,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 103,
+            "round": 8,
+            "adp": 113.7,
+            "stealDelta": -10.700000000000003,
+            "reachDelta": 10.700000000000003,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 104,
+            "round": 8,
+            "adp": 44.5,
+            "stealDelta": 59.5,
+            "reachDelta": -59.5,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Philip Rivers",
+            "pick": 132,
+            "round": 10,
+            "adp": 116.5,
+            "stealDelta": 15.5,
+            "reachDelta": -15.5,
+            "isKeeper": false
+          },
+          {
+            "playerName": "John Brown",
+            "pick": 143,
+            "round": 11,
+            "adp": 138.4,
+            "stealDelta": 4.599999999999994,
+            "reachDelta": -4.599999999999994,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 157,
+            "round": 12,
+            "adp": 126,
+            "stealDelta": 31,
+            "reachDelta": -31,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 178,
+            "round": 13,
+            "adp": 147.1,
+            "stealDelta": 30.900000000000006,
+            "reachDelta": -30.900000000000006,
+            "isKeeper": false
+          }
+        ],
+        "isolatedMetricsIfGradedAlone": {
+          "pickCount": 11,
+          "valueScore": 0.7092727272727273,
+          "avgAdpDelta": 10.463636363636363
+        }
+      }
+    },
+    "2022": {
+      "timingMsReported": 633,
+      "wallMs": 633,
+      "ownerCount": 14,
+      "draftNightSeasonAvailable": true,
+      "draftNightCoverageReason": null,
+      "draftRealitySeasonAvailable": true,
+      "draftRealityCoverageReason": null,
+      "focal": {
+        "ownerName": "Rod Sellers",
+        "teamId": 11,
+        "draftNight": {
+          "available": true,
+          "grade": "F",
+          "reason": null,
+          "valueScore": 0,
+          "pickCount": 6,
+          "adpPickCount": 6,
+          "biggestReach": {
+            "playerName": "Unknown",
+            "pick": 43,
+            "adp": 128.03,
+            "delta": 85.03,
+            "round": 4
+          },
+          "biggestSteal": null
+        },
+        "draftReality": {
+          "available": true,
+          "draftGrade": 8,
+          "reason": null,
+          "simulatedRank": 13,
+          "teamCount": 14,
+          "simulatedRecord": "5-11",
+          "actualRecord": "3-11",
+          "winDifference": 2,
+          "rosterMgmtGrade": 50
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "LOZELL STYLES",
+          "night": "A",
+          "results": 38,
+          "mgmt": 62
+        },
+        {
+          "ownerName": "Demetri Clark",
+          "night": "A",
+          "results": 100,
+          "mgmt": 38
+        },
+        {
+          "ownerName": "Rod Sellers",
+          "night": "F",
+          "results": 8,
+          "mgmt": 50
+        },
+        {
+          "ownerName": "Christian Graham",
+          "night": "D",
+          "results": 69,
+          "mgmt": 62
+        },
+        {
+          "ownerName": "Mark Deroux",
+          "night": "D",
+          "results": 23,
+          "mgmt": 73
+        },
+        {
+          "ownerName": "Randy Broner Jr",
+          "night": "C",
+          "results": 46,
+          "mgmt": 35
+        },
+        {
+          "ownerName": "Bruce Edwards",
+          "night": "C",
+          "results": 0,
+          "mgmt": 73
+        },
+        {
+          "ownerName": "steven hibbard",
+          "night": "C",
+          "results": 92,
+          "mgmt": 54
+        },
+        {
+          "ownerName": "Nate West",
+          "night": "B",
+          "results": 77,
+          "mgmt": 31
+        },
+        {
+          "ownerName": "Marlon Moore",
+          "night": "C",
+          "results": 85,
+          "mgmt": 35
+        },
+        {
+          "ownerName": "Sheldon deRoux",
+          "night": "D",
+          "results": 15,
+          "mgmt": 42
+        },
+        {
+          "ownerName": "Vince Sellers",
+          "night": "B",
+          "results": 54,
+          "mgmt": 35
+        },
+        {
+          "ownerName": "Jan Graham",
+          "night": "B",
+          "results": 31,
+          "mgmt": 77
+        },
+        {
+          "ownerName": "Steffon Bizzell",
+          "night": "B",
+          "results": 62,
+          "mgmt": 35
+        }
+      ],
+      "nightEvidence": {
+        "ownerName": "Rod Sellers",
+        "season": 2022,
+        "usableAdpPicks": [
+          {
+            "playerName": "Aaron Jones",
+            "pick": 15,
+            "round": 2,
+            "adp": 38.58,
+            "stealDelta": -23.58,
+            "reachDelta": 23.58,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Brandin Cooks",
+            "pick": 42,
+            "round": 3,
+            "adp": 95.29,
+            "stealDelta": -53.290000000000006,
+            "reachDelta": 53.290000000000006,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 43,
+            "round": 4,
+            "adp": 128.03,
+            "stealDelta": -85.03,
+            "reachDelta": 85.03,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 70,
+            "round": 5,
+            "adp": 151.31,
+            "stealDelta": -81.31,
+            "reachDelta": 81.31,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Dameon Pierce",
+            "pick": 71,
+            "round": 6,
+            "adp": 112.75,
+            "stealDelta": -41.75,
+            "reachDelta": 41.75,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Unknown",
+            "pick": 99,
+            "round": 8,
+            "adp": 155.44,
+            "stealDelta": -56.44,
+            "reachDelta": 56.44,
+            "isKeeper": false
+          }
+        ],
+        "isolatedMetricsIfGradedAlone": {
+          "pickCount": 6,
+          "valueScore": 0,
+          "avgAdpDelta": -56.900000000000006
+        }
+      }
+    },
+    "2024": {
+      "timingMsReported": 2181,
+      "wallMs": 2181,
+      "ownerCount": 13,
+      "draftNightSeasonAvailable": true,
+      "draftNightCoverageReason": null,
+      "draftRealitySeasonAvailable": true,
+      "draftRealityCoverageReason": null,
+      "focal": {
+        "ownerName": "Rod Sellers",
+        "teamId": 11,
+        "draftNight": {
+          "available": true,
+          "grade": "C",
+          "reason": null,
+          "valueScore": 0,
+          "pickCount": 6,
+          "adpPickCount": 6,
+          "biggestReach": {
+            "playerName": "Evan Engram",
+            "pick": 58,
+            "adp": 123.38,
+            "delta": 65.38,
+            "round": 5
+          },
+          "biggestSteal": null
+        },
+        "draftReality": {
+          "available": true,
+          "draftGrade": 33,
+          "reason": null,
+          "simulatedRank": 9,
+          "teamCount": 13,
+          "simulatedRecord": "7-9",
+          "actualRecord": "5-8",
+          "winDifference": 2,
+          "rosterMgmtGrade": 33
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "LOZELL STYLES",
+          "night": "A",
+          "results": 58,
+          "mgmt": 63
+        },
+        {
+          "ownerName": "Demetri Clark",
+          "night": "C",
+          "results": 25,
+          "mgmt": 88
+        },
+        {
+          "ownerName": "Rod Sellers",
+          "night": "C",
+          "results": 33,
+          "mgmt": 33
+        },
+        {
+          "ownerName": "Mark Deroux",
+          "night": "B",
+          "results": 0,
+          "mgmt": 96
+        },
+        {
+          "ownerName": "Randy Broner Jr",
+          "night": "D",
+          "results": 100,
+          "mgmt": 21
+        },
+        {
+          "ownerName": "Bruce Edwards",
+          "night": "A",
+          "results": 42,
+          "mgmt": 67
+        },
+        {
+          "ownerName": "Nate West",
+          "night": "C",
+          "results": 67,
+          "mgmt": 42
+        },
+        {
+          "ownerName": "Marlon Moore",
+          "night": "C",
+          "results": 75,
+          "mgmt": 17
+        },
+        {
+          "ownerName": "Sheldon deRoux",
+          "night": "F",
+          "results": 8,
+          "mgmt": 58
+        },
+        {
+          "ownerName": "Tony Dorsey",
+          "night": "B",
+          "results": 50,
+          "mgmt": 33
+        },
+        {
+          "ownerName": "Jan Graham",
+          "night": "D",
+          "results": 92,
+          "mgmt": 21
+        },
+        {
+          "ownerName": "Steffon Bizzell",
+          "night": "B",
+          "results": 83,
+          "mgmt": 42
+        },
+        {
+          "ownerName": "Christian Graham",
+          "night": "D",
+          "results": 17,
+          "mgmt": 71
+        }
+      ],
+      "nightEvidence": {
+        "ownerName": "Rod Sellers",
+        "season": 2024,
+        "usableAdpPicks": [
+          {
+            "playerName": "Amon-Ra St. Brown",
+            "pick": 6,
+            "round": 1,
+            "adp": 10.57,
+            "stealDelta": -4.57,
+            "reachDelta": 4.57,
+            "isKeeper": false
+          },
+          {
+            "playerName": "James Cook",
+            "pick": 32,
+            "round": 3,
+            "adp": 41.81,
+            "stealDelta": -9.810000000000002,
+            "reachDelta": 9.810000000000002,
+            "isKeeper": false
+          },
+          {
+            "playerName": "George Pickens",
+            "pick": 47,
+            "round": 4,
+            "adp": 61.23,
+            "stealDelta": -14.229999999999997,
+            "reachDelta": 14.229999999999997,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Evan Engram",
+            "pick": 58,
+            "round": 5,
+            "adp": 123.38,
+            "stealDelta": -65.38,
+            "reachDelta": 65.38,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Jaylen Warren",
+            "pick": 99,
+            "round": 8,
+            "adp": 157.9,
+            "stealDelta": -58.900000000000006,
+            "reachDelta": 58.900000000000006,
+            "isKeeper": false
+          },
+          {
+            "playerName": "Khalil Shakir",
+            "pick": 110,
+            "round": 9,
+            "adp": 130.68,
+            "stealDelta": -20.680000000000007,
+            "reachDelta": 20.680000000000007,
+            "isKeeper": false
+          }
+        ],
+        "isolatedMetricsIfGradedAlone": {
+          "pickCount": 6,
+          "valueScore": 0,
+          "avgAdpDelta": -28.92833333333333
+        }
+      }
+    },
+    "2025": {
+      "timingMsReported": 3046,
+      "wallMs": 3046,
+      "ownerCount": 14,
+      "draftNightSeasonAvailable": false,
+      "draftNightCoverageReason": "Historical ADP unavailable for this season.",
+      "draftRealitySeasonAvailable": true,
+      "draftRealityCoverageReason": null,
+      "focal": {
+        "ownerName": "Rod Sellers",
+        "teamId": 11,
+        "draftNight": {
+          "available": false,
+          "grade": null,
+          "reason": "Historical ADP unavailable for this season.",
+          "valueScore": null,
+          "pickCount": 13,
+          "adpPickCount": 0,
+          "biggestReach": null,
+          "biggestSteal": null
+        },
+        "draftReality": {
+          "available": true,
+          "draftGrade": 77,
+          "reason": null,
+          "simulatedRank": 4,
+          "teamCount": 14,
+          "simulatedRecord": "10-7",
+          "actualRecord": "9-5",
+          "winDifference": 1,
+          "rosterMgmtGrade": 62
+        }
+      },
+      "grades": [
+        {
+          "ownerName": "LOZELL STYLES",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 8,
+          "mgmt": 54
+        },
+        {
+          "ownerName": "Demetri Clark",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 31,
+          "mgmt": 73
+        },
+        {
+          "ownerName": "Rod Sellers",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 77,
+          "mgmt": 62
+        },
+        {
+          "ownerName": "Mark Deroux",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 54,
+          "mgmt": 23
+        },
+        {
+          "ownerName": "Randy Broner Jr",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 62,
+          "mgmt": 54
+        },
+        {
+          "ownerName": "Bruce Edwards",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 69,
+          "mgmt": 46
+        },
+        {
+          "ownerName": "Nate West",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 46,
+          "mgmt": 42
+        },
+        {
+          "ownerName": "Marlon Moore",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 0,
+          "mgmt": 62
+        },
+        {
+          "ownerName": "Sheldon deRoux",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 85,
+          "mgmt": 27
+        },
+        {
+          "ownerName": "Tony Dorsey",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 23,
+          "mgmt": 62
+        },
+        {
+          "ownerName": "Jan Graham",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 100,
+          "mgmt": 46
+        },
+        {
+          "ownerName": "Steffon Bizzell",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 15,
+          "mgmt": 46
+        },
+        {
+          "ownerName": "Christian Graham",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 92,
+          "mgmt": 46
+        },
+        {
+          "ownerName": "Marcus Reese",
+          "night": "— (Historical ADP unavailable for this season.)",
+          "results": 38,
+          "mgmt": 58
+        }
+      ]
+    }
+  }
+}
