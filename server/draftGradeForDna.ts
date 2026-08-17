@@ -36,8 +36,10 @@ type SeasonCache = {
 
 const seasonCache = new Map<string, SeasonCache>(); // key `${leagueId}:${season}`
 const FRESH_MS = 30 * 60 * 1000;
-const FLOOR_SEASON = 2018; // verified: player-level data begins here
-const MIN_WEEKS = 10;
+/** Verified: player-level weekly data begins here (league 457622). */
+export const FLOOR_SEASON = 2018;
+/** careerSimGrades / 055A skip Draft Reality below this week count. */
+export const MIN_WEEKS = 10;
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 

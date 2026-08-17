@@ -29,6 +29,7 @@ import { funnelRouter } from "./funnelRouter";
 import { onboardingRouter } from "./onboardingRouter";
 import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
+import { buildHistoricalDraftEvaluation } from "./historicalDraftEvaluation";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
 import { loadGmTradeLegs } from "./completedTradeAuthority";
@@ -3842,6 +3843,39 @@ export const appRouter = router({
             warnings,
           },
         };
+      }),
+
+    /**
+     * RFSN-055A — per-owner Draft Night + Draft Reality for /draft/history Team view.
+     * Reuses computeOwnerDraftMetrics, same-season ADP, classifyReach, computeDraftReality.
+     */
+    historicalDraftEvaluation: publicProcedure
+      .input(
+        z.object({
+          season: z.number().int().min(2009).max(2030),
+          activeLeagueKey: z.string().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        void input.activeLeagueKey;
+        const empty = {
+          season: input.season,
+          leagueId: "",
+          owners: [] as Awaited<ReturnType<typeof buildHistoricalDraftEvaluation>>["owners"],
+          draftNightSeasonAvailable: false,
+          draftNightCoverageReason: null as string | null,
+          draftRealitySeasonAvailable: false,
+          draftRealityCoverageReason: null as string | null,
+          timingMs: 0,
+        };
+        if (!ctx.user?.id) return empty;
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: { id: ctx.user.id } },
+          null,
+          input.season,
+        );
+        if (!leagueId) return empty;
+        return buildHistoricalDraftEvaluation({ leagueId, season: input.season });
       }),
 
     /**
