@@ -30,4 +30,10 @@ describe("Draft History board view stays a pick ledger (RFSN-055A)", () => {
     expect(team).not.toContain("Best Pick");
     expect(team).not.toContain("overallGrade");
   });
+
+  it("does not render empty player names on Draft Grades rows", () => {
+    expect(src).toContain("historicalPickDisplayName");
+    const team = src.slice(src.indexOf("{/* Draft Grades"));
+    expect(team).not.toMatch(/\{p\.playerName \?\? "—"\}/);
+  });
 });

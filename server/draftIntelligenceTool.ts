@@ -7,6 +7,7 @@
 import { and, eq } from "drizzle-orm";
 import { gmDraftPicks, gmTeams } from "../drizzle/schema";
 import { getDb } from "./db";
+import { fillMissingDraftPickIdentities } from "./draftPickIdentityLookup";
 import { ensureSameSeasonEspnOffenseAdp } from "./espnOffenseAdpSameSeason";
 import { resolveDraftRound } from "../shared/reachClassification";
 import {
@@ -231,11 +232,22 @@ export async function loadDraftPickEvidence(
     }),
   );
 
+  const identityFilled = await fillMissingDraftPickIdentities(
+    rows.map((r) => ({
+      playerId: resolveEspnPlayerIdFromRawPick(r.rawPick, r.playerId),
+      playerName: r.playerName,
+      position: r.position,
+    })),
+  );
+
   const out: DraftPickEvidence[] = [];
-  for (const r of rows) {
-    const playerId = resolveEspnPlayerIdFromRawPick(r.rawPick, r.playerId);
-    const playerName = String(r.playerName || "").trim();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]!;
+    const ident = identityFilled[i]!;
+    const playerId = ident.playerId != null ? Number(ident.playerId) : null;
+    const playerName = String(ident.playerName || "").trim();
     if (!playerId && !playerName) continue;
+    const position = String(ident.position || "").trim();
     const teams = teamsBySeason.get(r.season)?.size ?? 0;
     const round = resolveDraftRound({
       pickNumber: r.overallPick,
@@ -243,7 +255,7 @@ export async function loadDraftPickEvidence(
       existingRound: r.roundId > 0 ? r.roundId : null,
     });
     const ownerName = String(r.ownerName || r.teamName || "").trim() || `Team ${r.teamId}`;
-    const pid = playerId != null ? String(playerId) : "";
+    const pid = playerId != null && Number.isFinite(playerId) && playerId > 0 ? String(playerId) : "";
     const adp = pid ? adpBySeason.get(r.season)?.get(pid) ?? null : null;
     out.push({
       season: r.season,
@@ -252,9 +264,9 @@ export async function loadDraftPickEvidence(
       teamId: r.teamId,
       ownerName,
       ownerKey: String(r.ownerId || "").trim() || ownerName,
-      playerId,
+      playerId: pid ? playerId : null,
       playerName: playerName || "Unknown",
-      position: String(r.position || "").trim(),
+      position,
       isKeeper: Boolean(r.isKeeper),
       adp: isUsableAdp(adp) ? adp : null,
       numberOfTeams: teams || undefined,
