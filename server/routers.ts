@@ -2713,6 +2713,7 @@ export const appRouter = router({
           overallPickNumber?: number | null;
           roundId?: number | null;
           roundPickNumber?: number | null;
+          playerId?: number | null;
           playerName?: string | null;
           position?: string | null;
           proTeam?: string | null;
@@ -2724,6 +2725,7 @@ export const appRouter = router({
           overallPick: p.overallPickNumber,
           roundId: p.roundId,
           roundPick: p.roundPickNumber,
+          playerId: p.playerId != null && Number(p.playerId) > 0 ? Number(p.playerId) : null,
           playerName: p.playerName,
           position: p.position,
           nflTeam: p.proTeam ?? "",
@@ -2744,6 +2746,8 @@ export const appRouter = router({
                 overallPickNumber: Number(row.overallPickNumber),
                 roundId: Number(row.roundId),
                 roundPickNumber: Number(row.roundPickNumber),
+                playerId:
+                  row.playerId != null && Number(row.playerId) > 0 ? Number(row.playerId) : null,
                 playerName: row.playerName != null ? String(row.playerName) : null,
                 position: row.position != null ? String(row.position) : null,
                 proTeam: row.proTeam != null ? String(row.proTeam) : "",

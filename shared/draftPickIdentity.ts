@@ -39,6 +39,30 @@ export function historicalPickDisplayName(name: string | null | undefined): stri
   return t || "Unknown historical player";
 }
 
+/** Draft slot with no ESPN player id yet (pre-draft order, not a failed identity lookup). */
+export function isUnassignedDraftPick(playerId: number | string | null | undefined): boolean {
+  return espnPlayerIdKey(playerId) == null;
+}
+
+/** Draft Board / Draft Grades player label — distinguishes open slots from unresolved historical ids. */
+export function draftBoardPickDisplayName(pick: DraftPickIdentityFields): string {
+  const trimmed = String(pick.playerName ?? "").trim();
+  if (trimmed) return trimmed;
+  if (isUnassignedDraftPick(pick.playerId)) return "Unassigned pick";
+  return "Unknown historical player";
+}
+
+/** Position badge for draft ledger rows — TBD for unassigned slots, ? only after id lookup fails. */
+export function draftBoardPositionLabel(
+  position: string | null | undefined,
+  playerId: number | string | null | undefined,
+): string {
+  const pos = String(position ?? "").trim();
+  if (pos && pos !== "?") return pos;
+  if (isUnassignedDraftPick(playerId)) return "TBD";
+  return pos || "?";
+}
+
 export function applyDraftPickIdentityMap<T extends DraftPickIdentityFields>(
   picks: T[],
   byEspnId: Map<string, EspnPlayerIdentity>,

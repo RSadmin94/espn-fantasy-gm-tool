@@ -340,4 +340,33 @@ describe("espn.draftPicks", () => {
       await db.execute(sql`DELETE FROM gm_player_registry WHERE espnPlayerId = ${espnPlayerId}`);
     }
   });
+
+  it("returns null playerId for unassigned draft slots without inventing a name", async () => {
+    if (!dbAvailable) return;
+    await seedTeam(SLEEPER_LEAGUE_ID, SLEEPER_SEASON, 1, "Team Alpha", "Alpha Owner");
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(gmDraftPicks).values({
+      leagueId: SLEEPER_LEAGUE_ID,
+      season: SLEEPER_SEASON,
+      overallPick: 1,
+      roundId: 1,
+      roundPick: 1,
+      teamId: 1,
+      playerId: null,
+      playerName: "",
+      position: "?",
+      isKeeper: 0,
+      rawPick: JSON.stringify({ teamName: "Team Alpha", draftedForAnalytics: true }),
+    });
+    await seedConnection(SLEEPER_USER_ID, SLEEPER_LEAGUE_ID, "sleeper");
+
+    const [pick] = await caller(SLEEPER_USER_ID).espn.draftPicks({ season: SLEEPER_SEASON });
+    expect(pick).toMatchObject({
+      overallPick: 1,
+      playerId: null,
+      playerName: "",
+      position: "?",
+    });
+  });
 });

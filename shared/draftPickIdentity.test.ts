@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDraftPickIdentityMap,
+  draftBoardPickDisplayName,
+  draftBoardPositionLabel,
   draftPickNameIsBlank,
   historicalPickDisplayName,
+  isUnassignedDraftPick,
   pickNeedsIdentity,
 } from "../shared/draftPickIdentity";
 
@@ -58,6 +61,21 @@ describe("draftPickIdentity (RFSN-055B)", () => {
     expect(historicalPickDisplayName(null)).toBe("Unknown historical player");
     expect(historicalPickDisplayName("  Tyreek Hill  ")).toBe("Tyreek Hill");
     expect(draftPickNameIsBlank("")).toBe(true);
+  });
+
+  it("labels unassigned draft slots separately from unresolved historical ids (RFSN-055D)", () => {
+    expect(isUnassignedDraftPick(null)).toBe(true);
+    expect(isUnassignedDraftPick(0)).toBe(true);
+    expect(isUnassignedDraftPick(3117251)).toBe(false);
+    expect(
+      draftBoardPickDisplayName({ playerId: null, playerName: "", position: "?" }),
+    ).toBe("Unassigned pick");
+    expect(
+      draftBoardPickDisplayName({ playerId: 3117251, playerName: "", position: "?" }),
+    ).toBe("Unknown historical player");
+    expect(draftBoardPositionLabel("?", null)).toBe("TBD");
+    expect(draftBoardPositionLabel("?", 3117251)).toBe("?");
+    expect(draftBoardPositionLabel("RB", null)).toBe("RB");
   });
 
   it("keeps keeper identity when filling from the map", () => {
