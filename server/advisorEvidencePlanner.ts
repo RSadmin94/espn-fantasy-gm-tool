@@ -14,6 +14,7 @@ import { isSeasonMatchupDetailAsk } from "./championshipAuthority";
 import { isMatchupGalleryAsk } from "./matchupGalleryTool";
 import { isHistoricalNarrationAsk } from "./historicalNarrationTool";
 import { selectMatchupMarginTool } from "./matchupMarginTool";
+import { selectDraftIntelligenceTool } from "./draftIntelligenceTool";
 import {
   findMentionedOwners,
   type AdvisorOwnerAlias,
@@ -53,7 +54,7 @@ export const ADVISOR_AUTHORITY_MODULES: Record<AdvisorAuthorityId, string> = {
   playoffs: "h2hAuthority playoff layer / playoffPositionSplit",
   league_records: "hallOfFameService / espn.ownerAllTimeRecords",
   owner_dossier: "ownerProfileService / ownerCareerProfileService",
-  draft_history: "espn.draftHistory / owner draft DNA",
+  draft_history: "draftIntelligenceTool / espn.draftHistory / owner draft DNA",
   trades: "completedTradeAuthority.loadCompletedTradeIntelligence",
   transactions: "historicalDataService.getSeasonTransactions",
   timeline: "careerReportService.computeCareerReport timeline",
@@ -103,6 +104,7 @@ export type AdvisorPlannerIntent =
   | "career_most_losses"
   | "owner_career"
   | "draft_history"
+  | "draft_intelligence"
   | "trade_history"
   | "league_history_general"
   | "advisor_fallback";
@@ -512,6 +514,14 @@ function planForIntent(
         requiredEvidence: ["draft_picks", "draft_tendencies"],
         fallbackToAdvisorContext: false,
       };
+    case "draft_intelligence":
+      return {
+        authorities: uniqueAuthorities(["owner_identity", "draft_history"]),
+        deterministicFirst: true,
+        narrativeAllowed: false,
+        requiredEvidence: ["draft_picks", "draft_adp_join"],
+        fallbackToAdvisorContext: false,
+      };
     case "trade_history":
       return {
         authorities: uniqueAuthorities(["owner_identity", "trades", "transactions"]),
@@ -558,6 +568,7 @@ function detectIntent(
   if (isHistoricalNarrationAsk(t)) return "historical_narration";
   if (isMatchupGalleryAsk(t)) return "matchup_gallery";
   if (selectMatchupMarginTool(t) != null) return "matchup_margins";
+  if (selectDraftIntelligenceTool(t) != null) return "draft_intelligence";
   if (isChampionshipCompareAsk(t, ownerCount)) return "championship_compare";
   if (isChampionshipLeaderboard(t, ownerCount)) return "championship_leaderboard";
   if (isPodiumPlacementAsk(t)) return "podium_placement";

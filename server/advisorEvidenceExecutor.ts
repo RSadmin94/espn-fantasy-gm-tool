@@ -49,6 +49,8 @@ import {
   MATCHUP_GALLERY_TOOL_NAME,
   tryMatchupGalleryToolAnswer,
 } from "./matchupGalleryTool";
+import { isDraftIntelligenceFollowUpAsk } from "./draftIntelligenceTool";
+import type { DraftIntelligenceQuery } from "./draftIntelligence";
 import {
   HISTORICAL_NARRATION_TOOL_NAME,
   tryHistoricalNarrationToolAnswer,
@@ -108,6 +110,25 @@ export type AdvisorEvidenceExecutorDeps = {
   tryGallery?: typeof tryMatchupGalleryToolAnswer;
   tryNarration?: typeof tryHistoricalNarrationToolAnswer;
   resolveViewerOwnerName?: (userId: number) => Promise<string | null>;
+};
+
+function blocksDraftIntelligenceFollowUp(intent: AdvisorPlannerIntent): boolean {
+  return (
+    intent !== "advisor_fallback" &&
+    intent !== "draft_intelligence" &&
+    intent !== "draft_history" &&
+    intent !== "owner_career" &&
+    intent !== "owner_championships"
+  );
+}
+
+const DRAFT_INTELLIGENCE_PLAN: AdvisorEvidencePlan = {
+  intent: "draft_intelligence",
+  authorities: ["owner_identity", "draft_history"],
+  deterministicFirst: true,
+  narrativeAllowed: false,
+  requiredEvidence: ["draft_picks", "draft_adp_join"],
+  fallbackToAdvisorContext: false,
 };
 
 type MarginStats = {
@@ -730,6 +751,24 @@ export function formatDeterministicAdvisorAnswer(
     return { message: formatMostCareerLossesAnswer(pkg) };
   }
 
+  if (plan.intent === "draft_intelligence") {
+    const stats = pkg.draftStats as {
+      formattedAnswer?: string | null;
+      noDraftBoard?: boolean;
+    };
+    const draftCoverage = coverageLabelForUser(covStart, covEnd);
+    if (stats.formattedAnswer?.trim()) {
+      return {
+        message: stats.formattedAnswer.trim(),
+        tool: "query_draft_intelligence",
+      };
+    }
+    return {
+      message: missingDatasetSentence("draft history", draftCoverage),
+      tool: "query_draft_intelligence",
+    };
+  }
+
   return null;
 }
 
@@ -897,6 +936,15 @@ export async function runAdvisorEvidencePath(
     };
   }
 
+  const draftIntelligenceFollowUp =
+    convo?.lastIntent === "draft_intelligence" &&
+    Boolean(convo.lastDraftIntelligenceQuery) &&
+    isDraftIntelligenceFollowUpAsk(input.message) &&
+    !blocksDraftIntelligenceFollowUp(plan.intent);
+  if (draftIntelligenceFollowUp) {
+    plan = { ...DRAFT_INTELLIGENCE_PLAN };
+  }
+
   if (plan.intent === "historical_narration") {
     const resolveOwner =
       deps.resolveViewerOwnerName ??
@@ -989,7 +1037,13 @@ export async function runAdvisorEvidencePath(
     };
   }
 
-  const persistConversation = () => {
+  const persistConversation = (pkg?: AdvisorEvidencePackage) => {
+    const draftStats = pkg?.draftStats as
+      | {
+          draftIntelligenceQuery?: DraftIntelligenceQuery;
+          draftIntelligenceLeader?: string;
+        }
+      | undefined;
     setConvo(input.userId, input.leagueId, {
       lastResolvedOwners:
         owners.length >= 1 ? owners : (convo?.lastResolvedOwners ?? []),
@@ -998,6 +1052,12 @@ export async function runAdvisorEvidencePath(
       lastLeagueId: String(input.leagueId),
       lastGalleryFilter: null,
       lastGalleryPreset: null,
+      ...(plan.intent === "draft_intelligence" && draftStats?.draftIntelligenceQuery
+        ? { lastDraftIntelligenceQuery: draftStats.draftIntelligenceQuery }
+        : {}),
+      ...(plan.intent === "draft_intelligence" && draftStats?.draftIntelligenceLeader
+        ? { lastDraftIntelligenceLeader: draftStats.draftIntelligenceLeader }
+        : {}),
     });
   };
 
@@ -1034,10 +1094,14 @@ export async function runAdvisorEvidencePath(
     leagueName: input.leagueName,
     provider: input.provider,
     userId: input.userId,
+    ownerAliases: input.ownerAliases,
+    priorDraftIntelligenceQuery:
+      convo?.lastIntent === "draft_intelligence" ? convo.lastDraftIntelligenceQuery : undefined,
+    lastDraftIntelligenceLeader: convo?.lastDraftIntelligenceLeader,
   });
 
   const deterministic = formatDeterministicAdvisorAnswer(pkg);
-  persistConversation();
+  persistConversation(pkg);
   if (deterministic) {
     return {
       kind: "deterministic",

@@ -298,6 +298,10 @@ export type AdvisorEvidenceSources = {
   playoffScope?: AdvisorEvidencePackage["playoffScope"] | null;
   rivalryRanking?: RivalrySnapshot[] | null;
   draft?: DraftSnapshot[] | null;
+  /** Preformatted deterministic draft-intelligence answer. */
+  draftAnswer?: string | null;
+  draftIntelligenceQuery?: import("./draftIntelligence").DraftIntelligenceQuery | null;
+  draftIntelligenceLeader?: string | null;
   trades?: TradeSnapshot[] | null;
   timeline?: TimelineSnapshotFact[] | null;
 };
@@ -1030,8 +1034,20 @@ export function buildAdvisorEvidencePackage(
     }
   }
 
+  if (wanted.has("draft_history") && sources.draftAnswer?.trim()) {
+    pkg.draftStats = {
+      formattedAnswer: sources.draftAnswer.trim(),
+      ...(sources.draftIntelligenceQuery
+        ? { draftIntelligenceQuery: sources.draftIntelligenceQuery }
+        : {}),
+      ...(sources.draftIntelligenceLeader
+        ? { draftIntelligenceLeader: sources.draftIntelligenceLeader }
+        : {}),
+    };
+  }
+
   if (wanted.has("draft_history") && sources.draft?.length) {
-    pkg.draftStats = { owners: sources.draft };
+    pkg.draftStats = { ...pkg.draftStats, owners: sources.draft };
     for (const d of sources.draft) {
       if (d.reachCount == null && d.pickCount == null && !d.note) continue;
       pushFact(pkg, {
@@ -1233,6 +1249,9 @@ export async function loadAdvisorEvidenceSources(args: {
   message: string;
   plan: AdvisorEvidencePlan;
   owners: AdvisorPackageOwner[] | AdvisorResolvedOwner[];
+  ownerAliases?: import("./advisorQuestionClassify").AdvisorOwnerAlias[];
+  priorDraftIntelligenceQuery?: import("./draftIntelligence").DraftIntelligenceQuery | null;
+  lastDraftIntelligenceLeader?: string | null;
 }): Promise<AdvisorEvidenceSources> {
   const { leagueId, plan } = args;
   const wanted = new Set(plan.authorities);
@@ -1448,6 +1467,42 @@ export async function loadAdvisorEvidenceSources(args: {
     }
   }
 
+  if (wanted.has("draft_history")) {
+    try {
+      const {
+        selectDraftIntelligenceTool,
+        tryDraftIntelligenceToolAnswer,
+        draftIntelligenceLeaderFromResult,
+      } = await import("./draftIntelligenceTool");
+      const diCtx = {
+        priorQuery: args.priorDraftIntelligenceQuery,
+        lastIntent: args.priorDraftIntelligenceQuery ? "draft_intelligence" : null,
+        ownerAliases: args.ownerAliases,
+        lastDraftIntelligenceLeader: args.lastDraftIntelligenceLeader,
+      };
+      if (selectDraftIntelligenceTool(args.message, diCtx)) {
+        const hit = await tryDraftIntelligenceToolAnswer({
+          leagueId,
+          message: args.message,
+          resolvedOwnerNames: args.owners
+            .map((o) => o.displayName)
+            .filter((n): n is string => Boolean(n?.trim())),
+          priorQuery: args.priorDraftIntelligenceQuery,
+          lastIntent: diCtx.lastIntent,
+          ownerAliases: args.ownerAliases,
+          lastDraftIntelligenceLeader: args.lastDraftIntelligenceLeader,
+        });
+        sources.draftAnswer = hit?.answer ?? null;
+        if (hit) {
+          sources.draftIntelligenceQuery = hit.result.query;
+          sources.draftIntelligenceLeader = draftIntelligenceLeaderFromResult(hit.result);
+        }
+      }
+    } catch {
+      sources.draftAnswer = null;
+    }
+  }
+
   return sources;
 }
 
@@ -1456,6 +1511,9 @@ export async function assembleAdvisorEvidencePackage(
     leagueName?: string;
     provider?: string;
     userId?: number;
+    ownerAliases?: import("./advisorQuestionClassify").AdvisorOwnerAlias[];
+    priorDraftIntelligenceQuery?: import("./draftIntelligence").DraftIntelligenceQuery | null;
+    lastDraftIntelligenceLeader?: string | null;
   },
 ): Promise<AdvisorEvidencePackage> {
   const sources = await loadAdvisorEvidenceSources({
@@ -1466,6 +1524,9 @@ export async function assembleAdvisorEvidencePackage(
     message: input.message,
     plan: input.plan,
     owners: input.owners,
+    ownerAliases: input.ownerAliases,
+    priorDraftIntelligenceQuery: input.priorDraftIntelligenceQuery,
+    lastDraftIntelligenceLeader: input.lastDraftIntelligenceLeader,
   });
   return buildAdvisorEvidencePackage(input, sources);
 }

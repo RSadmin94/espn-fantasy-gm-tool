@@ -197,11 +197,105 @@ describe("planAdvisorEvidence", () => {
     });
   });
 
-  it("plans draft history without inventing a new engine", () => {
-    expectPlan("Who always reaches in the draft?", "draft_history", [
+  it("plans draft intelligence deterministically (RFSN-055)", () => {
+    expectPlan("Who always reaches in the draft?", "draft_intelligence", [
       "owner_identity",
       "draft_history",
-    ]);
+    ], { narrativeAllowed: false });
+    expectPlan("Who reaches the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("What was the biggest reach ever?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Biggest reach?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("What was the biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts QBs early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts quarterbacks early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who waits on QB?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who always waits on QB?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who reached the most in 2010?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who always drafts rookies?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who loves RBs?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts safest?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who gambles the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts running backs early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who drafts wide receivers early?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who waits on quarterback?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who follows ADP the closest?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+    expectPlan("Who ignores ADP the most?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
+  });
+
+  it("keeps draft-intelligence follow-ups deterministic (RFSN-055)", () => {
+    expectPlan("and who waits on quarterback?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false, deterministicFirst: true, fallback: false });
+    expectPlan("Biggest steal?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false, deterministicFirst: true, fallback: false });
+  });
+
+  it("does not turn two named owners + draft metric into H2H", () => {
+    expectPlan("Who reaches more, Demetri or LOZELL?", "draft_intelligence", [
+      "owner_identity",
+      "draft_history",
+    ], { narrativeAllowed: false });
   });
 
   it("plans trade history from transaction scope", () => {
@@ -310,7 +404,9 @@ describe("planAdvisorEvidence", () => {
     expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
       narrativeAllowed: false,
     });
-    expect(plan("Who reaches the most?").intent).not.toBe("matchup_gallery");
+    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
     expectPlan("Best career record?", "career_win_pct", ["owner_identity", "league_records"], {
       narrativeAllowed: false,
     });
@@ -377,14 +473,17 @@ describe("planAdvisorEvidence", () => {
     expectPlan("Who has the most championships?", "championship_leaderboard", ["championships"], {
       narrativeAllowed: false,
     });
-    expect(plan("Who reaches the most?").intent).not.toBe("matchup_gallery");
-    expect(plan("Who reaches the most?").intent).not.toBe("historical_narration");
+    expectPlan("Who reaches the most?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
     expect(plan("Who has the best record?").intent).not.toBe("matchup_gallery");
     expectPlan("Who has the most one-point losses?", "matchup_margins", ["owner_identity", "matchup_margins"], {
       narrativeAllowed: false,
     });
     expect(plan("Who has the most blowouts?").intent).not.toBe("matchup_gallery");
-    expect(plan("Who drafts QBs early?").intent).not.toBe("matchup_gallery");
+    expectPlan("Who drafts QBs early?", "draft_intelligence", ["owner_identity", "draft_history"], {
+      narrativeAllowed: false,
+    });
     expectPlan("What's my biggest win?", "matchup_margins", ["owner_identity", "matchup_margins"], {
       narrativeAllowed: false,
     });
