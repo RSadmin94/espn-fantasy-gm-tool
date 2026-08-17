@@ -8,6 +8,7 @@
 
 import type { AdvisorPlannerIntent, AdvisorResolvedOwner } from "./advisorEvidencePlanner";
 import type { AdvisorQuestionScope } from "./advisorScopeResolver";
+import type { DraftIntelligenceQuery } from "./draftIntelligence";
 import type { GalleryFilter } from "./matchupGalleryQuery";
 
 export type AdvisorConversationContext = {
@@ -19,6 +20,10 @@ export type AdvisorConversationContext = {
   /** RFSN-053D — last gallery filter for follow-up merge. Cleared on unrelated intent / Clear. */
   lastGalleryFilter?: GalleryFilter;
   lastGalleryPreset?: string;
+  /** RFSN-055C — last Draft Intelligence query for deterministic follow-ups. Cleared on unrelated intent / Clear. */
+  lastDraftIntelligenceQuery?: DraftIntelligenceQuery;
+  /** Top-ranked owner from the last Draft Intelligence answer (pronoun follow-ups). */
+  lastDraftIntelligenceLeader?: string;
 };
 
 const store = new Map<string, AdvisorConversationContext>();
@@ -39,11 +44,13 @@ export function setAdvisorConversationContext(
   leagueId: string,
   patch: Omit<
     AdvisorConversationContext,
-    "updatedAt" | "lastLeagueId" | "lastGalleryFilter" | "lastGalleryPreset"
+    "updatedAt" | "lastLeagueId" | "lastGalleryFilter" | "lastGalleryPreset" | "lastDraftIntelligenceQuery" | "lastDraftIntelligenceLeader"
   > & {
     lastLeagueId?: string;
     lastGalleryFilter?: GalleryFilter | null;
     lastGalleryPreset?: string | null;
+    lastDraftIntelligenceQuery?: DraftIntelligenceQuery | null;
+    lastDraftIntelligenceLeader?: string | null;
   },
 ): AdvisorConversationContext {
   const key = advisorConversationKey(userId, leagueId);
@@ -55,6 +62,12 @@ export function setAdvisorConversationContext(
     updatedAt: Date.now(),
     ...(patch.lastGalleryFilter ? { lastGalleryFilter: { ...patch.lastGalleryFilter } } : {}),
     ...(patch.lastGalleryPreset ? { lastGalleryPreset: patch.lastGalleryPreset } : {}),
+    ...(patch.lastDraftIntelligenceQuery
+      ? { lastDraftIntelligenceQuery: { ...patch.lastDraftIntelligenceQuery } }
+      : {}),
+    ...(patch.lastDraftIntelligenceLeader
+      ? { lastDraftIntelligenceLeader: patch.lastDraftIntelligenceLeader }
+      : {}),
   };
   store.set(key, next);
   return next;

@@ -610,4 +610,127 @@ describe("runAdvisorEvidencePath", () => {
     expect(getAdvisorConversationContext(9, "457622")?.lastIntent).toBe("championship_leaderboard");
     expect(getAdvisorConversationContext(9, "457622")?.lastGalleryFilter).toBeUndefined();
   });
+
+  it("RFSN-055C keeps Draft Intelligence follow-ups on query_draft_intelligence", async () => {
+    const {
+      clearAllAdvisorConversationContext,
+      getAdvisorConversationContext,
+    } = await import("./advisorConversationContext");
+    clearAllAdvisorConversationContext();
+
+    const reachQuery = { metric: "reach_frequency" as const, topN: 5 };
+    const assemble = async (message: string) =>
+      buildAdvisorEvidencePackage(
+        {
+          message,
+          leagueId: "457622",
+          scope: LEAGUE_HISTORY,
+          owners: [],
+          plan: DRAFT_INTEL_PLAN,
+        },
+        baseSources({
+          draftAnswer: message.startsWith("What about QBs")
+            ? "Reach frequency is computed league-wide by owner and cannot be filtered to quarterbacks only."
+            : message.startsWith("Only 2024")
+              ? "Across recorded ADP-joined drafts from 2024, reach frequency:\n1. Mark Deroux — 34 reaches / 49 picks (69%)"
+              : "Across recorded ADP-joined drafts from 2018–2024, reach frequency:\n1. Mark Deroux — 34 reaches / 49 picks (69%)",
+          draftIntelligenceQuery:
+            message.startsWith("Only 2024") || message.startsWith("What about QBs")
+              ? { ...reachQuery, seasonFrom: 2024, seasonTo: 2024 }
+              : reachQuery,
+          draftIntelligenceLeader: "Mark Deroux",
+        }),
+      );
+
+    const first = await runAdvisorEvidencePath(
+      { message: "Who reaches the most?", leagueId: "457622", userId: 7, season: 2026 },
+      { assemblePackage: async () => assemble("Who reaches the most?"), getHistory: async () => [] },
+    );
+    expect(first.kind).toBe("deterministic");
+    if (first.kind !== "deterministic") return;
+    expect(first.tool).toBe("query_draft_intelligence");
+    expect(getAdvisorConversationContext(7, "457622")?.lastDraftIntelligenceQuery?.metric).toBe(
+      "reach_frequency",
+    );
+
+    const season = await runAdvisorEvidencePath(
+      { message: "Only 2024.", leagueId: "457622", userId: 7, season: 2026 },
+      { assemblePackage: async () => assemble("Only 2024."), getHistory: async () => [] },
+    );
+    expect(season.kind).toBe("deterministic");
+    if (season.kind !== "deterministic") return;
+    expect(season.tool).toBe("query_draft_intelligence");
+    expect(season.telemetry.intent).toBe("draft_intelligence");
+
+    const position = await runAdvisorEvidencePath(
+      { message: "What about QBs?", leagueId: "457622", userId: 7, season: 2026 },
+      { assemblePackage: async () => assemble("What about QBs?"), getHistory: async () => [] },
+    );
+    expect(position.kind).toBe("deterministic");
+    if (position.kind !== "deterministic") return;
+    expect(position.tool).toBe("query_draft_intelligence");
+    expect(position.telemetry.intent).toBe("draft_intelligence");
+    expect(position.message).toMatch(/cannot be filtered to quarterbacks/i);
+  });
+
+  it("RFSN-055C unrelated intent and Clear exit Draft Intelligence context", async () => {
+    const {
+      clearAllAdvisorConversationContext,
+      clearAdvisorConversationContext,
+      getAdvisorConversationContext,
+      setAdvisorConversationContext,
+    } = await import("./advisorConversationContext");
+    clearAllAdvisorConversationContext();
+
+    setAdvisorConversationContext(8, "457622", {
+      lastResolvedOwners: [],
+      lastIntent: "draft_intelligence",
+      lastScope: LEAGUE_HISTORY,
+      lastLeagueId: "457622",
+      lastDraftIntelligenceQuery: { metric: "reach_frequency", topN: 5 },
+    });
+
+    const champ = await runAdvisorEvidencePath(
+      { message: "Who has the most championships?", leagueId: "457622", userId: 8, season: 2026 },
+      {
+        assemblePackage: async () =>
+          buildAdvisorEvidencePackage(
+            {
+              message: "Who has the most championships?",
+              leagueId: "457622",
+              scope: LEAGUE_HISTORY,
+              owners: [],
+              plan: LEADERBOARD_PLAN,
+            },
+            baseSources({ championships: champSnap() }),
+          ),
+        getHistory: async () => [],
+      },
+    );
+    expect(champ.kind).toBe("deterministic");
+    expect(getAdvisorConversationContext(8, "457622")?.lastIntent).toBe("championship_leaderboard");
+    expect(getAdvisorConversationContext(8, "457622")?.lastDraftIntelligenceQuery).toBeUndefined();
+
+    setAdvisorConversationContext(8, "457622", {
+      lastResolvedOwners: [],
+      lastIntent: "draft_intelligence",
+      lastScope: LEAGUE_HISTORY,
+      lastLeagueId: "457622",
+      lastDraftIntelligenceQuery: { metric: "reach_frequency", topN: 5, seasonFrom: 2024, seasonTo: 2024 },
+    });
+    clearAdvisorConversationContext(8, "457622");
+
+    const afterClear = await runAdvisorEvidencePath(
+      { message: "Only 2024.", leagueId: "457622", userId: 8, season: 2026 },
+      {
+        assemblePackage: async () => {
+          throw new Error("must not inherit draft intelligence after Clear");
+        },
+        buildFallbackMessages: async () => [{ role: "user", content: "fallback" }],
+        getHistory: async () => [],
+      },
+    );
+    expect(afterClear.kind).toBe("llm");
+    expect(afterClear.telemetry.intent).toBe("advisor_fallback");
+  });
 });
