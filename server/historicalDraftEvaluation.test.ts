@@ -512,4 +512,29 @@ describe("RFSN-055A historical draft evaluation", () => {
     expect(rod.draftNight.pickCount).toBe(3);
     expect(rod.draftNight.biggestReach?.playerName).not.toBe("Future");
   });
+
+  it("restoring blank names does not change Night letter, pick counts, or Reality grades", () => {
+    const named = composeHistoricalDraftEvaluation({
+      season: 2022,
+      leagueId: "457622",
+      picks: nightPicks,
+      reality: reality(),
+    });
+    const blanked = composeHistoricalDraftEvaluation({
+      season: 2022,
+      leagueId: "457622",
+      picks: nightPicks.map((p) => ({ ...p, playerName: "Unknown" })),
+      reality: reality(),
+    });
+    const rodNamed = named.owners.find((o) => o.ownerName === "Rod Sellers")!;
+    const rodBlank = blanked.owners.find((o) => o.ownerName === "Rod Sellers")!;
+    expect(rodBlank.draftNight.grade).toBe(rodNamed.draftNight.grade);
+    expect(rodBlank.draftNight.valueScore).toBe(rodNamed.draftNight.valueScore);
+    expect(rodBlank.draftNight.pickCount).toBe(rodNamed.draftNight.pickCount);
+    expect(rodBlank.draftNight.adpPickCount).toBe(rodNamed.draftNight.adpPickCount);
+    expect(rodBlank.draftNight.biggestReach?.pick).toBe(rodNamed.draftNight.biggestReach?.pick);
+    expect(rodBlank.draftNight.biggestSteal?.pick).toBe(rodNamed.draftNight.biggestSteal?.pick);
+    expect(rodBlank.draftReality.draftGrade).toBe(rodNamed.draftReality.draftGrade);
+    expect(rodBlank.draftReality.rosterMgmtGrade).toBe(rodNamed.draftReality.rosterMgmtGrade);
+  });
 });

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { appRouter } from "./routers";
 import { getDb, setActiveLeagueForUser } from "./db";
 import { espnSeasonCache, gmDraftPicks, gmTeams, leagueConnections } from "../drizzle/schema";
@@ -305,5 +305,39 @@ describe("espn.draftPicks", () => {
 
     const picks = await caller(SLEEPER_USER_ID).espn.draftPicks({ season: SLEEPER_SEASON });
     expect(picks).toEqual([]);
+  });
+
+  it("restores blank player names from gm_player_registry without dropping the pick", async () => {
+    if (!dbAvailable) return;
+    const db = await getDb();
+    if (!db) return;
+    const espnPlayerId = "980055201";
+    await db.execute(sql`DELETE FROM gm_player_registry WHERE espnPlayerId = ${espnPlayerId}`);
+    try {
+      await db.execute(sql`
+        INSERT INTO gm_player_registry (espnPlayerId, fullName, normalizedName, position)
+        VALUES (${espnPlayerId}, ${"RFSN055B Registry Player"}, ${"rfsn055bregistryplayer"}, ${"RB"})
+      `);
+      await seedTeam(SLEEPER_LEAGUE_ID, SLEEPER_SEASON, 1, "Team Alpha", "Alpha Owner");
+      await seedDraftPick({
+        leagueId: SLEEPER_LEAGUE_ID,
+        season: SLEEPER_SEASON,
+        overallPick: 8,
+        roundId: 4,
+        roundPick: 2,
+        teamId: 1,
+        playerName: "",
+        position: "?",
+        playerId: 980055201,
+      });
+      await seedConnection(SLEEPER_USER_ID, SLEEPER_LEAGUE_ID, "sleeper");
+      const picks = await caller(SLEEPER_USER_ID).espn.draftPicks({ season: SLEEPER_SEASON });
+      expect(picks).toHaveLength(1);
+      expect(picks[0]?.playerName).toBe("RFSN055B Registry Player");
+      expect(picks[0]?.position).toBe("RB");
+      expect(picks[0]?.overallPick).toBe(8);
+    } finally {
+      await db.execute(sql`DELETE FROM gm_player_registry WHERE espnPlayerId = ${espnPlayerId}`);
+    }
   });
 });

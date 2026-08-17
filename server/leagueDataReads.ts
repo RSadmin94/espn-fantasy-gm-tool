@@ -17,6 +17,7 @@ import {
   gmTransactions,
 } from "../drizzle/schema";
 import { getDb } from "./db";
+import { fillMissingDraftPickIdentities } from "./draftPickIdentityLookup";
 import { keepersEnabledFromSlots, readKeeperSlotsPerTeamFromPayload } from "./leagueCapabilities";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -343,12 +344,20 @@ export async function getSeasonDraftPicks(
   }
 
   const shaped = dedupedRows.map((r) => draftPickRowFromGm(r, yr));
+  const filled = await fillMissingDraftPickIdentities(
+    shaped.map((row) => ({
+      ...row,
+      playerId: (row.playerId as number | null) ?? null,
+      playerName: (row.playerName as string | null) ?? null,
+      position: (row.position as string | null) ?? null,
+    })),
+  );
   return {
-    rows: shaped,
+    rows: filled,
     source: "normalized",
     season: yr,
     leagueId: lid,
-    count: shaped.length,
+    count: filled.length,
     rawCount: rows.length,
   };
 }

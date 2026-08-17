@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { historicalPickDisplayName } from "@shared/draftPickIdentity";
 
 type HistoricalOwnerEval = {
   ownerKey: string;
@@ -909,9 +910,9 @@ export function DraftHistory() {
                 </tr>
               </thead>
               <tbody>
-                {filteredPicks.map((p) => (
+                {filteredPicks.map((p, pickIdx) => (
                   <tr
-                    key={`${p.overallPick}-${p.teamId}-${p.playerName ?? ""}`}
+                    key={`${pickIdx}-${p.overallPick}-${p.teamId}`}
                     className={cn(
                       "border-b border-border/40",
                       p.isKeeper && "bg-amber-500/5",
@@ -925,7 +926,7 @@ export function DraftHistory() {
                       {p.roundPick > 0 ? p.roundPick : "—"}
                     </td>
                     <td className="px-3 py-1.5 font-medium text-foreground">
-                      {p.playerName ?? "—"}
+                      {historicalPickDisplayName(p.playerName)}
                     </td>
                     <td className="px-3 py-1.5">
                       <PosBadge pos={p.position} />
@@ -1006,9 +1007,9 @@ export function DraftHistory() {
                   realitySeasonReason={evalQ.data?.draftRealityCoverageReason ?? null}
                 />
                 <ul className="divide-y divide-border/40">
-                  {g.picks.map((p) => (
+                  {g.picks.map((p, pickIdx) => (
                     <li
-                      key={`${p.overallPick}-${p.teamId}-${p.playerName ?? ""}`}
+                      key={`${g.key}-${pickIdx}-${p.overallPick}-${p.teamId}`}
                       className={cn(
                         "flex flex-wrap items-center gap-x-2 gap-y-1 py-1.5 text-sm",
                         p.isKeeper && "rounded bg-amber-500/5 px-1",
@@ -1020,7 +1021,9 @@ export function DraftHistory() {
                       <span className="font-mono text-xs tabular-nums text-muted-foreground">
                         · Pick {p.overallPick > 0 ? p.overallPick : "—"}
                       </span>
-                      <span className="font-medium text-foreground">{p.playerName ?? "—"}</span>
+                      <span className="font-medium text-foreground">
+                        {historicalPickDisplayName(p.playerName)}
+                      </span>
                       <PosBadge pos={p.position} />
                       {(p.nflTeam || "").trim() && (
                         <span className="text-xs text-muted-foreground">{p.nflTeam}</span>
