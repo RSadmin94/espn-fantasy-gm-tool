@@ -166,10 +166,15 @@ export function attachSameSeasonAdp(
   });
 }
 
-export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPickEvidence[]> {
+export async function loadDraftPickEvidence(
+  leagueId: string,
+  opts?: { season?: number },
+): Promise<DraftPickEvidence[]> {
   const db = await getDb();
   if (!db) return [];
   const lid = String(leagueId).slice(0, 32);
+  const seasonFilter =
+    opts?.season != null && Number.isFinite(opts.season) ? Math.floor(opts.season) : null;
   const rows = await db
     .select({
       season: gmDraftPicks.season,
@@ -195,7 +200,11 @@ export async function loadDraftPickEvidence(leagueId: string): Promise<DraftPick
         eq(gmDraftPicks.teamId, gmTeams.teamId),
       ),
     )
-    .where(eq(gmDraftPicks.leagueId, lid));
+    .where(
+      seasonFilter != null
+        ? and(eq(gmDraftPicks.leagueId, lid), eq(gmDraftPicks.season, seasonFilter))
+        : eq(gmDraftPicks.leagueId, lid),
+    );
 
   const teamsBySeason = new Map<number, Set<number>>();
   const seasonsWithIds = new Set<number>();

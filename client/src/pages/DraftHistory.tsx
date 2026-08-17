@@ -5,6 +5,7 @@ import { setTrpcToken } from "@/lib/trpcAuth";
 import { useLeagueContext } from "@/hooks/useLeagueContext";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
+import { TYPE_READABLE_BODY, TYPE_READABLE_LABEL, TYPE_READABLE_SECTION } from "@/lib/typeScale";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -15,6 +16,73 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+
+type HistoricalOwnerEval = {
+  ownerKey: string;
+  ownerName: string;
+  teamId: number;
+  draftNight: {
+    available: boolean;
+    reason: string | null;
+    grade: string | null;
+    valueScore: number | null;
+    pickCount: number;
+    adpPickCount: number;
+    biggestReach: { playerName: string; pick: number; adp: number; delta: number; round: number } | null;
+    biggestSteal: { playerName: string; pick: number; adp: number; delta: number; round: number } | null;
+  };
+  draftReality: {
+    available: boolean;
+    reason: string | null;
+    draftGrade: number | null;
+    simulatedRank: number | null;
+    teamCount: number | null;
+    simulatedRecord: string | null;
+    actualRecord: string | null;
+    simulatedWins: number | null;
+    actualWins: number | null;
+    winDifference: number | null;
+    rosterMgmtGrade: number | null;
+  };
+};
+
+function normOwnerLabel(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function findOwnerEval(
+  owners: HistoricalOwnerEval[],
+  g: { teamId: number; ownerName: string | null; teamName: string },
+): HistoricalOwnerEval | undefined {
+  if (g.teamId > 0) {
+    const byTeam = owners.find((o) => o.teamId === g.teamId);
+    if (byTeam) return byTeam;
+  }
+  const n = normOwnerLabel(g.ownerName || g.teamName || "");
+  if (!n) return undefined;
+  return owners.find((o) => normOwnerLabel(o.ownerName) === n);
+}
+
+function ordinalRank(n: number): string {
+  const v = n % 100;
+  if (v >= 11 && v <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1:
+      return `${n}st`;
+    case 2:
+      return `${n}nd`;
+    case 3:
+      return `${n}rd`;
+    default:
+      return `${n}th`;
+  }
+}
+
+function winDiffLabel(diff: number): string {
+  if (diff > 0) return `+${diff} win${diff === 1 ? "" : "s"}`;
+  if (diff < 0) return `${diff} win${diff === -1 ? "" : "s"}`;
+  return "0 wins";
+}
 
 type DraftPickRow = {
   overallPick: number;
@@ -128,6 +196,166 @@ function sortDraftPicks(rows: DraftPickRow[]): DraftPickRow[] {
   });
 }
 
+function GradeStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-[7.5rem]">
+      <div className={cn(TYPE_READABLE_LABEL, "uppercase tracking-wide text-ink-secondary")}>{label}</div>
+      <div className="mt-0.5 text-3xl font-bold tabular-nums leading-none tracking-tight text-foreground">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function ReachStealLine({
+  label,
+  row,
+  earlyLabel,
+}: {
+  label: string;
+  row: { playerName: string; pick: number; adp: number; delta: number } | null;
+  earlyLabel: boolean;
+}) {
+  return (
+    <div>
+      <div className={cn(TYPE_READABLE_LABEL, "text-ink-secondary")}>{label}</div>
+      {row ? (
+        <p className={cn(TYPE_READABLE_BODY, "mt-0.5 text-foreground")}>
+          {row.playerName}
+          <span className="mt-0.5 block text-ink-secondary">
+            Pick {row.pick} · ADP {Number.isInteger(row.adp) ? row.adp : row.adp.toFixed(1)}
+            {" · "}
+            {earlyLabel ? `${Math.round(row.delta)} spots early` : `+${Math.round(row.delta)} spots`}
+          </span>
+        </p>
+      ) : (
+        <p className={cn(TYPE_READABLE_BODY, "mt-0.5 text-ink-secondary")}>—</p>
+      )}
+    </div>
+  );
+}
+
+function TeamDraftEvalPanel({
+  ev,
+  loading,
+  nightSeasonReason,
+  realitySeasonReason,
+}: {
+  ev: HistoricalOwnerEval | undefined;
+  loading: boolean;
+  nightSeasonReason: string | null;
+  realitySeasonReason: string | null;
+}) {
+  if (loading && !ev) {
+    return (
+      <div className="mb-3 flex items-center gap-2 text-ink-secondary">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span className={TYPE_READABLE_LABEL}>Loading draft evaluation…</span>
+      </div>
+    );
+  }
+  if (!ev) {
+    if (!nightSeasonReason && !realitySeasonReason) return null;
+    return (
+      <div className="mb-4 space-y-3 border-b border-border/50 pb-4">
+        {nightSeasonReason && (
+          <section className="space-y-1">
+            <h3 className={TYPE_READABLE_SECTION}>Draft Night</h3>
+            <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>{nightSeasonReason}</p>
+          </section>
+        )}
+        {realitySeasonReason && (
+          <section className="space-y-1">
+            <h3 className={TYPE_READABLE_SECTION}>Draft Reality</h3>
+            <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>{realitySeasonReason}</p>
+          </section>
+        )}
+      </div>
+    );
+  }
+  const night = ev.draftNight;
+  const reality = ev.draftReality;
+
+  return (
+    <div className="mb-4 space-y-4 border-b border-border/50 pb-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <section className="space-y-2">
+          <h3 className={TYPE_READABLE_SECTION}>Draft Night</h3>
+          {!night.available && (
+            <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>
+              {night.reason ?? "Historical ADP unavailable for this season."}
+            </p>
+          )}
+          {night.available && (
+            <>
+              <p className={cn(TYPE_READABLE_BODY, "text-foreground")}>
+                Grade {night.grade ?? "—"}
+              </p>
+              <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>
+                Same-season ESPN ADP on {night.adpPickCount} of {night.pickCount} drafted picks.
+              </p>
+              <ReachStealLine label="Biggest Reach" row={night.biggestReach} earlyLabel />
+              <ReachStealLine label="Biggest Steal" row={night.biggestSteal} earlyLabel={false} />
+            </>
+          )}
+        </section>
+
+        <section className="space-y-2">
+          <h3 className={TYPE_READABLE_SECTION}>Draft Reality</h3>
+          <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>
+            How your original drafted roster performed using actual weekly results.
+          </p>
+          {!reality.available && (
+            <p className={cn(TYPE_READABLE_BODY, "text-ink-secondary")}>
+              {reality.reason ?? "Insufficient weekly player data."}
+            </p>
+          )}
+          {reality.available && (
+            <>
+              <p className={cn(TYPE_READABLE_BODY, "text-foreground")}>
+                {reality.draftGrade != null ? `${reality.draftGrade} / 100` : "—"}
+                {reality.simulatedRank != null && reality.teamCount != null
+                  ? ` · Untouched roster: ${ordinalRank(reality.simulatedRank)} of ${reality.teamCount}`
+                  : ""}
+              </p>
+              {reality.simulatedRecord != null && (
+                <div className={cn(TYPE_READABLE_BODY, "space-y-0.5 text-foreground")}>
+                  <div className={cn(TYPE_READABLE_LABEL, "uppercase tracking-wide text-ink-secondary")}>
+                    If you never touched your roster
+                  </div>
+                  <p>Projected record {reality.simulatedRecord}</p>
+                  {reality.actualRecord != null && <p>Actual record {reality.actualRecord}</p>}
+                  {reality.winDifference != null && (
+                    <p>Difference {winDiffLabel(reality.winDifference)}</p>
+                  )}
+                </div>
+              )}
+              {reality.rosterMgmtGrade != null && (
+                <div>
+                  <div className={TYPE_READABLE_SECTION}>Roster Management</div>
+                  <p className={cn(TYPE_READABLE_BODY, "mt-0.5 text-foreground")}>
+                    {reality.rosterMgmtGrade} / 100
+                  </p>
+                  <p className={cn(TYPE_READABLE_BODY, "mt-0.5 text-ink-secondary")}>
+                    Compares actual season results with the draft-only roster simulation. It does not
+                    score individual trades.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export function DraftHistory() {
   const { getToken, isLoaded: authLoaded, isSignedIn: isSignedInRaw } = useAuth();
   const { isLoaded: userLoaded } = useUser();
@@ -207,6 +435,14 @@ export function DraftHistory() {
   // Draft History view: "board" = existing pick-by-pick table (default, unchanged);
   // "team" = picks grouped into one card per owner (their full draft class).
   const [viewMode, setViewMode] = useState<"board" | "team">("board");
+  const evalQ = trpc.espn.historicalDraftEvaluation.useQuery(
+    withLeagueSalt({ season }, leagueContextKey),
+    {
+      enabled: leagueKeyReady && viewMode === "team",
+      staleTime: 5 * 60 * 1000,
+    },
+  );
+  const evalOwners = (evalQ.data?.owners ?? []) as HistoricalOwnerEval[];
 
   useEffect(() => {
     setLedgerFilter("all");
@@ -725,7 +961,9 @@ export function DraftHistory() {
       {/* Team View — one card per owner showing their full draft class */}
       {effectivePicks.length > 0 && viewMode === "team" && (
         <div className="space-y-3">
-          {teamGroups.map((g) => (
+          {teamGroups.map((g) => {
+            const ev = findOwnerEval(evalOwners, g);
+            return (
             <Card key={g.key}>
               <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -747,8 +985,28 @@ export function DraftHistory() {
                       : ""}
                   </span>
                 </div>
+                <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
+                  <GradeStat
+                    label="Draft Night"
+                    value={ev?.draftNight.available ? (ev.draftNight.grade ?? "—") : "—"}
+                  />
+                  <GradeStat
+                    label="Draft Results"
+                    value={
+                      ev?.draftReality.available && ev.draftReality.draftGrade != null
+                        ? String(ev.draftReality.draftGrade)
+                        : "—"
+                    }
+                  />
+                </div>
               </CardHeader>
               <CardContent className="pt-0">
+                <TeamDraftEvalPanel
+                  ev={ev}
+                  loading={evalQ.isLoading}
+                  nightSeasonReason={evalQ.data?.draftNightCoverageReason ?? null}
+                  realitySeasonReason={evalQ.data?.draftRealityCoverageReason ?? null}
+                />
                 <ul className="divide-y divide-border/40">
                   {g.picks.map((p) => (
                     <li
@@ -777,7 +1035,8 @@ export function DraftHistory() {
                 </ul>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
