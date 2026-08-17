@@ -432,8 +432,8 @@ export function DraftHistory() {
 
   type LedgerFilter = "all" | "drafted" | "keepers";
   const [ledgerFilter, setLedgerFilter] = useState<LedgerFilter>("all");
-  // Draft History view: "board" = existing pick-by-pick table (default, unchanged);
-  // "team" = picks grouped into one card per owner (their full draft class).
+  // Draft History view: "board" = pick ledger (default);
+  // "team" = Draft Grades — one owner card with Night / Results / Management.
   const [viewMode, setViewMode] = useState<"board" | "team">("board");
   const evalQ = trpc.espn.historicalDraftEvaluation.useQuery(
     withLeagueSalt({ season }, leagueContextKey),
@@ -459,7 +459,7 @@ export function DraftHistory() {
     return effectivePicks;
   }, [effectivePicks, ledgerFilter]);
 
-  // Team View grouping: one entry per owner/team, holding their full draft class.
+  // Draft Grades grouping: one card per owner, holding their full draft class.
   // Reuses existing pick data only (no new draft metrics). Label prefers the clean
   // ownerName and falls back to teamName; a key/GUID is never used as a label.
   const teamGroups = useMemo(() => {
@@ -614,10 +614,8 @@ export function DraftHistory() {
     <div data-rfsn-054d className="mx-auto max-w-6xl space-y-6 px-1 pb-12">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isLegacySeason
-            ? `Legacy season (${LEGACY_MIN}–${LEGACY_MAX}): ESPN combined cache first, then legacy draft recap capture.`
-            : "ESPN combined cache → normalized draft picks."}
+        <p className={cn("mt-1", TYPE_READABLE_BODY, "text-ink-secondary")}>
+          Draft Board is the pick ledger. Draft Grades evaluate each owner's draft night and results.
         </p>
       </div>
 
@@ -654,7 +652,7 @@ export function DraftHistory() {
               {(
                 [
                   { id: "board" as const, label: "Draft Board" },
-                  { id: "team" as const, label: "Team View" },
+                  { id: "team" as const, label: "Draft Grades" },
                 ] satisfies { id: "board" | "team"; label: string }[]
               ).map((v) => (
                 <Button
@@ -662,7 +660,7 @@ export function DraftHistory() {
                   type="button"
                   size="sm"
                   variant={viewMode === v.id ? "default" : "outline"}
-                  className="h-8 text-xs"
+                  className={cn("h-8", TYPE_READABLE_LABEL)}
                   onClick={() => setViewMode(v.id)}
                 >
                   {v.label}
@@ -958,7 +956,7 @@ export function DraftHistory() {
         </Card>
       )}
 
-      {/* Team View — one card per owner showing their full draft class */}
+      {/* Draft Grades — one card per owner with Night / Results / Management */}
       {effectivePicks.length > 0 && viewMode === "team" && (
         <div className="space-y-3">
           {teamGroups.map((g) => {

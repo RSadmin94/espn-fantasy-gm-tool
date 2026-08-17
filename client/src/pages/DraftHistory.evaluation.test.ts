@@ -7,7 +7,7 @@ const src = readFileSync(path.join(process.cwd(), "client/src/pages/DraftHistory
 describe("Draft History board view stays a pick ledger (RFSN-055A)", () => {
   it("does not add Draft Night / Draft Results columns to the board table", () => {
     const boardStart = src.indexOf("{/* Picks table */}");
-    const teamStart = src.indexOf("{/* Team View");
+    const teamStart = src.indexOf("{/* Draft Grades");
     expect(boardStart).toBeGreaterThan(-1);
     expect(teamStart).toBeGreaterThan(boardStart);
     const board = src.slice(boardStart, teamStart);
@@ -19,9 +19,11 @@ describe("Draft History board view stays a pick ledger (RFSN-055A)", () => {
     expect(board).not.toContain("Roster Management");
   });
 
-  it("places grades on Team view only", () => {
+  it("places grades on Draft Grades view only", () => {
     expect(src).toContain("historicalDraftEvaluation");
-    const team = src.slice(src.indexOf("{/* Team View"));
+    expect(src).toContain('label: "Draft Grades"');
+    expect(src).not.toContain('label: "Team View"');
+    const team = src.slice(src.indexOf("{/* Draft Grades"));
     expect(team).toContain("Draft Night");
     expect(team).toContain("Draft Results");
     expect(team).toContain("GradeStat");

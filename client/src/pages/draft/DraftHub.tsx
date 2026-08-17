@@ -26,7 +26,7 @@ const DESTINATIONS = [
   { label: "Live Draft", href: "/draft/live", hint: "RFSN draft or connected-league real draft → booth", icon: Radio },
   { label: "Mock Draft", href: "/draft/mock", hint: "External simulated drafts (FantasyPros)", icon: Target },
   { label: "Keeper Center", href: "/draft/keepers", hint: "Forecast & advisor", icon: Crown },
-  { label: "Draft History", href: "/draft/history", hint: "Past boards & picks", icon: ScrollText },
+  { label: "Draft History", href: "/draft/history", hint: "Boards and draft grades", icon: ScrollText },
 ] as const;
 
 export function DraftHub() {
