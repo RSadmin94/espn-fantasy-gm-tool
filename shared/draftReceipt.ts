@@ -116,10 +116,31 @@ function winDiffFact(diff: number): string {
   return "Win difference: 0";
 }
 
+/** Wins-losses or wins-losses-ties. Returns total games, or null if unparseable. */
+export function recordGameCount(record: string): number | null {
+  const t = record.trim();
+  if (!t || t === "—") return null;
+  const parts = t.split("-").map((p) => Number(p));
+  if (parts.length < 2 || parts.length > 3) return null;
+  if (!parts.every((n) => Number.isFinite(n) && n >= 0)) return null;
+  return parts.reduce((sum, n) => sum + n, 0);
+}
+
+export const RECORD_COVERAGE_NOTE =
+  "Different game counts — replay coverage vs completed season.";
+
 function recordFact(reality: DraftReceiptReality): string | null {
   const sim = String(reality.simulatedRecord ?? "").trim();
   const actual = String(reality.actualRecord ?? "").trim();
-  if (sim && actual) return `Untouched draft ${sim} · Actual ${actual}`;
+  if (sim && actual) {
+    const line = `Untouched Draft: ${sim} · Actual Record: ${actual}`;
+    const simGames = recordGameCount(sim);
+    const actualGames = recordGameCount(actual);
+    if (simGames != null && actualGames != null && simGames !== actualGames) {
+      return `${line}\n${RECORD_COVERAGE_NOTE}`;
+    }
+    return line;
+  }
   if (reality.winDifference != null && Number.isFinite(reality.winDifference)) {
     return winDiffFact(reality.winDifference);
   }

@@ -131,7 +131,7 @@ describe("formatDraftReceipt (RFSN-055F)", () => {
     expect(text).not.toContain("Biggest Reach:");
     expect(text).not.toContain("Biggest Steal:");
     expect(text).not.toContain("Win difference:");
-    expect(text).not.toContain("Untouched draft");
+    expect(text).not.toContain("Untouched Draft:");
     expect(text).not.toMatch(/\bF\b.*\bA\b/);
   });
 
@@ -176,7 +176,7 @@ describe("formatDraftReceipt (RFSN-055F)", () => {
       (l) =>
         l.startsWith("Biggest Reach:") ||
         l.startsWith("Biggest Steal:") ||
-        l.startsWith("Untouched draft") ||
+        l.startsWith("Untouched Draft:") ||
         l.startsWith("Win difference:"),
     );
     expect(factLines.length).toBeLessThanOrEqual(MAX_RECEIPT_FACTS);
@@ -207,5 +207,26 @@ describe("formatDraftReceipt (RFSN-055F)", () => {
     const snapshot = JSON.stringify(src);
     formatDraftReceipt(src);
     expect(JSON.stringify(src)).toBe(snapshot);
+  });
+
+  it("labels untouched vs actual records and notes unequal game coverage", () => {
+    const equal = formatDraftReceipt(input());
+    expect(equal).toContain("Untouched Draft: 6-8-0 · Actual Record: 7-7-0");
+    expect(equal).not.toContain("Different game counts");
+
+    const unequal = formatDraftReceipt(
+      input({
+        draftNight: night({ biggestReach: { playerName: "Evan Engram", pick: 58 } }),
+        draftReality: reality({
+          simulatedRecord: "7-9",
+          actualRecord: "5-8",
+          winDifference: 2,
+        }),
+      }),
+    );
+    expect(unequal).toContain("Untouched Draft: 7-9 · Actual Record: 5-8");
+    expect(unequal).toContain("Different game counts — replay coverage vs completed season.");
+    expect(unequal).toContain("Draft Results: 33");
+    expect(unequal).toContain("Roster Management: 33");
   });
 });
