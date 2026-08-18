@@ -49,6 +49,7 @@ export const ALL_SLEEPER_TEST_LEAGUE_IDS = [
   "draft_picks_espn",
   "draft_picks_sleeper",
   "draft_picks_other",
+  "draft_picks_espn_055d2",
   "rivalry_espn_test",
   "rivalry_sleeper_test",
   "rivalry_other_test",
@@ -111,9 +112,9 @@ export const SLEEPER_INTEGRATION_FIXTURES: Record<SleeperIntegrationScope, Sleep
     seasons: [2023, 2024, 2095, 2096],
   },
   draftPicks: {
-    leagueIds: ["draft_picks_espn", "draft_picks_sleeper", "draft_picks_other"],
-    userIds: [99_020, 99_021, 99_022],
-    seasons: [2024, 2096],
+    leagueIds: ["draft_picks_espn", "draft_picks_sleeper", "draft_picks_other", "draft_picks_espn_055d2"],
+    userIds: [99_020, 99_021, 99_022, 99_023],
+    seasons: [2024, 2096, 2097, 2098, 2099],
   },
   rivalry: {
     leagueIds: ["rivalry_espn_test", "rivalry_sleeper_test", "rivalry_other_test"],

@@ -12,6 +12,7 @@
 
 import { classifyEspnDraftSlot } from "./draftTruth/classifySlot";
 import { readKeeperSlotsPerTeamFromPayload, keepersEnabledFromSlots } from "./leagueCapabilities";
+import { espnDefenseIdentity, isEspnDefensePlayerId } from "../shared/espnDefenseIdentity";
 
 const LEAGUE_ID = process.env.ESPN_LEAGUE_ID || "457622";
 const SWID = process.env.ESPN_SWID || "";
@@ -793,7 +794,22 @@ function playerInfoFromDraftPickShape(pick: Record<string, unknown>): {
 } {
   const pool = (pick.playerPoolEntry as Record<string, unknown>) || {};
   const player = (pool.player as Record<string, unknown>) || {};
-  const rawPid = pick.playerId ?? player.id;
+  const rawPid = (pick.playerId ?? player.id) as number | string | null | undefined;
+  const dst = espnDefenseIdentity(rawPid);
+  if (dst) {
+    const name =
+      (player.fullName as string) ||
+      (pick.playerName as string) ||
+      (pick.fullName as string) ||
+      dst.fullName;
+    return {
+      playerId: dst.playerId,
+      name,
+      position: "D/ST",
+      positionId: 16,
+      proTeam: PRO_TEAM_MAP[dst.proTeamId] || "",
+    };
+  }
   const playerId =
     rawPid != null && Number.isFinite(Number(rawPid)) && Number(rawPid) > 0 ? Number(rawPid) : 0;
   const name =
@@ -920,7 +936,8 @@ export function normalizeDraftPicks(data: Record<string, unknown>) {
       overallPickNumber,
       teamId: teamIdNum,
       teamName: teamNameMap[teamIdNum] || `Team ${teamIdNum}`,
-      playerId: resolvedPlayerId > 0 ? resolvedPlayerId : null,
+      playerId:
+        resolvedPlayerId > 0 || isEspnDefensePlayerId(resolvedPlayerId) ? resolvedPlayerId : null,
       playerName: pinfo.name,
       positionId: pinfo.positionId,
       position: pinfo.position,

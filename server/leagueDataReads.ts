@@ -18,6 +18,7 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { fillMissingDraftPickIdentities } from "./draftPickIdentityLookup";
+import { draftPickSourceRank } from "./draftPickSourcePriority";
 import { keepersEnabledFromSlots, readKeeperSlotsPerTeamFromPayload } from "./leagueCapabilities";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -335,7 +336,18 @@ export async function getSeasonDraftPicks(
 
   const byOverall = new Map<number, (typeof rows)[number]>();
   for (const row of rows) {
-    if (!byOverall.has(row.overallPick)) byOverall.set(row.overallPick, row);
+    const existing = byOverall.get(row.overallPick);
+    if (!existing) {
+      byOverall.set(row.overallPick, row);
+      continue;
+    }
+    const nextRank = draftPickSourceRank(yr, row.rawPick);
+    const prevRank = draftPickSourceRank(yr, existing.rawPick);
+    if (nextRank > prevRank) {
+      byOverall.set(row.overallPick, row);
+    } else if (nextRank === prevRank && row.id > existing.id) {
+      byOverall.set(row.overallPick, row);
+    }
   }
   const dedupedRows = [...byOverall.values()].sort((a, b) => a.overallPick - b.overallPick);
 

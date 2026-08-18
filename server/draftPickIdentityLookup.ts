@@ -2,6 +2,7 @@ import { inArray } from "drizzle-orm";
 import { gmPlayerRegistry } from "../drizzle/schema";
 import {
   applyDraftPickIdentityMap,
+  applyEspnDefenseIdentities,
   espnPlayerIdKey,
   pickNeedsIdentity,
   type DraftPickIdentityFields,
@@ -49,10 +50,11 @@ export async function loadEspnPlayerIdentityMap(
 export async function fillMissingDraftPickIdentities<T extends DraftPickIdentityFields>(
   picks: T[],
 ): Promise<T[]> {
-  const ids = picks.filter(pickNeedsIdentity).map((p) => p.playerId);
-  if (ids.length === 0) return picks;
+  let filled = applyEspnDefenseIdentities(picks);
+  const ids = filled.filter(pickNeedsIdentity).map((p) => p.playerId);
+  if (ids.length === 0) return filled;
   const registry = await loadEspnPlayerIdentityMap(ids);
-  let filled = applyDraftPickIdentityMap(picks, registry);
+  filled = applyDraftPickIdentityMap(filled, registry);
   const leftover = filled
     .filter(pickNeedsIdentity)
     .map((p) => Number(espnPlayerIdKey(p.playerId)))

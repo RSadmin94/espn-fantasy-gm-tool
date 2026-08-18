@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyDraftPickIdentityMap,
+  applyEspnDefenseIdentities,
   draftBoardPickDisplayName,
   draftBoardPositionLabel,
   draftPickNameIsBlank,
@@ -67,15 +68,54 @@ describe("draftPickIdentity (RFSN-055B)", () => {
     expect(isUnassignedDraftPick(null)).toBe(true);
     expect(isUnassignedDraftPick(0)).toBe(true);
     expect(isUnassignedDraftPick(3117251)).toBe(false);
+    expect(isUnassignedDraftPick(-16024)).toBe(false);
     expect(
       draftBoardPickDisplayName({ playerId: null, playerName: "", position: "?" }),
     ).toBe("Unassigned pick");
     expect(
       draftBoardPickDisplayName({ playerId: 3117251, playerName: "", position: "?" }),
     ).toBe("Unknown historical player");
+    expect(historicalPickDisplayName("")).toBe("Unknown historical player");
     expect(draftBoardPositionLabel("?", null)).toBe("TBD");
     expect(draftBoardPositionLabel("?", 3117251)).toBe("?");
     expect(draftBoardPositionLabel("RB", null)).toBe("RB");
+  });
+
+  it("labels proven retained slots separately from generic unknown historical (RFSN-055E)", () => {
+    expect(
+      draftBoardPickDisplayName({
+        playerId: null,
+        playerName: "",
+        reservedForKeeper: true,
+        retained: true,
+      }),
+    ).toBe("Retained player unavailable");
+    expect(
+      draftBoardPickDisplayName({
+        playerId: null,
+        playerName: "",
+        isKeeper: true,
+      }),
+    ).toBe("Retained player unavailable");
+  });
+
+  it("recovers ESPN D/ST identity from the negative playerId convention (RFSN-055E)", () => {
+    const [filled] = applyEspnDefenseIdentities([
+      { playerId: -16024, playerName: "", position: "?" },
+    ]);
+    expect(filled).toMatchObject({
+      playerId: -16024,
+      playerName: "Chargers D/ST",
+      position: "D/ST",
+    });
+    expect(
+      draftBoardPickDisplayName({
+        playerId: -16024,
+        playerName: "Chargers D/ST",
+        position: "D/ST",
+      }),
+    ).toBe("Chargers D/ST");
+    expect(draftBoardPositionLabel("?", -16024)).toBe("D/ST");
   });
 
   it("keeps keeper identity when filling from the map", () => {
