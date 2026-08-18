@@ -20,6 +20,8 @@ import {
   draftBoardPickDisplayName,
   draftBoardPositionLabel,
 } from "@shared/draftPickIdentity";
+import { CopyDraftReceiptButton } from "@/components/draft/CopyDraftReceiptButton";
+import type { DraftReceiptInput } from "@shared/draftReceipt";
 
 type HistoricalOwnerEval = {
   ownerKey: string;
@@ -86,6 +88,38 @@ function winDiffLabel(diff: number): string {
   if (diff > 0) return `+${diff} win${diff === 1 ? "" : "s"}`;
   if (diff < 0) return `${diff} win${diff === -1 ? "" : "s"}`;
   return "0 wins";
+}
+
+function receiptInputFromEval(
+  season: number,
+  ownerName: string,
+  ev: HistoricalOwnerEval | undefined,
+): DraftReceiptInput | null {
+  if (!ev) return null;
+  return {
+    season,
+    ownerName: (ownerName || ev.ownerName || "").trim(),
+    draftNight: {
+      available: ev.draftNight.available,
+      reason: ev.draftNight.reason,
+      grade: ev.draftNight.grade,
+      biggestReach: ev.draftNight.biggestReach
+        ? { playerName: ev.draftNight.biggestReach.playerName, pick: ev.draftNight.biggestReach.pick }
+        : null,
+      biggestSteal: ev.draftNight.biggestSteal
+        ? { playerName: ev.draftNight.biggestSteal.playerName, pick: ev.draftNight.biggestSteal.pick }
+        : null,
+    },
+    draftReality: {
+      available: ev.draftReality.available,
+      reason: ev.draftReality.reason,
+      draftGrade: ev.draftReality.draftGrade,
+      rosterMgmtGrade: ev.draftReality.rosterMgmtGrade,
+      simulatedRecord: ev.draftReality.simulatedRecord,
+      actualRecord: ev.draftReality.actualRecord,
+      winDifference: ev.draftReality.winDifference,
+    },
+  };
 }
 
 type DraftPickRow = {
@@ -626,7 +660,7 @@ export function DraftHistory() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
         <p className={cn("mt-1", TYPE_READABLE_BODY, "text-ink-secondary")}>
-          Draft Board is the pick ledger. Draft Grades evaluate each owner's draft night and results.
+          Draft Board is the pick ledger. Draft Receipts package each owner's grades to copy and send.
         </p>
       </div>
 
@@ -663,7 +697,7 @@ export function DraftHistory() {
               {(
                 [
                   { id: "board" as const, label: "Draft Board" },
-                  { id: "team" as const, label: "Draft Grades" },
+                  { id: "team" as const, label: "Draft Receipts" },
                 ] satisfies { id: "board" | "team"; label: string }[]
               ).map((v) => (
                 <Button
@@ -967,32 +1001,44 @@ export function DraftHistory() {
         </Card>
       )}
 
-      {/* Draft Grades — one card per owner with Night / Results / Management */}
+      {/* Draft Receipts — owner cards; Draft Night / Results / Management stay the content */}
       {effectivePicks.length > 0 && viewMode === "team" && (
         <div className="space-y-3">
           {teamGroups.map((g) => {
             const ev = findOwnerEval(evalOwners, g);
+            const receiptOwner = (g.ownerName || g.teamName || ev?.ownerName || "").trim();
             return (
-            <Card key={g.key}>
+            <Card key={g.key} data-draft-receipt={receiptOwner}>
               <CardHeader className="pb-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <CardTitle className="text-base">
-                    {g.ownerName ? (
-                      <>
-                        <span className="text-foreground">{g.ownerName}</span>
-                        <span className="text-muted-foreground"> — {g.teamName}</span>
-                      </>
-                    ) : (
-                      <span className="text-foreground">{g.teamName}</span>
-                    )}
-                  </CardTitle>
-                  <span className="text-xs tabular-nums text-muted-foreground">
-                    {g.draftSlot ? `Slot ${g.draftSlot} · ` : ""}
-                    {g.totalPicks} pick{g.totalPicks === 1 ? "" : "s"}
-                    {g.keeperCount > 0
-                      ? ` · ${g.keeperCount} keeper${g.keeperCount === 1 ? "" : "s"}`
-                      : ""}
-                  </span>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className={cn(TYPE_READABLE_LABEL, "uppercase tracking-wide text-ink-secondary")}>
+                      Draft Receipt
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                      <CardTitle className="text-base">
+                        {g.ownerName ? (
+                          <>
+                            <span className="text-foreground">{g.ownerName}</span>
+                            <span className="text-muted-foreground"> — {g.teamName}</span>
+                          </>
+                        ) : (
+                          <span className="text-foreground">{g.teamName}</span>
+                        )}
+                      </CardTitle>
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {g.draftSlot ? `Slot ${g.draftSlot} · ` : ""}
+                        {g.totalPicks} pick{g.totalPicks === 1 ? "" : "s"}
+                        {g.keeperCount > 0
+                          ? ` · ${g.keeperCount} keeper${g.keeperCount === 1 ? "" : "s"}`
+                          : ""}
+                      </span>
+                    </div>
+                  </div>
+                  <CopyDraftReceiptButton
+                    input={receiptInputFromEval(season, receiptOwner, ev)}
+                    disabled={evalQ.isLoading && !ev}
+                  />
                 </div>
                 <div className="mt-3 flex flex-wrap gap-x-8 gap-y-2">
                   <GradeStat
