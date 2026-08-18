@@ -24,6 +24,8 @@ import {
 import { mapNormalizedLegToPersist } from "./transactionPersist";
 import { matchupIsPlayoffFromEspnTier } from "./matchupPlayoffTier";
 import { TRPCError } from "@trpc/server";
+import { draftPickNameIsBlank } from "../shared/draftPickIdentity";
+import { isEspnDefensePlayerId } from "../shared/espnDefenseIdentity";
 
 export type AppDb = MySql2Database<typeof schema>;
 
@@ -403,6 +405,18 @@ export async function upsertDraftPicks(
     picks = [];
   }
   const now = new Date();
+  const existingRows = await db
+    .select({
+      overallPick: schema.gmDraftPicks.overallPick,
+      playerId: schema.gmDraftPicks.playerId,
+      playerName: schema.gmDraftPicks.playerName,
+      position: schema.gmDraftPicks.position,
+      rawPick: schema.gmDraftPicks.rawPick,
+    })
+    .from(schema.gmDraftPicks)
+    .where(and(eq(schema.gmDraftPicks.leagueId, lid), eq(schema.gmDraftPicks.season, yr)));
+  const existingByOverall = new Map(existingRows.map((row) => [row.overallPick, row]));
+
   let n = 0;
   for (const p of picks) {
     const overall = Number(p.overallPickNumber ?? 0);
@@ -411,9 +425,32 @@ export async function upsertDraftPicks(
     const bidAmount =
       bidRaw != null && Number.isFinite(Number(bidRaw)) ? Number(bidRaw) : 0;
     const playerIdVal =
-      p.playerId != null && Number.isFinite(Number(p.playerId)) && Number(p.playerId) > 0
+      p.playerId != null &&
+      Number.isFinite(Number(p.playerId)) &&
+      (Number(p.playerId) > 0 || isEspnDefensePlayerId(p.playerId))
         ? Number(p.playerId)
         : null;
+    const incomingName = p.playerName != null ? String(p.playerName) : null;
+    const incomingHasIdentity =
+      playerIdVal != null || !draftPickNameIsBlank(incomingName);
+    const existing = existingByOverall.get(overall);
+    const existingHasIdentity =
+      existing != null &&
+      ((existing.playerId != null &&
+        (Number(existing.playerId) > 0 || isEspnDefensePlayerId(existing.playerId))) ||
+        !draftPickNameIsBlank(existing.playerName));
+
+    let finalPlayerId = playerIdVal;
+    let finalPlayerName = incomingName;
+    let finalPosition = p.position != null ? String(p.position) : null;
+    let finalRawPick = safeStringify(p);
+    if (existingHasIdentity && !incomingHasIdentity) {
+      finalPlayerId = existing!.playerId;
+      finalPlayerName = existing!.playerName;
+      finalPosition = existing!.position;
+      finalRawPick = existing!.rawPick ?? finalRawPick;
+    }
+
     await db
       .insert(schema.gmDraftPicks)
       .values({
@@ -424,12 +461,12 @@ export async function upsertDraftPicks(
         roundPick: Number(p.roundPickNumber ?? 0) || 0,
         teamId: Number(p.teamId ?? 0) || 0,
         owningTeamId: null,
-        playerId: playerIdVal,
-        playerName: p.playerName != null ? String(p.playerName) : null,
-        position: p.position != null ? String(p.position) : null,
+        playerId: finalPlayerId,
+        playerName: finalPlayerName,
+        position: finalPosition,
         isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
         bidAmount,
-        rawPick: safeStringify(p),
+        rawPick: finalRawPick,
         updatedAt: now,
       })
       .onDuplicateKeyUpdate({
@@ -437,12 +474,12 @@ export async function upsertDraftPicks(
           roundId: Number(p.roundId ?? 0) || 0,
           roundPick: Number(p.roundPickNumber ?? 0) || 0,
           teamId: Number(p.teamId ?? 0) || 0,
-          playerId: playerIdVal,
-          playerName: p.playerName != null ? String(p.playerName) : null,
-          position: p.position != null ? String(p.position) : null,
+          playerId: finalPlayerId,
+          playerName: finalPlayerName,
+          position: finalPosition,
           isKeeper: (p.keeper || p.reservedForKeeper) ? 1 : 0,
           bidAmount,
-          rawPick: safeStringify(p),
+          rawPick: finalRawPick,
           updatedAt: now,
         },
       });

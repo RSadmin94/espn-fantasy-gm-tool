@@ -97,6 +97,8 @@ import {
   getSeasonTeams,
 } from "./historicalDataService";
 import { getSeasonDraftPicks as getNormalizedSeasonDraftPicks, getSeasonMatchups as getNormalizedSeasonMatchups, getSeasonTeams as getNormalizedSeasonTeams } from "./leagueDataReads";
+import { resolveDraftBoardPicks } from "./draftBoardReadPath";
+import { isEspnDefensePlayerId } from "../shared/espnDefenseIdentity";
 import { upsertMatchups } from "./espnPersistence";
 import { leagueConnections as lcTable, gmDraftPicks, gmTeams, gmSeasonRosters, gmLeagueSettings, gmMatchups, syncRuns, leagueMedals, ownerAliases, gmTransactions, gmRosterEntries, gmPlayers } from "../drizzle/schema";
 import { resolveShareMeta } from "./receiptShare";
@@ -2713,6 +2715,7 @@ export const appRouter = router({
           overallPickNumber?: number | null;
           roundId?: number | null;
           roundPickNumber?: number | null;
+          playerId?: number | null;
           playerName?: string | null;
           position?: string | null;
           proTeam?: string | null;
@@ -2720,30 +2723,39 @@ export const appRouter = router({
           teamId?: number | null;
           keeper?: boolean;
           reservedForKeeper?: boolean;
-        }) => ({
-          overallPick: p.overallPickNumber,
-          roundId: p.roundId,
-          roundPick: p.roundPickNumber,
-          playerName: p.playerName,
-          position: p.position,
-          nflTeam: p.proTeam ?? "",
-          teamName: p.teamName,
-          ownerName: ownerByTeamId.get(Number(p.teamId)) ?? null,
-          teamId: p.teamId,
-          isKeeper: Boolean(p.keeper || p.reservedForKeeper),
-        });
+        }) => {
+          const pid =
+            p.playerId != null && Number.isFinite(Number(p.playerId)) ? Number(p.playerId) : null;
+          const playerId =
+            pid != null && (pid > 0 || isEspnDefensePlayerId(pid)) ? pid : null;
+          return {
+            overallPick: p.overallPickNumber,
+            roundId: p.roundId,
+            roundPick: p.roundPickNumber,
+            playerId,
+            playerName: p.playerName,
+            position: p.position,
+            nflTeam: p.proTeam ?? "",
+            teamName: p.teamName,
+            ownerName: ownerByTeamId.get(Number(p.teamId)) ?? null,
+            teamId: p.teamId,
+            isKeeper: Boolean(p.keeper || p.reservedForKeeper),
+          };
+        };
 
         if (resolvedLeagueId) {
-          const normalized = await getNormalizedSeasonDraftPicks({
+          const board = await resolveDraftBoardPicks({
             leagueId: resolvedLeagueId,
             season: input.season,
+            userId: ctx.user?.id,
           });
-          if (normalized.count > 0) {
-            const picks = normalized.rows.map((row) =>
+          if (board.count > 0) {
+            const picks = board.rows.map((row) =>
               mapPickToResponse({
                 overallPickNumber: Number(row.overallPickNumber),
                 roundId: Number(row.roundId),
                 roundPickNumber: Number(row.roundPickNumber),
+                playerId: row.playerId != null ? Number(row.playerId) : null,
                 playerName: row.playerName != null ? String(row.playerName) : null,
                 position: row.position != null ? String(row.position) : null,
                 proTeam: row.proTeam != null ? String(row.proTeam) : "",

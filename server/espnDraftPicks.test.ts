@@ -4,6 +4,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { appRouter } from "./routers";
 import { getDb, setActiveLeagueForUser } from "./db";
 import { espnSeasonCache, gmDraftPicks, gmTeams, leagueConnections } from "../drizzle/schema";
+import { upsertDraftPicks } from "./espnPersistence";
 import {
   prepareSleeperIntegrationTest,
   registerSleeperIntegrationTeardown,
@@ -339,5 +340,195 @@ describe("espn.draftPicks", () => {
     } finally {
       await db.execute(sql`DELETE FROM gm_player_registry WHERE espnPlayerId = ${espnPlayerId}`);
     }
+  });
+
+  it("returns null playerId for unassigned draft slots without inventing a name", async () => {
+    if (!dbAvailable) return;
+    await seedTeam(SLEEPER_LEAGUE_ID, SLEEPER_SEASON, 1, "Team Alpha", "Alpha Owner");
+    const db = await getDb();
+    if (!db) return;
+    await db.insert(gmDraftPicks).values({
+      leagueId: SLEEPER_LEAGUE_ID,
+      season: SLEEPER_SEASON,
+      overallPick: 1,
+      roundId: 1,
+      roundPick: 1,
+      teamId: 1,
+      playerId: null,
+      playerName: "",
+      position: "?",
+      isKeeper: 0,
+      rawPick: JSON.stringify({ teamName: "Team Alpha", draftedForAnalytics: true }),
+    });
+    await seedConnection(SLEEPER_USER_ID, SLEEPER_LEAGUE_ID, "sleeper");
+
+    const [pick] = await caller(SLEEPER_USER_ID).espn.draftPicks({ season: SLEEPER_SEASON });
+    expect(pick).toMatchObject({
+      overallPick: 1,
+      playerId: null,
+      playerName: "",
+      position: "?",
+    });
+  });
+
+  it("prefers a finished-draft cache source over placeholder normalized rows (RFSN-055D2)", async () => {
+    if (!dbAvailable) return;
+    const leagueId = "draft_picks_espn_055d2";
+    const season = 2097;
+    const userId = 99_023;
+    const db = await getDb();
+    if (!db) return;
+
+    await seedTeam(leagueId, season, 1, "Team Alpha", "Alpha Owner");
+    await db.insert(gmDraftPicks).values({
+      leagueId,
+      season,
+      overallPick: 1,
+      roundId: 1,
+      roundPick: 1,
+      teamId: 1,
+      playerId: null,
+      playerName: "",
+      position: "?",
+      isKeeper: 0,
+      rawPick: JSON.stringify({ source: "combined", teamName: "Team Alpha" }),
+    });
+    await db.insert(espnSeasonCache).values({
+      leagueId,
+      season,
+      viewName: "combined",
+      payload: JSON.stringify({
+        id: leagueId,
+        seasonId: season,
+        teams: { "1": { id: 1, location: "Test", nickname: "Alpha", abbrev: "ALP" } },
+        settings: { size: 1 },
+        draftDetail: {
+          picks: [
+            {
+              roundId: 1,
+              roundPickNumber: 1,
+              overallPickNumber: 1,
+              teamId: 1,
+              playerId: 3117251,
+              playerPoolEntry: {
+                player: { fullName: "Christian McCaffrey", defaultPositionId: 2, proTeam: "SF" },
+              },
+            },
+          ],
+        },
+      }),
+    });
+    await seedConnection(userId, leagueId, "espn");
+
+    const [pick] = await caller(userId).espn.draftPicks({ season });
+    expect(pick?.playerName).toBe("Christian McCaffrey");
+    expect(pick?.playerId).toBe(3117251);
+    expect(pick?.position).toBe("RB");
+  });
+
+  it("recovers ESPN D/ST identity onto a blank ledger row without changing keeper flags (RFSN-055E)", async () => {
+    if (!dbAvailable) return;
+    const leagueId = "draft_picks_espn";
+    const season = 2098;
+    const db = await getDb();
+    if (!db) return;
+
+    await seedTeam(leagueId, season, 7, "LA Street Runners", "Christian Graham");
+    await db.insert(gmDraftPicks).values({
+      leagueId,
+      season,
+      overallPick: 183,
+      roundId: 13,
+      roundPick: 3,
+      teamId: 7,
+      playerId: null,
+      playerName: "",
+      position: "?",
+      isKeeper: 0,
+      rawPick: JSON.stringify({
+        teamName: "LA Street Runners",
+        draftedForAnalytics: true,
+        keeper: false,
+        reservedForKeeper: false,
+      }),
+    });
+    await db.insert(espnSeasonCache).values({
+      leagueId,
+      season,
+      viewName: "combined",
+      payload: JSON.stringify({
+        id: leagueId,
+        seasonId: season,
+        teams: { "7": { id: 7, location: "LA", nickname: "Street Runners" } },
+        settings: { size: 16 },
+        draftDetail: {
+          drafted: true,
+          picks: [
+            {
+              overallPickNumber: 183,
+              roundId: 13,
+              roundPickNumber: 3,
+              teamId: 7,
+              playerId: -16024,
+              keeper: false,
+              reservedForKeeper: false,
+            },
+          ],
+        },
+      }),
+    });
+    await seedConnection(ESPN_USER_ID, leagueId, "espn");
+
+    const [pick] = await caller(ESPN_USER_ID).espn.draftPicks({ season });
+    expect(pick?.playerName).toBe("Chargers D/ST");
+    expect(pick?.playerId).toBe(-16024);
+    expect(pick?.position).toBe("D/ST");
+    expect(pick?.isKeeper).toBe(false);
+  });
+
+  it("does not clobber existing player identity when syncing placeholder rows (RFSN-055D2)", async () => {
+    if (!dbAvailable) return;
+    const db = await getDb();
+    if (!db) return;
+    const leagueId = "draft_picks_espn";
+    const season = 2099;
+
+    await db.insert(gmDraftPicks).values({
+      leagueId,
+      season,
+      overallPick: 1,
+      roundId: 1,
+      roundPick: 1,
+      teamId: 1,
+      playerId: 3117251,
+      playerName: "Christian McCaffrey",
+      position: "RB",
+      isKeeper: 0,
+      rawPick: JSON.stringify({ source: "draft_recap_html", teamName: "Team Alpha" }),
+    });
+
+    await upsertDraftPicks(db, leagueId, season, {
+      draftDetail: {
+        picks: [
+          {
+            roundId: 1,
+            roundPickNumber: 1,
+            overallPickNumber: 1,
+            teamId: 1,
+            playerId: -1,
+          },
+        ],
+      },
+    });
+
+    const [row] = await db
+      .select()
+      .from(gmDraftPicks)
+      .where(and(eq(gmDraftPicks.leagueId, leagueId), eq(gmDraftPicks.season, season)))
+      .limit(1);
+
+    expect(row?.playerId).toBe(3117251);
+    expect(row?.playerName).toBe("Christian McCaffrey");
+    expect(row?.position).toBe("RB");
   });
 });
