@@ -8,7 +8,10 @@ import { publicProcedure, protectedProcedure, subscribedProcedure, router, resol
 import { gateRivalryScores, gateH2H, gateRivalryDossier, gateHallOfFame, gateOwnerProfile, gateOwnerList, gateTradeAnalyzeResult, gateOwnerAllTimeRecords } from "./leagueIntelGating";
 import { assertUserLeagueAccess } from "./leagueAccess";
 import { computeBiggestThreat } from "./biggestThreatService";
+import { usageCostRouter } from "./usageCostRouter";
+import { adminConsoleRouter } from "./adminConsole/router";
 import { invokeLLM, type Message } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
 import { injuryRouter } from "./injuryRouter";
 import { buildAdvisorInjuryContext } from "./injuryAnalytics";
@@ -752,6 +755,8 @@ export const appRouter = router({
   system: systemRouter,
   billing: billingRouter,
   funnel: funnelRouter,
+  usageCost: usageCostRouter,
+  adminConsole: adminConsoleRouter,
   me: meRouter,
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,
@@ -1462,6 +1467,7 @@ export const appRouter = router({
             { role: "user", content: prompt },
           ],
           callType: "draft_helper",
+          usageContext: aiUsage("DRAFT_ANALYSIS", { userId: ctx.user?.id, leagueId: lpc.leagueId }),
         });
 
         const rawContent = response?.choices?.[0]?.message?.content ?? "";
@@ -8092,6 +8098,7 @@ Generate a JSON prediction report with these exact fields:
           { role: 'system', content: 'You are a fantasy football analytics expert. Always respond with valid JSON only, no markdown fences.' },
           { role: 'user', content: prompt },
         ],
+        usageContext: aiUsage("OWNER_COMPARISON", { userId: ctx.user?.id, leagueId: promptCtx.leagueId }),
         response_format: {
           type: 'json_schema',
           json_schema: {
@@ -8197,6 +8204,7 @@ Respond with JSON in this exact format:
         { role: 'system', content: 'You are a fantasy football analytics expert. Always respond with valid JSON only, no markdown fences.' },
         { role: 'user', content: prompt },
       ],
+      usageContext: aiUsage("TEAM_IMPROVEMENT", { userId: ctx.user?.id, leagueId: promptCtx.leagueId }),
       response_format: {
         type: 'json_schema',
         json_schema: {
@@ -8934,6 +8942,7 @@ Be specific, honest, and tactical. This is a competitive scouting report, not a 
           { role: "system", content: "You are an expert fantasy football analyst providing competitive scouting reports. Be direct, specific, and tactical." },
           { role: "user", content: prompt },
         ],
+        usageContext: aiUsage("OWNER_COMPARISON", { userId: ctx.user?.id, leagueId: promptCtx.leagueId }),
       });
 
       const report = response.choices?.[0]?.message?.content ?? "Scouting report unavailable.";
@@ -9868,6 +9877,7 @@ Generate a trade strategy and recommended approach. ${dnaPromptBlock ? "IMPORTAN
       try {
         const llmResponse = await invokeLLM({
           messages: llmMessages,
+          usageContext: aiUsage("TRADE_ANALYSIS", { userId: ctx.user?.id }),
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -10465,6 +10475,7 @@ Provide:
           { role: "system", content: "You are a fantasy football trade analyst. The math is already done. Explain and recommend based on the provided numbers. Be concise and decisive." },
           { role: "user", content: prompt },
         ],
+        usageContext: aiUsage("TRADE_ANALYSIS", { userId: ctx.user?.id }),
       });
       const aiVerdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
 
@@ -10573,7 +10584,16 @@ Provide:
         );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         // Rate limit check
-        const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
+        const { evaluateAiPolicy } = await import("./adminConsole/accountControls");
+        const policy = await evaluateAiPolicy(userId);
+        if (!policy.allowed) throw new TRPCError({ code: "FORBIDDEN", message: policy.reason ?? "AI access disabled" });
+        const rl = checkRateLimit({
+          userId,
+          callType: "advisor",
+          isAdmin: ctx.user.role === "admin" || ctx.user.role === "owner",
+          tokenBudgetMultiplier: policy.tokenBudgetMultiplier,
+          dailyTokenLimit: policy.dailyTokenLimit,
+        });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
         await addChatMessage(userId, "user", input.message, season, chatLeagueId);
 
@@ -10641,6 +10661,7 @@ Provide:
           messages,
           callType: "advisor",
           persistUsage: (u) => persistLlmUsage({ userId, ...u }),
+          usageContext: aiUsage("ADVISOR", { userId, leagueId: chatLeagueId }),
         });
         const rawContent = response.choices?.[0]?.message?.content;
         const assistantMessage = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "I couldn't generate a response. Please try again.");

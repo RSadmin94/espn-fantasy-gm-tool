@@ -4,6 +4,8 @@
 // All callers use the same invokeLLM / invokeLLMStream interface — no changes needed upstream.
 
 import { ENV } from "./env";
+import { randomUUID } from "node:crypto";
+import type { AiUsageContext } from "../aiCost/aiFeatures";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -115,6 +117,8 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  /** Feature / user / intent attribution — captured at the provider boundary. */
+  usageContext?: AiUsageContext;
 };
 
 export type ToolCall = {
@@ -140,6 +144,7 @@ export type InvokeResult = {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    cached_tokens?: number;
   };
 };
 
@@ -231,6 +236,9 @@ async function trackUsageAfterCall(
     totalTokens: number;
     durationMs: number;
     streaming: boolean;
+    cachedInputTokens?: number;
+    status?: "SUCCESS" | "ERROR";
+    errorCode?: string | null;
   }
 ) {
   logUsage({
@@ -243,7 +251,7 @@ async function trackUsageAfterCall(
     durationMs: usageData.durationMs,
   });
 
-  if (params.persistUsage) {
+  if (params.persistUsage && usageData.status !== "ERROR") {
     try {
       params.persistUsage(usageData);
     } catch {
@@ -253,8 +261,10 @@ async function trackUsageAfterCall(
 
   try {
     const { trackLLMEvent } = await import("../usageTracker");
+    const ctx = params.usageContext;
+    const status = usageData.status ?? "SUCCESS";
     trackLLMEvent({
-      featureName: params.callType ?? "llm.unspecified",
+      featureName: ctx?.feature ?? params.callType ?? "llm.unspecified",
       callType: params.callType ?? "unspecified",
       model: usageData.model,
       promptTokens: usageData.promptTokens,
@@ -262,10 +272,51 @@ async function trackUsageAfterCall(
       totalTokens: usageData.totalTokens,
       durationMs: usageData.durationMs,
       streaming: usageData.streaming,
+      userId: ctx?.userId,
+      provider: ENV.llmProvider,
+      featureId: ctx?.feature,
+      intent: ctx?.intent,
+      leagueId: ctx?.leagueId,
+      requestId: ctx?.requestId,
+      parentRequestId: ctx?.parentRequestId,
+      retryCount: ctx?.retryCount,
+      cachedInputTokens: usageData.cachedInputTokens ?? 0,
+      status,
+      errorCode: usageData.errorCode,
+      generated: ctx?.generated ?? status === "SUCCESS",
+      delivered: ctx?.delivered ?? status === "SUCCESS",
+      displayed: ctx?.displayed,
+      discarded: ctx?.discarded,
     });
   } catch {
     /* never block */
   }
+}
+
+function errorCodeFromUnknown(err: unknown): string {
+  if (err instanceof Error) {
+    const msg = err.message;
+    const http = msg.match(/\b(4\d\d|5\d\d)\b/);
+    if (http) return `HTTP_${http[1]}`;
+    if (/not configured/i.test(msg)) return "NOT_CONFIGURED";
+    if (/timeout/i.test(msg)) return "TIMEOUT";
+    return err.name || "ERROR";
+  }
+  return "ERROR";
+}
+
+async function trackFailedCall(params: InvokeParams, err: unknown, durationMs: number, model?: string) {
+  await trackUsageAfterCall(params, {
+    callType: params.callType ?? "unspecified",
+    model: model ?? params.model ?? ENV.llmProvider,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    durationMs,
+    streaming: false,
+    status: "ERROR",
+    errorCode: errorCodeFromUnknown(err),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +349,12 @@ type AnthropicResponse = {
     | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   >;
   stop_reason: string | null;
-  usage?: { input_tokens: number; output_tokens: number };
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number;
+    cache_read_input_tokens?: number;
+  };
 };
 
 function contentToAnthropicBlocks(
@@ -482,6 +538,7 @@ function buildInvokeResult(anthropic: AnthropicResponse): InvokeResult {
           prompt_tokens: anthropic.usage.input_tokens,
           completion_tokens: anthropic.usage.output_tokens,
           total_tokens: anthropic.usage.input_tokens + anthropic.usage.output_tokens,
+          cached_tokens: anthropic.usage.cache_read_input_tokens ?? 0,
         }
       : undefined,
   };
@@ -520,6 +577,7 @@ async function invokeAnthropic(params: InvokeParams): Promise<InvokeResult> {
     totalTokens: result.usage?.total_tokens ?? 0,
     durationMs,
     streaming: false,
+    cachedInputTokens: result.usage?.cached_tokens ?? 0,
   });
 
   return result;
@@ -552,6 +610,8 @@ async function* invokeAnthropicStream(params: InvokeParams): AsyncGenerator<stri
   let buffer = "";
   let promptTokens: number | undefined;
   let completionTokens: number | undefined;
+  let cachedInputTokens = 0;
+  let streamError: unknown = null;
 
   try {
     while (true) {
@@ -568,17 +628,29 @@ async function* invokeAnthropicStream(params: InvokeParams): AsyncGenerator<stri
         try {
           const event = JSON.parse(data) as {
             type?: string;
-            message?: { usage?: { input_tokens?: number; output_tokens?: number } };
-            usage?: { input_tokens?: number; output_tokens?: number };
+            message?: {
+              usage?: {
+                input_tokens?: number;
+                output_tokens?: number;
+                cache_read_input_tokens?: number;
+              };
+            };
+            usage?: {
+              input_tokens?: number;
+              output_tokens?: number;
+              cache_read_input_tokens?: number;
+            };
             delta?: { type?: string; text?: string };
           };
           if (event.type === "message_start" && event.message?.usage) {
             promptTokens = event.message.usage.input_tokens;
             if (event.message.usage.output_tokens != null) completionTokens = event.message.usage.output_tokens;
+            cachedInputTokens = event.message.usage.cache_read_input_tokens ?? cachedInputTokens;
           }
           if (event.type === "message_delta" && event.usage) {
             if (event.usage.input_tokens != null) promptTokens = event.usage.input_tokens;
             if (event.usage.output_tokens != null) completionTokens = event.usage.output_tokens;
+            if (event.usage.cache_read_input_tokens != null) cachedInputTokens = event.usage.cache_read_input_tokens;
           }
           if (event.type === "content_block_delta" && event.delta?.type === "text_delta" && event.delta.text) {
             yield event.delta.text;
@@ -586,6 +658,9 @@ async function* invokeAnthropicStream(params: InvokeParams): AsyncGenerator<stri
         } catch { /* skip malformed chunk */ }
       }
     }
+  } catch (err) {
+    streamError = err;
+    throw err;
   } finally {
     reader.releaseLock();
     const finalDurationMs = Date.now() - startMs;
@@ -597,6 +672,9 @@ async function* invokeAnthropicStream(params: InvokeParams): AsyncGenerator<stri
       totalTokens: (promptTokens ?? 0) + (completionTokens ?? 0),
       durationMs: finalDurationMs,
       streaming: true,
+      cachedInputTokens,
+      status: streamError ? "ERROR" : "SUCCESS",
+      errorCode: streamError ? errorCodeFromUnknown(streamError) : null,
     });
   }
 }
@@ -659,10 +737,16 @@ async function invokeOpenAI(params: InvokeParams): Promise<InvokeResult> {
       message: { role: string; content: string | null; tool_calls?: ToolCall[] };
       finish_reason: string | null;
     }>;
-    usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+    usage?: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      prompt_tokens_details?: { cached_tokens?: number };
+    };
   };
 
   const durationMs = Date.now() - startMs;
+  const cachedInputTokens = json.usage?.prompt_tokens_details?.cached_tokens ?? 0;
   const result: InvokeResult = {
     id: json.id,
     created: Math.floor(Date.now() / 1000),
@@ -676,7 +760,14 @@ async function invokeOpenAI(params: InvokeParams): Promise<InvokeResult> {
       },
       finish_reason: c.finish_reason,
     })),
-    usage: json.usage,
+    usage: json.usage
+      ? {
+          prompt_tokens: json.usage.prompt_tokens,
+          completion_tokens: json.usage.completion_tokens,
+          total_tokens: json.usage.total_tokens,
+          cached_tokens: cachedInputTokens,
+        }
+      : undefined,
   };
 
   await trackUsageAfterCall(params, {
@@ -687,6 +778,7 @@ async function invokeOpenAI(params: InvokeParams): Promise<InvokeResult> {
     totalTokens: result.usage?.total_tokens ?? 0,
     durationMs,
     streaming: false,
+    cachedInputTokens,
   });
 
   return result;
@@ -724,6 +816,8 @@ async function* invokeOpenAIStream(params: InvokeParams): AsyncGenerator<string,
   let buffer = "";
   let promptTokens = 0;
   let completionTokens = 0;
+  let cachedInputTokens = 0;
+  let streamError: unknown = null;
 
   try {
     while (true) {
@@ -740,17 +834,25 @@ async function* invokeOpenAIStream(params: InvokeParams): AsyncGenerator<string,
         try {
           const event = JSON.parse(data) as {
             choices?: Array<{ delta?: { content?: string } }>;
-            usage?: { prompt_tokens?: number; completion_tokens?: number };
+            usage?: {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+              prompt_tokens_details?: { cached_tokens?: number };
+            };
           };
           if (event.usage) {
             promptTokens = event.usage.prompt_tokens ?? promptTokens;
             completionTokens = event.usage.completion_tokens ?? completionTokens;
+            cachedInputTokens = event.usage.prompt_tokens_details?.cached_tokens ?? cachedInputTokens;
           }
           const delta = event.choices?.[0]?.delta?.content;
           if (delta) yield delta;
         } catch { /* skip */ }
       }
     }
+  } catch (err) {
+    streamError = err;
+    throw err;
   } finally {
     reader.releaseLock();
     await trackUsageAfterCall(params, {
@@ -761,6 +863,9 @@ async function* invokeOpenAIStream(params: InvokeParams): AsyncGenerator<string,
       totalTokens: promptTokens + completionTokens,
       durationMs: Date.now() - startMs,
       streaming: true,
+      cachedInputTokens,
+      status: streamError ? "ERROR" : "SUCCESS",
+      errorCode: streamError ? errorCodeFromUnknown(streamError) : null,
     });
   }
 }
@@ -825,12 +930,18 @@ async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
       content?: { parts?: Array<{ text?: string }> };
       finishReason?: string;
     }>;
-    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+      cachedContentTokenCount?: number;
+    };
   };
 
   const durationMs = Date.now() - startMs;
   const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   const usage = json.usageMetadata;
+  const cachedInputTokens = usage?.cachedContentTokenCount ?? 0;
 
   const result: InvokeResult = {
     id: `gemini-${Date.now()}`,
@@ -848,6 +959,7 @@ async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
           prompt_tokens: usage.promptTokenCount ?? 0,
           completion_tokens: usage.candidatesTokenCount ?? 0,
           total_tokens: usage.totalTokenCount ?? 0,
+          cached_tokens: cachedInputTokens,
         }
       : undefined,
   };
@@ -860,6 +972,7 @@ async function invokeGemini(params: InvokeParams): Promise<InvokeResult> {
     totalTokens: result.usage?.total_tokens ?? 0,
     durationMs,
     streaming: false,
+    cachedInputTokens,
   });
 
   return result;
@@ -901,6 +1014,8 @@ async function* invokeGeminiStream(params: InvokeParams): AsyncGenerator<string,
   let buffer = "";
   let promptTokens = 0;
   let completionTokens = 0;
+  let cachedInputTokens = 0;
+  let streamError: unknown = null;
 
   try {
     while (true) {
@@ -917,17 +1032,26 @@ async function* invokeGeminiStream(params: InvokeParams): AsyncGenerator<string,
         try {
           const event = JSON.parse(data) as {
             candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-            usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+            usageMetadata?: {
+              promptTokenCount?: number;
+              candidatesTokenCount?: number;
+              totalTokenCount?: number;
+              cachedContentTokenCount?: number;
+            };
           };
           if (event.usageMetadata) {
             promptTokens = event.usageMetadata.promptTokenCount ?? promptTokens;
             completionTokens = event.usageMetadata.candidatesTokenCount ?? completionTokens;
+            cachedInputTokens = event.usageMetadata.cachedContentTokenCount ?? cachedInputTokens;
           }
           const text = event.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
           if (text) yield text;
         } catch { /* skip */ }
       }
     }
+  } catch (err) {
+    streamError = err;
+    throw err;
   } finally {
     reader.releaseLock();
     await trackUsageAfterCall(params, {
@@ -938,6 +1062,9 @@ async function* invokeGeminiStream(params: InvokeParams): AsyncGenerator<string,
       totalTokens: promptTokens + completionTokens,
       durationMs: Date.now() - startMs,
       streaming: true,
+      cachedInputTokens,
+      status: streamError ? "ERROR" : "SUCCESS",
+      errorCode: streamError ? errorCodeFromUnknown(streamError) : null,
     });
   }
 }
@@ -946,16 +1073,70 @@ async function* invokeGeminiStream(params: InvokeParams): AsyncGenerator<string,
 // Public API — provider-agnostic
 // ---------------------------------------------------------------------------
 
+function withUsageRequestId(params: InvokeParams): InvokeParams {
+  if (params.usageContext?.requestId) return params;
+  return {
+    ...params,
+    usageContext: {
+      ...params.usageContext,
+      requestId: randomUUID(),
+    },
+  };
+}
+
+async function enforceUsageGuards(params: InvokeParams): Promise<void> {
+  const uidRaw = params.usageContext?.userId;
+  const uid = uidRaw != null && String(uidRaw) !== "" ? Number(uidRaw) : NaN;
+  if (!Number.isInteger(uid) || uid <= 0) return;
+
+  const { evaluateLlmAccess } = await import("../adminConsole/aiAccessPolicy");
+  const decision = await evaluateLlmAccess({
+    userId: uid,
+    featureKey: params.usageContext?.feature ?? null,
+    callType: params.callType,
+  });
+  if (!decision.allowed) {
+    try {
+      const { trackLLMEvent } = await import("../usageTracker");
+      trackLLMEvent({
+        featureName: params.usageContext?.feature ?? params.callType ?? "llm.denied",
+        callType: params.callType ?? "unspecified",
+        model: params.model ?? "unknown",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: 0,
+        streaming: false,
+        userId: uid,
+        status: "ERROR",
+        errorCode: decision.code,
+      });
+    } catch {
+      /* telemetry must not block the deny */
+    }
+    throw new Error(decision.reason ?? "AI access is disabled for this account.");
+  }
+}
+
 /**
  * Standard (non-streaming) LLM invocation.
  * Provider selected by LLM_PROVIDER env var: "anthropic" | "openai" | "gemini"
  * Defaults to "anthropic".
  */
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  const provider = ENV.llmProvider;
-  if (provider === "openai") return invokeOpenAI(params);
-  if (provider === "gemini") return invokeGemini(params);
-  return invokeAnthropic(params);
+  const next = withUsageRequestId(params);
+  await enforceUsageGuards(next);
+  const started = Date.now();
+  const resolvedModel = next.model;
+  try {
+    const provider = ENV.llmProvider;
+    if (provider === "openai") return await invokeOpenAI(next);
+    if (provider === "gemini") return await invokeGemini(next);
+    return await invokeAnthropic(next);
+  } catch (err) {
+    await trackFailedCall(next, err, Date.now() - started, resolvedModel);
+    throw err;
+  }
 }
 
 /**
@@ -971,8 +1152,22 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 export async function* invokeLLMStream(
   params: InvokeParams
 ): AsyncGenerator<string, void, unknown> {
-  const provider = ENV.llmProvider;
-  if (provider === "openai") yield* invokeOpenAIStream(params);
-  else if (provider === "gemini") yield* invokeGeminiStream(params);
-  else yield* invokeAnthropicStream(params);
+  const next = withUsageRequestId(params);
+  await enforceUsageGuards(next);
+  const started = Date.now();
+  try {
+    const provider = ENV.llmProvider;
+    if (provider === "openai") yield* invokeOpenAIStream(next);
+    else if (provider === "gemini") yield* invokeGeminiStream(next);
+    else yield* invokeAnthropicStream(next);
+  } catch (err) {
+    // Fetch/setup failures happen before the inner generator's finally.
+    // Inner stream errors are already recorded in that finally block.
+    const msg = err instanceof Error ? err.message : "";
+    const setupFailed = /failed:|not configured|response body is null/i.test(msg);
+    if (setupFailed) {
+      await trackFailedCall(next, err, Date.now() - started, next.model);
+    }
+    throw err;
+  }
 }

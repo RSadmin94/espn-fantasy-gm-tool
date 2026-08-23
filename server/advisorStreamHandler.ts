@@ -20,6 +20,7 @@ import { invokeLLMStream } from "./_core/llm";
 import { buildAdvisorMessages } from "./advisorContextBuilder";
 import { addChatMessage, getUserMemory, persistLlmUsage, resolveActiveLeagueId, sanitizeAdvisorChatLeagueId } from "./db";
 import { checkRateLimit, recordUsage } from "./rateLimiter";
+import { aiUsage } from "./aiCost/aiFeatures";
 
 const bodySchema = z.object({
   message: z.string().min(1).max(2000),
@@ -50,7 +51,19 @@ export function registerAdvisorStreamRoute(app: Express) {
     }
 
     // --- Rate limit ---
-    const rl = checkRateLimit({ userId: user.id, callType: "advisor", isAdmin: user.role === "admin" });
+    const { evaluateAiPolicy } = await import("./adminConsole/accountControls");
+    const policy = await evaluateAiPolicy(user.id);
+    if (!policy.allowed) {
+      res.status(403).json({ error: policy.reason ?? "AI access disabled" });
+      return;
+    }
+    const rl = checkRateLimit({
+      userId: user.id,
+      callType: "advisor",
+      isAdmin: user.role === "admin" || user.role === "owner",
+      tokenBudgetMultiplier: policy.tokenBudgetMultiplier,
+      dailyTokenLimit: policy.dailyTokenLimit,
+    });
     if (!rl.allowed) {
       res.status(429).json({ error: rl.reason ?? "Rate limit exceeded" });
       return;
@@ -129,6 +142,10 @@ export function registerAdvisorStreamRoute(app: Express) {
         messages,
         callType: "advisor",
         persistUsage: (u) => persistLlmUsage({ userId: user!.id, ...u }),
+        usageContext: aiUsage("ADVISOR", {
+          userId: user.id,
+          leagueId: chatLeagueId,
+        }),
       })) {
         fullResponse += chunk;
         sendEvent({ delta: chunk });

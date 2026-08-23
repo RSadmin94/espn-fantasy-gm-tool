@@ -595,9 +595,11 @@ The test suite uses Vitest with 7 test files and 44 tests total. All tests are p
 
 **Running tests:**
 ```bash
-pnpm test          # Run all tests once
+pnpm test          # Run all tests once (local Vitest entrypoint)
 pnpm test --watch  # Watch mode
 ```
+
+Use `pnpm test` (or `node ./node_modules/vitest/vitest.mjs run …` for a subset). Do not use `npx vitest` — in this repo `npx` / `pnpm exec vitest` can fail to find the binary even when Vitest is installed.
 
 ---
 
