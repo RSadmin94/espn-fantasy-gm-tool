@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useClerk, useUser } from "@clerk/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { trpc } from "@/lib/trpc";
-import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
+import { signOutOfRivals } from "@/lib/signOutRivals";
 import { COMMERCIAL } from "@/lib/commercialCopy";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ function SettingRow({ children, className }: { children: React.ReactNode; classN
 function ProfileSection() {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
 
   if (!user) {
     return (
@@ -133,7 +135,7 @@ function ProfileSection() {
             variant="outline"
             size="sm"
             className="gap-1.5 shrink-0"
-            onClick={() => { setSessionUnlocked(false); void signOut(); }}
+            onClick={() => { void signOutOfRivals({ signOut, queryClient }); }}
           >
             <LogOut className="h-3.5 w-3.5" />
             Sign out
@@ -536,6 +538,28 @@ function DangerZone() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+function AdminToolsSection() {
+  const sessionQ = trpc.me.session.useQuery();
+  if (!sessionQ.data?.isAdmin) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Admin</CardTitle>
+        <CardDescription>Internal operations tools. Not visible to league users.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <Link
+          to="/admin"
+          className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3 text-sm hover:border-primary/30 hover:bg-primary/5"
+        >
+          Open Admin Console
+          <ChevronRight className="h-3.5 w-3.5 opacity-50" />
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function Settings() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -551,6 +575,7 @@ export function Settings() {
       <LeaguesSection />
       <SubscriptionSection />
       <DangerZone />
+      <AdminToolsSection />
 
       {/* Quick nav to other pages */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

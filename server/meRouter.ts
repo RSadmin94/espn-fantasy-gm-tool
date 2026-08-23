@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { isDemoAccount } from "./_core/demoAccount";
+import { isOwnerAccount, isConsoleAccount } from "./_core/owners";
+import { capabilitiesFor } from "./_core/adminAccess";
+import { publicFeatureGateState } from "./adminConsole/router";
 import { resolveActiveProfile, resolveActiveLeagueId, getDb } from "./db";
 import { computeBiggestThreat } from "./biggestThreatService";
 import { resolveCurrentOwner } from "./currentOwnerService";
@@ -20,10 +23,23 @@ export const meRouter = router({
    * Lightweight session flags (read-only). Powers the demo-mode banner and any
    * client-side read-only affordances. Anonymous callers get isDemo:false.
    */
-  session: publicProcedure.query(({ ctx }) => ({
-    isAuthenticated: !!ctx.user,
-    isDemo: isDemoAccount(ctx.user ?? null),
-  })),
+  session: publicProcedure.query(async ({ ctx }) => {
+    let isSuspended = false;
+    if (ctx.user && !isOwnerAccount(ctx.user)) {
+      const { getAccountControl } = await import("./adminConsole/accountControls");
+      const ctrl = await getAccountControl(ctx.user.id);
+      isSuspended = ctrl?.status === "suspended";
+    }
+    return {
+      isAuthenticated: !!ctx.user,
+      isDemo: isDemoAccount(ctx.user ?? null),
+      isAdmin: isConsoleAccount(ctx.user),
+      isOwner: isOwnerAccount(ctx.user),
+      isSuspended,
+      capabilities: capabilitiesFor(ctx.user),
+      blockedFeatures: ctx.user ? await publicFeatureGateState(ctx.user) : {},
+    };
+  }),
 
   /** The user's selected league/team identity (see resolveActiveProfile). */
   activeProfile: publicProcedure

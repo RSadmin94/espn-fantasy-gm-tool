@@ -179,7 +179,7 @@ Every backend issue maps to one of these four categories:
 | `pnpm build` | Build frontend + backend for production |
 | `pnpm start` | Start production server |
 | `pnpm db:push` | Apply schema changes to database |
-| `pnpm test` | Run all tests (756 tests) |
+| `pnpm test` | Run all tests via the local Vitest entrypoint (`node ./node_modules/vitest/vitest.mjs run`). Do not use `npx vitest`. |
 
 ---
 

@@ -1,90 +1,22 @@
 import type { Express } from "express";
-import mysql from "mysql2/promise";
-import { ENV } from "./env";
-
-/** Informational only; never used for pass/fail. */
-function optionalEnv(...keys: string[]): string {
-  for (const key of keys) {
-    const v = process.env[key];
-    if (typeof v === "string" && v.trim() !== "") return v.trim();
-  }
-  return "unknown";
-}
-
-function nodeEnvLabel(): string {
-  const v = process.env.NODE_ENV;
-  if (typeof v === "string" && v.trim() !== "") return v.trim();
-  return "unknown";
-}
+import { collectHealthSnapshot } from "./healthSnapshot";
 
 export function registerHealthRoute(app: Express): void {
   app.get("/api/health", async (_req, res) => {
-    const checks: Record<string, "ok" | "missing" | "error" | "warn"> = {};
-
-    // 1. Required env vars
-    checks.DATABASE_URL = ENV.databaseUrl ? "ok" : "missing";
-    checks.JWT_SECRET = ENV.cookieSecret ? "ok" : "missing";
-    checks.ESPN_LEAGUE_ID = process.env.ESPN_LEAGUE_ID ? "ok" : "missing";
-    checks.ESPN_S2 = process.env.ESPN_S2 ? "ok" : "missing";
-    checks.ESPN_SWID = process.env.ESPN_SWID ? "ok" : "missing";
-    checks.CREDENTIAL_ENCRYPTION_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY
-      ? "ok"
-      : "missing";
-
-    // 2. LLM provider check — warn (not fail) if active provider key is missing
-    const llmProvider = ENV.llmProvider ?? "anthropic";
-    const llmKeyMap: Record<string, string | undefined> = {
-      anthropic: ENV.anthropicApiKey,
-      openai: ENV.openaiApiKey,
-      gemini: ENV.geminiApiKey,
-    };
-    const activeLlmKey = llmKeyMap[llmProvider];
-    checks[`LLM_PROVIDER(${llmProvider})`] = activeLlmKey ? "ok" : "warn";
-
-    // 3. Database connectivity
-    try {
-      const conn = await mysql.createConnection(ENV.databaseUrl);
-      await conn.execute("SELECT 1");
-      await conn.end();
-      checks.database = "ok";
-    } catch {
-      checks.database = "error";
-    }
-
-    // Only hard failures (missing required vars or DB error) cause 503
-    const hardFailed = Object.entries(checks).filter(
-      ([, v]) => v === "missing" || v === "error"
-    );
-    const warned = Object.entries(checks).filter(([, v]) => v === "warn");
-
-    const status = hardFailed.length === 0 ? 200 : 503;
-
-    const gitSha = optionalEnv(
-      "GIT_COMMIT",
-      "RAILWAY_GIT_COMMIT_SHA",
-      "VERCEL_GIT_COMMIT_SHA",
-    );
-    const gitBranch = optionalEnv(
-      "RAILWAY_GIT_BRANCH",
-      "VERCEL_GIT_COMMIT_REF",
-    );
-    const buildTime = optionalEnv("BUILD_TIME");
-
-    res.status(status).json({
-      status: status === 200 ? "ok" : "degraded",
-      timestamp: new Date().toISOString(),
-      version: process.env.npm_package_version ?? "unknown",
-      gitSha,
-      gitBranch,
-      buildTime,
-      nodeEnv: nodeEnvLabel(),
-      checks,
-      ...(hardFailed.length > 0 && {
-        failed: hardFailed.map(([k, v]) => `${k}: ${v}`),
-      }),
-      ...(warned.length > 0 && {
-        warnings: warned.map(
-          ([k]) => `${k}: key not set — AI features disabled`
+    const snap = await collectHealthSnapshot();
+    res.status(snap.httpStatus).json({
+      status: snap.status,
+      timestamp: snap.timestamp,
+      version: snap.version,
+      gitSha: snap.gitSha,
+      gitBranch: snap.gitBranch,
+      buildTime: snap.buildTime,
+      nodeEnv: snap.nodeEnv,
+      checks: snap.checks,
+      ...(snap.failed.length > 0 && { failed: snap.failed }),
+      ...(snap.warnings.length > 0 && {
+        warnings: snap.warnings.map((w) =>
+          w.includes("LLM_PROVIDER") ? `${w} — AI features disabled` : w,
         ),
       }),
     });

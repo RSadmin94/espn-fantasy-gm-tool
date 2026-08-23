@@ -7,6 +7,7 @@ import { isFounderAccount, hasFounderOwnerIdentity } from "./founders";
 import { isDemoAccount, DEMO_READONLY_MSG } from "./demoAccount";
 import { hasBetaDemoPremiumAccess } from "./betaDemoUsers";
 import { isStaffAccount } from "./staff";
+import { hasCapability, type AdminCapability } from "./adminAccess";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -28,7 +29,23 @@ const blockDemoMutations = t.middleware(async ({ ctx, type, next }) => {
   return next();
 });
 
-export const publicProcedure = t.procedure.use(blockDemoMutations);
+const blockSuspendedAccounts = t.middleware(async ({ ctx, next, path }) => {
+  if (!ctx.user) return next();
+  if (path === "me.session") return next();
+  const { isOwnerAccount } = await import("./owners");
+  if (isOwnerAccount(ctx.user)) return next();
+  const { getAccountControl } = await import("../adminConsole/accountControls");
+  const ctrl = await getAccountControl(ctx.user.id);
+  if (ctrl?.status === "suspended") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "This account is suspended.",
+    });
+  }
+  return next();
+});
+
+export const publicProcedure = t.procedure.use(blockDemoMutations).use(blockSuspendedAccounts);
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -38,6 +55,18 @@ const requireUser = t.middleware(async opts => {
   }
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
+  }
+
+  const { isOwnerAccount } = await import("./owners");
+  if (!isOwnerAccount(ctx.user)) {
+    const { getAccountControl } = await import("../adminConsole/accountControls");
+    const ctrl = await getAccountControl(ctx.user.id);
+    if (ctrl?.status === "suspended") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "This account is suspended.",
+      });
+    }
   }
 
   return next({
@@ -143,22 +172,30 @@ export const subscribedProcedure = t.procedure.use(blockDemoMutations).use(
   }),
 );
 
-export const adminProcedure = t.procedure.use(blockDemoMutations).use(
-  t.middleware(async opts => {
+function requireCapability(capability: AdminCapability) {
+  return t.middleware(async opts => {
     const { ctx, next } = opts;
-
     if (!ctx.auth?.userId) {
       throw new TRPCError({ code: "UNAUTHORIZED", message: UNAUTHED_ERR_MSG });
     }
-    if (!ctx.user || ctx.user.role !== 'admin') {
+    if (!ctx.user || !hasCapability(ctx.user, capability)) {
       throw new TRPCError({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
-
     return next({
       ctx: {
         ...ctx,
         user: ctx.user,
       },
     });
-  }),
-);
+  });
+}
+
+/** Console access: application owner or users.role === "admin". */
+export const adminProcedure = t.procedure.use(blockDemoMutations).use(requireCapability("VIEW_ADMIN"));
+
+/** Owner-only mutations (feature flags, account restrictions, runtime settings). */
+export const ownerProcedure = t.procedure.use(blockDemoMutations).use(requireCapability("OWNER_ACCESS"));
+
+export function capabilityProcedure(capability: AdminCapability) {
+  return t.procedure.use(blockDemoMutations).use(requireCapability(capability));
+}

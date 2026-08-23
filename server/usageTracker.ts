@@ -17,23 +17,29 @@
 
 import { getDb } from "./db";
 import { usageEvents } from "../drizzle/schema";
+import { calculateAiCost } from "./aiCost/calculateAiCost";
+import { resolveFeatureId, stringifyUserId, UNATTRIBUTED } from "./aiCost/aiFeatures";
+import { inferProviderFromModel, normalizeProvider } from "./aiCost/aiPricingCatalog";
+import { recordAiUsageTrace } from "./aiCost/debugTrace";
 
-// ─── Cost model ───────────────────────────────────────────────────────────────
-
-/** Per-token USD cost for known models. Falls back to Gemini Flash pricing. */
-const MODEL_PRICING: Record<string, { inputPerToken: number; outputPerToken: number }> = {
-  "gemini-2.5-flash":       { inputPerToken: 0.00000015, outputPerToken: 0.00000060 },
-  "gemini-2.0-flash":       { inputPerToken: 0.00000010, outputPerToken: 0.00000040 },
-  "gemini-1.5-flash":       { inputPerToken: 0.000000075, outputPerToken: 0.00000030 },
-  "gpt-4o":                 { inputPerToken: 0.0000025,  outputPerToken: 0.000010   },
-  "gpt-4o-mini":            { inputPerToken: 0.00000015, outputPerToken: 0.00000060 },
-  "claude-3-5-sonnet":      { inputPerToken: 0.000003,   outputPerToken: 0.000015   },
-  "claude-3-haiku":         { inputPerToken: 0.00000025, outputPerToken: 0.00000125 },
-};
-
-function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const pricing = MODEL_PRICING[model] ?? MODEL_PRICING["gemini-2.5-flash"];
-  return promptTokens * pricing.inputPerToken + completionTokens * pricing.outputPerToken;
+/**
+ * Cost is computed by `calculateAiCost` (single catalog). Historical rows keep
+ * the `estimatedCostUsd` written at insert time — this function is write-path only.
+ */
+function estimateCost(
+  model: string,
+  promptTokens: number,
+  completionTokens: number,
+  extra?: { provider?: string | null; cachedInputTokens?: number; timestamp?: Date },
+): number {
+  return calculateAiCost({
+    provider: extra?.provider,
+    model,
+    inputTokens: promptTokens,
+    outputTokens: completionTokens,
+    cachedInputTokens: extra?.cachedInputTokens,
+    timestamp: extra?.timestamp,
+  }).calculatedCost;
 }
 
 // ─── Event types ──────────────────────────────────────────────────────────────
@@ -47,8 +53,24 @@ export interface LLMUsageEvent {
   totalTokens: number;
   durationMs: number;
   streaming: boolean;
-  userId?: string;
+  userId?: string | number | null;
   metadata?: Record<string, unknown>;
+  provider?: string | null;
+  featureId?: string | null;
+  intent?: string | null;
+  leagueId?: string | null;
+  requestId?: string | null;
+  parentRequestId?: string | null;
+  retryCount?: number | null;
+  cachedInputTokens?: number | null;
+  status?: "SUCCESS" | "ERROR";
+  errorCode?: string | null;
+  generated?: boolean;
+  delivered?: boolean;
+  displayed?: boolean | null;
+  discarded?: boolean;
+  providerReportedCost?: number | null;
+  timestamp?: Date;
 }
 
 export interface EspnUsageEvent {
@@ -87,7 +109,38 @@ async function writeEvent(row: typeof usageEvents.$inferInsert): Promise<void> {
  * or directly from streaming handlers.
  */
 export function trackLLMEvent(event: LLMUsageEvent): void {
-  const cost = estimateCost(event.model, event.promptTokens, event.completionTokens);
+  const timestamp = event.timestamp ?? new Date();
+  const provider = event.provider
+    ? normalizeProvider(event.provider)
+    : inferProviderFromModel(event.model);
+  const cachedInputTokens = Math.max(0, event.cachedInputTokens ?? 0);
+  const priced = calculateAiCost({
+    provider,
+    model: event.model,
+    inputTokens: event.promptTokens,
+    outputTokens: event.completionTokens,
+    cachedInputTokens,
+    timestamp,
+  });
+  const featureId = resolveFeatureId({
+    feature: event.featureId,
+    callType: event.callType,
+    featureName: event.featureName,
+  });
+  const isAdvisor = featureId === "ADVISOR";
+  const intent = event.intent?.trim()
+    ? event.intent.trim()
+    : isAdvisor
+      ? UNATTRIBUTED
+      : null;
+  const status = event.status ?? "SUCCESS";
+  const generated = event.generated ?? status === "SUCCESS";
+  const delivered = event.delivered ?? status === "SUCCESS";
+  const discarded = event.discarded ?? false;
+  const requestId = event.requestId ?? undefined;
+  const retryCount = event.retryCount ?? 0;
+  const userId = stringifyUserId(event.userId);
+
   void writeEvent({
     eventCategory: "llm",
     featureName: event.featureName,
@@ -95,13 +148,55 @@ export function trackLLMEvent(event: LLMUsageEvent): void {
     promptTokens: event.promptTokens,
     completionTokens: event.completionTokens,
     totalTokens: event.totalTokens,
-    estimatedCostUsd: cost,
+    estimatedCostUsd: priced.calculatedCost,
     durationMs: event.durationMs,
-    userId: event.userId,
+    userId,
     model: event.model,
     streaming: event.streaming,
     metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+    provider,
+    featureId,
+    intent,
+    leagueId: event.leagueId ?? undefined,
+    requestId,
+    parentRequestId: event.parentRequestId ?? undefined,
+    retryCount,
+    cachedInputTokens,
+    status,
+    errorCode: event.errorCode ?? undefined,
+    generated,
+    delivered,
+    displayed: event.displayed ?? null,
+    discarded,
+    costPriced: priced.priced || event.providerReportedCost != null,
+    providerReportedCostUsd: event.providerReportedCost ?? undefined,
+    createdAt: timestamp,
   });
+
+  try {
+    recordAiUsageTrace({
+      at: timestamp.toISOString(),
+      requestId: requestId ?? "",
+      parentRequestId: event.parentRequestId ?? null,
+      retryCount,
+      userId: userId ?? null,
+      leagueId: event.leagueId ?? null,
+      feature: featureId,
+      intent,
+      provider,
+      model: event.model,
+      inputTokens: event.promptTokens,
+      cachedInputTokens,
+      outputTokens: event.completionTokens,
+      calculatedCost: priced.calculatedCost,
+      priced: priced.priced,
+      status,
+      latencyMs: event.durationMs,
+      errorCode: event.errorCode ?? null,
+    });
+  } catch {
+    /* never block */
+  }
 }
 
 /**

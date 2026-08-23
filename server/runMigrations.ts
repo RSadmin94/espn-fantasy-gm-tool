@@ -11,6 +11,7 @@ const SKIPPABLE_CODES = new Set([
   "ER_BAD_FIELD_ERROR",
   "ER_DUP_KEYNAME",
   "ER_DUP_ENTRY",
+  "ER_DUP_FIELDNAME",
   "ER_KEY_DOES_NOT_EXIST",
   "ER_CANT_DROP_FIELD_OR_KEY",
 ]);
@@ -37,6 +38,7 @@ function isSkippable(err: unknown): boolean {
     msg.includes("check that column/key exists") ||
     msg.includes("Can't DROP") ||
     msg.includes("Duplicate key name") ||
+    msg.includes("Duplicate column name") ||
     msg.includes("already exists")
   );
 }
