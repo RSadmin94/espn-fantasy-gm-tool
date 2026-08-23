@@ -1,7 +1,7 @@
 -- Owner-only Admin Console: owner role + account controls + feature overrides + audit log.
 -- Applied at process start by server/runMigrations.ts (NOT drizzle-kit journal).
 -- No FKs on purpose: admin rows must not cascade-delete if a users row is removed.
--- ALTER ENUM adds 'owner' only; existing 'user'/'admin' rows are unchanged.
+-- ALTER ENUM adds owner only. Existing user and admin rows stay unchanged.
 -- Column names match drizzle/schema.ts (camelCase), which is what production already uses.
 
 ALTER TABLE `users` MODIFY COLUMN `role` ENUM('user','admin','owner') NOT NULL DEFAULT 'user';
