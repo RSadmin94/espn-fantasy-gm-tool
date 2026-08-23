@@ -104,7 +104,7 @@ Non-LLM tRPC routers are **not** globally wrapped. If a feature’s primary page
 | Catalog id | LLM-backed (`aiFeatureId`) | Enforcement |
 |---|---|---|
 | advisor, draft-commentary, keeper-advisor, draft-war-room, trades, rfsn, rivalries, owner-profiles, league-dna, league-history, complete-rivalry-documentaries, historic-trade-intelligence | yes | UI + LLM. Other non-LLM tRPC on the same page may still respond if called directly. |
-| dashboard, rosters, matchups, post-draft-evaluation, championship-path, the-cast, power-rankings, acquisition-impact, standings, commissioner-command-center, hall-of-fame, transactions, why-havent-i-won, championship-reports, deep-league-records | no | **Partial** — UI/session only |
+| dashboard, rosters, matchups, championship-path, the-cast, power-rankings, acquisition-impact, standings, commissioner-command-center, hall-of-fame, transactions, why-havent-i-won, championship-reports, deep-league-records | no | **Partial** — UI/session only |
 
 Shared `aiFeatureId` values (example: `DRAFT_ANALYSIS` on keeper-advisor and draft-war-room) map to **one** product id at the LLM boundary (last catalog row wins). Restricting one of those product ids may not uniquely address every call site that shares the AI id.
 

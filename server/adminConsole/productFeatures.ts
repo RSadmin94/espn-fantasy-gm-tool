@@ -17,7 +17,6 @@ export const PRODUCT_FEATURE_CATALOG: ProductFeatureCatalogEntry[] = [
   { id: "advisor", label: "Advisor", entryType: "route", route: "/advisor", aiFeatureId: "ADVISOR" },
   { id: "draft-war-room", label: "Draft War Room", entryType: "route", route: "/draft-war-room", aiFeatureId: "DRAFT_ANALYSIS" },
   { id: "draft-commentary", label: "Draft Commentary", entryType: "route", route: "/draft-commentary", aiFeatureId: "DRAFT_COMMENTARY" },
-  { id: "post-draft-evaluation", label: "Post-Draft Evaluation", entryType: "route", route: "/post-draft-evaluation", aiFeatureId: null },
   { id: "rivalries", label: "Rivalry Center", entryType: "route", route: "/rivalry-center", aiFeatureId: "RIVALRY_HISTORY" },
   { id: "owner-profiles", label: "Owner Profiles", entryType: "route", route: "/owner-profiles", aiFeatureId: "OWNER_COMPARISON" },
   { id: "championship-path", label: "Championship Diagnosis", entryType: "route", route: "/championship-diagnosis", aiFeatureId: null },
