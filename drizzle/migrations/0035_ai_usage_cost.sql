@@ -1,6 +1,58 @@
--- AI usage & cost tracking: extend usage_events + app_settings for monthly budget.
+-- AI usage & cost tracking: ensure usage_events exists, then add attribution columns + app_settings.
 -- Applied at process start by server/runMigrations.ts (NOT drizzle-kit journal).
--- Column names match drizzle/schema.ts (camelCase), which is what production already uses.
+-- Production may not have usage_events yet (drizzle-kit 0027 was never in this runner).
+-- CREATE IF NOT EXISTS + skippable ALTER/INDEX keeps this idempotent.
+
+CREATE TABLE IF NOT EXISTS `usage_events` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `eventCategory` varchar(16) NOT NULL,
+  `featureName` varchar(128) NOT NULL,
+  `callType` varchar(64) NULL,
+  `promptTokens` int NOT NULL DEFAULT 0,
+  `completionTokens` int NOT NULL DEFAULT 0,
+  `totalTokens` int NOT NULL DEFAULT 0,
+  `estimatedCostUsd` float NOT NULL DEFAULT 0,
+  `durationMs` int NOT NULL DEFAULT 0,
+  `userId` varchar(64) NULL,
+  `model` varchar(128) NULL,
+  `streaming` boolean NOT NULL DEFAULT false,
+  `eventType` varchar(32) NULL,
+  `page` varchar(256) NULL,
+  `action` varchar(128) NULL,
+  `sessionId` varchar(64) NULL,
+  `metadata` text NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `provider` varchar(32) NULL,
+  `featureId` varchar(64) NULL,
+  `intent` varchar(64) NULL,
+  `leagueId` varchar(64) NULL,
+  `requestId` varchar(64) NULL,
+  `parentRequestId` varchar(64) NULL,
+  `retryCount` int NOT NULL DEFAULT 0,
+  `cachedInputTokens` int NOT NULL DEFAULT 0,
+  `status` varchar(16) NULL,
+  `errorCode` varchar(64) NULL,
+  `generated` boolean NULL,
+  `delivered` boolean NULL,
+  `displayed` boolean NULL,
+  `discarded` boolean NULL,
+  `costPriced` boolean NULL,
+  `providerReportedCostUsd` float NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_ue_feature` (`featureName`),
+  KEY `idx_ue_category` (`eventCategory`),
+  KEY `idx_ue_created` (`createdAt`),
+  KEY `idx_ue_user` (`userId`),
+  KEY `idx_ue_event_type` (`eventType`),
+  KEY `idx_ue_session` (`sessionId`),
+  KEY `idx_ue_provider` (`provider`),
+  KEY `idx_ue_model` (`model`),
+  KEY `idx_ue_feature_id` (`featureId`),
+  KEY `idx_ue_intent` (`intent`),
+  KEY `idx_ue_league` (`leagueId`),
+  KEY `idx_ue_request` (`requestId`),
+  KEY `idx_ue_status` (`status`)
+);
 
 ALTER TABLE `usage_events` MODIFY COLUMN `model` varchar(128) NULL;
 
