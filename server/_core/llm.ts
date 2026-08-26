@@ -276,17 +276,8 @@ async function trackUsageAfterCall(
   }
 
   try {
-    const { trackLLMEvent } = await import("../usageTracker");
-    trackLLMEvent({
-      featureName: params.callType ?? "llm.unspecified",
-      callType: params.callType ?? "unspecified",
-      model: usageData.model,
-      promptTokens: usageData.promptTokens,
-      completionTokens: usageData.completionTokens,
-      totalTokens: usageData.totalTokens,
-      durationMs: usageData.durationMs,
-      streaming: usageData.streaming,
-    });
+    const { recordInvokeUsage } = await import("../usageTracker");
+    recordInvokeUsage(params, usageData, ENV.llmProvider);
   } catch {
     /* never block */
   }

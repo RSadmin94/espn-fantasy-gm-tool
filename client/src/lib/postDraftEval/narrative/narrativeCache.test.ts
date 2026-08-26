@@ -181,6 +181,29 @@ describe("narrative cache identity", () => {
     expect(narrativeCacheMaterial(a)).toEqual(narrativeCacheMaterial(b));
   });
 
+  it("award identity change produces a different cache key", () => {
+    const a = narrativeCacheMaterial(baseFacts());
+    const b = narrativeCacheMaterial(
+      baseFacts({
+        biggestMiss: {
+          round: 9,
+          overallPick: 123,
+          actualName: "Tre Tucker",
+          altName: "Quentin Johnston",
+          why: "Generated miss copy.",
+        },
+        turningPoint: {
+          round: 9,
+          overallPick: 123,
+          actualName: "Tre Tucker",
+          altName: "Quentin Johnston",
+          why: "Generated turning-point copy.",
+        },
+      }),
+    );
+    expect(a).not.toEqual(b);
+  });
+
   it("prompt / narrative version change produces a different cache key", () => {
     const a = narrativeCacheMaterial(baseFacts());
     const b = narrativeCacheMaterial(baseFacts({ narrativeVersion: "post-draft-eval-05" }));

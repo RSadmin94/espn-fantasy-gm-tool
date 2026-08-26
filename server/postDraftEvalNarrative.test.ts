@@ -2,9 +2,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { invokeLLM, resolveLlmRoute } = vi.hoisted(() => ({
+const { invokeLLM, resolveLlmRoute, getDb } = vi.hoisted(() => ({
   invokeLLM: vi.fn(),
   resolveLlmRoute: vi.fn(() => ({ provider: "openai", model: "gpt-4o" })),
+  getDb: vi.fn(async () => null),
 }));
 
 vi.mock("./_core/llm", () => ({
@@ -12,7 +13,7 @@ vi.mock("./_core/llm", () => ({
   resolveLlmRoute,
 }));
 vi.mock("./db", () => ({
-  getDb: vi.fn(async () => null),
+  getDb,
 }));
 
 import {
@@ -20,6 +21,7 @@ import {
   getPostDraftNarrative,
   narrativeCacheKey,
 } from "./postDraftEvalNarrative";
+import { recordInvokeUsage } from "./usageTracker";
 import {
   EVALUATOR_VERSION,
   NARRATIVE_VERSION,
@@ -70,6 +72,8 @@ describe("post-draft storytelling server path", () => {
     invokeLLM.mockReset();
     resolveLlmRoute.mockReset();
     resolveLlmRoute.mockReturnValue({ provider: "openai", model: "gpt-4o" });
+    getDb.mockReset();
+    getDb.mockResolvedValue(null);
     __resetNarrativeInflightForTests();
   });
 
@@ -104,6 +108,12 @@ describe("post-draft storytelling server path", () => {
     expect(src).toContain("invokeLLM");
     expect(src).toContain("resolveLlmRoute");
     expect(src).not.toMatch(/anthropic|claude-sonnet|claude-/i);
+  });
+
+  it("LLM adapter forwards usageContext into recordInvokeUsage", () => {
+    const src = readFileSync(path.join(process.cwd(), "server/_core/llm.ts"), "utf8");
+    expect(src).toContain("recordInvokeUsage");
+    expect(src).toContain("usageContext");
   });
 
   it("attributes the LLM call to POST_DRAFT_STORYTELLING with league and season intent", async () => {
@@ -235,6 +245,95 @@ describe("post-draft storytelling server path", () => {
     const narrative = emptyUnavailableNarrative("provider_error");
     expect(narrative.source).toBe("unavailable");
     expect(narrative.pickTakes).toEqual([]);
+  });
+
+  it("one uncached generation records exactly one POST_DRAFT_STORYTELLING usage event", async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    getDb.mockResolvedValue({
+      insert: () => ({
+        values: async (row: Record<string, unknown>) => {
+          inserted.push(row);
+        },
+      }),
+    });
+    recordInvokeUsage(
+      {
+        callType: "json_structured",
+        usageContext: {
+          feature: "POST_DRAFT_STORYTELLING",
+          userId: 1,
+          leagueId: "457622",
+          intent: "season:2026",
+        },
+      },
+      {
+        model: "gpt-4o-2024-08-06",
+        promptTokens: 7292,
+        completionTokens: 772,
+        totalTokens: 8064,
+        durationMs: 1200,
+        streaming: false,
+      },
+      "openai",
+    );
+    await vi.waitFor(() => expect(inserted).toHaveLength(1));
+    expect(inserted[0]?.featureId).toBe("POST_DRAFT_STORYTELLING");
+    expect(inserted[0]?.provider).toBe("OPENAI");
+    expect(inserted[0]?.model).toBe("gpt-4o-2024-08-06");
+    expect(inserted[0]?.promptTokens).toBe(7292);
+    expect(inserted[0]?.completionTokens).toBe(772);
+    expect(inserted[0]?.intent).toBe("season:2026");
+    expect(Number(inserted[0]?.estimatedCostUsd)).toBeCloseTo(0.02595, 5);
+    expect(inserted[0]?.status).toBe("SUCCESS");
+  });
+
+  it("reload and dashboard-return cache hits produce zero additional usage events", async () => {
+    const payload = JSON.stringify({ v: NARRATIVE_VERSION, narrative: buildFallbackNarrative(facts(2026)) });
+    getDb.mockResolvedValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ payload }],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: () => ({
+          onDuplicateKeyUpdate: async () => undefined,
+        }),
+      }),
+    });
+    invokeLLM.mockResolvedValue(llmContent(buildFallbackNarrative(facts(2026))));
+    const first = await getPostDraftNarrative({ facts: facts(2026), userId: 1, leagueId: "457622" });
+    const reload = await getPostDraftNarrative({ facts: facts(2026), userId: 1, leagueId: "457622" });
+    const dashboardReturn = await getPostDraftNarrative({ facts: facts(2026), userId: 1, leagueId: "457622" });
+    expect(first.cached).toBe(true);
+    expect(reload.cached).toBe(true);
+    expect(dashboardReturn.cached).toBe(true);
+    expect(invokeLLM).not.toHaveBeenCalled();
+  });
+
+  it("repairs a cached Draft Story that collapsed Miss and Turning Point without calling the LLM", async () => {
+    const collapsed = {
+      ...buildFallbackNarrative(facts(2026)),
+      draftStory:
+        "Selecting Tre Tucker over Quentin Johnston was a double whammy, both the biggest miss and turning point of the draft.",
+      source: "llm" as const,
+    };
+    const payload = JSON.stringify({ v: NARRATIVE_VERSION, narrative: collapsed });
+    getDb.mockResolvedValue({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ payload }],
+          }),
+        }),
+      }),
+    });
+    const result = await getPostDraftNarrative({ facts: facts(2026), userId: 1, leagueId: "457622" });
+    expect(invokeLLM).not.toHaveBeenCalled();
+    expect(result.cached).toBe(true);
+    expect(result.draftStory.toLowerCase()).not.toMatch(/double whammy|both the biggest miss and turning point/);
   });
 });
 

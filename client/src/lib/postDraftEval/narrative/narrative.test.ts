@@ -7,6 +7,7 @@ import {
   buildFallbackNarrative,
   compactFactsForLlm,
   compactFactsSize,
+  collapsesMissAndTurningPoint,
   groundNarrative,
   narrativeCacheMaterial,
   storytellingAllowed,
@@ -547,6 +548,61 @@ describe("post-draft storytelling grounding", () => {
     expect(`${take?.headline} ${take?.explanation}`.toLowerCase()).toContain("mike evans");
   });
 
+  it("Draft Story cannot collapse Miss and Turning Point into a combined purpose", () => {
+    const facts = season2026Facts();
+    const grounded = groundNarrative(facts, {
+      draftStory:
+        "Selecting Matthew Golden over Mike Evans was a double whammy, both the biggest miss and turning point of the draft.",
+      biggestMissStory:
+        "Rivals preferred Mike Evans. You took Matthew Golden instead. Immediate opportunity cost at this slot.",
+      turningPointStory: "Round 7 is the hinge because of what it did next. That increased the pressure later.",
+    });
+    expect(collapsesMissAndTurningPoint(grounded.draftStory)).toBe(false);
+    expect(grounded.draftStory.toLowerCase()).not.toMatch(/double whammy|both the biggest miss and turning point/);
+    expect(grounded.biggestMissStory).not.toEqual(grounded.turningPointStory);
+  });
+
+  it("overlapping award identities still keep distinct Miss vs Turning Point purposes", () => {
+    const facts = season2026Facts({
+      biggestMiss: {
+        round: 9,
+        overallPick: 123,
+        actualName: "Tre Tucker",
+        altName: "Quentin Johnston",
+        why: "Immediate opportunity cost at this slot.",
+      },
+      turningPoint: {
+        round: 9,
+        overallPick: 123,
+        actualName: "Tre Tucker",
+        altName: "Quentin Johnston",
+        why: "Later WR depth had to be chased.",
+      },
+      picks: season2026Facts().picks.concat([
+        pick({
+          overallPick: 123,
+          round: 9,
+          actualName: "Tre Tucker",
+          rivalsName: "Quentin Johnston",
+          independentRivalsName: "Quentin Johnston",
+          sequentialRedraftName: "Jakobi Meyers",
+        }),
+      ]),
+    });
+    const fallback = buildFallbackNarrative(facts);
+    expect(fallback.biggestMissStory).not.toEqual(fallback.turningPointStory);
+    expect(fallback.biggestMissStory?.toLowerCase()).toMatch(/opportunity|preferred|took tre tucker/);
+    expect(fallback.turningPointStory?.toLowerCase()).toMatch(/hinge|later|next/);
+    expect(collapsesMissAndTurningPoint(fallback.draftStory)).toBe(false);
+    const grounded = groundNarrative(facts, {
+      draftStory: fallback.draftStory,
+      biggestMissStory: fallback.biggestMissStory,
+      turningPointStory: fallback.turningPointStory,
+    });
+    expect(grounded.biggestMissStory).not.toEqual(grounded.turningPointStory);
+    expect(collapsesMissAndTurningPoint(grounded.draftStory)).toBe(false);
+  });
+
   it("same pick as Biggest Miss and Turning Point gets distinct section purposes", () => {
     const facts = season2026Facts();
     const sameLine =
@@ -597,5 +653,10 @@ describe("post-draft storytelling grounding", () => {
     expect(narrative.draftStory.toLowerCase()).not.toMatch(/limited historical ranking data/);
     expect(compactFactsForLlm(facts).supportStatus).toBe("FULL");
     expect(compactFactsForLlm(facts).recommendationCeiling).toBe("MEDIUM");
+  });
+
+  it("does not change evaluator version or narrative version", () => {
+    expect(EVALUATOR_VERSION).toBe("post-draft-eval-04");
+    expect(NARRATIVE_VERSION).toBe("post-draft-eval-06");
   });
 });

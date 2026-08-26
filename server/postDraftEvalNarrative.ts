@@ -136,7 +136,10 @@ export async function getPostDraftNarrative(args: {
   }
   const key = narrativeCacheKey(args.facts, args.userId);
   const cached = await readCache(key);
-  if (cached) return cached;
+  if (cached) {
+    const source = cached.source === "fallback" || cached.source === "unavailable" ? cached.source : "llm";
+    return { ...groundNarrative(args.facts, cached, source), cached: true, source: cached.source };
+  }
 
   const existing = inflight.get(key);
   if (existing) return existing;

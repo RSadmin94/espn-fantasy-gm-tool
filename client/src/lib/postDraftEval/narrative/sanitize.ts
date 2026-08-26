@@ -52,6 +52,13 @@ const EMPTY_CHAIR_RE =
 const HARD_CAUSE_RE =
   /forced (?:a )?later chase|became expensive later|that sequence is a decision chain|you were then forced/;
 
+const COLLAPSED_MISS_TURN_RE =
+  /double[\s-]?whammy|(?:both(?:\s+\w+){0,6}\s+)?(?:the\s+)?biggest miss and(?:\s+the)?\s+turning point|miss and turning point(?:\s+of the draft)?/i;
+
+export function collapsesMissAndTurningPoint(text: string): boolean {
+  return COLLAPSED_MISS_TURN_RE.test(text);
+}
+
 function nameKey(n: string): string {
   return n.trim().toLowerCase();
 }
@@ -247,7 +254,12 @@ export function groundNarrative(
   let draftStory =
     groundedText(draft.draftStory ?? draft.openingBody, fallback.draftStory, universe, universe, { lowConfidence: low }) ??
     fallback.draftStory;
-  if (claimsKeeperPositionEmpty(draftStory, facts) || claimsNonSequentialRedraftPlayer(draftStory, facts) || claimsUnsupportedCausality(draftStory, facts)) {
+  if (
+    claimsKeeperPositionEmpty(draftStory, facts) ||
+    claimsNonSequentialRedraftPlayer(draftStory, facts) ||
+    claimsUnsupportedCausality(draftStory, facts) ||
+    collapsesMissAndTurningPoint(draftStory)
+  ) {
     draftStory = fallback.draftStory;
   }
   const openingHeadline = stripHindsight(asText(draft.openingHeadline)) || fallback.openingHeadline;
@@ -382,6 +394,10 @@ function applySectionDiversity(
     biggestMissStory = args.fallback.biggestMissStory;
     turningPointStory = args.fallback.turningPointStory;
   }
+  let draftStory = args.draftStory;
+  if (collapsesMissAndTurningPoint(draftStory)) {
+    draftStory = args.fallback.draftStory;
+  }
   const pickTakes = args.pickTakes.map((take) => {
     if (take.overallPick !== miss.overallPick) return take;
     const fb = args.fallback.pickTakes.find((t) => t.overallPick === take.overallPick);
@@ -394,7 +410,7 @@ function applySectionDiversity(
     return take;
   });
   return {
-    draftStory: args.draftStory,
+    draftStory,
     biggestMissStory,
     turningPointStory,
     pickTakes,

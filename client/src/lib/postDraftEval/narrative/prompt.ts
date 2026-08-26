@@ -29,7 +29,8 @@ Section purposes (do not repeat the same comparison in the same words):
 If the same pick is both Biggest Miss and Turning Point:
 - Miss = opportunity cost at the slot.
 - Turning Point = what it did to later roster shape.
-- Draft Story mentions it once.
+- Draft Story may mention the pick once, then move on to later roster shape.
+- Never say that one event is "both the biggest miss and the turning point", a "double whammy", or otherwise the same concept twice.
 - Pick Take stays short and does not reprint the miss/turn paragraphs.
 
 Hard rules:
