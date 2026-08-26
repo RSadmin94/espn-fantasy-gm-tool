@@ -23,6 +23,8 @@ export const AI_FEATURE_IDS = [
   "DNA",
   "TTS",
   "ENTAILMENT",
+  "POST_DRAFT_EVALUATION",
+  "POST_DRAFT_STORYTELLING",
   "OTHER",
   "UNATTRIBUTED",
 ] as const;
@@ -52,6 +54,8 @@ export const FEATURE_LABELS: Record<AiFeatureId, string> = {
   DNA: "League / Owner DNA",
   TTS: "Broadcast TTS",
   ENTAILMENT: "Commentary Entailment",
+  POST_DRAFT_EVALUATION: "Post-Draft Evaluation",
+  POST_DRAFT_STORYTELLING: "Post-Draft Storytelling",
   OTHER: "Other",
   UNATTRIBUTED: "Unattributed",
 };

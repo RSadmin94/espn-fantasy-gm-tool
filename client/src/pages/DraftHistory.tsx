@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setTrpcToken } from "@/lib/trpcAuth";
@@ -381,7 +382,10 @@ export function DraftHistory() {
         <p className="mt-1 text-sm text-muted-foreground">
           {isLegacySeason
             ? `Legacy season (${LEGACY_MIN}–${LEGACY_MAX}): ESPN combined cache first, then legacy draft recap capture.`
-            : "ESPN combined cache → normalized draft picks."}
+            : "ESPN combined cache → normalized draft picks."}{" "}
+          <Link to={`/post-draft-evaluation?season=${season}`} className="text-lime-400 hover:underline">
+            Evaluate who you should have drafted
+          </Link>
         </p>
       </div>
 

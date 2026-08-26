@@ -79,6 +79,7 @@ import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { CLERK_GOOGLE_ACCOUNT_PICKER, RIVALS_AFTER_SIGN_OUT_URL } from "@/lib/signOutRivals";
 import { Toaster } from "@/components/ui/sonner";
+import { PostDraftEvaluation } from "./pages/PostDraftEvaluation";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
@@ -282,6 +283,7 @@ const router = createBrowserRouter([
           { path: "/league-wire/article/:articleId", element: <LegacyWireArticleRedirect /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
+          { path: "/post-draft-evaluation",    element: <FeatureRouteGate route="/post-draft-evaluation"><PostDraftEvaluation /></FeatureRouteGate> },
           { path: "/transactions", element: <FeatureRouteGate route="/transactions"><Transactions /></FeatureRouteGate> },
           { path: "/standings", element: <Standings /> },
           { path: "/dynasty-power-rankings", element: <DynastyPowerRankings /> },
