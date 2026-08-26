@@ -184,10 +184,14 @@ function SSOCallbackPage() {
   return <AuthenticateWithRedirectCallback />;
 }
 
-function ProtectedLayout() {
+function SignedInGate() {
   const { isLoaded, isSignedIn } = useAuth();
   if (!isLoaded) return <LoadingSpinner />;
   if (!isSignedIn) return <Navigate to="/sign-in" replace />;
+  return <Outlet />;
+}
+
+function ProductLayout() {
   return (
     <>
       <DemoBanner />
@@ -264,7 +268,7 @@ const router = createBrowserRouter([
       { path: "/claim", element: <Claim /> },
       { path: "/reveal", element: <SignatureReveal /> },
       {
-        element: <ProtectedLayout />,
+        element: <SignedInGate />,
         children: [
           {
             element: <AdminConsoleLayout />,
@@ -291,6 +295,9 @@ const router = createBrowserRouter([
               { path: "/admin/audit", element: <AdminAudit /> },
             ],
           },
+          {
+            element: <ProductLayout />,
+            children: [
           // ── Active routes ─────────────────────────────────────────────
           ...v2PlaceholderRoutes,
           { path: "/home", element: <Home /> },
@@ -437,6 +444,8 @@ const router = createBrowserRouter([
           { path: "/offseason", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/behavioral", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/activity-capture", element: <Navigate to="/dashboard" replace /> },
+            ],
+          },
         ],
       },
       { path: "*", element: <NotFoundPage /> },
