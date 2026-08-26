@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,6 +128,7 @@ export function ownerResolutionStatusLabel(status: string): string {
 }
 
 export function ConnectSleeper() {
+  const navigate = useNavigate();
   const [leagueId, setLeagueId] = useState("");
   const [previewLeagueId, setPreviewLeagueId] = useState<string | null>(null);
   const [importedTeams, setImportedTeams] = useState<ImportedTeam[]>([]);
@@ -214,6 +216,9 @@ export function ConnectSleeper() {
       setActionError(null);
       setSaveMessage("Team selection saved.");
       void utils.providers.getMyLeagues.invalidate();
+      void utils.me.activeProfile.invalidate();
+      void utils.league.getConnectionLimits.invalidate();
+      navigate("/dashboard", { replace: true });
     },
     onError: (err) => setActionError(err.message),
   });
@@ -330,7 +335,7 @@ export function ConnectSleeper() {
       <div>
         <h1 className="text-2xl font-semibold">Connect Sleeper</h1>
         <p className="text-sm text-muted-foreground">
-          Enter your Sleeper league ID to preview, import, and select your team.
+          Enter the league number from your Sleeper league. We'll find it and connect it — no browser add-on required.
         </p>
       </div>
 

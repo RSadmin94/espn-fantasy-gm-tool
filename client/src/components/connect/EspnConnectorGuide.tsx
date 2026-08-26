@@ -125,7 +125,7 @@ export function EspnConnectorCtaRow({ className }: { className?: string }) {
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
       <Link
-        to="/connect"
+        to="/connect/espn"
         className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
       >
         <Plug className="h-3.5 w-3.5" />

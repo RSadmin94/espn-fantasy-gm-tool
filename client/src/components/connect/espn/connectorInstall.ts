@@ -1,19 +1,17 @@
 /**
- * Where "Install Connector" sends people.
+ * Where "Install the connector" sends people.
  *
- * The Chrome Web Store listing does not exist yet. Until it does, the install step falls back to
- * load-unpacked instructions so the screen is never a dead end; publishing is a one-line change
- * here and nowhere else.
+ * Isolated configuration dependency. Do not invent a Chrome Web Store URL here.
+ * When the listing is published, set VITE_CONNECTOR_INSTALL_URL (or this constant) to that URL.
+ * Empty means the listing is not available — never point users at a fake store page.
  */
-export const CONNECTOR_INSTALL_URL = "";
+const FROM_ENV =
+  typeof import.meta !== "undefined" && import.meta.env && typeof import.meta.env.VITE_CONNECTOR_INSTALL_URL === "string"
+    ? import.meta.env.VITE_CONNECTOR_INSTALL_URL.trim()
+    : "";
+
+export const CONNECTOR_INSTALL_URL = FROM_ENV;
 
 export function hasConnectorInstallUrl(): boolean {
   return CONNECTOR_INSTALL_URL.trim().length > 0;
 }
-
-export const CONNECTOR_MANUAL_INSTALL_STEPS = [
-  "Open chrome://extensions in a new tab.",
-  "Turn on Developer mode, top right.",
-  "Choose Load unpacked, then pick the Rivals Connector folder.",
-  "Come back here and choose Check again.",
-] as const;

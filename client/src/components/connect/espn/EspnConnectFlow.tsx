@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { useEspnConnectFlow } from "@/hooks/useEspnConnectFlow";
+import { nextAfterEspnConnected } from "@/lib/onboardingSetup";
 import { ConnectStepCard } from "./ConnectStepCard";
 import {
   ChooseLeagueStep,
@@ -7,6 +8,7 @@ import {
   ConnectedStep,
   ConnectingStep,
   InstallConnectorStep,
+  MobileEspnUnsupportedStep,
   SignInEspnStep,
   StartConnectStep,
 } from "./EspnConnectSteps";
@@ -16,8 +18,27 @@ import {
  * connecting — it only picks which step the user is looking at.
  */
 export function EspnConnectFlow() {
-  const { state, busy, connectedLeagues, atLimit, remainingSlots, recheck, connect, chooseLeagues } =
-    useEspnConnectFlow();
+  const {
+    state,
+    busy,
+    connectedLeagues,
+    atLimit,
+    remainingSlots,
+    connectorCapable,
+    isSetupComplete,
+    recheck,
+    connect,
+    chooseLeagues,
+  } = useEspnConnectFlow();
+
+  if (!connectorCapable) {
+    return <MobileEspnUnsupportedStep />;
+  }
+
+  const continueTo = nextAfterEspnConnected({
+    isSetupComplete,
+    leagueId: state.connected[0]?.id ?? connectedLeagues.find((l) => l.provider === "espn")?.leagueId ?? null,
+  });
 
   switch (state.step) {
     case "preflight":
@@ -54,6 +75,7 @@ export function EspnConnectFlow() {
           failed={state.failed}
           onConnectAnother={connect}
           canConnectAnother={!atLimit}
+          continueTo={continueTo}
         />
       );
 
@@ -64,8 +86,6 @@ export function EspnConnectFlow() {
 
     case "ready":
     default: {
-      // Connector and ESPN are both ready but we did not auto-connect: this account already has a
-      // league (or is at its limit), so show where they stand rather than reconnecting silently.
       const existing = connectedLeagues.filter((l) => l.provider === "espn");
       const shown = existing.length ? existing : connectedLeagues;
       if (shown.length && !atLimit) {
@@ -74,6 +94,7 @@ export function EspnConnectFlow() {
             leagues={shown.map((l) => ({ id: l.leagueId, name: l.leagueName || "Your league" }))}
             onConnectAnother={connect}
             canConnectAnother
+            continueTo={continueTo}
           />
         );
       }
@@ -81,3 +102,4 @@ export function EspnConnectFlow() {
     }
   }
 }
+

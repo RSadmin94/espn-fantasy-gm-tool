@@ -609,7 +609,7 @@ export function Settings() {
       {/* Quick nav to other pages */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
-          { label: "Connect ESPN", href: "/connect" },
+          { label: "Connect ESPN", href: "/connect/espn" },
           { label: "Sync Data",    href: "/sync" },
           { label: "AI Advisor",   href: "/advisor" },
         ].map(({ label, href }) => (
