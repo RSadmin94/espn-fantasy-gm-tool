@@ -1261,6 +1261,12 @@ export const usageEvents = mysqlTable(
     sessionId: varchar("sessionId", { length: 64 }),
     metadata: text("metadata"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
+    // Attribution columns already present on Preview/Production usage_events.
+    provider: varchar("provider", { length: 32 }),
+    featureId: varchar("featureId", { length: 64 }),
+    intent: varchar("intent", { length: 64 }),
+    leagueId: varchar("leagueId", { length: 64 }),
+    status: varchar("status", { length: 16 }),
   },
   (t) => [
     index("idx_ue_feature").on(t.featureName),

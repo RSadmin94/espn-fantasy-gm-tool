@@ -31,9 +31,29 @@ const MODEL_PRICING: Record<string, { inputPerToken: number; outputPerToken: num
   "claude-3-haiku":         { inputPerToken: 0.00000025, outputPerToken: 0.00000125 },
 };
 
+function pricingKey(model: string): string {
+  const m = model.toLowerCase();
+  if (m.startsWith("gpt-4o-mini")) return "gpt-4o-mini";
+  if (m.startsWith("gpt-4o")) return "gpt-4o";
+  return MODEL_PRICING[model] ? model : "gemini-2.5-flash";
+}
+
 function estimateCost(model: string, promptTokens: number, completionTokens: number): number {
-  const pricing = MODEL_PRICING[model] ?? MODEL_PRICING["gemini-2.5-flash"];
+  const pricing = MODEL_PRICING[pricingKey(model)] ?? MODEL_PRICING["gemini-2.5-flash"];
   return promptTokens * pricing.inputPerToken + completionTokens * pricing.outputPerToken;
+}
+
+function stringifyUserId(userId: string | number | null | undefined): string | undefined {
+  if (userId == null || userId === "") return undefined;
+  return String(userId);
+}
+
+function normalizeProvider(provider: string | null | undefined, model: string): string | undefined {
+  if (provider && provider.trim()) return provider.trim().toUpperCase();
+  if (model.toLowerCase().startsWith("gpt-")) return "OPENAI";
+  if (model.toLowerCase().startsWith("claude-")) return "ANTHROPIC";
+  if (model.toLowerCase().startsWith("gemini-")) return "GEMINI";
+  return undefined;
 }
 
 // ─── Event types ──────────────────────────────────────────────────────────────
@@ -47,8 +67,13 @@ export interface LLMUsageEvent {
   totalTokens: number;
   durationMs: number;
   streaming: boolean;
-  userId?: string;
+  userId?: string | number | null;
   metadata?: Record<string, unknown>;
+  provider?: string | null;
+  featureId?: string | null;
+  intent?: string | null;
+  leagueId?: string | null;
+  status?: "SUCCESS" | "ERROR";
 }
 
 export interface EspnUsageEvent {
@@ -88,6 +113,8 @@ async function writeEvent(row: typeof usageEvents.$inferInsert): Promise<void> {
  */
 export function trackLLMEvent(event: LLMUsageEvent): void {
   const cost = estimateCost(event.model, event.promptTokens, event.completionTokens);
+  const featureId = event.featureId?.trim() || undefined;
+  const provider = normalizeProvider(event.provider, event.model);
   void writeEvent({
     eventCategory: "llm",
     featureName: event.featureName,
@@ -97,10 +124,56 @@ export function trackLLMEvent(event: LLMUsageEvent): void {
     totalTokens: event.totalTokens,
     estimatedCostUsd: cost,
     durationMs: event.durationMs,
-    userId: event.userId,
+    userId: stringifyUserId(event.userId),
     model: event.model,
     streaming: event.streaming,
     metadata: event.metadata ? JSON.stringify(event.metadata) : undefined,
+    provider,
+    featureId,
+    intent: event.intent ?? undefined,
+    leagueId: event.leagueId ?? undefined,
+    status: event.status ?? "SUCCESS",
+  });
+}
+
+/** Map invokeLLM usageContext onto the usage_events write path. */
+export function recordInvokeUsage(
+  params: {
+    callType?: string;
+    usageContext?: {
+      feature?: string | null;
+      intent?: string | null;
+      userId?: string | number | null;
+      leagueId?: string | null;
+    };
+  },
+  usageData: {
+    model: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    durationMs: number;
+    streaming: boolean;
+  },
+  provider: string,
+): void {
+  const ctx = params.usageContext;
+  const feature = ctx?.feature?.trim() || params.callType || "llm.unspecified";
+  trackLLMEvent({
+    featureName: feature,
+    callType: params.callType ?? "unspecified",
+    model: usageData.model,
+    promptTokens: usageData.promptTokens,
+    completionTokens: usageData.completionTokens,
+    totalTokens: usageData.totalTokens,
+    durationMs: usageData.durationMs,
+    streaming: usageData.streaming,
+    userId: ctx?.userId,
+    provider,
+    featureId: ctx?.feature,
+    intent: ctx?.intent,
+    leagueId: ctx?.leagueId,
+    status: "SUCCESS",
   });
 }
 

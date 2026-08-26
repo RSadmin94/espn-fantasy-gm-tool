@@ -82,6 +82,7 @@ import { getV2CanonicalRoutes, getV2DestinationByRoute, V2_PARAM_ROUTES } from "
 import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
+import { PostDraftEvaluation } from "./pages/PostDraftEvaluation";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
@@ -330,6 +331,7 @@ const router = createBrowserRouter([
           { path: "/league/commissioner", element: <LeagueCommissioner /> },
           { path: "/draft-war-room",           element: <FeatureRouteGate route="/draft-war-room"><DraftWarRoom /></FeatureRouteGate> },
           { path: "/draft-commentary",         element: <FeatureRouteGate route="/draft-commentary"><DraftCommentary /></FeatureRouteGate> },
+          { path: "/post-draft-evaluation",    element: <FeatureRouteGate route="/post-draft-evaluation"><PostDraftEvaluation /></FeatureRouteGate> },
           { path: "/transactions", element: <Navigate to="/league/history/transactions" replace /> },
           { path: "/standings", element: <Navigate to="/league/standings" replace /> },
           { path: "/dynasty-power-rankings", element: <Navigate to="/league/standings/power-rankings" replace /> },
