@@ -10,6 +10,7 @@ const EXEMPT_PREFIXES = [
   "/claim",
   "/sync",
   "/sign-in",
+  "/admin",
 ];
 
 function isExempt(pathname: string): boolean {

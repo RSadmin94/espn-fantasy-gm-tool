@@ -37,7 +37,7 @@ import { ProductHelpButton, ProductOnboardingProvider } from "@/components/onboa
 import { V1 } from "@/lib/v1Copy";
 import { buildV2NavGroups, getV2NavHref, isV2RouteActive, type V2Destination } from "@/lib/v2Navigation";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
-import { setSessionUnlocked } from "@/lib/rivalsProSessionUnlock";
+import { signOutOfRivals } from "@/lib/signOutRivals";
 import { normalizeLeagueProvider, shouldShowSyncDataNav } from "@/lib/leagueProvider";
 
 type NavEntry = { kind: "link"; label: string; href: string; icon: LucideIcon; locked?: boolean };
@@ -635,7 +635,9 @@ function Sidebar({
 function Header({ onMenuClick }: { onMenuClick: () => void }) {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const queryClient = useQueryClient();
   const location = useLocation();
+  const sessionQ = trpc.me.session.useQuery();
   const activeQ = trpc.league.getActive.useQuery(undefined, { staleTime: 30_000 });
   const activeProvider = normalizeLeagueProvider(activeQ.data?.provider);
   const showSyncData = shouldShowSyncDataNav(activeProvider);
@@ -683,6 +685,13 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
                 {V1.features.settings}
               </Link>
             </DropdownMenuItem>
+            {sessionQ.data?.isAdmin ? (
+            <DropdownMenuItem asChild>
+              <Link to="/admin" className="cursor-pointer">
+                Admin Console
+              </Link>
+            </DropdownMenuItem>
+            ) : null}
             {showSyncData ? (
               <DropdownMenuItem asChild>
                 <Link to="/sync" className="cursor-pointer" data-nav="sync-data">
@@ -705,7 +714,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => { setSessionUnlocked(false); signOut(); }}
+          onClick={() => { void signOutOfRivals({ signOut, queryClient }); }}
           className="gap-2 text-muted-foreground hover:text-foreground"
         >
           <LogOut className="h-4 w-4" />
@@ -719,6 +728,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 export function AppShell() {
   const location = useLocation();
   const outlet = useOutlet();
+  const sessionQ = trpc.me.session.useQuery();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [leagueSwitchOverlayDepth, setLeagueSwitchOverlayDepth] = useState(0);
   const bumpLeagueSwitchOverlay = useCallback((delta: 1 | -1) => {
@@ -756,7 +766,16 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Header onMenuClick={() => setSidebarOpen(true)} />
         <main key={location.pathname} className="flex-1 overflow-y-auto bg-background p-4 md:p-6">
-          {outlet}
+          {sessionQ.data?.isSuspended && !sessionQ.data.isOwner ? (
+            <div className="mx-auto max-w-lg py-16 text-center">
+              <h1 className="text-2xl font-bold">Account suspended</h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                This account cannot use Fantasy Football Rivals right now. Sign out or contact the application owner.
+              </p>
+            </div>
+          ) : (
+            outlet
+          )}
         </main>
       </div>
 

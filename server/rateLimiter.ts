@@ -24,8 +24,11 @@ const AGENT_COOLDOWN_SECONDS = 10;
 /** Minimum seconds between weekly_briefing calls per user */
 const BRIEFING_COOLDOWN_SECONDS = 30;
 
-/** Max LLM tokens per user per day (rolling 24h window) */
-const DAILY_TOKEN_BUDGET = 50_000;
+/** Max LLM tokens per user per UTC calendar day (default budget). */
+export const DAILY_TOKEN_BUDGET = 50_000;
+
+/** Daily token accounting uses the UTC calendar day (00:00–24:00 UTC). */
+export const AI_USAGE_DAY_TIMEZONE = "UTC";
 
 /** Admin users get this multiplier on all limits */
 const ADMIN_MULTIPLIER = 5;
@@ -42,7 +45,20 @@ interface DailyUsageEntry {
 }
 
 const cooldowns = new Map<string, CooldownEntry>(); // key: `${userId}:${callType}`
-const dailyUsage = new Map<number, DailyUsageEntry>(); // key: userId
+const dailyUsage = new Map<number, DailyUsageEntry>(); // key: userId — rolling 24h throttle budget
+const utcDayUsage = new Map<string, number>(); // key: `${userId}:${yyyy-mm-dd}` UTC calendar day
+
+export function utcUsageDayKey(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+export function utcUsageDayStart(now = new Date()): Date {
+  return new Date(`${utcUsageDayKey(now)}T00:00:00.000Z`);
+}
+
+export function tokensUsedUtcDay(userId: number, now = new Date()): number {
+  return utcDayUsage.get(`${userId}:${utcUsageDayKey(now)}`) ?? 0;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -62,9 +78,14 @@ export function checkRateLimit(opts: {
   userId: number;
   callType: string;
   isAdmin?: boolean;
+  tokenBudgetMultiplier?: number;
+  dailyTokenLimit?: number | null;
 }): { allowed: boolean; reason?: string } {
-  const { userId, callType, isAdmin = false } = opts;
-  const multiplier = isAdmin ? ADMIN_MULTIPLIER : 1;
+  const { userId, callType, isAdmin = false, tokenBudgetMultiplier = 1, dailyTokenLimit } = opts;
+  if (tokenBudgetMultiplier <= 0) {
+    return { allowed: false, reason: "AI access is disabled for this account." };
+  }
+  const multiplier = (isAdmin ? ADMIN_MULTIPLIER : 1) * tokenBudgetMultiplier;
   const now = Date.now();
 
   // 1. Cooldown check
@@ -79,13 +100,21 @@ export function checkRateLimit(opts: {
     }
   }
 
-  // 2. Daily token budget check
+  // 2. Rolling 24h throttle budget
   const dailyBudget = DAILY_TOKEN_BUDGET * multiplier;
   const usage = dailyUsage.get(userId);
   const windowStart = now - 24 * 60 * 60 * 1000;
   if (usage && usage.windowStart > windowStart) {
     if (usage.tokensUsed >= dailyBudget) {
       return { allowed: false, reason: "Daily AI usage limit reached. Resets in 24 hours." };
+    }
+  }
+
+  // 3. Per-account UTC calendar-day cap
+  if (dailyTokenLimit != null && dailyTokenLimit > 0) {
+    const usedToday = tokensUsedUtcDay(userId, new Date(now));
+    if (usedToday >= dailyTokenLimit) {
+      return { allowed: false, reason: "Daily AI token limit reached. Resets at 00:00 UTC." };
     }
   }
 
@@ -107,15 +136,17 @@ export function recordUsage(opts: {
   // Update cooldown
   cooldowns.set(`${userId}:${callType}`, { lastCallAt: now });
 
-  // Update daily usage
+  // Update rolling 24h usage
   const windowStart = now - 24 * 60 * 60 * 1000;
   const existing = dailyUsage.get(userId);
   if (!existing || existing.windowStart <= windowStart) {
-    // Start fresh window
     dailyUsage.set(userId, { windowStart: now, tokensUsed });
   } else {
     existing.tokensUsed += tokensUsed;
   }
+
+  const dayKey = `${userId}:${utcUsageDayKey(new Date(now))}`;
+  utcDayUsage.set(dayKey, (utcDayUsage.get(dayKey) ?? 0) + tokensUsed);
 }
 
 /**
@@ -124,6 +155,7 @@ export function recordUsage(opts: {
 export function resetRateLimiter(): void {
   cooldowns.clear();
   dailyUsage.clear();
+  utcDayUsage.clear();
 }
 
 /**

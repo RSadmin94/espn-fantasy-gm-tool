@@ -5,6 +5,7 @@
 
 import { ENV } from "./env";
 import type { AiUsageContext } from "../aiCost/aiFeatures";
+import { randomUUID } from "node:crypto";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -961,16 +962,63 @@ async function* invokeGeminiStream(params: InvokeParams): AsyncGenerator<string,
 // Public API — provider-agnostic
 // ---------------------------------------------------------------------------
 
+function withUsageRequestId(params: InvokeParams): InvokeParams {
+  if (params.usageContext?.requestId) return params;
+  return {
+    ...params,
+    usageContext: {
+      ...params.usageContext,
+      requestId: randomUUID(),
+    },
+  };
+}
+
+async function enforceUsageGuards(params: InvokeParams): Promise<void> {
+  const uidRaw = params.usageContext?.userId;
+  const uid = uidRaw != null && String(uidRaw) !== "" ? Number(uidRaw) : NaN;
+  if (!Number.isInteger(uid) || uid <= 0) return;
+
+  const { evaluateLlmAccess } = await import("../adminConsole/aiAccessPolicy");
+  const decision = await evaluateLlmAccess({
+    userId: uid,
+    featureKey: params.usageContext?.feature ?? null,
+    callType: params.callType,
+  });
+  if (!decision.allowed) {
+    try {
+      const { trackLLMEvent } = await import("../usageTracker");
+      trackLLMEvent({
+        featureName: params.usageContext?.feature ?? params.callType ?? "llm.denied",
+        callType: params.callType ?? "unspecified",
+        model: params.model ?? "unknown",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs: 0,
+        streaming: false,
+        userId: uid,
+        status: "ERROR",
+        errorCode: decision.code,
+      });
+    } catch {
+      /* telemetry must not block the deny */
+    }
+    throw new Error(decision.reason ?? "AI access is disabled for this account.");
+  }
+}
+
 /**
  * Standard (non-streaming) LLM invocation.
  * Provider selected by LLM_PROVIDER env var: "anthropic" | "openai" | "gemini"
  * Defaults to "anthropic".
  */
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
+  const next = withUsageRequestId(params);
+  await enforceUsageGuards(next);
   const provider = ENV.llmProvider;
-  if (provider === "openai") return invokeOpenAI(params);
-  if (provider === "gemini") return invokeGemini(params);
-  return invokeAnthropic(params);
+  if (provider === "openai") return invokeOpenAI(next);
+  if (provider === "gemini") return invokeGemini(next);
+  return invokeAnthropic(next);
 }
 
 /**
@@ -986,8 +1034,10 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
 export async function* invokeLLMStream(
   params: InvokeParams
 ): AsyncGenerator<string, void, unknown> {
+  const next = withUsageRequestId(params);
+  await enforceUsageGuards(next);
   const provider = ENV.llmProvider;
-  if (provider === "openai") yield* invokeOpenAIStream(params);
-  else if (provider === "gemini") yield* invokeGeminiStream(params);
-  else yield* invokeAnthropicStream(params);
+  if (provider === "openai") yield* invokeOpenAIStream(next);
+  else if (provider === "gemini") yield* invokeGeminiStream(next);
+  else yield* invokeAnthropicStream(next);
 }

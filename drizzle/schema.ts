@@ -21,7 +21,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["user", "admin", "owner"]).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -1249,10 +1249,11 @@ export const usageEvents = mysqlTable(
     promptTokens: int("promptTokens").notNull().default(0),
     completionTokens: int("completionTokens").notNull().default(0),
     totalTokens: int("totalTokens").notNull().default(0),
+    /** Calculated cost at write time. Never rewritten when catalog rates change. */
     estimatedCostUsd: float("estimatedCostUsd").notNull().default(0),
     durationMs: int("durationMs").notNull().default(0),
     userId: varchar("userId", { length: 64 }),
-    model: varchar("model", { length: 64 }),
+    model: varchar("model", { length: 128 }),
     streaming: boolean("streaming").notNull().default(false),
     // UI event fields (null for server-side LLM/ESPN/tRPC events)
     eventType: varchar("eventType", { length: 32 }),
@@ -1266,7 +1267,18 @@ export const usageEvents = mysqlTable(
     featureId: varchar("featureId", { length: 64 }),
     intent: varchar("intent", { length: 64 }),
     leagueId: varchar("leagueId", { length: 64 }),
+    requestId: varchar("requestId", { length: 64 }),
+    parentRequestId: varchar("parentRequestId", { length: 64 }),
+    retryCount: int("retryCount").notNull().default(0),
+    cachedInputTokens: int("cachedInputTokens").notNull().default(0),
     status: varchar("status", { length: 16 }),
+    errorCode: varchar("errorCode", { length: 64 }),
+    generated: boolean("generated"),
+    delivered: boolean("delivered"),
+    displayed: boolean("displayed"),
+    discarded: boolean("discarded"),
+    costPriced: boolean("costPriced"),
+    providerReportedCostUsd: float("providerReportedCostUsd"),
   },
   (t) => [
     index("idx_ue_feature").on(t.featureName),
@@ -1275,10 +1287,77 @@ export const usageEvents = mysqlTable(
     index("idx_ue_user").on(t.userId),
     index("idx_ue_event_type").on(t.eventType),
     index("idx_ue_session").on(t.sessionId),
+    index("idx_ue_provider").on(t.provider),
+    index("idx_ue_model").on(t.model),
+    index("idx_ue_feature_id").on(t.featureId),
+    index("idx_ue_intent").on(t.intent),
+    index("idx_ue_league").on(t.leagueId),
+    index("idx_ue_request").on(t.requestId),
+    index("idx_ue_status").on(t.status),
   ]
 );
 export type UsageEvent = typeof usageEvents.$inferSelect;
 export type InsertUsageEvent = typeof usageEvents.$inferInsert;
+
+/** Isolated key/value settings (monthly AI budget, etc.). Not user-facing product config. */
+export const appSettings = mysqlTable("app_settings", {
+  key: varchar("key", { length: 64 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AppSetting = typeof appSettings.$inferSelect;
+
+/** Owner/admin account restrictions (throttle, suspend, AI disable). */
+export const adminAccountControls = mysqlTable("admin_account_controls", {
+  userId: int("userId").primaryKey(),
+  status: mysqlEnum("status", [
+    "active",
+    "watched",
+    "throttled",
+    "restricted",
+    "suspended",
+  ]).default("active").notNull(),
+  aiDisabled: boolean("aiDisabled").notNull().default(false),
+  dailyTokenLimit: int("dailyTokenLimit"),
+  notes: text("notes"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedByUserId: int("updatedByUserId"),
+});
+export type AdminAccountControl = typeof adminAccountControls.$inferSelect;
+
+/** Runtime feature overrides. Missing row = enabled for everyone entitled. */
+export const adminFeatureOverrides = mysqlTable("admin_feature_overrides", {
+  featureId: varchar("featureId", { length: 64 }).primaryKey(),
+  enabled: boolean("enabled").notNull().default(true),
+  maintenance: boolean("maintenance").notNull().default(false),
+  restrictTo: mysqlEnum("restrictTo", ["none", "admin", "owner"]).notNull().default("none"),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type AdminFeatureOverride = typeof adminFeatureOverrides.$inferSelect;
+
+/** Consequential admin actions. */
+export const adminAuditLog = mysqlTable(
+  "admin_audit_log",
+  {
+    id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    actorUserId: int("actorUserId").notNull(),
+    actorOpenId: varchar("actorOpenId", { length: 64 }),
+    action: varchar("action", { length: 64 }).notNull(),
+    targetType: varchar("targetType", { length: 32 }).notNull(),
+    targetId: varchar("targetId", { length: 128 }).notNull(),
+    previousValue: text("previousValue"),
+    newValue: text("newValue"),
+    reason: text("reason"),
+  },
+  (t) => [
+    index("idx_aal_created").on(t.createdAt),
+    index("idx_aal_actor").on(t.actorUserId),
+    index("idx_aal_action").on(t.action),
+    index("idx_aal_target").on(t.targetType, t.targetId),
+  ],
+);
+export type AdminAuditLog = typeof adminAuditLog.$inferSelect;
 
 // ─── Scraped Trades (from Chrome extension) ──────────────────────────────────
 // Stores completed trades scraped from the ESPN transactions page via the

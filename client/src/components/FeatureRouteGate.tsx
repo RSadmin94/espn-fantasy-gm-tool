@@ -3,6 +3,7 @@ import { getFeatureByRoute } from "@/lib/featureRegistry";
 import { usePremiumAccess } from "@/hooks/usePremiumAccess";
 import { FeatureLockedPage } from "@/components/FeatureLockedPage";
 import { PageLoading } from "@/components/layout";
+import { trpc } from "@/lib/trpc";
 
 type FeatureRouteGateProps = {
   route: string;
@@ -16,8 +17,18 @@ type FeatureRouteGateProps = {
 export function FeatureRouteGate({ route, children }: FeatureRouteGateProps) {
   const feature = getFeatureByRoute(route);
   const { hasAccess, isLoading } = usePremiumAccess();
+  const sessionQ = trpc.me.session.useQuery();
+  const blockedReason = feature ? sessionQ.data?.blockedFeatures?.[feature.id] : undefined;
 
-  if (!feature || feature.requiredPlan === "free") {
+  if (!feature) return <>{children}</>;
+  if (blockedReason) {
+    return (
+      <div className="mx-auto max-w-lg p-8 text-center text-sm text-muted-foreground">
+        {blockedReason}
+      </div>
+    );
+  }
+  if (feature.requiredPlan === "free") {
     return <>{children}</>;
   }
 
