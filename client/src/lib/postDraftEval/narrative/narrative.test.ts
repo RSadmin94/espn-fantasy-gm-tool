@@ -9,6 +9,7 @@ import {
   compactFactsSize,
   collapsesMissAndTurningPoint,
   groundNarrative,
+  awardCardBody,
   narrativeCacheMaterial,
   storytellingAllowed,
   type NarrativeFacts,
@@ -658,5 +659,24 @@ describe("post-draft storytelling grounding", () => {
   it("does not change evaluator version or narrative version", () => {
     expect(EVALUATOR_VERSION).toBe("post-draft-eval-04");
     expect(NARRATIVE_VERSION).toBe("post-draft-eval-06");
+  });
+
+  it("report-card copy prefers distinct narrative purposes over overlapping evaluator why", () => {
+    const missWhy = "Quentin Johnston appears to have been the stronger roster-building option.";
+    const turnWhy = "Quentin Johnston appears to have been the stronger roster-building option.";
+    const missStory = "Rivals preferred Quentin Johnston. You took Tre Tucker instead. Immediate opportunity cost at this slot.";
+    const turnStory = "Round 9 is the hinge because of what it did next, not the name on the card.";
+    expect(awardCardBody({ storyReady: false, narrativeStory: missStory, evaluatorWhy: missWhy, empty: "empty" })).toBe(missWhy);
+    expect(
+      awardCardBody({ storyReady: true, narrativeStory: missStory, evaluatorWhy: missWhy, empty: "empty" }),
+    ).toBe(missStory);
+    expect(
+      awardCardBody({ storyReady: true, narrativeStory: turnStory, evaluatorWhy: turnWhy, empty: "empty" }),
+    ).toBe(turnStory);
+    expect(
+      awardCardBody({ storyReady: true, narrativeStory: missStory, evaluatorWhy: missWhy, empty: "empty" }),
+    ).not.toBe(
+      awardCardBody({ storyReady: true, narrativeStory: turnStory, evaluatorWhy: turnWhy, empty: "empty" }),
+    );
   });
 });

@@ -1,5 +1,19 @@
 import type { GroundedNarrative, NarrativeFacts } from "./types";
 
+/** Prefer grounded section copy so overlapping award identities still read as distinct purposes. */
+export function awardCardBody(args: {
+  storyReady: boolean;
+  narrativeStory?: string | null;
+  evaluatorWhy?: string | null;
+  empty: string;
+}): string {
+  if (args.storyReady) {
+    const story = args.narrativeStory?.trim();
+    if (story) return story;
+  }
+  return args.evaluatorWhy?.trim() || args.empty;
+}
+
 export function buildShareCardText(facts: NarrativeFacts, narrative: GroundedNarrative): string {
   const best = facts.bestPick
     ? `${facts.bestPick.actualName} (Rd ${facts.bestPick.round}, pick ${facts.bestPick.overallPick})`

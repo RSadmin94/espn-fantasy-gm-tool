@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { buildFormatProfile } from "@/lib/liveDraftGrade";
 import {
   evaluatePostDraft,
+  awardCardBody,
   buildNarrativeFacts,
   buildShareCardText,
   pdeMayEvaluate,
@@ -403,17 +404,25 @@ function EvaluationBody({
           <HeadlineCard
             label="Best Pick"
             title={evaled.bestPick ? `${evaled.bestPick.actualName} · ${evaled.bestPick.round}.${evaled.bestPick.overallPick}` : "No standout best pick identified"}
-            body={evaled.bestPick?.why ?? "No standout best pick identified"}
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.bestPickStory,
+              evaluatorWhy: evaled.bestPick?.why,
+              empty: "No standout best pick identified",
+            })}
             tone="good"
           />
           <HeadlineCard
             label="Biggest Miss"
             title={evaled.biggestMiss ? `Rd ${evaled.biggestMiss.round} · ${evaled.biggestMiss.actualName}` : "No major draft miss identified"}
-            body={
-              evaled.biggestMiss
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.biggestMissStory,
+              evaluatorWhy: evaled.biggestMiss
                 ? `Could have taken ${evaled.biggestMiss.altName}. ${evaled.biggestMiss.why}`
-                : "Gaps were small. We do not manufacture drama for a one-spot ranking difference."
-            }
+                : null,
+              empty: "Gaps were small. We do not manufacture drama for a one-spot ranking difference.",
+            })}
             tone={evaled.biggestMiss ? "warn" : "neutral"}
           />
         </div>
@@ -421,7 +430,12 @@ function EvaluationBody({
           <HeadlineCard
             label="Turning Point"
             title={evaled.turningPoint ? `Rd ${evaled.turningPoint.round} · ${evaled.turningPoint.actualName}` : "No major turning point identified"}
-            body={evaled.turningPoint?.why ?? "No pick uniquely bent the rest of the roster."}
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.turningPointStory,
+              evaluatorWhy: evaled.turningPoint?.why,
+              empty: "No pick uniquely bent the rest of the roster.",
+            })}
           />
           <HeadlineCard label="Strongest Position" title={evaled.strongestPosition ?? "—"} body="Relative to starter requirements." />
           <HeadlineCard label="Weakest Position" title={evaled.weakestPosition ?? "—"} body="Still short of a starting-lineup need." />
@@ -491,19 +505,34 @@ function EvaluationBody({
           <HeadlineCard
             label="Best Pick"
             title={evaled.bestPick ? evaled.bestPick.actualName : "No standout best pick identified"}
-            body={storyReady ? remote.bestPickStory ?? evaled.bestPick?.why ?? "No standout best pick identified" : evaled.bestPick?.why ?? "No standout best pick identified"}
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.bestPickStory,
+              evaluatorWhy: evaled.bestPick?.why,
+              empty: "No standout best pick identified",
+            })}
             tone="good"
           />
           <HeadlineCard
             label="Biggest Miss"
             title={evaled.biggestMiss ? evaled.biggestMiss.actualName : "No major miss identified"}
-            body={storyReady ? remote.biggestMissStory ?? (evaled.biggestMiss ? evaled.biggestMiss.why : "We do not manufacture a miss.") : evaled.biggestMiss ? evaled.biggestMiss.why : "We do not manufacture a miss."}
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.biggestMissStory,
+              evaluatorWhy: evaled.biggestMiss?.why,
+              empty: "We do not manufacture a miss.",
+            })}
             tone={evaled.biggestMiss ? "warn" : "neutral"}
           />
           <HeadlineCard
             label="Turning Point"
             title={evaled.turningPoint ? evaled.turningPoint.actualName : "No major turning point identified"}
-            body={storyReady ? remote.turningPointStory ?? evaled.turningPoint?.why ?? "No pick uniquely bent the rest of the roster." : evaled.turningPoint?.why ?? "No pick uniquely bent the rest of the roster."}
+            body={awardCardBody({
+              storyReady,
+              narrativeStory: remote?.turningPointStory,
+              evaluatorWhy: evaled.turningPoint?.why,
+              empty: "No pick uniquely bent the rest of the roster.",
+            })}
           />
         </div>
       </IntelPanel>

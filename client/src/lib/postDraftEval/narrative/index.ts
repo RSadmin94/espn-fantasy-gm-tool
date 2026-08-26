@@ -41,4 +41,4 @@ export {
   groundNarrative,
 } from "./sanitize";
 export { buildNarrativePrompt, NARRATIVE_JSON_SCHEMA, NARRATIVE_SYSTEM_PROMPT } from "./prompt";
-export { buildShareCardText } from "./share";
+export { awardCardBody, buildShareCardText } from "./share";

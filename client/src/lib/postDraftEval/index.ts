@@ -64,6 +64,7 @@ export {
   buildFallbackNarrative,
   emptyUnavailableNarrative,
   groundNarrative,
+  awardCardBody,
   buildShareCardText,
   storytellingAllowed,
   type GroundedNarrative,
