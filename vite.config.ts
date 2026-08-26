@@ -183,6 +183,8 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // Vite root is client/, so Rollup otherwise misses repo-root tslib used by Radix.
+      tslib: path.resolve(import.meta.dirname, "node_modules", "tslib"),
     },
   },
   envDir: path.resolve(import.meta.dirname),

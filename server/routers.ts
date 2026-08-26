@@ -39,6 +39,8 @@ import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
 import { postDraftEvalRouter } from "./postDraftEvalRouter";
+import { usageCostRouter } from "./usageCostRouter";
+import { adminConsoleRouter } from "./adminConsole/router";
 import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
 import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
@@ -761,6 +763,8 @@ export const appRouter = router({
   billing: billingRouter,
   funnel: funnelRouter,
   me: meRouter,
+  usageCost: usageCostRouter,
+  adminConsole: adminConsoleRouter,
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,
   completedTradeIntel: completedTradeIntelRouter,
@@ -10664,7 +10668,16 @@ Provide:
         );
         const chatLeagueId = sanitizeAdvisorChatLeagueId(String(resolvedLid ?? ""));
         // Rate limit check
-        const rl = checkRateLimit({ userId, callType: "advisor", isAdmin: ctx.user.role === "admin" });
+        const { evaluateAiPolicy } = await import("./adminConsole/accountControls");
+        const policy = await evaluateAiPolicy(userId);
+        if (!policy.allowed) throw new TRPCError({ code: "FORBIDDEN", message: policy.reason ?? "AI access disabled" });
+        const rl = checkRateLimit({
+          userId,
+          callType: "advisor",
+          isAdmin: ctx.user.role === "admin" || ctx.user.role === "owner",
+          tokenBudgetMultiplier: policy.tokenBudgetMultiplier,
+          dailyTokenLimit: policy.dailyTokenLimit,
+        });
         if (!rl.allowed) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: rl.reason ?? "Rate limit exceeded" });
         await addChatMessage(userId, "user", input.message, season, chatLeagueId);
 

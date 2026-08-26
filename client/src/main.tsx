@@ -43,6 +43,22 @@ import { RfsnAnalysts } from "./pages/rfsn/RfsnAnalysts";
 import { DraftWarRoom }      from "./pages/DraftWarRoom";
 import { DraftCommentary }   from "./pages/DraftCommentary";
 import { AdminConversionFunnel } from "./pages/AdminConversionFunnel";
+import { AdminUsageCost } from "./pages/AdminUsageCost";
+import { AdminConsoleLayout, AdminIndexRedirect } from "./pages/admin/AdminConsoleLayout";
+import { AdminOverview } from "./pages/admin/AdminOverview";
+import { AdminUsers } from "./pages/admin/AdminUsers";
+import { AdminUserDetail } from "./pages/admin/AdminUserDetail";
+import { AdminAuth } from "./pages/admin/AdminAuth";
+import { AdminLeagues, AdminDataHealth } from "./pages/admin/AdminLeagues";
+import { AdminLeagueDetail } from "./pages/admin/AdminLeagueDetail";
+import { AdminFeatures } from "./pages/admin/AdminFeatures";
+import { AdminFeatureDetail } from "./pages/admin/AdminFeatureDetail";
+import { AdminAnalytics } from "./pages/admin/AdminAnalytics";
+import { AdminErrors } from "./pages/admin/AdminErrors";
+import { AdminJobs } from "./pages/admin/AdminJobs";
+import { AdminIntegrations, AdminProviders } from "./pages/admin/AdminIntegrations";
+import { AdminSettingsPage } from "./pages/admin/AdminSettingsPage";
+import { AdminAudit } from "./pages/admin/AdminAudit";
 import { FeatureRouteGate } from "./components/FeatureRouteGate";
 import { SignatureReveal } from "./pages/SignatureReveal";
 import { Home } from "./pages/Home";
@@ -83,6 +99,7 @@ import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { PostDraftEvaluation } from "./pages/PostDraftEvaluation";
+import { CLERK_GOOGLE_ACCOUNT_PICKER, RIVALS_AFTER_SIGN_OUT_URL } from "@/lib/signOutRivals";
 import "./index.css";
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
@@ -151,7 +168,7 @@ function LoadingSpinner() {
 function SignInPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background">
-      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/connect" signUpFallbackRedirectUrl="/connect" />
+      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/connect" signUpFallbackRedirectUrl="/connect" {...CLERK_GOOGLE_ACCOUNT_PICKER} />
       <div className="flex flex-col items-center gap-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">or</div>
         <TryDemoButton />
@@ -232,7 +249,7 @@ function NotFoundPage() {
 const router = createBrowserRouter([
   {
     element: (
-      <ClerkProvider publishableKey={PUBLISHABLE_KEY ?? ""}>
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY ?? ""} afterSignOutUrl={RIVALS_AFTER_SIGN_OUT_URL}>
         <Outlet />
       </ClerkProvider>
     ),
@@ -249,6 +266,31 @@ const router = createBrowserRouter([
       {
         element: <ProtectedLayout />,
         children: [
+          {
+            element: <AdminConsoleLayout />,
+            children: [
+              { path: "/admin", element: <AdminIndexRedirect /> },
+              { path: "/admin/overview", element: <AdminOverview /> },
+              { path: "/admin/users", element: <AdminUsers /> },
+              { path: "/admin/users/:userId", element: <AdminUserDetail /> },
+              { path: "/admin/auth", element: <AdminAuth /> },
+              { path: "/admin/leagues", element: <AdminLeagues /> },
+              { path: "/admin/leagues/:provider/:leagueId", element: <AdminLeagueDetail /> },
+              { path: "/admin/data-health", element: <AdminDataHealth /> },
+              { path: "/admin/usage", element: <AdminUsageCost /> },
+              { path: "/admin/usage-cost", element: <Navigate to="/admin/usage" replace /> },
+              { path: "/admin/providers", element: <AdminProviders /> },
+              { path: "/admin/features", element: <AdminFeatures /> },
+              { path: "/admin/features/:featureId", element: <AdminFeatureDetail /> },
+              { path: "/admin/conversion-funnel", element: <AdminConversionFunnel /> },
+              { path: "/admin/analytics", element: <AdminAnalytics /> },
+              { path: "/admin/errors", element: <AdminErrors /> },
+              { path: "/admin/jobs", element: <AdminJobs /> },
+              { path: "/admin/integrations", element: <AdminIntegrations /> },
+              { path: "/admin/settings", element: <AdminSettingsPage /> },
+              { path: "/admin/audit", element: <AdminAudit /> },
+            ],
+          },
           // ── Active routes ─────────────────────────────────────────────
           ...v2PlaceholderRoutes,
           { path: "/home", element: <Home /> },
@@ -395,7 +437,6 @@ const router = createBrowserRouter([
           { path: "/offseason", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/behavioral", element: <Navigate to="/dashboard" replace /> },
           { path: "/admin/activity-capture", element: <Navigate to="/dashboard" replace /> },
-          { path: "/admin/conversion-funnel", element: <AdminConversionFunnel /> },
         ],
       },
       { path: "*", element: <NotFoundPage /> },
