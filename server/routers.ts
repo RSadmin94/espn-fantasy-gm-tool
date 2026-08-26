@@ -38,6 +38,7 @@ import { orphanExecutedProposalIds } from "@shared/transactionDisplay";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
+import { postDraftEvalRouter } from "./postDraftEvalRouter";
 import { demoRouter } from "./demoRouter";
 import { activityDnaRouter } from "./activityDnaRouter";
 import { transactionAnalysisRouter } from "./transactionAnalysisRouter";
@@ -765,6 +766,7 @@ export const appRouter = router({
   completedTradeIntel: completedTradeIntelRouter,
   rivalryStory: rivalryStoryRouter,
   sofia: sofiaRouter,
+  postDraftEval: postDraftEvalRouter,
   rivalryShare: rivalryShareRouter,
   demo: demoRouter,
   activityDna: activityDnaRouter,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { useAuth, useUser } from "@clerk/react-router";
 import { trpc } from "@/lib/trpc";
 import { setTrpcToken } from "@/lib/trpcAuth";
@@ -660,7 +661,10 @@ export function DraftHistory() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Draft History</h1>
         <p className={cn("mt-1", TYPE_READABLE_BODY, "text-ink-secondary")}>
-          Draft Board is the pick ledger. Draft Receipts package each owner's grades to copy and send.
+          Draft Board is the pick ledger. Draft Receipts package each owner's grades to copy and send.{" "}
+          <Link to={`/post-draft-evaluation?season=${season}`} className="text-lime-400 hover:underline">
+            Evaluate who you should have drafted
+          </Link>
         </p>
       </div>
 

@@ -4,6 +4,7 @@
 // All callers use the same invokeLLM / invokeLLMStream interface — no changes needed upstream.
 
 import { ENV } from "./env";
+import type { AiUsageContext } from "../aiCost/aiFeatures";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -88,6 +89,27 @@ const OPENAI_DEFAULT_MODEL = "gpt-4o";
 const GEMINI_API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
+/** Active provider from `LLM_PROVIDER`. Unset defaults to anthropic in code; production/preview set openai. */
+export function resolveLlmProvider(): "anthropic" | "openai" | "gemini" {
+  return ENV.llmProvider;
+}
+
+/** Model `invokeLLM` will send when the caller does not pass `params.model`. */
+export function resolveLlmModel(explicitModel?: string): string {
+  if (explicitModel) return explicitModel;
+  const provider = resolveLlmProvider();
+  if (provider === "openai") return ENV.openaiModel || OPENAI_DEFAULT_MODEL;
+  if (provider === "gemini") return ENV.geminiModel || GEMINI_DEFAULT_MODEL;
+  return ENV.anthropicModel || ANTHROPIC_DEFAULT_MODEL;
+}
+
+export function resolveLlmRoute(explicitModel?: string): {
+  provider: "anthropic" | "openai" | "gemini";
+  model: string;
+} {
+  return { provider: resolveLlmProvider(), model: resolveLlmModel(explicitModel) };
+}
+
 // ---------------------------------------------------------------------------
 // Shared types
 // ---------------------------------------------------------------------------
@@ -115,6 +137,8 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  /** Feature / user / intent attribution — captured at the provider boundary. */
+  usageContext?: AiUsageContext;
 };
 
 export type ToolCall = {

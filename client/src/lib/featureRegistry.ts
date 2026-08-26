@@ -16,6 +16,7 @@ import {
   Route,
   ShoppingCart,
   Calendar,
+  GitCompare,
   Crown,
   Target,
   Film,
@@ -233,6 +234,22 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     experienceCategory: "Draft Intelligence",
     marketingDescription:
       "Sofia's evidence-grounded commentary on every pick in your mock draft — verified against league facts.",
+  },
+  {
+    entryType: "route",
+    id: "post-draft-evaluation",
+    label: "Post-Draft Evaluation",
+    route: "/post-draft-evaluation",
+    navCategory: "knowRivals",
+    icon: GitCompare,
+    requiredPlan: "pro",
+    discoverable: true,
+    showInOnboarding: true,
+    showInPricing: true,
+    showInDashboard: true,
+    experienceCategory: "Draft Intelligence",
+    marketingDescription:
+      "Who you should have drafted at each pick — roster need, scarcity, and players actually available on the clock.",
   },
   {
     entryType: "route",
