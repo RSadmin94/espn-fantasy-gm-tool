@@ -99,6 +99,7 @@ import { trpc } from "@/lib/trpc";
 import { getTrpcToken } from "@/lib/trpcAuth";
 import { Toaster } from "@/components/ui/sonner";
 import { PostDraftEvaluation } from "./pages/PostDraftEvaluation";
+import { ConnectProvider } from "./pages/ConnectProvider";
 import { CLERK_GOOGLE_ACCOUNT_PICKER, RIVALS_AFTER_SIGN_OUT_URL } from "@/lib/signOutRivals";
 import "./index.css";
 
@@ -168,7 +169,7 @@ function LoadingSpinner() {
 function SignInPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background">
-      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/connect" signUpFallbackRedirectUrl="/connect" {...CLERK_GOOGLE_ACCOUNT_PICKER} />
+      <SignIn routing="path" path="/sign-in" signUpUrl={undefined} fallbackRedirectUrl="/dashboard" signUpFallbackRedirectUrl="/dashboard" {...CLERK_GOOGLE_ACCOUNT_PICKER} />
       <div className="flex flex-col items-center gap-2">
         <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">or</div>
         <TryDemoButton />
@@ -240,7 +241,7 @@ function NotFoundPage() {
           Back to The Briefing
         </Link>
         <Link
-          to="/connect"
+          to="/connect/espn"
           className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:border-white/30 hover:text-foreground"
         >
           Connect ESPN
@@ -317,7 +318,8 @@ const router = createBrowserRouter([
           { path: "/my-team/profile", element: <MyTeamProfile /> },
           { path: "/my-team/championship-path", element: <MyTeamChampionshipPath /> },
           { path: "/dashboard", element: <Dashboard /> },
-          { path: "/connect", element: <ConnectESPN /> },
+          { path: "/connect", element: <ConnectProvider /> },
+          { path: "/connect/espn", element: <ConnectESPN /> },
           { path: "/connect/sleeper", element: <ConnectSleeper /> },
           { path: "/connect/yahoo", element: <ConnectYahoo /> },
           { path: "/import/sleeper-workbook", element: <ImportSleeperWorkbook /> },

@@ -32,6 +32,12 @@ import {
 } from "@/lib/espnConnectFlow";
 import { useFunnel } from "@/lib/funnel";
 import { trpc } from "@/lib/trpc";
+import { isConnectorCapableBrowser } from "@/lib/onboardingSetup";
+import {
+  clearAwaitingConnectorInstall,
+  consumeEspnConnectReload,
+  markAwaitingConnectorInstall,
+} from "@/lib/connectorInstallReturn";
 
 interface ConnectedLeagueRow {
   id: number;
@@ -49,6 +55,8 @@ export interface UseEspnConnectFlow {
   atLimit: boolean;
   /** How many more leagues this account may connect, or null until the limit is known. */
   remainingSlots: number | null;
+  connectorCapable: boolean;
+  isSetupComplete: boolean;
   recheck: () => void;
   connect: () => void;
   /** Link every league the user ticked, one after another. */
@@ -69,11 +77,15 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
   const sessionQ = trpc.me.session.useQuery();
   const leaguesQ = trpc.league.getMyLeagues.useQuery();
   const limitsQ = trpc.league.getConnectionLimits.useQuery();
+  const profileQ = trpc.me.activeProfile.useQuery();
 
   const connectedLeagues = (leaguesQ.data as ConnectedLeagueRow[] | undefined) ?? [];
   const isDemo = sessionQ.data?.isDemo === true;
   const atLimit = limitsQ.data?.atLimit === true;
   const remainingSlots = limitsQ.data ? limitsQ.data.remaining : null;
+  const connectorCapable =
+    typeof navigator === "undefined" ? true : isConnectorCapableBrowser(navigator.userAgent);
+  const isSetupComplete = profileQ.data?.isSetupComplete === true;
 
   /** R7: one line per stage with the fields that explain what the user is about to see. */
   const report = useCallback(
@@ -127,6 +139,7 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
         .map((league) => league.id);
       report("verify", last, confirmed.length > 0);
       setState((s) => applyReadBack(s, confirmed));
+      void utils.me.activeProfile.invalidate();
     },
     [report, utils],
   );
@@ -217,18 +230,59 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
     trackedStepRef.current = state.step;
     track(connectFunnelStep(state.step), {
       eventType: "feature_open",
-      page: "/connect",
+      page: "/connect/espn",
       extra: connectFunnelExtra(state, factsRef.current),
     });
   }, [state, track]);
 
   useEffect(() => {
+    if (!connectorCapable) return;
     void runPreflight();
-  }, [runPreflight]);
+  }, [connectorCapable, runPreflight]);
+
+  useEffect(() => {
+    if (typeof sessionStorage === "undefined") return;
+    if (state.step === "connector_missing") markAwaitingConnectorInstall(sessionStorage);
+    else if (state.step !== "preflight") clearAwaitingConnectorInstall(sessionStorage);
+  }, [state.step]);
+
+  useEffect(() => {
+    if (!connectorCapable || typeof window === "undefined") return;
+
+    const onReturn = () => {
+      if (consumeEspnConnectReload(sessionStorage, connectorCapable)) {
+        window.location.reload();
+        return;
+      }
+      if (state.step === "connector_missing" || state.step === "espn_signed_out") {
+        void runPreflight();
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") onReturn();
+    };
+
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onVisibility);
+    const poll =
+      state.step === "connector_missing"
+        ? window.setInterval(() => {
+            void runPreflight();
+          }, 1500)
+        : 0;
+
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (poll) window.clearInterval(poll);
+    };
+  }, [connectorCapable, runPreflight, state.step]);
 
   // Auto-advance for a cold-start user: no league yet, nothing to lose, one less click.
   useEffect(() => {
     if (!leaguesQ.isSuccess || !limitsQ.isSuccess || !sessionQ.isSuccess) return;
+    if (!connectorCapable) return;
     if (
       !shouldAutoConnect({
         step: state.step,
@@ -259,6 +313,8 @@ export function useEspnConnectFlow(): UseEspnConnectFlow {
     connectedLeagues,
     atLimit,
     remainingSlots,
+    connectorCapable,
+    isSetupComplete,
     recheck: useCallback(() => void runPreflight(), [runPreflight]),
     connect: useCallback(() => void run(), [run]),
     chooseLeagues: useCallback(

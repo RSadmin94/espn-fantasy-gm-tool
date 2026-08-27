@@ -1,5 +1,11 @@
 import { Navigate, useLocation } from "react-router";
 import { trpc } from "@/lib/trpc";
+import {
+  incompleteLeague,
+  setupGateDestination,
+  setupPhase,
+  type OnboardingLeagueRow,
+} from "@/lib/onboardingSetup";
 
 const EXEMPT_PREFIXES = [
   "/connect",
@@ -18,8 +24,8 @@ function isExempt(pathname: string): boolean {
 }
 
 /**
- * Redirect brand-new users to connect before wandering the app.
- * Demo sessions and connect-flow routes are exempt.
+ * Redirect incomplete users using server setup authority.
+ * Connected Leagues stays reachable as a management page — it is not the default next step.
  */
 export function SetupGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -30,27 +36,29 @@ export function SetupGate({ children }: { children: React.ReactNode }) {
   const profileQ = trpc.me.activeProfile.useQuery(undefined, {
     enabled: sessionQ.data?.isAuthenticated && !sessionQ.data?.isDemo,
   });
+  const leaguesQ = trpc.league.getMyLeagues.useQuery(undefined, {
+    enabled: sessionQ.data?.isAuthenticated && !sessionQ.data?.isDemo,
+  });
+
+  if (isExempt(location.pathname)) return <>{children}</>;
 
   const isDemo = sessionQ.data?.isDemo === true;
-  const used = limitsQ.data?.used ?? 0;
-  const needsConnect = !isDemo && sessionQ.data?.isAuthenticated && limitsQ.isSuccess && used === 0;
-  const needsTeam =
-    !isDemo &&
-    sessionQ.data?.isAuthenticated &&
-    used > 0 &&
-    profileQ.isSuccess &&
-    profileQ.data?.isSetupComplete === false;
+  const used = limitsQ.data?.used ?? null;
+  const phase = setupPhase({
+    isAuthenticated: sessionQ.data?.isAuthenticated === true,
+    isDemo,
+    connectedLeagueCount: limitsQ.isSuccess ? used : null,
+    isSetupComplete: profileQ.isSuccess ? profileQ.data?.isSetupComplete === true : null,
+  });
+  const incomplete = incompleteLeague((leaguesQ.data ?? []) as OnboardingLeagueRow[]);
+  const dest = setupGateDestination({
+    phase,
+    pathname: location.pathname,
+    incomplete,
+  });
 
-  if (!isExempt(location.pathname) && needsConnect) {
-    return <Navigate to="/connect" replace state={{ from: location.pathname }} />;
-  }
-
-  if (
-    !isExempt(location.pathname) &&
-    needsTeam &&
-    !location.pathname.startsWith("/connect/sleeper")
-  ) {
-    return <Navigate to="/connected-leagues" replace />;
+  if (dest) {
+    return <Navigate to={dest} replace state={{ from: location.pathname }} />;
   }
 
   return <>{children}</>;

@@ -3,7 +3,6 @@ import { Link } from "react-router";
 import {
   AlertTriangle,
   Check,
-  ChevronRight,
   ExternalLink,
   Loader2,
   Plug,
@@ -24,7 +23,6 @@ import { cn } from "@/lib/utils";
 import { ConnectStepCard, ConnectStepLink } from "./ConnectStepCard";
 import {
   CONNECTOR_INSTALL_URL,
-  CONNECTOR_MANUAL_INSTALL_STEPS,
   hasConnectorInstallUrl,
 } from "./connectorInstall";
 
@@ -61,6 +59,26 @@ function openEspn(leagueId?: string) {
 
 // ── 1. Connector missing ──────────────────────────────────────────────────────
 
+export function MobileEspnUnsupportedStep() {
+  return (
+    <ConnectStepCard
+      mark={
+        <Mark tone="warning">
+          <Puzzle className="h-6 w-6" />
+        </Mark>
+      }
+      headline="ESPN needs a desktop browser"
+      message="Connecting ESPN currently requires the Fantasy Football Rivals connector on desktop Chrome. Your place in setup is saved — finish on a computer, or connect a Sleeper league from here."
+      primary={
+        <Button asChild size="lg" className="w-full font-semibold">
+          <Link to="/connect/sleeper">Connect Sleeper instead</Link>
+        </Button>
+      }
+      secondary={<ConnectStepLink href="/connect">Choose a different site</ConnectStepLink>}
+    />
+  );
+}
+
 export function InstallConnectorStep({
   onRecheck,
   busy,
@@ -68,8 +86,6 @@ export function InstallConnectorStep({
   onRecheck: () => void;
   busy: boolean;
 }) {
-  const [showSteps, setShowSteps] = useState(false);
-
   return (
     <ConnectStepCard
       mark={
@@ -77,47 +93,32 @@ export function InstallConnectorStep({
           <Puzzle className="h-6 w-6" />
         </Mark>
       }
-      headline="Connect your ESPN league"
-      message="Fantasy Football Rivals reads your league through the Rivals Connector. Add it once and you're done."
+      headline="Connect ESPN securely"
+      message="Install the Fantasy Football Rivals connector. It lets Rivals securely connect to the ESPN leagues you're already signed into."
       primary={
         hasConnectorInstallUrl() ? (
           <Button asChild size="lg" className="w-full gap-2 font-semibold">
             <a href={CONNECTOR_INSTALL_URL} target="_blank" rel="noopener noreferrer">
               <Plug className="h-4 w-4" />
-              Install Connector
+              Install the connector
             </a>
           </Button>
         ) : (
-          <Button
-            size="lg"
-            className="w-full gap-2 font-semibold"
-            onClick={() => setShowSteps(true)}
-          >
+          <Button size="lg" className="w-full gap-2 font-semibold" disabled>
             <Plug className="h-4 w-4" />
-            Install Connector
+            Install listing coming soon
           </Button>
         )
       }
       secondary={
         <ConnectStepLink onClick={onRecheck}>
-          {busy ? "Checking…" : "Already installed? Check again"}
+          {busy ? "Checking…" : "I installed it — check again"}
         </ConnectStepLink>
       }
       footer={
         <ConnectStepLink href="/connect/sleeper">Not on ESPN? Connect Sleeper</ConnectStepLink>
       }
-    >
-      {showSteps && (
-        <ol className="space-y-2 rounded-xl border border-border/60 bg-muted/20 px-4 py-4 text-left text-xs leading-relaxed text-muted-foreground">
-          {CONNECTOR_MANUAL_INSTALL_STEPS.map((step, i) => (
-            <li key={step} className="flex gap-3">
-              <span className="font-semibold text-foreground">{i + 1}</span>
-              <span>{step}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </ConnectStepCard>
+    />
   );
 }
 
@@ -132,7 +133,7 @@ export function SignInEspnStep({ onRecheck, busy }: { onRecheck: () => void; bus
         </Mark>
       }
       headline="Sign in to ESPN"
-      message="Use the account that can see your league. We'll pick it up from there — nothing to copy or paste."
+      message="ESPN login is required. Use the account that can see your league, then come back here — we'll continue automatically."
       primary={
         <Button size="lg" className="w-full gap-2 font-semibold" onClick={() => openEspn()}>
           <ExternalLink className="h-4 w-4" />
@@ -316,11 +317,13 @@ export function ConnectedStep({
   failed = [],
   onConnectAnother,
   canConnectAnother,
+  continueTo,
 }: {
   leagues: readonly EspnConnectLeagueRef[];
   failed?: readonly EspnConnectLeagueRef[];
   onConnectAnother: () => void;
   canConnectAnother: boolean;
+  continueTo: { href: string; label: string };
 }) {
   const many = leagues.length > 1;
 
@@ -342,7 +345,7 @@ export function ConnectedStep({
       }
       primary={
         <Button asChild size="lg" className="w-full gap-2 font-semibold">
-          <Link to="/connected-leagues">{many ? "Pick your teams" : "Pick your team"}</Link>
+          <Link to={continueTo.href}>{continueTo.label}</Link>
         </Button>
       }
       secondary={

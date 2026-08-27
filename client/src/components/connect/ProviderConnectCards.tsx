@@ -8,7 +8,7 @@ const PROVIDERS = [
     id: "espn",
     title: "ESPN",
     description: "Chrome extension or league ID — imports full ESPN history.",
-    href: "/connect",
+    href: "/connect/espn",
     icon: Plug,
   },
   {

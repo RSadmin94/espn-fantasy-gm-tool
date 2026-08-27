@@ -1439,7 +1439,7 @@ function SyncDataEspnCenter() {
           <EspnConnectorGuide highlightStep={4} />
           <p className="text-sm text-muted-foreground">
             Complete steps 1–3 on{" "}
-            <a href="/connect" className="font-medium text-primary underline underline-offset-2">
+            <a href="/connect/espn" className="font-medium text-primary underline underline-offset-2">
               Connect ESPN
             </a>{" "}
             before syncing.
@@ -1845,7 +1845,7 @@ function SyncDataEspnCenter() {
           {!leagueId && (
             <p className="text-sm text-muted-foreground">
               Connect your league on{" "}
-              <a href="/connect" className="font-medium text-primary underline underline-offset-2">
+              <a href="/connect/espn" className="font-medium text-primary underline underline-offset-2">
                 Connect ESPN
               </a>{" "}
               (steps 1–3) to enable browser session sync via the ESPN Connector.

@@ -130,7 +130,7 @@ export function SyncDataNonEspnNotice({ provider }: SyncDataNonEspnNoticeProps) 
             <Link to="/connected-leagues">Connected Leagues</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link to="/connect">Connect ESPN</Link>
+            <Link to="/connect/espn">Connect ESPN</Link>
           </Button>
         </CardContent>
       </Card>

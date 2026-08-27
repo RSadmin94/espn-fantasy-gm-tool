@@ -29,8 +29,8 @@ export function TryDemoButton() {
       const res = await client.signIn.create({ strategy: "ticket", ticket });
       if (res.status === "complete" && res.createdSessionId) {
         await clerk.setActive({ session: res.createdSessionId });
-        // Hard-navigate so the /sign-in page (and its Clerk <SignIn fallbackRedirectUrl="/connect">,
-        // which would otherwise redirect the just-signed-in demo to /connect) is fully unmounted.
+        // Hard-navigate so the /sign-in page (and its Clerk <SignIn fallbackRedirectUrl="/dashboard">)
+        // is fully unmounted.
         // The demo must always land on the dashboard, never onboarding. A full load also picks up
         // the demo's league context (457622) cleanly.
         window.location.replace("/dashboard");
