@@ -286,7 +286,7 @@ function render(root) {
     html += `<button type="button" class="secondary" disabled>Refresh leagues</button>`;
     html += `<button type="button" disabled>Sync Selected Leagues</button>`;
   } else {
-    html += `<p>2026 leagues from ESPN profile (or your open league tab). Stay signed in at <strong>fantasyfootballrivals.com</strong> so sync can use your War Room session.</p>`;
+    html += `<p>2026 leagues from ESPN profile (or your open league tab). Stay signed in at <strong>www.fantasyfootballrivals.com</strong> so sync can use your Fantasy Football Rivals session.</p>`;
     html += `<button type="button" class="secondary" id="refresh" ${busy ? "disabled" : ""}>Refresh leagues</button>`;
     html += `<div style="display:flex;gap:6px;margin:0 0 10px;">`;
     html += `<input id="addLid" type="text" inputmode="numeric" placeholder="Add a league by ID (e.g. 457622)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #444;background:#1e1e1e;color:#eee;box-sizing:border-box;" ${busy ? "disabled" : ""} />`;

@@ -61,7 +61,8 @@ function consoleCalls(source) {
 }
 
 const resolveWarRoomOrigin = loadPureFunction(background, "resolveWarRoomOrigin");
-const PROD = "https://fantasyfootballrivals.com";
+const PROD = "https://www.fantasyfootballrivals.com";
+const PROD_APEX = "https://fantasyfootballrivals.com";
 
 describe("GMWR_CONNECT_ESPN bridge", () => {
   it("declares the message type in the background worker", () => {
@@ -96,27 +97,33 @@ describe("GMWR_CONNECT_ESPN bridge", () => {
   });
 
   it("ships a bumped extension version", () => {
-    expect(manifest.version).toBe("1.14.2");
+    expect(manifest.version).toBe("1.14.3");
     expect(pkg.version).toBe(manifest.version);
+  });
+
+  it("does not request retired or development hosts in the Store artifact", () => {
+    const hosts = JSON.stringify(manifest);
+    expect(hosts).not.toMatch(/gmwarroom\.online/);
+    expect(hosts).not.toMatch(/localhost/);
+    expect(hosts).not.toMatch(/127\.0\.0\.1/);
+    expect(hosts).not.toMatch(/\*\.fantasyfootballrivals\.com/);
+    expect(manifest.host_permissions).toContain("https://www.fantasyfootballrivals.com/*");
+    expect(manifest.host_permissions).toContain("https://fantasyfootballrivals.com/*");
   });
 });
 
 describe("resolveWarRoomOrigin", () => {
-  it("saves back to the local dev server that asked", () => {
-    expect(resolveWarRoomOrigin({ origin: "http://localhost:3000" })).toBe("http://localhost:3000");
-    expect(resolveWarRoomOrigin({ origin: "http://127.0.0.1:5173" })).toBe(
-      "http://127.0.0.1:5173",
-    );
+  it("refuses localhost and loopback in the Store build", () => {
+    expect(resolveWarRoomOrigin({ origin: "http://localhost:3000" })).toBeNull();
+    expect(resolveWarRoomOrigin({ origin: "http://127.0.0.1:5173" })).toBeNull();
   });
 
-  it("saves back to production and preview hosts we ship", () => {
+  it("saves back to canonical Production www and apex only", () => {
     expect(resolveWarRoomOrigin({ origin: PROD })).toBe(PROD);
-    expect(resolveWarRoomOrigin({ origin: "https://www.fantasyfootballrivals.com" })).toBe(
-      "https://www.fantasyfootballrivals.com",
-    );
-    expect(resolveWarRoomOrigin({ origin: "https://preview.gmwarroom.online" })).toBe(
-      "https://preview.gmwarroom.online",
-    );
+    expect(resolveWarRoomOrigin({ origin: PROD_APEX })).toBe(PROD_APEX);
+    expect(resolveWarRoomOrigin({ origin: "https://sprint-8-preview.fantasyfootballrivals.com" })).toBeNull();
+    expect(resolveWarRoomOrigin({ origin: "https://preview.gmwarroom.online" })).toBeNull();
+    expect(resolveWarRoomOrigin({ origin: "https://gmwarroom.online" })).toBeNull();
   });
 
   it("refuses an unrecognized origin rather than sending it to production", () => {
@@ -136,9 +143,10 @@ describe("resolveWarRoomOrigin", () => {
   });
 
   it("reads the tab URL when the sender has no origin", () => {
-    expect(resolveWarRoomOrigin({ tab: { url: "http://localhost:3000/connect" } })).toBe(
-      "http://localhost:3000",
-    );
+    expect(
+      resolveWarRoomOrigin({ tab: { url: "https://www.fantasyfootballrivals.com/connect/espn" } }),
+    ).toBe(PROD);
+    expect(resolveWarRoomOrigin({ tab: { url: "http://localhost:3000/connect" } })).toBeNull();
   });
 
   it("cannot be pointed somewhere by the message payload", () => {

@@ -8,7 +8,7 @@
  * Historical draft recap: scrape the rendered draftrecap page in a background tab (no ESPN draft JSON API).
  */
 
-const WAR_ROOM_ORIGIN = "https://fantasyfootballrivals.com";
+const WAR_ROOM_ORIGIN = "https://www.fantasyfootballrivals.com";
 const TRPC_SAVE_URL = `${WAR_ROOM_ORIGIN}/api/trpc/espn.saveCredentials`;
 const TRPC_ME_URL = `${WAR_ROOM_ORIGIN}/api/trpc/auth.me`;
 /** Server runs full onboarding sync; land on dashboard when leagues are linked. */
@@ -94,17 +94,11 @@ function resolveWarRoomOrigin(sender) {
   }
 
   const host = url.hostname.toLowerCase();
-  const isLoopback =
-    (url.protocol === "http:" || url.protocol === "https:") &&
-    (host === "localhost" || host === "127.0.0.1");
-  const isKnownSite =
+  const isProductionSite =
     url.protocol === "https:" &&
-    (host === "fantasyfootballrivals.com" ||
-      host.endsWith(".fantasyfootballrivals.com") ||
-      host === "gmwarroom.online" ||
-      host.endsWith(".gmwarroom.online"));
+    (host === "www.fantasyfootballrivals.com" || host === "fantasyfootballrivals.com");
 
-  return isLoopback || isKnownSite ? url.origin : null;
+  return isProductionSite ? url.origin : null;
 }
 
 function buildSaveCredentialsUrl(origin) {
@@ -528,11 +522,8 @@ const MSG_FP_MOCK_SESSION_RESET = "GMWR_FP_MOCK_SESSION_RESET";
 const MSG_FP_MOCK_PING = "GMWR_FP_MOCK_PING";
 const MSG_FP_MOCK_GET_STATE = "GMWR_FP_MOCK_GET_STATE";
 const FP_MOCK_FFR_ORIGINS = [
-  "https://fantasyfootballrivals.com",
   "https://www.fantasyfootballrivals.com",
-  "https://gmwarroom.online",
-  "http://localhost",
-  "http://127.0.0.1",
+  "https://fantasyfootballrivals.com",
 ];
 /** @type {{ armed: boolean, config: object|null, lastStatus: object|null, lastPickAt: string|null, picksEmitted: number, picksObserved: number, armedAt: string|null, sessionId: string|null }} */
 let fpMockConnectorState = {
@@ -554,13 +545,12 @@ const FP_MOCK_SESSION_TTL_MS = 6 * 60 * 60 * 1000;
 function isFfrTabUrl(url) {
   if (!url || typeof url !== "string") return false;
   if (FP_MOCK_FFR_ORIGINS.some((origin) => url.startsWith(origin))) return true;
-  // Preview / env subdomains: https://sprint-8-preview.fantasyfootballrivals.com/...
   try {
     const u = new URL(url);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    if (u.protocol !== "https:") return false;
     return (
-      u.hostname === "fantasyfootballrivals.com" ||
-      u.hostname.endsWith(".fantasyfootballrivals.com")
+      u.hostname === "www.fantasyfootballrivals.com" ||
+      u.hostname === "fantasyfootballrivals.com"
     );
   } catch {
     return false;
@@ -761,7 +751,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestParsedDraftPicks*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestParsedDraftPicks*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -773,7 +763,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.importDraftFromEspnApi*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/espn.importDraftFromEspnApi*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -785,7 +775,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.historicalImportStatus*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/espn.historicalImportStatus*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -797,7 +787,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestLegacyDraftRecap*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestLegacyDraftRecap*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -809,7 +799,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/espn.ingestSeasonRosters*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/espn.ingestSeasonRosters*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -821,7 +811,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/playerStatsCache.saveWeeklyPlayerStats*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.saveWeeklyPlayerStats*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -833,7 +823,7 @@ async function applyWarRoomTrpcHistRule(warRoomCookieHeader) {
           requestHeaders: [{ header: "Cookie", operation: "set", value: warRoomCookieHeader }],
         },
         condition: {
-          urlFilter: "https://fantasyfootballrivals.com/api/trpc/playerStatsCache.getPlayerStatsCacheStatus*",
+          urlFilter: `${WAR_ROOM_ORIGIN}/api/trpc/playerStatsCache.getPlayerStatsCacheStatus*`,
           resourceTypes: ["xmlhttprequest", "other"],
         },
       },
@@ -2550,7 +2540,9 @@ async function postImportDraftFromEspnApi(leagueId, season, espnCreds, warRoomCo
 }
 
 async function openOrFocusPostConnectTab() {
-  const tabs = await chrome.tabs.query({ url: ["https://fantasyfootballrivals.com/*", "https://www.fantasyfootballrivals.com/*", "https://gmwarroom.online/*"] });
+  const tabs = await chrome.tabs.query({
+    url: ["https://www.fantasyfootballrivals.com/*", "https://fantasyfootballrivals.com/*"],
+  });
   const existing = tabs.find((t) => t.id != null) ?? null;
   if (existing?.id != null) {
     await chrome.tabs.update(existing.id, { url: POST_CONNECT_URL, active: true });

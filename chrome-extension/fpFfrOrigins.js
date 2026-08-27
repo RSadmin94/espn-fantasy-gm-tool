@@ -1,21 +1,21 @@
 /**
  * Unit helpers for RFSN-030C FFR tab URL matching (mirrors background isFfrTabUrl).
+ * Store build is pinned to canonical Production hosts only.
  */
-export function isFfrTabUrlForTests(url, origins = [
-  "https://fantasyfootballrivals.com",
+export const FFR_PRODUCTION_ORIGINS = [
   "https://www.fantasyfootballrivals.com",
-  "https://gmwarroom.online",
-  "http://localhost",
-  "http://127.0.0.1",
-]) {
+  "https://fantasyfootballrivals.com",
+];
+
+export function isFfrTabUrlForTests(url, origins = FFR_PRODUCTION_ORIGINS) {
   if (!url || typeof url !== "string") return false;
   if (origins.some((origin) => url.startsWith(origin))) return true;
   try {
     const u = new URL(url);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+    if (u.protocol !== "https:") return false;
     return (
-      u.hostname === "fantasyfootballrivals.com" ||
-      u.hostname.endsWith(".fantasyfootballrivals.com")
+      u.hostname === "www.fantasyfootballrivals.com" ||
+      u.hostname === "fantasyfootballrivals.com"
     );
   } catch {
     return false;
