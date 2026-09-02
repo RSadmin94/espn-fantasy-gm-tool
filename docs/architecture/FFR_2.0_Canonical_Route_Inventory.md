@@ -113,13 +113,20 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/settings` | `Settings` | Yes | Account / billing |
 | `/league-settings` | `LeagueSettings` | Yes | League admin |
 | `/sync` | `SyncData` | Yes | Data sync |
-| `/connected-leagues` | `ConnectedLeagues` | Yes | League connections |
-| `/connect`, `/connect/sleeper` | Connect flows | Yes | Onboarding |
-| `/privacy` | `PrivacyPolicyPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/privacy` |
-| `/support` | `SupportPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/support` |
+| `/connected-leagues` | `ConnectedLeagues` | Yes | League connections (management, not mandatory onboarding) |
+| `/connect` | `ConnectProvider` | Yes | ESPN + Sleeper **only** (058P). Yahoo/workbook not on this chooser |
+| `/connect/espn` | ESPN connector flow | Yes | Desktop Chrome required on mobile |
+| `/connect/sleeper` | Sleeper | Yes | No extension |
+| `/connect/yahoo` | Yahoo OAuth | Yes | Secondary |
+| `/import/sleeper-workbook` | Workbook | Yes | Deferred from primary onboarding |
+| `/post-draft-evaluation` | `PostDraftEvaluation` | Yes | Gate `/post-draft-evaluation` |
+| `/privacy` | `PrivacyPolicyPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/privacy` **PENDING PRODUCTION PROMOTION** |
+| `/support` | `SupportPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/support` **PENDING PRODUCTION PROMOTION** |
+| `/admin/*` | Admin Console | Yes | Owner mutations; view-only for limited admin |
 | `/player-database` | `PlayerDatabase` | Yes | Utility |
 | `/league-data-health` | `LeagueDataHealth` | Yes | Admin utility |
 | `/owner-identity-review` | `OwnerIdentityReview` | Yes | Admin utility |
+| `/league/history/matchups*` | Historical matchup gallery | Yes | On Production git `433fdaf` |
 
 ---
 
