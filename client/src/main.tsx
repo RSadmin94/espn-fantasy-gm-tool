@@ -19,6 +19,8 @@ import { ConnectSleeper } from "./pages/ConnectSleeper";
 import { ConnectYahoo } from "./pages/ConnectYahoo";
 import { ImportSleeperWorkbook } from "./pages/ImportSleeperWorkbook";
 import { LandingPage } from "./pages/LandingPage";
+import { PrivacyPolicyPage } from "./pages/legal/PrivacyPolicyPage";
+import { SupportPage } from "./pages/legal/SupportPage";
 import { ReceiptShare } from "./pages/ReceiptShare";
 import { RivalryShare } from "./pages/RivalryShare";
 import { Claim } from "./pages/Claim";
@@ -260,6 +262,8 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: "/", element: <LandingPage /> },
+      { path: "/privacy", element: <PrivacyPolicyPage /> },
+      { path: "/support", element: <SupportPage /> },
       { path: "/sign-in", element: <SignInPage /> },
       { path: "/sign-in/*", element: <SignInPage /> },
       { path: "/sso-callback", element: <SSOCallbackPage /> },

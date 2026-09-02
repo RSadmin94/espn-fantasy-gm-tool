@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-08-17 (RFSN-055A Historical Draft Grades Production)  
+**Edition:** 2026-09-02 (RFSN-058C privacy/support Preview — not Production)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · per-ticket audit artifacts.
 
@@ -26,7 +26,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 | Area | Status | Notes |
 | --- | --- | --- |
 | Production | 🟢 Stable | Git `635585f` · `buildTime=2026-08-17T19:04:31.361Z` · 051A–D + **054** + **054A** + **054B** + **054C** + **054D** + 052J/K + **052L** + **055A** + **056A** + **053C–H** |
-| Preview | 🟢 Git-aligned | Git `5b34a29` · `buildTime=2026-08-17T18:05:23.401Z` · 051A–D + **054** + **054A** + **054B** + **054C** + **054D** + 052J/K + **052L** + **055** + **055A** + **056A** + **053C–H** |
+| Preview | 🟡 RFSN-058C in flight | Public `/privacy` and `/support` on `feat/rfsn-058c-legal` for Preview Git. Not Production. |
 | GM Advisor | 🟢 / 🟡 | 052J+K+**L** live Preview + Production. **053D gallery visuals live Preview + Production**. **053H narration live Preview + Production**. **055 Draft Intelligence live Preview only** (same-season ADP join **2018–2024**, founder **11/11**). **055A historical Draft Night + Draft Reality live Preview + Production**. **“What's my biggest win?” FAIL**. |
 | RFSN | 🟢 | Live / Stories / Recaps |
 | Typography | 🟢 | 051A–D + **054B** floors + **054C** cert + **054D** targeted fonts live Preview + **Production**. §5.1 gate. No new census. |
@@ -50,6 +50,17 @@ Founder leagues: ESPN **`457622` ATLANTAS FINEST FF**, ESPN **`480452315` Dynast
 | **Local working tree** | localhost | — | uncommitted | marketing |
 
 Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha` (stale on both CLI and Git deploys).
+
+### RFSN-058C — Privacy + Support (this increment)
+
+Public first-party pages under Fantasy Football Rivals. **Do not use** `365globalsolutions.com` or `gmwarroom.online` as the canonical legal/support host.
+
+| URL after Production | Preview host | Status |
+| --- | --- | --- |
+| `https://www.fantasyfootballrivals.com/privacy` | `https://sprint-8-preview.fantasyfootballrivals.com/privacy` | **PREVIEW** pending certification — **not Production** |
+| `https://www.fantasyfootballrivals.com/support` | `https://sprint-8-preview.fantasyfootballrivals.com/support` | **PREVIEW** pending certification — **not Production** |
+
+Support mechanism: in-product Sign in / Connect / Settings. No published support email. Chrome Web Store URL does **not** exist — do not invent one. This ticket does not change the ESPN Connector protocol, ZIP, or version.
 
 ---
 
@@ -217,6 +228,7 @@ Stop after each increment. Production only when explicitly asked.
 
 | When | What | Where |
 | --- | --- | --- |
+| 2026-09-02 | **RFSN-058C** public `/privacy` + `/support`. Anonymous. ESPN Connector disclosure. No Store submit. No Production. | Preview pending Git deploy |
 | 2026-08-17 | **055A Production.** Git `635585f` → deploy `c21ab5ce`. Team view Draft Night + Draft Results. Same-season ADP included. Advisor 055 not wired. | Production `buildTime=2026-08-17T19:04:31.361Z` · `RFSN-055A-production-validation.md` |
 | 2026-08-17 | **055A Preview.** Git `5b34a29` → deploy `3de133fb`. Draft History Team view: Draft Night (`computeOwnerDraftMetrics` + 055 ADP) + Draft Results (`computeDraftReality`). | Preview `buildTime=2026-08-17T18:05:23.401Z` · `RFSN-055A-preview-validation.md` |
 | 2026-08-10 | **054D Production.** Cherry-pick `a51491b` of `9d67df5` (no 055) → deploy `1db54037`. Wrap/overflow smoke **PASS** (Trades, Advisor, Championship Path, Draft History). | Production `buildTime=2026-08-10T07:39:05.771Z` · `RFSN-054D-production-validation.md` |
@@ -384,6 +396,7 @@ Stop after each increment. Production only when explicitly asked.
 | **053G PNG export** | yes `0c5d94a` / **9/9** | **Shipped** `7565ace` | Snapshots ShareCardRenderer. Nixpacks Chromium |
 | **053H AI narration** | yes `1885bc8` / **7/7** + pre-promote **9/9** | **Shipped** `7565ace` / founder **9/9** | Story Package → LLM style. No video/TTS |
 | **053I / MKT-001** | no | No | Not ready |
+| **RFSN-058C** | **PREVIEW** pending cert | **No** — stop for founder | Public `/privacy` `/support`. No Chrome Web Store submit. No Production. |
 
 **Production must not receive** marketing or **055 Advisor Draft Intelligence** until explicitly requested. 051 stays closed. **054 + 054A + 054B + 054C + 054D + 052L + 055A + 056A + 053C–H are live.**
 

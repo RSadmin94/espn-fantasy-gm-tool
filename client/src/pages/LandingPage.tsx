@@ -5,7 +5,7 @@
  * Real in-app screenshots (client/public/screenshots). No tRPC / backend calls. All ASCII.
  */
 import { useState, type CSSProperties } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate } from "react-router";
 import { useAuth } from "@clerk/react-router";
 import { cn } from "@/lib/utils";
 import { COMMERCIAL } from "@/lib/commercialCopy";
@@ -329,7 +329,11 @@ export function LandingPage() {
             <img src="/logo.png" alt="" className="h-5 w-auto opacity-70" />
             <span>Fantasy Football Rivals - League Intelligence</span>
           </div>
-          <button onClick={go} className="font-semibold text-white/55 transition hover:text-white">Sign in</button>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link to="/privacy" className="font-semibold text-white/55 transition hover:text-white">Privacy</Link>
+            <Link to="/support" className="font-semibold text-white/55 transition hover:text-white">Support</Link>
+            <button onClick={go} className="font-semibold text-white/55 transition hover:text-white">Sign in</button>
+          </div>
         </footer>
 
       </div>
