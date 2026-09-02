@@ -115,6 +115,8 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/sync` | `SyncData` | Yes | Data sync |
 | `/connected-leagues` | `ConnectedLeagues` | Yes | League connections |
 | `/connect`, `/connect/sleeper` | Connect flows | Yes | Onboarding |
+| `/privacy` | `PrivacyPolicyPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/privacy` |
+| `/support` | `SupportPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/support` |
 | `/player-database` | `PlayerDatabase` | Yes | Utility |
 | `/league-data-health` | `LeagueDataHealth` | Yes | Admin utility |
 | `/owner-identity-review` | `OwnerIdentityReview` | Yes | Admin utility |
