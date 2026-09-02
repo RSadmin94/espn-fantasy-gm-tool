@@ -100,9 +100,6 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/league/history/dynasties` | Archive focus scroll | Dynasty timeline | Yes | — | — |
 | `/league/history/timeline` | Archive focus scroll | Milestones | Yes | — | — |
 | `/league/history/transactions` | `LeagueTransactions` → `Transactions` | Transaction authority | Yes | `/transactions` | `/transactions` → redirect |
-| `/league/history/matchups` | `HistoricalMatchupGalleryPage` | `matchupGallery.query` (053B) | Yes | — | **053C Production live** `2ad6e04` |
-| `/league/history/matchups/no-mercy` | Gallery No Mercy preset | same + margin ≥ 50 + wins | Yes | — | **053C Production live** |
-| `/league/history/matchups/:matchupId` | Historical Matchup Viewer V1 | `matchupGallery.get` | Yes | — | **053C Production live** — lineups/bench when recorded |
 | `/league/acquisition-impact` | `LeagueAcquisitionImpact` | Acquisition impact | Yes | `/acquisition-impact` | `/acquisition-impact` → redirect |
 | `/league/commissioner` | `LeagueCommissioner` | Commissioner tools | Yes | `/commissioner-command-center` | `/commissioner-command-center` → redirect |
 | `/history` | `LeagueHistory` | Dynasty Board | Yes | — | Preserved (distinct from HoF archive) |
@@ -116,15 +113,20 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/settings` | `Settings` | Yes | Account / billing |
 | `/league-settings` | `LeagueSettings` | Yes | League admin |
 | `/sync` | `SyncData` | Yes | Data sync |
-| `/connected-leagues` | `ConnectedLeagues` | Yes | League connections |
-| `/connect`, `/connect/sleeper` | Connect flows | Yes | Onboarding |
-| `/privacy` | `PrivacyPolicyPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/privacy` |
-| `/support` | `SupportPage` | **No** | **RFSN-058C PREVIEW** — not Production. Canonical public URL after promote: `https://www.fantasyfootballrivals.com/support` |
+| `/connected-leagues` | `ConnectedLeagues` | Yes | League connections (management, not mandatory onboarding) |
+| `/connect` | `ConnectProvider` | Yes | ESPN + Sleeper **only** (058P). Yahoo/workbook not on this chooser |
+| `/connect/espn` | ESPN connector flow | Yes | Desktop Chrome required on mobile |
+| `/connect/sleeper` | Sleeper | Yes | No extension |
+| `/connect/yahoo` | Yahoo OAuth | Yes | Secondary |
+| `/import/sleeper-workbook` | Workbook | Yes | Deferred from primary onboarding |
+| `/post-draft-evaluation` | `PostDraftEvaluation` | Yes | Gate `/post-draft-evaluation` |
+| `/privacy` | `PrivacyPolicyPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/privacy` **PENDING PRODUCTION PROMOTION** |
+| `/support` | `SupportPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/support` **PENDING PRODUCTION PROMOTION** |
+| `/admin/*` | Admin Console | Yes | Owner mutations; view-only for limited admin |
 | `/player-database` | `PlayerDatabase` | Yes | Utility |
 | `/league-data-health` | `LeagueDataHealth` | Yes | Admin utility |
 | `/owner-identity-review` | `OwnerIdentityReview` | Yes | Admin utility |
-| `/rivalry/:shareCode` | `RivalryShare` | Yes | Existing rivalry share (not 053I) |
-| `/m/:shareCode` | Planned hype/share card | — | **053I — not implemented.** Do not treat as live. |
+| `/league/history/matchups*` | Historical matchup gallery | Yes | On Production git `433fdaf` |
 
 ---
 
