@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-09-02 (RFSN-058C Preview certification — Production privacy/support **PENDING PRODUCTION PROMOTION**)  
+**Edition:** 2026-09-02 (RFSN-058C **PRODUCTION CERTIFIED / CLOSED**)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · `docs/ARCHITECTURE.md` (ESPN cache / hist pipeline) · `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md` (voice/TTS mechanics) · per-ticket audit artifacts.
 
@@ -27,7 +27,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 **PRODUCTION PARTIAL** for ESPN install | Live `buildTime=2026-08-27T23:13:03.813Z` (fetched 2026-09-02). Health `gitSha` still stale `06b35ba`. Certified website commit **`433fdaf`** (RFSN-058P) · Railway deploy **`1aa8f4f2`**. Admin + PDE + provider-first onboarding present. Chrome Web Store install URL **not** live. |
+| Production | 🟢 **PRODUCTION PARTIAL** for ESPN install | Live `buildTime=2026-09-03T03:34:54.217Z`. Health `gitSha` still stale `06b35ba`. Website **`fbd212c`** (RFSN-058C legal pages on 058P `433fdaf`). Railway **`6ed1220b`**. Bundle `index-B3xJVKLN.js`. `/privacy` `/support` **PRODUCTION**. Chrome Web Store install URL **not** live. |
 | Preview | 🟢 RFSN-058C **PREVIEW CERTIFIED** | `/privacy` `/support` live. Git `23c7a4b` · Railway `d3c9a689` · `buildTime=2026-09-02T23:44:51.956Z` · bundle `index-DkpY0IP_.js`. Health gitSha stale — ignore. **Not Production.** |
 | GM Advisor | 🟢 / 🟡 | 052J+K live: LOZELL **3**, HoF, largest margin, H2H, 2009 limitation. **“What's my biggest win?” still FAIL** unless a later ticket closed it in source (not re-smoked this edition). |
 | RFSN | 🟢 | Live / Stories / Recaps. Voice/TTS optional via Kokoro Serverless. |
@@ -59,13 +59,13 @@ Live evidence for Production was re-fetched 2026-09-02 (`GET https://www.fantasy
 | Kokoro TTS | Production `kokoro-tts` · **Serverless CERTIFIED** (OPS-002) | Preview `kokoro-tts` · **Serverless CERTIFIED** (OPS-005) | Source-unconnected image services. Apply sleep with **`serviceInstanceUpdate` → `serviceInstanceRedeploy`**. **Do not** use `railway redeploy` / `deploymentRedeploy` — it clones a stale snapshot. Then verify active deployment has `sleepApplication=true`. | Sleep/wake/synthesize/re-sleep certified both envs. |
 | TTS endpoint relationship | Production Node `RFSN_TTS_SERVICE_URL` → **Production Kokoro** | Preview Node `RFSN_TTS_SERVICE_URL` → **Preview Kokoro** (OPS-006 **CERTIFIED**) | Railway env vars on each Node service | Endpoints are **separate**. Bearer **token is currently shared** across environments = **KNOWN TECHNICAL DEBT** (do not paste the token here). |
 | ESPN Connector | Store listing **does not exist**. Internal unpacked **v1.14.3**. Store package **v1.14.4** ready for founder review, **not published**. | Same protocol files; Store ZIP **refuses** Preview/localhost origins (saves Production www/apex only) | Chrome extension, not Railway | `VITE_CONNECTOR_INSTALL_URL` empty until a real Store URL exists. Do not invent one. |
-| Privacy / Support URLs | **Not live** on Production (SPA `/privacy` still “Off the grid.”) | **PREVIEW CERTIFIED** `/privacy` `/support` | Git `23c7a4b` → Railway `d3c9a689` | Intended Production: `https://www.fantasyfootballrivals.com/privacy` and `/support` — **PENDING PRODUCTION PROMOTION**. Do not use 365globalsolutions.com. |
+| Privacy / Support URLs | **PRODUCTION** `https://www.fantasyfootballrivals.com/privacy` and `/support` | **PRODUCTION** (Preview still live) | Git `fbd212c` → Railway `6ed1220b` | Do not use 365globalsolutions.com. First-party Rivals URLs only. |
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` (058P commit `433fdaf` on that branch) | `buildTime=2026-08-27T23:13:03.813Z` · health `gitSha` stale `06b35ba` · `gitIdentitySource=build-meta` · Railway deploy **`1aa8f4f2`** (058P cert) |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | RFSN-058C Git **`fbd212c`** (cherry-picks of `23c7a4b` + `e5ef1c8` onto `433fdaf`). Railway **`6ed1220b`**. `buildTime=2026-09-03T03:34:54.217Z` · bundle `index-B3xJVKLN.js` (gitSha stale `06b35ba`) |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-058C Git **`23c7a4b`**. Railway **`d3c9a689`**. `buildTime=2026-09-02T23:44:51.956Z` (gitSha stale `dff6154`). |
-| **Local working tree** | localhost | — | uncommitted 058B | Store package + `/privacy` `/support` **not** on Production |
+| **Local working tree** | localhost | — | uncommitted 058B Store package | Store ZIP still local/untracked. Privacy/support **live on Production**. |
 
 Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha`.
 
@@ -93,14 +93,14 @@ Keep the no-CLI rule. Do not `railway up` Preview.
 
 Fantasy Football Rivals is a **live production product** (Clerk + Google account picker, provider-first ESPN/Sleeper onboarding, Rivalry Center, Draft War Room, RFSN, GM Advisor, Admin Console, Post-Draft Evaluation, Stripe billing).
 
-**Headline remaining gaps:** (1) Chrome Web Store ESPN Connector **not published** — full ESPN *install* path is **PRODUCTION PARTIAL**. (2) 052K personal “What's my biggest win?” still failed at last smoke. (3) Privacy/support **PREVIEW CERTIFIED**; Production URLs **PENDING PRODUCTION PROMOTION**. (4) Yahoo / workbook are not primary onboarding.
+**Headline remaining gaps:** (1) Chrome Web Store ESPN Connector **not published** — full ESPN *install* path is **PRODUCTION PARTIAL**. (2) 052K personal “What's my biggest win?” still failed at last smoke. (3) Privacy/support **PRODUCTION**. (4) Yahoo / workbook are not primary onboarding.
 
 | Layer | State |
 | --- | --- |
 | Production website | **RFSN-058P PRODUCTION** for store-independent onboarding (`433fdaf` / `buildTime=2026-08-27T23:13:03.813Z`). Admin + PDE retained. |
 | ESPN Store install | **BLOCKED** on a real Chrome Web Store listing URL. 058A hygiene **v1.14.3**. 058B Store package **v1.14.4** ready for founder review, **not submitted**. |
 | Preview | TTS isolated to Preview Kokoro (OPS-006). Website Preview not re-fetched this edition. |
-| Local / unpushed | **RFSN-058B** Store overlay, legal pages, submission package. |
+| Local / unpushed | **RFSN-058B** Store overlay + submission package (ZIP untracked). Legal pages are **Production**. |
 
 ---
 
@@ -129,7 +129,7 @@ Status vocabulary: **IMPLEMENTED** (in current source) · **PARTIAL** · **PREVI
 | Mobile ESPN | **PRODUCTION** | Desktop Chrome required copy; Sleeper alternative offered |
 | Connected Leagues | **PRODUCTION** | Management surface — **not** a mandatory onboarding ceremony |
 | Manual upload / Sleeper workbook | **DEFERRED** from primary onboarding | Route `/import/sleeper-workbook` still exists from Connected Leagues |
-| Privacy `/privacy` + Support `/support` | **PREVIEW CERTIFIED** `23c7a4b` · **not Production** | Production URLs **PENDING PRODUCTION PROMOTION**. No invented support email. |
+| Privacy `/privacy` + Support `/support` | **PRODUCTION** `fbd212c` / `6ed1220b` | Live `https://www.fantasyfootballrivals.com/privacy` and `/support`. No invented support email. |
 
 ### ESPN Connector
 
@@ -192,7 +192,7 @@ Status vocabulary: **IMPLEMENTED** (in current source) · **PARTIAL** · **PREVI
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` as of `buildTime=2026-08-27T23:13:03.813Z` (RFSN-058P website `433fdaf`). Feature SHAs for older 051/052/054 closes remain in **Release History**.
+Shipped and live on `www.fantasyfootballrivals.com` as of `buildTime=2026-09-03T03:34:54.217Z` (RFSN-058C legal pages on 058P `433fdaf` / `fbd212c`). Feature SHAs for older 051/052/054 closes remain in **Release History**.
 
 | Area | What’s in Production |
 | --- | --- |
@@ -209,7 +209,7 @@ Shipped and live on `www.fantasyfootballrivals.com` as of `buildTime=2026-08-27T
 | Commercial | Free + Rivals Pro Stripe · The League deferred · **no Admin paid-cancel entitlement control** |
 | Extension | Internal **v1.14.3**. Store **v1.14.4** not published. Public Store branding: Fantasy Football Rivals — ESPN Connector |
 
-051A–E typography **and RFSN-054 density** remain Production. Privacy/support pages are **not** in this Production build.
+051A–E typography **and RFSN-054 density** remain Production. Privacy/support pages are **PRODUCTION**.
 
 ---
 
@@ -234,8 +234,8 @@ On Preview **in addition to** Production, unless noted.
 
 | ID | Work | Status |
 | --- | --- | --- |
-| **RFSN-058C** | Publish Privacy + Support | **PREVIEW CERTIFIED** `23c7a4b` / `d3c9a689`. Production **PENDING**. |
-| **RFSN-058B** | Chrome Web Store submission package | **READY EXCEPT MANUAL STORE ASSETS** — **not submitted**. Privacy/support Preview live; Production URLs **PENDING PRODUCTION PROMOTION**. |
+| **RFSN-058C** | Publish Privacy + Support | **CLOSED / PRODUCTION CERTIFIED** `fbd212c` / `6ed1220b`. |
+| **RFSN-058B** | Chrome Web Store submission package | **READY EXCEPT MANUAL STORE ASSETS** — **not submitted**. Production privacy/support URLs live. |
 | **RFSN-058 / 058A** | ESPN connector Store availability | **PRODUCTION PARTIAL** — hygiene **v1.14.3** certified; listing URL still missing |
 | **P0 Preview=Git** | Stop orphan CLI Preview uploads | **Proven** (keep). Also: Kokoro Serverless must use `serviceInstanceRedeploy`, not `railway redeploy` |
 | **052K-follow** | Personal “What's my biggest win?” | **Open** at last smoke |
@@ -251,7 +251,7 @@ No Advisor / Rivalry Center / live Matchups **redesign** is in progress. Do **no
 
 Stop after each increment. Production only when explicitly asked.
 
-1. **Founder:** promote 058C `/privacy` `/support` to Production (`23c7a4b` cherry-pick onto `release/promote-provider-expansion-dff6154`), then submit 058B Store package. **Do not invent a Store URL.**  
+1. **Founder:** RFSN-058D — Chrome Web Store final assets & founder submission review of v1.14.4. Privacy/support Production URLs are live. **Do not invent a Store URL.**  
 2. After a real listing URL exists: `VITE_CONNECTOR_INSTALL_URL` → Preview certify new-user install → Production (`store-submission/CONTINUATION.md`).  
 3. **052K-follow — personal biggest win** (still open at last smoke).  
 4. Remaining 053 increment close-out only if a later ticket left gaps — gallery **routes are already on Production git**.  
@@ -266,7 +266,7 @@ Stop after each increment. Production only when explicitly asked.
 
 | Item | Notes |
 | --- | --- |
-| Chrome Web Store publish | 058B package exists; founder submit after live privacy/support. **No Store URL yet.** |
+| Chrome Web Store publish | 058B package exists; founder 058D after Store assets. Production privacy/support live. **No Store URL yet.** |
 | Separate Preview/Production TTS **tokens** | Endpoints isolated; token still shared — **KNOWN TECHNICAL DEBT** |
 | Admin paid-membership cancellation / entitlement | SUSPENDED ≠ Stripe cancel. Control **absent**. |
 | Yahoo provider approval / primary onboarding | Secondary route only today |
@@ -320,7 +320,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | When | What | Where |
 | --- | --- | --- |
-| 2026-09-02 | **RFSN-058C PREVIEW CERTIFIED.** Git `23c7a4b` → Railway `d3c9a689`. Anonymous `/privacy` `/support`. No Store submit. No Production. | Preview `buildTime=2026-09-02T23:44:51.956Z` · bundle `index-DkpY0IP_.js` |
+| 2026-09-03 | **RFSN-058C PRODUCTION CERTIFIED / CLOSED.** Cherry-picks `23c7a4b`+`e5ef1c8` onto `433fdaf` → Git `fbd212c` → Railway `6ed1220b`. Anonymous `/privacy` `/support`. No Store submit. | Production `buildTime=2026-09-03T03:34:54.217Z` · bundle `index-B3xJVKLN.js` |
 | 2026-09-02 | **RFSN-058B** Store package (v1.14.4 ZIP) + `/privacy` `/support` in source. **Not submitted. Not Production-deployed.** | Local `store-submission/` |
 | 2026-08-27 | **RFSN-058P** Production promotion of store-independent onboarding. Git `433fdaf` · Railway `1aa8f4f2`. Live `buildTime=2026-08-27T23:13:03.813Z` (re-fetched 2026-09-02; health `gitSha` still stale). | Production |
 | 2026-08-28–09-01 | **RFSN-OPS-001–006 CLOSED.** See Infrastructure section. No Node/MySQL/Kokoro code changes in those tickets except Preview Node TTS URL (OPS-006). | Railway config |
@@ -353,7 +353,6 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | **Never `railway down` a serving SUCCESS** to kill INITIALIZING | Production | **P0 ops lesson** (2026-08-09 brief outage) |
 | 052K “What's my biggest win?” returns generic no-margins while league-wide largest margin works | Production | **Open** at last smoke |
 | Chrome Web Store listing does not exist | — | Blocks full ESPN install UX |
-| `/privacy` `/support` not on Production | Production | 058B source only until website deploy |
 | 052J Preview run 1 failed 3/8 (LLM invented 2009 record/score) | Preview (superseded) | Fixed in run 2; do not cite run 1 |
 
 ---
@@ -420,7 +419,8 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | **OPS-001–006** | Railway cost / Kokoro sleep / MySQL backup / TTS isolation | done | n/a | Railway config **CLOSED** |
 | **058P** | Store-independent onboarding | done | yes | **yes** `433fdaf` |
 | **058 / 058A** | Connector hygiene 1.14.3 | done | n/a | Protocol certified; Store URL **missing** |
-| **058B** | Store package 1.14.4 + legal pages | **CURRENT** | not deployed | **not deployed / not submitted** |
+| **058C** | Privacy + Support public pages | done | yes | **yes** `fbd212c` / `6ed1220b` |
+| **058B** | Store package 1.14.4 | **CURRENT** | n/a | **READY EXCEPT MANUAL STORE ASSETS** — not submitted |
 
 ---
 
@@ -428,7 +428,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | ID | Title | Blocked on |
 | --- | --- | --- |
-| **RFSN-058B** | Store submit | Founder review + live `/privacy` `/support` + CWS account. **Do not invent Store URL.** |
+| **RFSN-058B** | Store submit | Founder 058D review + CWS account. Production privacy/support live. **Do not invent Store URL.** |
 | **RFSN-058** | Full ESPN install | Real Chrome Web Store listing URL |
 | **052K-follow** | Personal “What's my biggest win?” | Owner resolution into `query_matchup_margins` |
 | 053 later increments | Gallery close-out if gaps remain | Explicit ticket — routes already on Production git |
@@ -453,7 +453,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | **053 gallery routes** | yes | **On Production git** | Do not treat as local-only |
 | **053 later increments / MKT-001** | mixed | Not re-certified this edition | Explicit ask |
 
-**Production must not receive** 058B website legal pages or a fake Store URL until explicitly requested. 051 stays closed. **054 is live.** **058P is live.**
+**Production must not receive** a fake Store URL. 051 stays closed. **054 is live.** **058P is live.** **058C privacy/support are live.**
 
 ---
 
@@ -477,7 +477,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 ## Recommendations still open
 
-1. Founder: Production-promote 058C privacy/support (`23c7a4b`), then Chrome Web Store submit of v1.14.4. After Google issues a URL, set `VITE_CONNECTOR_INSTALL_URL` (Preview then Production).
+1. Founder: RFSN-058D Chrome Web Store final assets & submission review of v1.14.4. After Google issues a URL, set `VITE_CONNECTOR_INSTALL_URL` (Preview then Production).
 2. Fix 052K personal biggest-win (`my` → margin `ownerName`) and re-smoke Production only when asked.
 3. Separate Preview/Production TTS tokens when scheduled.
 4. Never use `railway down` against a serving SUCCESS to clear INITIALIZING.

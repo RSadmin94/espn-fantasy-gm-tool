@@ -120,8 +120,8 @@ Authority: `FFR_2.0_Product_Architecture.md`.
 | `/connect/yahoo` | Yahoo OAuth | Yes | Secondary |
 | `/import/sleeper-workbook` | Workbook | Yes | Deferred from primary onboarding |
 | `/post-draft-evaluation` | `PostDraftEvaluation` | Yes | Gate `/post-draft-evaluation` |
-| `/privacy` | `PrivacyPolicyPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/privacy` **PENDING PRODUCTION PROMOTION** |
-| `/support` | `SupportPage` | No | **RFSN-058C PREVIEW certified** (`23c7a4b`). Production `https://www.fantasyfootballrivals.com/support` **PENDING PRODUCTION PROMOTION** |
+| `/privacy` | `PrivacyPolicyPage` | No | **RFSN-058C PRODUCTION** `fbd212c`. Live `https://www.fantasyfootballrivals.com/privacy` |
+| `/support` | `SupportPage` | No | **RFSN-058C PRODUCTION** `fbd212c`. Live `https://www.fantasyfootballrivals.com/support` |
 | `/admin/*` | Admin Console | Yes | Owner mutations; view-only for limited admin |
 | `/player-database` | `PlayerDatabase` | Yes | Utility |
 | `/league-data-health` | `LeagueDataHealth` | Yes | Admin utility |
