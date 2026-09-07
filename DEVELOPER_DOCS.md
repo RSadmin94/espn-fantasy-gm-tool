@@ -479,7 +479,11 @@ The Start/Sit Advisor (`/startsit`) uses the AI GM Advisor's LLM integration to 
 
 ### 9.8 Trade Analyzer
 
-The Trade Analyzer (`/trade`) allows users to input a proposed trade (players going out vs. players coming in) and receive an AI-powered fairness assessment. The LLM evaluates the trade using current season performance data, historical keeper value, and positional scarcity.
+The Trade Analyzer (`/trades`) allows users to input a proposed trade (players going out vs. players coming in) and receive an AI-powered fairness assessment. Valuation is Market Value Engine V2 (`server/marketValue.ts`) via `calcTradeValue`; pick math is `server/tradePickValueAuthority.ts`.
+
+**Trade Finder (RFSN-061)** lives on the same page (`Trade Finder` tab). It is a league-aware recommendation engine: need/surplus → complementary partners → bounded 1-for-1 / 2-for-1 / 1-for-2 / 2-for-2 generation → deterministic scoring. AI may only explain ranked results; it cannot change values or order. Authority: `server/tradeFinder/`. Endpoint: `tradeFinder.find`.
+
+The LLM evaluates a user-constructed trade using current season performance data, historical keeper value, and positional scarcity. Trade Finder rankings never depend on that LLM.
 
 ### 9.9 Waiver Wire Intelligence
 

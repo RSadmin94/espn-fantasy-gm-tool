@@ -299,3 +299,8 @@ vitest suites before commit (ignore the pre-existing `mockDraftIntelligence.test
 missing `client/src/lib/mockDraftUtils`, unrelated); verify deploy by polling
 `https://gmwarroom.online/api/health` for `gitSha` (~2–4 min). Do NOT start Mock Draft Intelligence
 or Trade Reality Simulator.
+
+### 12.7 Trade Finder (RFSN-061)
+
+Trade Finder (`server/tradeFinder/`, `tradeFinder.find`) generates ranked league offers. It reuses Market Value / `calcTradeValue` and `tradePickValueAuthority` — it does not introduce a second valuation or fairness model. AI narrative is optional and cannot reorder results. UI: Trade Intelligence `/trades` → Trade Finder tab.
+

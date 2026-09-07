@@ -34,6 +34,7 @@ import { meRouter } from "./meRouter";
 import { draftRealityRouter } from "./draftRealityRouter";
 import { leagueIntelRouter } from "./leagueIntelRouter";
 import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
+import { tradeFinderRouter } from "./tradeFinderRouter";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
@@ -760,6 +761,7 @@ export const appRouter = router({
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,
   completedTradeIntel: completedTradeIntelRouter,
+  tradeFinder: tradeFinderRouter,
   rivalryStory: rivalryStoryRouter,
   sofia: sofiaRouter,
   postDraftEval: postDraftEvalRouter,
