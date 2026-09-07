@@ -26,7 +26,7 @@ import type { ManagerBehaviorEvidence, TradeFinderResult } from "./tradeFinder/t
 import { DEFAULT_TRADE_FINDER_FILTERS } from "./tradeFinder/types";
 
 const filtersSchema = z.object({
-  targetPosition: z.enum(["ANY", "QB", "RB", "WR", "TE", "FLEX"]).default("ANY"),
+  targetPosition: z.enum(["ANY", "QB", "RB", "WR", "TE", "FLEX", "K", "DST"]).default("ANY"),
   partnerTeamId: z.number().int().positive().nullable().default(null),
   maxAssets: z.union([z.literal(1), z.literal(2)]).default(2),
   includeDraftPicks: z.boolean().default(false),
@@ -174,12 +174,14 @@ export const tradeFinderRouter = router({
             emptyExplanation: "No strong trade opportunities right now. This season is not synced.",
             userNeeds: [],
             userSurplus: [],
+            tradePriority: [],
             trades: [],
             disclaimers: [],
             picksSupported: false,
             metrics: {
               teams: 0, assetsEvaluated: 0, partnersRanked: 0,
               candidatesGenerated: 0, candidatesScored: 0, candidatesReturned: 0, elapsedMs: 0,
+              wantNeedPositions: [], streamerDeprioritized: true,
             },
             narrativeApplied: false,
           } satisfies TradeFinderResult;

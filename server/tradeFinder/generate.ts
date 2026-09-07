@@ -10,6 +10,12 @@ import type {
 } from "./types";
 import { TRADE_FINDER_BOUNDS, TRADE_FINDER_VALUE_BANDS } from "./weights";
 import { needMap } from "./needSurplus";
+import {
+  isDeprioritizedStreamer,
+  isSkillOffense,
+  skillOffensePositions,
+  tradePriorityScore,
+} from "./priority";
 
 export interface RankedPartner {
   team: TradeFinderTeam;
@@ -97,8 +103,9 @@ function matchesTarget(receive: TradeFinderAsset[], filters: TradeFinderFilters)
 }
 
 /**
- * Partner rank: they have surplus where we have need AND need where we have surplus.
- * complement = Σ (userNeed[P]*oppSurplus[P] + userSurplus[P]*oppNeed[P]) / (100*100*n)
+ * Partner rank uses trade-priority scores, not raw roster need.
+ * complement = Σ (userPriNeed[P]*oppPriSur[P] + userPriSur[P]*oppPriNeed[P]) / (100*100*n)
+ * K/DST are scaled by TRADE_FINDER_PRIORITY_MULTIPLIER unless explicitly targeted.
  */
 export function rankPartners(
   league: TradeFinderLeague,
@@ -118,10 +125,10 @@ export function rankPartners(
     for (const pos of positions) {
       const u = userNeeds.get(pos);
       const o = oppNeeds.get(pos);
-      const uNeed = u?.needScore ?? 0;
-      const uSur = u?.surplusScore ?? 0;
-      const oNeed = o?.needScore ?? 0;
-      const oSur = o?.surplusScore ?? 0;
+      const uNeed = tradePriorityScore(u?.needScore ?? 0, pos, filters, league.slots);
+      const uSur = tradePriorityScore(u?.surplusScore ?? 0, pos, filters, league.slots);
+      const oNeed = tradePriorityScore(o?.needScore ?? 0, pos, filters, league.slots);
+      const oSur = tradePriorityScore(o?.surplusScore ?? 0, pos, filters, league.slots);
       num += uNeed * oSur + uSur * oNeed;
       denom += 100 * 100;
     }
@@ -130,6 +137,30 @@ export function rankPartners(
   ranked.sort((a, b) => b.complementScore - a.complementScore || a.team.teamId - b.team.teamId);
   if (filters.partnerTeamId != null) return ranked.slice(0, 1);
   return ranked.slice(0, TRADE_FINDER_BOUNDS.maxPartners);
+}
+
+/** Positions we try to acquire: skill offense always, plus high trade-priority needs. */
+export function discoveryNeedPositions(
+  team: TradeFinderTeam,
+  filters: TradeFinderFilters,
+  slots: TradeFinderLeague["slots"],
+): TradePosition[] {
+  const labeled = team.needs
+    .filter((n) => n.label === "NEED" && !isDeprioritizedStreamer(n.position, filters))
+    .map((n) => n.position);
+  const rankedPriority = [...team.needs]
+    .map((n) => ({ n, pri: tradePriorityScore(n.needScore, n.position, filters, slots) }))
+    .filter((x) => x.pri >= 20 && !isDeprioritizedStreamer(x.n.position, filters))
+    .sort((a, b) => b.pri - a.pri)
+    .map((x) => x.n.position);
+  const targeted: TradePosition[] = [];
+  if (filters.targetPosition === "DST" || filters.targetPosition === "K") {
+    targeted.push(filters.targetPosition);
+  }
+  if (filters.targetPosition === "QB" || filters.targetPosition === "RB" || filters.targetPosition === "WR" || filters.targetPosition === "TE") {
+    targeted.push(filters.targetPosition);
+  }
+  return [...new Set([...targeted, ...labeled, ...rankedPriority, ...skillOffensePositions()])];
 }
 
 function surplusAssets(team: TradeFinderTeam, want: TradePosition[]): TradeFinderAsset[] {
@@ -160,20 +191,36 @@ function needAssets(team: TradeFinderTeam, want: TradePosition[]): TradeFinderAs
     });
 }
 
-function complementOk(user: TradeFinderTeam, opp: TradeFinderTeam, give: TradeFinderAsset[], receive: TradeFinderAsset[]): boolean {
+export function receiveHitsFormalNeed(user: TradeFinderTeam, receive: TradeFinderAsset[]): boolean {
   const u = needMap(user);
-  const o = needMap(opp);
-  const receiveHitsNeed = receive.some((a) => {
+  return receive.some((a) => {
     if (a.kind === "pick") return true;
     const n = u.get(a.position as TradePosition);
     return n != null && (n.label === "NEED" || n.needScore >= 32);
+  });
+}
+
+function complementOk(
+  user: TradeFinderTeam,
+  opp: TradeFinderTeam,
+  give: TradeFinderAsset[],
+  receive: TradeFinderAsset[],
+  filters: TradeFinderFilters,
+): boolean {
+  const o = needMap(opp);
+  const receiveUseful = receive.some((a) => {
+    if (a.kind === "pick") return true;
+    if (isDeprioritizedStreamer(a.position, filters)) return false;
+    if (receiveHitsFormalNeed(user, [a])) return true;
+    // Fallback: skill/IDP lineup-improvement candidate even if not labeled NEED.
+    return isSkillOffense(a.position) || a.position === "DP";
   });
   const giveHitsTheirNeed = give.some((a) => {
     if (a.kind === "pick") return true;
     const n = o.get(a.position as TradePosition);
     return n != null && (n.label === "NEED" || n.needScore >= 32);
   });
-  return receiveHitsNeed && giveHitsTheirNeed;
+  return receiveUseful && giveHitsTheirNeed;
 }
 
 function pushCandidate(
@@ -189,10 +236,11 @@ function pushCandidate(
   if (give.length === 0 || receive.length === 0) return;
   if (give.length > filters.maxAssets || receive.length > filters.maxAssets) return;
   if (!matchesTarget(receive, filters)) return;
+  if (receive.some((a) => isDeprioritizedStreamer(a.position, filters))) return;
   const ids = [...give, ...receive].map((a) => a.assetId);
   if (new Set(ids).size !== ids.length) return;
   if (!inBand(valueSum(give), valueSum(receive), filters)) return;
-  if (!complementOk(user, partner, give, receive)) return;
+  if (!complementOk(user, partner, give, receive, filters)) return;
   const key = `${partner.teamId}|${give.map((a) => a.assetId).sort().join(",")}|${receive.map((a) => a.assetId).sort().join(",")}`;
   if (seen.has(key)) return;
   const shape: TradeShape =
@@ -216,10 +264,8 @@ export function generateCandidates(
 ): GeneratedTrade[] {
   const user = league.teams.find((t) => t.teamId === league.userTeamId);
   if (!user) return [];
-  const userNeedPos = user.needs.filter((n) => n.label === "NEED").map((n) => n.position);
   const userSurplusPos = user.needs.filter((n) => n.label === "SURPLUS").map((n) => n.position);
-  const fallbackNeed = [...user.needs].sort((a, b) => b.needScore - a.needScore).slice(0, 2).map((n) => n.position);
-  const wantNeed = userNeedPos.length ? userNeedPos : fallbackNeed;
+  const wantNeed = discoveryNeedPositions(user, filters, league.slots);
   const wantGive = userSurplusPos.length ? userSurplusPos : skillFallback(user);
 
   const out: GeneratedTrade[] = [];

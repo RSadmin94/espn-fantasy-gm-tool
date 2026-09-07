@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. Status: **Preview certified 2026-09-07**. Do not promote to Production from this ticket.
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** adds trade-priority discovery (K/DST 0.20 unless targeted). Status: **061A Preview candidate** (this change set). Do not promote to Production from this ticket.
 
 ---
 
@@ -491,11 +491,11 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | Preview certified 2026-09-07. Production not promoted. |
+| Status | RFSN-061A Preview candidate (this change set). Production not promoted. |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
-| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Score weights: `server/tradeFinder/weights.ts`. |
+| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Trade-priority: `server/tradeFinder/priority.ts`. Score weights: `server/tradeFinder/weights.ts`. |
 | Player value | Existing Market Value Engine V2 + `calcTradeValue` (`server/marketValue.ts`, `server/analytics.ts`) |
 | Pick value / fairness | Existing `server/tradePickValueAuthority.ts` (`compareGivenSideTotals`, `fairnessGradeFromGainRatio`) |
 | Roster / lineup | ESPN combined cache via `normalizeRosters` / `normalizeTeams`; slots from `settings.rosterSettings.lineupSlotCounts` |
@@ -523,6 +523,21 @@ else NEUTRAL
 
 Replacement at each position is the median dedicated-starter quality across the league.
 
+### Trade-priority score (RFSN-061A)
+
+Roster needScore is unchanged. Discovery, partner ranking, and need-fit use:
+
+```
+tradePriorityScore = needScore × tradePriorityMultiplier(position)
+QB/RB/WR/TE = 1.00
+K = 0.20
+DST = 0.20
+DP (IDP) = 1.00 when the league starts IDP; 0.20 if no IDP slots
+Explicit TARGET=K or TARGET=DST sets that position's multiplier to 1.00
+```
+
+Default search always considers QB/RB/WR/TE lineup improvements even when the highest raw need is K/DST. K/DST remain visible as roster needs.
+
 ### Trade score (initial weights)
 
 ```
@@ -536,8 +551,8 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - No calibrated acceptance probability (by design).
 - Dynasty/keeper economics are disclosed, not fully priced.
 - Superflex/IDP/DST supported when slots exist; exotic IR/taxi scoring is limited.
+- Default discovery deprioritizes K/DST (0.20) so a DST roster hole does not block skill-position recommendations. Empty remains valid when skill packages fail fairness/lineup/mutual-benefit gates.
 - Sleeper leagues only work if the same ESPN-shaped combined cache is populated. Provider auth is unchanged.
-- If DST/K is the only labeled NEED, skill-position packages may correctly return empty when no partner has complementary DST surplus (observed on Teco 2026 read-only smoke).
 
 ### Recommended RFSN-061B
 
@@ -545,5 +560,5 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - Calibrated acceptance only if a labeled historical model exists
 - Taxi/IR/keeper-cost in the need model
 - Sleeper-native roster payload if ESPN-shaped cache is absent
-- Deprioritize DST/K in partner ranking unless the user targets that position, so skill-position needs still surface
+- DST/K trade-priority deprioritization unless targeted — **done in RFSN-061A**
 

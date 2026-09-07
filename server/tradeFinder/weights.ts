@@ -68,3 +68,19 @@ export const TRADE_FINDER_BEHAVIOR = {
   moderateShare: 0.35,
   strongShare: 0.5,
 } as const;
+
+/**
+ * Discovery / ranking multiplier. Does not change roster needScore,
+ * player tradeValue, or fairness grades.
+ * Explicit TARGET=K or TARGET=DST overrides to 1.00 in priority.ts.
+ */
+export const TRADE_FINDER_PRIORITY_MULTIPLIER = {
+  QB: 1,
+  RB: 1,
+  WR: 1,
+  TE: 1,
+  K: 0.2,
+  DST: 0.2,
+  /** IDP: full priority when the league starts IDP (see tradePriorityMultiplier). */
+  DP: 1,
+} as const;
