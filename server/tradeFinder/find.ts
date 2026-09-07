@@ -9,7 +9,7 @@ import { DEFAULT_TRADE_FINDER_FILTERS } from "./types";
 import { TRADE_FINDER_BOUNDS } from "./weights";
 import { attachNeeds } from "./needSurplus";
 import { discoveryNeedPositions, generateCandidates, rankPartners } from "./generate";
-import { rankScored, scoreCandidate } from "./score";
+import { evaluateCandidate, rankScored } from "./score";
 import { emptyExplanation } from "./explain";
 import { applyNarratives } from "./narrative";
 import { tradePriorityScore } from "./priority";
@@ -81,6 +81,7 @@ export function findTrades(
     partnersRanked: 0,
     candidatesGenerated: 0,
     candidatesScored: 0,
+    candidatesRejectedByRationality: 0,
     candidatesReturned: 0,
     elapsedMs: 0,
     wantNeedPositions,
@@ -118,9 +119,11 @@ export function findTrades(
 
   const generated = generateCandidates(league, partners, filters);
   const scored = [];
+  let rejectedByRationality = 0;
   for (const g of generated) {
-    const s = scoreCandidate(league, user, g, filters);
-    if (s) scored.push(s);
+    const outcome = evaluateCandidate(league, user, g, filters);
+    if (outcome.rejectedByRationality) rejectedByRationality += 1;
+    if (outcome.candidate) scored.push(outcome.candidate);
   }
   const ranked = rankScored(scored).slice(0, filters.topN);
   const withNarrative = applyNarratives(ranked, opts?.narrativeRaw ?? null);
@@ -131,6 +134,7 @@ export function findTrades(
       partnersRanked: partners.length,
       candidatesGenerated: generated.length,
       candidatesScored: scored.length,
+      candidatesRejectedByRationality: rejectedByRationality,
     }, entitled, filters));
   }
 
@@ -151,6 +155,7 @@ export function findTrades(
     partnersRanked: partners.length,
     candidatesGenerated: generated.length,
     candidatesScored: scored.length,
+    candidatesRejectedByRationality: rejectedByRationality,
     candidatesReturned: withNarrative.trades.length,
     wantNeedPositions,
     streamerDeprioritized,

@@ -180,7 +180,7 @@ export const tradeFinderRouter = router({
             picksSupported: false,
             metrics: {
               teams: 0, assetsEvaluated: 0, partnersRanked: 0,
-              candidatesGenerated: 0, candidatesScored: 0, candidatesReturned: 0, elapsedMs: 0,
+              candidatesGenerated: 0, candidatesScored: 0, candidatesRejectedByRationality: 0, candidatesReturned: 0, elapsedMs: 0,
               wantNeedPositions: [], streamerDeprioritized: true,
             },
             narrativeApplied: false,

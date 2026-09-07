@@ -84,3 +84,18 @@ export const TRADE_FINDER_PRIORITY_MULTIPLIER = {
   /** IDP: full priority when the league starts IDP (see tradePriorityMultiplier). */
   DP: 1,
 } as const;
+
+/**
+ * Partner-rationality gate (RFSN-061B). Recommendation ranking only.
+ * Does not change player tradeValue or fairness grades.
+ */
+export const TRADE_FINDER_RATIONALITY = {
+  /** Partner starter-point drop that requires a compensating roster benefit. */
+  materialDropPpg: 1.5,
+  /** Canonical needScore (not trade-priority) that counts as a real NEED. */
+  needFloor: 40,
+  /** Canonical needScore that counts as a severe weakness. */
+  severeNeedScore: 50,
+  /** Partner received-value / given-value that counts as a clear premium. */
+  valuePremiumRatio: 1.15,
+} as const;

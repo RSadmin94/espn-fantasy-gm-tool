@@ -15,6 +15,7 @@ export type FairnessBand =
   | "AGGRESSIVE ASK"
   | "UNREALISTIC";
 export type BehaviorFit = "NONE" | "WEAK" | "MODERATE" | "STRONG";
+export type PartnerRationality = "STRONG" | "GOOD" | "MARGINAL" | "POOR";
 export type TradeShape = "1-for-1" | "2-for-1" | "1-for-2" | "2-for-2";
 export type TargetPositionFilter = "ANY" | "QB" | "RB" | "WR" | "TE" | "FLEX" | "K" | "DST";
 export type EmptyReason =
@@ -152,6 +153,7 @@ export interface TradeFinderCandidate {
   partnerNeedFit: number;
   userDepthDamage: number;
   partnerDepthDamage: number;
+  partnerRationality: PartnerRationality;
   behaviorFit: BehaviorFit;
   behaviorNote: string | null;
   whyThisWorks: string;
@@ -168,6 +170,7 @@ export interface TradeFinderMetrics {
   partnersRanked: number;
   candidatesGenerated: number;
   candidatesScored: number;
+  candidatesRejectedByRationality: number;
   candidatesReturned: number;
   elapsedMs: number;
   wantNeedPositions: string[];
