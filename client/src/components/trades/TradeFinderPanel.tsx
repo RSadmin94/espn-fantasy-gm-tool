@@ -39,10 +39,18 @@ type FinderTrade = {
   shape: string;
   tradeScore: number;
   tradeFit: string;
+  opportunity: string;
+  qualityTier: number;
+  resultGroup: string;
+  targetSatisfied: boolean;
+  twoForOneClutter: boolean;
   fairness: string;
   userLineupDelta: number | null;
   partnerLineupDelta: number | null;
   whyThisWorks: string;
+  whyTheydConsider: string;
+  theCost: string;
+  rivalsVerdict: string;
   riskWatchout: string;
   yourImpact: string;
   theirImpact: string;
@@ -78,9 +86,10 @@ const LOADING_STEPS = [
 const FIT_CLASS: Record<string, string> = {
   "STRONG FIT": "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
   "GOOD FIT": "border-lime-500/40 bg-lime-500/10 text-lime-400",
-  BALANCED: "border-violet-500/40 bg-violet-500/10 text-violet-400",
-  AGGRESSIVE: "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
+  "AGGRESSIVE ASK": "border-yellow-500/40 bg-yellow-500/10 text-yellow-400",
+  "NECESSITY TRADE": "border-sky-500/40 bg-sky-500/10 text-sky-300",
   "LONG SHOT": "border-orange-500/40 bg-orange-500/10 text-orange-400",
+  "BAD DEAL FOR YOU": "border-red-500/40 bg-red-500/10 text-red-300",
 };
 
 type TeamRow = { teamId: number; teamName: string };
@@ -144,7 +153,7 @@ export function TradeFinderPanel(props: {
   return (
     <div className="space-y-5 min-w-0">
       <p className="text-sm text-muted-foreground">
-        Ranked offers that help your roster and still make sense for the other manager. Advisory only — nothing is sent to ESPN or Sleeper.
+        Ranked trade options in this league, from best available to long shots. Advisory only — nothing is sent to ESPN or Sleeper.
       </p>
 
       {emptyConn && (
@@ -164,8 +173,8 @@ export function TradeFinderPanel(props: {
           options={[["any", "Any"], ...props.teams.filter((t) => t.teamId !== myTeamId).map((t) => [String(t.teamId), t.teamName] as [string, string])]}
         />
         <FilterSelect label="Max assets" value={maxAssets} onChange={(v) => setMaxAssets(v as "1" | "2")} options={[["1", "1"], ["2", "2"]]} />
-        <FilterSelect label="Risk" value={risk} onChange={(v) => setRisk(v as RiskPref)} options={[
-          ["conservative", "Conservative"], ["balanced", "Balanced"], ["aggressive", "Aggressive"],
+        <FilterSelect label="Trade approach" value={risk} onChange={(v) => setRisk(v as RiskPref)} options={[
+          ["conservative", "Best value"], ["balanced", "Need a starter"], ["aggressive", "Must make a move"],
         ]} />
         <FilterSelect label="Show" value={topN} onChange={(v) => setTopN(v as "5" | "10")} options={[["5", "Top 5"], ["10", "Top 10"]]} />
         <div className="flex items-end min-w-0">
@@ -273,20 +282,32 @@ function FinderResults(props: {
       {result.trades.length === 0 && !result.gated && (
         <Card className="border-border/60">
           <CardContent className="py-5 px-4 space-y-2">
-            <p className="text-sm font-semibold text-foreground">No strong trade opportunities right now.</p>
+            <p className="text-sm font-semibold text-foreground">Rivals couldn&apos;t construct a valid trade from the current roster data.</p>
             <p className="text-sm text-muted-foreground break-words">{result.emptyExplanation}</p>
           </CardContent>
         </Card>
       )}
 
-      {result.trades.map((t) => (
-        <TradeCard
-          key={`${t.partnerTeamId}-${t.youGive.map((a) => a.assetId).join("-")}-${t.youReceive.map((a) => a.assetId).join("-")}`}
-          trade={t}
-          userTeamId={props.userTeamId}
-          onAnalyze={props.onLoadIntoAnalyzer}
-        />
-      ))}
+      {(["BEST AVAILABLE", "MORE AGGRESSIVE OPTIONS"] as const).map((group) => {
+        const rows = result.trades.filter((t) => (t.resultGroup || (t.qualityTier <= 2 ? "BEST AVAILABLE" : "MORE AGGRESSIVE OPTIONS")) === group);
+        if (rows.length === 0) return null;
+        const mixed = result.trades.some((t) => t.resultGroup === "MORE AGGRESSIVE OPTIONS") && result.trades.some((t) => t.resultGroup === "BEST AVAILABLE");
+        return (
+          <div key={group} className="space-y-3 min-w-0">
+            {mixed && (
+              <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{group}</p>
+            )}
+            {rows.map((t) => (
+              <TradeCard
+                key={`${t.partnerTeamId}-${t.youGive.map((a) => a.assetId).join("-")}-${t.youReceive.map((a) => a.assetId).join("-")}`}
+                trade={t}
+                userTeamId={props.userTeamId}
+                onAnalyze={props.onLoadIntoAnalyzer}
+              />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -298,9 +319,11 @@ function TradeCard(props: {
 }) {
   const t = props.trade;
   const why = t.whyAi || t.whyThisWorks;
-  const risk = t.riskAi || t.riskWatchout;
+  const opp = t.opportunity || t.tradeFit;
+  const warn = opp === "BAD DEAL FOR YOU" || opp === "LONG SHOT" || opp === "NECESSITY TRADE" || opp === "AGGRESSIVE ASK";
+  const fmt = (n: number | null) => (n == null ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(1)} PPG`);
   return (
-    <Card className="border-border/60 min-w-0 overflow-hidden">
+    <Card className={cn("border-border/60 min-w-0 overflow-hidden", opp === "BAD DEAL FOR YOU" && "border-red-500/30")}>
       <CardContent className="py-4 px-4 space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
@@ -308,8 +331,8 @@ function TradeCard(props: {
             <h3 className="text-base font-semibold text-foreground break-words">{t.partnerName}</h3>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <Pill className={FIT_CLASS[t.tradeFit] ?? "border-border text-muted-foreground"}>{t.tradeFit}</Pill>
-            <Pill className="border-border/60 text-muted-foreground">{t.fairness}</Pill>
+            <Pill className={FIT_CLASS[opp] ?? "border-border text-muted-foreground"}>{opp}</Pill>
+            <Pill className="border-border/60 text-muted-foreground">Fairness {t.fairness}</Pill>
             {t.partnerRationality && (
               <Pill className="border-border/60 text-muted-foreground">Partner {t.partnerRationality}</Pill>
             )}
@@ -321,16 +344,26 @@ function TradeCard(props: {
           <AssetCol label="You give" assets={t.youGive} accent="text-orange-300" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs min-w-0">
-          <p className="text-muted-foreground break-words"><span className="text-foreground font-medium">Your impact: </span>{t.yourImpact}</p>
-          <p className="text-muted-foreground break-words"><span className="text-foreground font-medium">Their impact: </span>{t.theirImpact}</p>
+        <div className="grid grid-cols-2 gap-3 text-xs min-w-0">
+          <p className="text-muted-foreground break-words"><span className="text-foreground font-medium">Your lineup: </span>{fmt(t.userLineupDelta)}</p>
+          <p className="text-muted-foreground break-words"><span className="text-foreground font-medium">Their lineup: </span>{fmt(t.partnerLineupDelta)}</p>
         </div>
 
         <p className="text-sm text-foreground break-words">
           <Sparkles className="inline h-3.5 w-3.5 mr-1 text-primary" />
           {why}
         </p>
-        <p className="text-xs text-muted-foreground break-words">Risk: {risk}</p>
+        {t.whyTheydConsider && (
+          <p className="text-xs text-muted-foreground break-words"><span className="text-foreground font-medium">Why they&apos;d consider it: </span>{t.whyTheydConsider}</p>
+        )}
+        {t.theCost && (
+          <p className="text-xs text-muted-foreground break-words"><span className="text-foreground font-medium">The cost: </span>{t.theCost}</p>
+        )}
+        {t.rivalsVerdict && (
+          <p className={cn("text-xs break-words", warn ? "text-yellow-300" : "text-muted-foreground")}>
+            <span className="text-foreground font-medium">Rivals verdict: </span>{t.whyAi ? t.riskAi || t.rivalsVerdict : t.rivalsVerdict}
+          </p>
+        )}
         {t.behaviorNote && t.behaviorFit !== "NONE" && (
           <p className="text-xs text-muted-foreground break-words">{t.behaviorNote}</p>
         )}

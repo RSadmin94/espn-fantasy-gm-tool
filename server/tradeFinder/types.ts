@@ -6,8 +6,19 @@
 export type SkillPosition = "QB" | "RB" | "WR" | "TE";
 export type TradePosition = SkillPosition | "K" | "DST" | "DP";
 export type RiskPreference = "conservative" | "balanced" | "aggressive";
+export type TradeApproach = "BEST VALUE" | "NEED A STARTER" | "MUST MAKE A MOVE";
 export type NeedLabel = "NEED" | "SURPLUS" | "NEUTRAL";
-export type TradeFitLabel = "STRONG FIT" | "GOOD FIT" | "BALANCED" | "AGGRESSIVE" | "LONG SHOT";
+export type OpportunityLabel =
+  | "STRONG FIT"
+  | "GOOD FIT"
+  | "AGGRESSIVE ASK"
+  | "NECESSITY TRADE"
+  | "LONG SHOT"
+  | "BAD DEAL FOR YOU";
+/** @deprecated Use OpportunityLabel. Kept as an alias for existing imports. */
+export type TradeFitLabel = OpportunityLabel;
+export type QualityTier = 1 | 2 | 3 | 4;
+export type TradeResultGroup = "BEST AVAILABLE" | "MORE AGGRESSIVE OPTIONS";
 export type FairnessBand =
   | "BALANCED"
   | "SLIGHT EDGE YOU"
@@ -24,6 +35,7 @@ export type EmptyReason =
   | "preseason_empty"
   | "unsupported_season"
   | "no_viable_partners"
+  | "no_constructable_trade"
   | "insufficient_values"
   | "injury_heavy"
   | "team_mismatch"
@@ -144,6 +156,11 @@ export interface TradeFinderCandidate {
   shape: TradeShape;
   tradeScore: number;
   tradeFit: TradeFitLabel;
+  opportunity: OpportunityLabel;
+  qualityTier: QualityTier;
+  resultGroup: TradeResultGroup;
+  targetSatisfied: boolean;
+  twoForOneClutter: boolean;
   fairness: FairnessBand;
   fairnessGrade: string;
   gainRatioUser: number;
@@ -157,6 +174,9 @@ export interface TradeFinderCandidate {
   behaviorFit: BehaviorFit;
   behaviorNote: string | null;
   whyThisWorks: string;
+  whyTheydConsider: string;
+  theCost: string;
+  rivalsVerdict: string;
   riskWatchout: string;
   yourImpact: string;
   theirImpact: string;
@@ -170,7 +190,12 @@ export interface TradeFinderMetrics {
   partnersRanked: number;
   candidatesGenerated: number;
   candidatesScored: number;
+  candidatesHardRejected: number;
   candidatesRejectedByRationality: number;
+  tier1Count: number;
+  tier2Count: number;
+  tier3Count: number;
+  tier4Count: number;
   candidatesReturned: number;
   elapsedMs: number;
   wantNeedPositions: string[];
