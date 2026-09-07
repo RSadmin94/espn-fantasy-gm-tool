@@ -2,16 +2,18 @@ import { describe, expect, it } from "vitest";
 import { findTrades } from "./tradeFinder/find";
 import { attachNeeds, analyzeTeamNeeds, leagueReplacementByPosition } from "./tradeFinder/needSurplus";
 import { generateCandidates, rankPartners } from "./tradeFinder/generate";
-import { scoreCandidate } from "./tradeFinder/score";
+import { scoreCandidate, evaluateCandidate, rankScored, tradeFitLabel } from "./tradeFinder/score";
 import { applyNarratives } from "./tradeFinder/narrative";
 import { behaviorFitForTrade } from "./tradeFinder/behavior";
 import { fairnessBandFromGrade } from "./tradeFinder/score";
 import { DEFAULT_ROSTER_SLOTS } from "./tradeFinder/types";
 import { tradePriorityMultiplier, tradePriorityScore } from "./tradeFinder/priority";
+import { partnerRationality } from "./tradeFinder/partnerRationality";
 import { TRADE_FINDER_PRIORITY_MULTIPLIER } from "./tradeFinder/weights";
 import { compareGivenSideTotals, fairnessGradeFromGainRatio, PICK_TO_MARKET_SCALE } from "./tradePickValueAuthority";
 import type {
   TradeFinderAsset,
+  TradeFinderCandidate,
   TradeFinderLeague,
   TradeFinderTeam,
   TradePosition,
@@ -516,5 +518,256 @@ describe("RFSN-061A trade-priority discovery", () => {
     expect(tradePriorityMultiplier("DP", { targetPosition: "ANY" }, { ...DEFAULT_ROSTER_SLOTS, DP: 0 })).toBe(0.2);
     expect(tradePriorityScore(80, "DST", { targetPosition: "ANY" })).toBe(16);
     expect(tradePriorityScore(80, "DST", { targetPosition: "DST" })).toBe(80);
+  });
+});
+
+const filtersBalanced = {
+  targetPosition: "ANY" as const,
+  partnerTeamId: null,
+  maxAssets: 2 as const,
+  includeDraftPicks: false,
+  risk: "balanced" as const,
+  topN: 5,
+};
+
+function stubCandidate(over: Partial<TradeFinderCandidate>): TradeFinderCandidate {
+  return {
+    partnerTeamId: 1,
+    partnerName: "X",
+    youGive: [{ kind: "player", assetId: "a", playerId: 1, name: "A", position: "RB", tradeValue: 100 }],
+    youReceive: [{ kind: "player", assetId: "b", playerId: 2, name: "B", position: "WR", tradeValue: 100 }],
+    shape: "1-for-1",
+    tradeScore: 50,
+    tradeFit: "BALANCED",
+    fairness: "BALANCED",
+    fairnessGrade: "FAIR",
+    gainRatioUser: 1,
+    userLineupDelta: 3,
+    partnerLineupDelta: 0,
+    userNeedFit: 50,
+    partnerNeedFit: 50,
+    userDepthDamage: 0,
+    partnerDepthDamage: 0,
+    partnerRationality: "GOOD",
+    behaviorFit: "NONE",
+    behaviorNote: null,
+    whyThisWorks: "why",
+    riskWatchout: "risk",
+    yourImpact: "you",
+    theirImpact: "them",
+    whyAi: null,
+    riskAi: null,
+    ...over,
+  };
+}
+
+describe("RFSN-061B partner rationality gate", () => {
+  it("1. rejects a fair-value trade that materially hurts the partner lineup with no compensator", () => {
+    const user = team(1, "You", [
+      asset({ playerId: 1, name: "Josh Allen", position: "QB", weeklyProjection: 22, starter: true, tradeValue: 220 }),
+      asset({ playerId: 2, name: "Saquon Barkley", position: "RB", weeklyProjection: 18, starter: true, tradeValue: 180 }),
+      asset({ playerId: 3, name: "James Cook", position: "RB", weeklyProjection: 15, starter: true, tradeValue: 150 }),
+      asset({ playerId: 4, name: "CeeDee Lamb", position: "WR", weeklyProjection: 18, starter: true, tradeValue: 180 }),
+      asset({ playerId: 5, name: "Puka Nacua", position: "WR", weeklyProjection: 16, starter: true, tradeValue: 160 }),
+      asset({ playerId: 6, name: "DK Metcalf", position: "WR", weeklyProjection: 12, starter: false, tradeValue: 80 }),
+      asset({ playerId: 7, name: "Jordan Addison", position: "WR", weeklyProjection: 8, starter: false, tradeValue: 70 }),
+      asset({ playerId: 8, name: "Trey McBride", position: "TE", weeklyProjection: 12, starter: true, tradeValue: 120 }),
+      asset({ playerId: 9, name: "K", position: "K", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+      asset({ playerId: 10, name: "DST", position: "DST", weeklyProjection: 7, starter: true, tradeValue: 35 }),
+    ]);
+    const mike = team(2, "Mike", [
+      asset({ playerId: 11, name: "Jalen Hurts", position: "QB", weeklyProjection: 21, starter: true, tradeValue: 210 }),
+      asset({ playerId: 12, name: "Bijan Robinson", position: "RB", weeklyProjection: 20, starter: true, tradeValue: 150 }),
+      asset({ playerId: 13, name: "Breece Hall", position: "RB", weeklyProjection: 16, starter: true, tradeValue: 160 }),
+      asset({ playerId: 14, name: "Kyren Williams", position: "RB", weeklyProjection: 14, starter: false, tradeValue: 140 }),
+      asset({ playerId: 15, name: "Amon-Ra St. Brown", position: "WR", weeklyProjection: 18, starter: true, tradeValue: 180 }),
+      asset({ playerId: 16, name: "Garrett Wilson", position: "WR", weeklyProjection: 16, starter: true, tradeValue: 160 }),
+      asset({ playerId: 17, name: "Chris Olave", position: "WR", weeklyProjection: 12, starter: false, tradeValue: 120 }),
+      asset({ playerId: 18, name: "Dallas Goedert", position: "TE", weeklyProjection: 10, starter: true, tradeValue: 100 }),
+      asset({ playerId: 19, name: "K2", position: "K", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+      asset({ playerId: 20, name: "DST2", position: "DST", weeklyProjection: 7, starter: true, tradeValue: 35 }),
+    ]);
+    const league = attachNeeds(leagueOf(1, [user, mike, team(3, "Pat", user.roster.map((a) => ({ ...a, playerId: a.playerId! + 200, assetId: `p:${a.playerId! + 200}` })))]));
+    const dk = league.teams[0].roster.find((a) => a.name === "DK Metcalf")!;
+    const addison = league.teams[0].roster.find((a) => a.name === "Jordan Addison")!;
+    const bijan = league.teams[1].roster.find((a) => a.name === "Bijan Robinson")!;
+    const outcome = evaluateCandidate(league, league.teams[0], {
+      partner: league.teams[1],
+      give: [dk, addison],
+      receive: [bijan],
+      shape: "2-for-1",
+    }, filtersBalanced);
+    expect(outcome.candidate).toBeNull();
+    expect(outcome.rejectedByRationality).toBe(true);
+  });
+
+  it("2. allows a slight partnerDelta loss when a severe positional need is fixed", () => {
+    const user = team(1, "You", [
+      asset({ playerId: 1, name: "Josh Allen", position: "QB", weeklyProjection: 22, starter: true, tradeValue: 220 }),
+      asset({ playerId: 2, name: "Saquon Barkley", position: "RB", weeklyProjection: 20, starter: true, tradeValue: 200 }),
+      asset({ playerId: 3, name: "James Cook", position: "RB", weeklyProjection: 16, starter: true, tradeValue: 160 }),
+      asset({ playerId: 4, name: "Amon-Ra St. Brown", position: "WR", weeklyProjection: 18, starter: true, tradeValue: 180 }),
+      asset({ playerId: 5, name: "Puka Nacua", position: "WR", weeklyProjection: 16, starter: true, tradeValue: 160 }),
+      asset({ playerId: 6, name: "Trey McBride", position: "TE", weeklyProjection: 12, starter: true, tradeValue: 150 }),
+      asset({ playerId: 7, name: "Backup TE", position: "TE", weeklyProjection: 9, starter: false, tradeValue: 150 }),
+      asset({ playerId: 8, name: "K", position: "K", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+      asset({ playerId: 9, name: "DST", position: "DST", weeklyProjection: 7, starter: true, tradeValue: 35 }),
+    ]);
+    const mike = team(2, "Mike", [
+      asset({ playerId: 11, name: "Jalen Hurts", position: "QB", weeklyProjection: 21, starter: true, tradeValue: 210 }),
+      asset({ playerId: 12, name: "Breece Hall", position: "RB", weeklyProjection: 15, starter: true, tradeValue: 150 }),
+      asset({ playerId: 13, name: "Kyren Williams", position: "RB", weeklyProjection: 14, starter: true, tradeValue: 140 }),
+      asset({ playerId: 14, name: "CeeDee Lamb", position: "WR", weeklyProjection: 20, starter: true, tradeValue: 150 }),
+      asset({ playerId: 15, name: "Romeo Doubs", position: "WR", weeklyProjection: 8, starter: true, tradeValue: 80 }),
+      asset({ playerId: 29, name: "Khalil Shakir", position: "WR", weeklyProjection: 10, starter: false, tradeValue: 90 }),
+      asset({ playerId: 16, name: "Broken TE", position: "TE", weeklyProjection: 2, starter: true, tradeValue: 20 }),
+      asset({ playerId: 17, name: "K2", position: "K", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+      asset({ playerId: 18, name: "DST2", position: "DST", weeklyProjection: 7, starter: true, tradeValue: 35 }),
+    ]);
+    const pat = team(3, "Pat", [
+      asset({ playerId: 21, name: "Patrick Mahomes", position: "QB", weeklyProjection: 20, starter: true, tradeValue: 200 }),
+      asset({ playerId: 22, name: "Josh Jacobs", position: "RB", weeklyProjection: 14, starter: true, tradeValue: 140 }),
+      asset({ playerId: 23, name: "Derrick Henry", position: "RB", weeklyProjection: 13, starter: true, tradeValue: 130 }),
+      asset({ playerId: 24, name: "Justin Jefferson", position: "WR", weeklyProjection: 19, starter: true, tradeValue: 190 }),
+      asset({ playerId: 25, name: "A.J. Brown", position: "WR", weeklyProjection: 15, starter: true, tradeValue: 150 }),
+      asset({ playerId: 26, name: "Sam LaPorta", position: "TE", weeklyProjection: 11, starter: true, tradeValue: 110 }),
+      asset({ playerId: 27, name: "K3", position: "K", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+      asset({ playerId: 28, name: "DST3", position: "DST", weeklyProjection: 8, starter: true, tradeValue: 40 }),
+    ]);
+    const league = attachNeeds(leagueOf(1, [user, mike, pat]));
+    const teNeed = league.teams[1].needs.find((n) => n.position === "TE");
+    expect(teNeed?.label).toBe("NEED");
+    expect((teNeed?.needScore ?? 0) >= 50).toBe(true);
+    const backupTe = league.teams[0].roster.find((a) => a.name === "Backup TE")!;
+    const lamb = league.teams[1].roster.find((a) => a.name === "CeeDee Lamb")!;
+    const outcome = evaluateCandidate(league, league.teams[0], {
+      partner: league.teams[1],
+      give: [backupTe],
+      receive: [lamb],
+      shape: "1-for-1",
+    }, { ...filtersBalanced, maxAssets: 1 });
+    expect(outcome.rejectedByRationality).toBe(false);
+    expect(outcome.candidate).toBeTruthy();
+    expect((outcome.candidate!.partnerLineupDelta ?? 0) < 0).toBe(true);
+    expect(["GOOD", "MARGINAL", "STRONG"].includes(outcome.candidate!.partnerRationality)).toBe(true);
+  });
+
+  it("3. prefers mutual positive-delta trades over user-only positive trades", () => {
+    const ranked = rankScored([
+      stubCandidate({
+        partnerName: "UserOnly",
+        tradeScore: 70,
+        userLineupDelta: 6,
+        partnerLineupDelta: -1.2,
+        partnerRationality: "MARGINAL",
+      }),
+      stubCandidate({
+        partnerName: "Mutual",
+        tradeScore: 48,
+        userLineupDelta: 3,
+        partnerLineupDelta: 2,
+        partnerRationality: "GOOD",
+        youGive: [{ kind: "player", assetId: "c", playerId: 3, name: "C", position: "RB", tradeValue: 100 }],
+        youReceive: [{ kind: "player", assetId: "d", playerId: 4, name: "D", position: "WR", tradeValue: 100 }],
+      }),
+    ]);
+    expect(ranked[0].partnerName).toBe("Mutual");
+  });
+
+  it("4. rejects a 2-for-1 where the second asset is unusable bench clutter", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const mike = league.teams[1];
+    const addison = league.teams[0].roster.find((a) => a.name === "Jordan Addison")!;
+    const shaheed = league.teams[0].roster.find((a) => a.name === "Rashid Shaheed")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const rat = partnerRationality({
+      partner: mike,
+      partnerIncoming: [addison, shaheed],
+      partnerOutgoing: [wilson],
+      partnerDelta: -3.2,
+      partnerNeedFit: 12,
+      partnerDepthDamage: 0.3,
+      partnerUnfilledBefore: 0,
+      partnerUnfilledAfter: 0,
+      partnerBeforeLineup: { starterIds: [wilson.assetId], starterPoints: 80, usesRealProjections: true, unfilledDedicated: {} },
+      partnerAfterLineup: { starterIds: [], starterPoints: 76.8, usesRealProjections: true, unfilledDedicated: {} },
+      partnerReceiveValue: addison.tradeValue + shaheed.tradeValue,
+      partnerGiveValue: wilson.tradeValue,
+      fairness: "BALANCED",
+      shape: "2-for-1",
+      slots: league.slots,
+    });
+    expect(rat.twoForOneClutter).toBe(true);
+    expect(rat.hasStrongCompensator).toBe(false);
+    expect(rat.label).toBe("POOR");
+  });
+
+  it("5. allows a rational 2-for-1 where both assets fill real needs", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const white = user.roster.find((a) => a.name === "Rachaad White")!;
+    const spears = user.roster.find((a) => a.name === "Tyjae Spears")!;
+    const amonRa = mike.roster.find((a) => a.name === "Amon-Ra St. Brown")!;
+    const outcome = evaluateCandidate(league, user, {
+      partner: mike,
+      give: [white, spears],
+      receive: [amonRa],
+      shape: "2-for-1",
+    }, filtersBalanced);
+    expect(outcome.rejectedByRationality).toBe(false);
+    expect(outcome.candidate).toBeTruthy();
+    expect(outcome.candidate!.shape).toBe("2-for-1");
+    expect(outcome.candidate!.partnerRationality).not.toBe("POOR");
+  });
+
+  it("6. STRONG FIT cannot coexist with POOR partner rationality", () => {
+    expect(tradeFitLabel({
+      score: 80,
+      fairness: "BALANCED",
+      partnerGain: 0.4,
+      userGain: 0.6,
+      userDelta: 5,
+      partnerDelta: -4,
+      rationality: "POOR",
+    })).not.toBe("STRONG FIT");
+    const result = findTrades(rbWrComplementLeague(), { topN: 5 });
+    expect(result.trades.every((t) => t.tradeFit !== "STRONG FIT" || t.partnerRationality === "STRONG" || t.partnerRationality === "GOOD")).toBe(true);
+    expect(result.trades.every((t) => t.partnerRationality !== "POOR")).toBe(true);
+  });
+
+  it("7. fairness authority is unchanged", () => {
+    const cmp = compareGivenSideTotals(40, 180, Math.round(50 * PICK_TO_MARKET_SCALE));
+    const grade = cmp.fairnessGrade || fairnessGradeFromGainRatio(cmp.gainRatioA);
+    expect(fairnessBandFromGrade(grade, cmp.gainRatioA)).toBe("UNREALISTIC");
+  });
+
+  it("8. player values are unchanged", () => {
+    const league = rbWrComplementLeague();
+    const before = league.teams.flatMap((t) => t.roster).map((a) => `${a.playerId}:${a.tradeValue}`);
+    findTrades(league);
+    expect(league.teams.flatMap((t) => t.roster).map((a) => `${a.playerId}:${a.tradeValue}`)).toEqual(before);
+  });
+
+  it("9. DST/K priority behavior is unchanged", () => {
+    const league = dstHighestNeedLeague();
+    const result = findTrades(league, { targetPosition: "ANY", topN: 5 });
+    expect(result.userNeeds.some((n) => n.position === "DST")).toBe(true);
+    expect(result.metrics.wantNeedPositions).toEqual(expect.arrayContaining(["QB", "RB", "WR", "TE"]));
+    expect(result.trades.every((t) => t.youReceive.every((a) => a.position !== "DST"))).toBe(true);
+    const targeted = findTrades(league, { targetPosition: "DST", topN: 10 });
+    expect(tradePriorityMultiplier("DST", { targetPosition: "DST" })).toBe(1);
+    expect(targeted.tradePriority.find((n) => n.position === "DST")!.tradePriorityScore).toBeCloseTo(
+      targeted.tradePriority.find((n) => n.position === "DST")!.needScore,
+      5,
+    );
+  });
+
+  it("10. ranking remains deterministic across runs", () => {
+    const a = findTrades(rbWrComplementLeague(), { topN: 5 });
+    const b = findTrades(rbWrComplementLeague(), { topN: 5 });
+    expect(a.trades.map((t) => `${t.partnerTeamId}:${t.youGive.map((x) => x.assetId).join(",")}:${t.youReceive.map((x) => x.assetId).join(",")}`)).toEqual(
+      b.trades.map((t) => `${t.partnerTeamId}:${t.youGive.map((x) => x.assetId).join(",")}:${t.youReceive.map((x) => x.assetId).join(",")}`),
+    );
   });
 });

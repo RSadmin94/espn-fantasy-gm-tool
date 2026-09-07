@@ -50,6 +50,7 @@ type FinderTrade = {
   riskAi: string | null;
   behaviorFit: string;
   behaviorNote: string | null;
+  partnerRationality: string;
 };
 
 type FinderResult = {
@@ -309,6 +310,9 @@ function TradeCard(props: {
           <div className="flex flex-wrap gap-1.5">
             <Pill className={FIT_CLASS[t.tradeFit] ?? "border-border text-muted-foreground"}>{t.tradeFit}</Pill>
             <Pill className="border-border/60 text-muted-foreground">{t.fairness}</Pill>
+            {t.partnerRationality && (
+              <Pill className="border-border/60 text-muted-foreground">Partner {t.partnerRationality}</Pill>
+            )}
           </div>
         </div>
 
