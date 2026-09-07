@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { isPickManual } from "./draftClock";
 import {
   buildDefaultManualTeamIds,
+  formatManualOwnerLabel,
   isAiCountdownActive,
+  isTeamPausedForManualPick,
   manualTeamIdsAfterScheduleIdentityChange,
   resetTeamControlsManualIds,
   shouldRefreshClockOnManualUncheck,
@@ -11,37 +13,34 @@ import {
 } from "./draftManualTeams";
 
 describe("manual team controls", () => {
-  it("defaults to the signed-in user team only", () => {
-    expect([...buildDefaultManualTeamIds(11)]).toEqual([11]);
+  it("1. zero teams selected by default", () => {
+    expect([...buildDefaultManualTeamIds(11)]).toEqual([]);
     expect(buildDefaultManualTeamIds(null).size).toBe(0);
+    expect(isPickManual(new Set(), 11)).toBe(false);
   });
 
-  it("zero selected = full AI draft", () => {
-    const m = new Set<number>();
-    expect(isPickManual(m, 3)).toBe(false);
-    expect(isPickManual(m, 11)).toBe(false);
-  });
-
-  it("one selected = only that team is manual", () => {
-    const m = new Set<number>([11]);
+  it("2. one team can be selected", () => {
+    const m = toggleManualTeamIds(new Set(), 11);
+    expect([...m]).toEqual([11]);
     expect(isPickManual(m, 11)).toBe(true);
     expect(isPickManual(m, 3)).toBe(false);
   });
 
-  it("multiple selected = each checked team is manual", () => {
+  it("3. multiple teams can be selected", () => {
     const m = toggleManualTeamIds(toggleManualTeamIds(new Set([3]), 7), 11);
     expect(isPickManual(m, 3)).toBe(true);
     expect(isPickManual(m, 7)).toBe(true);
     expect(isPickManual(m, 11)).toBe(true);
-    expect(isPickManual(m, 5)).toBe(false);
   });
 
-  it("all selected = fully manual draft", () => {
-    const all = new Set(Array.from({ length: 14 }, (_, i) => i + 1));
-    for (let id = 1; id <= 14; id++) expect(isPickManual(all, id)).toBe(true);
+  it("4. deselecting one team does not clear the others", () => {
+    const selected = new Set([3, 7, 11]);
+    const after = toggleManualTeamIds(selected, 7);
+    expect([...after].sort((a, b) => a - b)).toEqual([3, 11]);
+    expect(isPickManual(after, 7)).toBe(false);
   });
 
-  it("checking the on-clock AI team stops the countdown", () => {
+  it("5. checked current team pauses (countdown inactive)", () => {
     expect(
       shouldStopClockForManualCheck({ wasManual: false, teamId: 4, onClockTeamId: 4 }),
     ).toBe(true);
@@ -56,7 +55,7 @@ describe("manual team controls", () => {
     ).toBe(false);
   });
 
-  it("unchecking the on-clock manual team starts a fresh countdown", () => {
+  it("6. unchecked current team auto-picks (countdown active)", () => {
     expect(
       shouldRefreshClockOnManualUncheck({ wasManual: true, teamId: 4, onClockTeamId: 4 }),
     ).toBe(true);
@@ -71,23 +70,52 @@ describe("manual team controls", () => {
     ).toBe(true);
   });
 
-  it("draft reset preserves manual-team selections", () => {
+  it("7. selections survive navigation (session-shaped copy)", () => {
     const preserved = toggleManualTeamIds(new Set([11]), 7);
-    const afterReset = new Set(preserved);
-    expect([...afterReset].sort((a, b) => a - b)).toEqual([7, 11]);
+    const afterNav = new Set(preserved);
+    expect([...afterNav].sort((a, b) => a - b)).toEqual([7, 11]);
   });
 
-  it("schedule/league identity change resets to the user team", () => {
-    const dirty = toggleManualTeamIds(new Set([11]), 7);
-    expect(dirty.size).toBe(2);
-    const reset = manualTeamIdsAfterScheduleIdentityChange(11);
-    expect([...reset]).toEqual([11]);
-  });
-
-  it("Reset team controls restores user team only", () => {
+  it("8. reset team controls clears all selections", () => {
     const dirty = toggleManualTeamIds(toggleManualTeamIds(new Set([11]), 7), 3);
+    expect(dirty.size).toBe(3);
     const restored = resetTeamControlsManualIds(11);
-    expect([...restored]).toEqual([11]);
+    expect(restored.size).toBe(0);
     expect(dirty.has(7)).toBe(true);
+  });
+
+  it("9. pause-on-my-picks does not add the user's team to manualTeamIds", () => {
+    const empty = buildDefaultManualTeamIds(11);
+    expect(empty.has(11)).toBe(false);
+    // pause preference affects pause helper, not the set
+    expect(
+      isTeamPausedForManualPick({
+        manualTeamIds: empty,
+        teamId: 11,
+        pauseOnMyPicks: true,
+        myTeamId: 11,
+      }),
+    ).toBe(true);
+    expect(empty.has(11)).toBe(false);
+    expect(
+      isTeamPausedForManualPick({
+        manualTeamIds: empty,
+        teamId: 3,
+        pauseOnMyPicks: true,
+        myTeamId: 11,
+      }),
+    ).toBe(false);
+  });
+
+  it("does not auto-select the user's own team on default/reset", () => {
+    expect(buildDefaultManualTeamIds(11).size).toBe(0);
+    expect(manualTeamIdsAfterScheduleIdentityChange(11).size).toBe(0);
+    expect(resetTeamControlsManualIds(11).size).toBe(0);
+  });
+
+  it("formats owner — team labels for checkbox copy", () => {
+    expect(formatManualOwnerLabel("Rod Sellers", "SMASHVILLE TITANS")).toBe(
+      "Rod Sellers — SMASHVILLE TITANS",
+    );
   });
 });

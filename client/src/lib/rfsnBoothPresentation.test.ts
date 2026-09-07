@@ -33,6 +33,36 @@ describe("buildBoothCommentarySequence", () => {
     const snap = fixtureForScenario("routine_pick");
     expect(buildBoothCommentarySequence(snap)).toHaveLength(0);
   });
+
+  it("dedupes same analyst+text across primary and ticker ids", () => {
+    const snap = fixtureForScenario("notable_pick");
+    const primary = snap.primary!;
+    const withDupTicker = {
+      ...snap,
+      ticker: [
+        {
+          id: `${primary.id}:ticker:0`,
+          commentator: primary.commentator,
+          text: primary.text,
+        },
+        ...snap.ticker,
+      ],
+    };
+    const seq = buildBoothCommentarySequence(withDupTicker);
+    const sameLine = seq.filter(
+      (c) => c.commentator === primary.commentator && c.text.trim() === primary.text.trim(),
+    );
+    expect(sameLine).toHaveLength(1);
+  });
+
+  it("skips blank primary text", () => {
+    const snap = fixtureForScenario("notable_pick");
+    const seq = buildBoothCommentarySequence({
+      ...snap,
+      primary: { ...snap.primary!, text: "   " },
+    });
+    expect(seq.every((c) => c.text.trim().length > 0)).toBe(true);
+  });
 });
 
 describe("analyst opacity", () => {
@@ -62,23 +92,23 @@ describe("analyst opacity", () => {
 });
 
 describe("commentary visibility", () => {
-  it("shows text only in active and dismissing states", () => {
+  it("shows text while entering, active, or dismissing", () => {
     expect(isCommentaryVisibleState("active")).toBe(true);
     expect(isCommentaryVisibleState("dismissing")).toBe(true);
     expect(isCommentaryVisibleState("standby")).toBe(false);
-    expect(isCommentaryVisibleState("entering")).toBe(false);
+    expect(isCommentaryVisibleState("entering")).toBe(true);
     expect(isCommentaryVisibleState("exiting")).toBe(false);
   });
 });
 
 describe("commentaryDisplayMs", () => {
-  it("respects minimum and maximum bounds", () => {
-    expect(commentaryDisplayMs("")).toBe(3000);
-    expect(commentaryDisplayMs("x".repeat(500))).toBe(12000);
+  it("respects minimum and scales with length (no hard max cut-off)", () => {
+    expect(commentaryDisplayMs("")).toBe(6000);
+    expect(commentaryDisplayMs("x".repeat(500))).toBe(500 * 50);
   });
 
   it("uses reduced motion minimum", () => {
-    expect(commentaryDisplayMs("x".repeat(200), true)).toBe(3000);
+    expect(commentaryDisplayMs("x".repeat(200), true)).toBe(6000);
   });
 });
 

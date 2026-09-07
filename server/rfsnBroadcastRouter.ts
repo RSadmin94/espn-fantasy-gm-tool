@@ -4,7 +4,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
-import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled } from "./services/sofia/liveBroadcastFeature";
+import { canAccessRfsnLiveBroadcast, isRfsnLiveBroadcastEnabled, isRfsnVoiceBeta } from "./services/sofia/liveBroadcastFeature";
 import { isRfsnTtsEnabled, isRfsnTtsConfigured } from "./services/rfsn/rfsnTtsConfig";
 import { getLiveAudioStatus } from "./services/rfsn/rfsnVoiceAudioCache";
 import {
@@ -30,6 +30,8 @@ const lockedPickSchema = z.object({
   playerName: z.string().min(1),
   position: z.string().min(1),
   nflTeam: z.string().nullable().optional(),
+  /** Optional ESPN ADP from the War Room pool (same source as the board). */
+  adp: z.number().finite().nullable().optional(),
 });
 
 function assertLiveAccess(user: Parameters<typeof canAccessRfsnLiveBroadcast>[0]): void {
@@ -59,7 +61,8 @@ export const rfsnBroadcastRouter = router({
   getAccess: protectedProcedure.query(({ ctx }) => ({
     enabled: isRfsnLiveBroadcastEnabled(),
     canAccess: canAccessRfsnLiveBroadcast(ctx.user),
-    ttsEnabled: isRfsnTtsEnabled() && isRfsnTtsConfigured(),
+    // Voice off by default — match client RFSN_VOICE_BETA.
+    ttsEnabled: isRfsnVoiceBeta() && isRfsnTtsEnabled() && isRfsnTtsConfigured(),
   })),
 
   getLiveSnapshot: protectedProcedure
@@ -95,11 +98,12 @@ export const rfsnBroadcastRouter = router({
         pick: lockedPickSchema,
         draftComplete: z.boolean().optional(),
         draftPace: z.enum(["broadcast", "brisk", "turbo"]).optional(),
+        teamCount: z.number().int().min(2).max(32).optional(),
         /** Test-only — forces deterministic provider (no API calls). */
         useDeterministicProvider: z.boolean().optional(),
       }),
     )
-    .mutation(({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       assertLiveAccess(ctx.user);
       if (!isRfsnLiveBroadcastEnabled()) {
         return { accepted: false, reason: "disabled" as const };
@@ -109,16 +113,25 @@ export const rfsnBroadcastRouter = router({
 
       let draftMoment;
       try {
-        draftMoment = buildDraftMomentForLockedPick(input.leagueId, input.draftId, input.pick as LockedPickInput, {
-          draftPace: input.draftPace,
-        });
+        draftMoment = await buildDraftMomentForLockedPick(
+          input.leagueId,
+          input.draftId,
+          input.pick as LockedPickInput,
+          {
+            draftPace: input.draftPace,
+            teamCount: input.teamCount,
+            userId: ctx.user?.id ?? null,
+          },
+        );
       } catch {
         return { accepted: false, reason: "moment_build_failed" as const };
       }
 
       scheduleLiveBroadcastForDraftMoment(draftMoment, {
         draftComplete: input.draftComplete,
-        useDeterministicProvider: input.useDeterministicProvider ?? false,
+        teamCount: input.teamCount,
+        // Written launch path: deterministic provider so cards never depend on live LLM/TTS.
+        useDeterministicProvider: input.useDeterministicProvider ?? !isRfsnVoiceBeta(),
       });
 
       return { accepted: true, pickId: draftMoment.eventId };

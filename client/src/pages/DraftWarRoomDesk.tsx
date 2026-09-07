@@ -550,10 +550,14 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
 
   const memoConfidence = clamp(conf?.mostPredictable?.score ?? timelineConf ?? 60);
 
+  // `display: contents` so the sticky section nav is a direct child of the page
+  // stack (not trapped inside this shorter desk wrapper). Sticky containing blocks
+  // end at the nearest ancestor box — wrapping the nav here was releasing pin early.
   return (
-    <div className="space-y-4 mb-6">
-      {/* header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="contents">
+      <div className="space-y-4">
+        {/* header */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="grid place-items-center rounded-2xl shrink-0" style={{ width: 46, height: 46, background: GOLD + "1a", border: `1px solid ${GOLD}44` }}>
             <Crosshair className="h-6 w-6" style={{ color: GOLD }} />
@@ -708,9 +712,11 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
           </div>
         </Panel>
       </div>
+    </div>
 
       {sectionNav}
 
+    <div className="!mt-4 space-y-4 mb-6">
       {/* Upcoming picks from synced draft board (no speculative player projections) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel>
@@ -829,6 +835,7 @@ export function DraftWarRoomDesk({ data, sectionNav }: { data: any; sectionNav?:
         draftEnvironment={draftEnvironment}
         draftAfterKeepers={draftAfterKeepers}
       />
+    </div>
     </div>
   );
 }

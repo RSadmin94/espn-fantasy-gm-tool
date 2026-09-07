@@ -4,6 +4,7 @@ import {
   URGENT_MS,
   formatClock,
   isPickManual,
+  nextBroadcastHoldState,
   resolveClockState,
 } from "./draftClock";
 
@@ -71,5 +72,23 @@ describe("formatClock", () => {
 describe("labels", () => {
   it("paused state announces the broadcast pause reason", () => {
     expect(CLOCK_STATE_LABEL.paused_for_broadcast).toMatch(/RFSN Broadcast/i);
+  });
+});
+
+describe("nextBroadcastHoldState", () => {
+  it("arms hold when busy and not force-cleared", () => {
+    expect(
+      nextBroadcastHoldState({ broadcastBusy: true, holding: false, holdForceCleared: false }),
+    ).toEqual({ holding: true, holdForceCleared: false });
+  });
+  it("does not re-arm after watchdog force-clear while still busy", () => {
+    expect(
+      nextBroadcastHoldState({ broadcastBusy: true, holding: false, holdForceCleared: true }),
+    ).toEqual({ holding: false, holdForceCleared: true });
+  });
+  it("resets force-clear when busy ends", () => {
+    expect(
+      nextBroadcastHoldState({ broadcastBusy: false, holding: true, holdForceCleared: true }),
+    ).toEqual({ holding: false, holdForceCleared: false });
   });
 });

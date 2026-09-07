@@ -19,6 +19,7 @@ vi.mock("./usePrefersReducedMotion", () => ({ usePrefersReducedMotion: () => tru
 
 import { useRfsnBoothController } from "./useRfsnBoothController";
 import { createRfsnLiveStandbySnapshot } from "@/lib/rfsnLiveState";
+import { commentaryDisplayMs } from "@/lib/rfsnBoothPresentation";
 import type {
   RfsnBroadcastSnapshot,
   RfsnCommentaryCard,
@@ -67,6 +68,10 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     userEnabled: true,
     muted: false,
     volume: 1,
+    unlocked: true,
+    lastPlayable: null,
+    replayAvailable: false,
+    isPlaying: () => false,
     stopCurrent: vi.fn(),
     playForCard: vi.fn(),
     onSnapshotChange: vi.fn(),
@@ -74,6 +79,7 @@ function mockAudio(overrides: Partial<RfsnAudioPlayback> = {}): RfsnAudioPlaybac
     setMuted: vi.fn(),
     setVolume: vi.fn(),
     replayCurrent: vi.fn(),
+    clearReplay: vi.fn(),
     ...overrides,
   } as unknown as RfsnAudioPlayback;
 }
@@ -208,6 +214,42 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     expect(result.current.cardStates.coach).toBe("active");
   });
 
+  it("[8b] preference on but locked still advances via written text timing", () => {
+    const audio = mockAudio({ unlocked: false, userEnabled: true });
+    const card = mkCard("coach", "c-9");
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: card }) },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(result.current.cardStates.coach).toBe("active");
+    expect(audio.playForCard).toHaveBeenCalledTimes(1);
+    // Written dwell owns advance — never waits on Enable Sound / unlock.
+    act(() => vi.advanceTimersByTime(commentaryDisplayMs(card.text, true) + 50));
+    act(() => vi.advanceTimersByTime(50)); // exit + gap under reduced motion
+    expect(result.current.activeCommentator).toBeNull();
+    expect(result.current.sequenceIndex).toBe(-1);
+  });
+
+  it("[8c] tts preference off shows written card and advances without audio", () => {
+    const audio = mockAudio({ userEnabled: false, unlocked: false });
+    const card = mkCard("sofia", "s-9");
+    const { result } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: card }) },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("sofia");
+    expect(result.current.cardStates.sofia).toBe("active");
+    expect(result.current.activeCard?.text).toBe(card.text);
+    expect(audio.playForCard).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(commentaryDisplayMs(card.text, true) + 50));
+    act(() => vi.advanceTimersByTime(50));
+    expect(result.current.activeCommentator).toBeNull();
+    expect(result.current.sequenceIndex).toBe(-1);
+  });
+
   it("[8] audio enabled starts playback for the active card", () => {
     const audio = mockAudio({ state: "ready", userEnabled: true });
     const { result } = renderHook(
@@ -258,7 +300,7 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
   it("[11] a corrected line for the same pick (same id, new text) restarts the booth", () => {
     const audio = mockAudio();
     const cardWith = (text: string): RfsnCommentaryCard => ({
-      id: "9:coach:primary", // structural id — identical across the correction
+      id: "9:coach:primary",
       commentator: "coach",
       label: "ROLE",
       text,
@@ -270,10 +312,70 @@ describe("useRfsnBoothController — new frames, audio independence, silence", (
     settle();
     expect(result.current.activeCard?.text).toBe("Original line.");
     (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
-    // Same pick + same card id, but the line was re-generated with corrected text.
     rerender(snap({ pick: "9.01", primary: cardWith("Corrected line.") }));
     settle();
-    expect(audio.onSnapshotChange).toHaveBeenCalled(); // frame restarted
-    expect(result.current.activeCard?.text).toBe("Corrected line."); // shows the new content
+    expect(audio.onSnapshotChange).toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe("Corrected line.");
+  });
+
+  it("[11b] a new pick while audio is playing waits for speech before switching frames", () => {
+    let playing = false;
+    const audio = mockAudio({ isPlaying: () => playing });
+    const first: RfsnCommentaryCard = {
+      id: "c-9",
+      commentator: "coach",
+      label: "ROLE",
+      text: "First pick line that is still being spoken.",
+    };
+    const second: RfsnCommentaryCard = {
+      id: "s-10",
+      commentator: "sofia",
+      label: "ROLE",
+      text: "Next pick commentary.",
+    };
+    const { result, rerender } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      { initialProps: snap({ pick: "9.01", primary: first }) },
+    );
+    settle();
+    expect(result.current.activeCard?.text).toBe(first.text);
+    playing = true;
+    (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
+    rerender(snap({ pick: "10.01", primary: second }));
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(audio.onSnapshotChange).not.toHaveBeenCalled();
+    expect(audio.stopCurrent).not.toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe(first.text);
+    playing = false;
+    act(() => vi.advanceTimersByTime(600));
+    settle();
+    expect(audio.onSnapshotChange).toHaveBeenCalled();
+    expect(result.current.activeCard?.text).toBe(second.text);
+  });
+
+  it("[12] ticker growth on poll does NOT reset the active speaker", () => {
+    const audio = mockAudio();
+    const primary = mkCard("coach", "c-9");
+    const { result, rerender } = renderHook(
+      (s: RfsnBroadcastSnapshot) => useRfsnBoothController(s, { audio }),
+      {
+        initialProps: snap({
+          pick: "9.01",
+          primary,
+          secondary: undefined,
+        }),
+      },
+    );
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    (audio.onSnapshotChange as ReturnType<typeof vi.fn>).mockClear();
+    const withTicker = snap({ pick: "9.01", primary });
+    withTicker.ticker = [
+      { id: "t1", text: "New ticker line.", commentator: "roxanne" as const, label: "X" },
+    ];
+    rerender(withTicker);
+    settle();
+    expect(result.current.activeCommentator).toBe("coach");
+    expect(audio.onSnapshotChange).not.toHaveBeenCalled();
   });
 });

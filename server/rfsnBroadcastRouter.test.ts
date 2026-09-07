@@ -12,6 +12,7 @@ import { resetRfsnLiveTtsServiceForTests } from "./services/rfsn/rfsnLiveTtsServ
 import { resetRfsnAudioSharedStoreForTests } from "./services/rfsn/rfsnAudioSharedStore";
 
 const ENV_KEY = "RFSN_LIVE_BROADCAST_ENABLED";
+const VOICE_BETA_KEY = "RFSN_VOICE_BETA";
 const TTS_ENV = {
   ENABLED: "RFSN_TTS_ENABLED",
   URL: "RFSN_TTS_SERVICE_URL",
@@ -19,14 +20,18 @@ const TTS_ENV = {
 } as const;
 
 const SAVED_TTS_ENV: Partial<Record<(typeof TTS_ENV)[keyof typeof TTS_ENV], string | undefined>> = {};
+let SAVED_VOICE_BETA: string | undefined;
 
 function saveTtsEnv(): void {
+  SAVED_VOICE_BETA = process.env[VOICE_BETA_KEY];
   for (const key of Object.values(TTS_ENV)) {
     SAVED_TTS_ENV[key] = process.env[key];
   }
 }
 
 function restoreTtsEnv(): void {
+  if (SAVED_VOICE_BETA === undefined) delete process.env[VOICE_BETA_KEY];
+  else process.env[VOICE_BETA_KEY] = SAVED_VOICE_BETA;
   for (const key of Object.values(TTS_ENV)) {
     const saved = SAVED_TTS_ENV[key];
     if (saved === undefined) delete process.env[key];
@@ -35,6 +40,7 @@ function restoreTtsEnv(): void {
 }
 
 function clearTtsEnv(): void {
+  delete process.env[VOICE_BETA_KEY];
   for (const key of Object.values(TTS_ENV)) {
     delete process.env[key];
   }
@@ -125,7 +131,8 @@ describe("rfsnBroadcastRouter", () => {
     expect(access.ttsEnabled).toBe(false);
   });
 
-  it("reports tts enabled when flag on with url and token", async () => {
+  it("reports tts enabled when voice beta + tts enabled with url and token", async () => {
+    process.env[VOICE_BETA_KEY] = "true";
     process.env[TTS_ENV.ENABLED] = "true";
     process.env[TTS_ENV.URL] = "https://kokoro.example";
     process.env[TTS_ENV.TOKEN] = "secret-token";
@@ -133,7 +140,17 @@ describe("rfsnBroadcastRouter", () => {
     expect(access.ttsEnabled).toBe(true);
   });
 
+  it("reports tts disabled when tts configured but voice beta off", async () => {
+    delete process.env[VOICE_BETA_KEY];
+    process.env[TTS_ENV.ENABLED] = "true";
+    process.env[TTS_ENV.URL] = "https://kokoro.example";
+    process.env[TTS_ENV.TOKEN] = "secret-token";
+    const access = await founderCaller().rfsnBroadcast.getAccess();
+    expect(access.ttsEnabled).toBe(false);
+  });
+
   it("reports tts disabled when enabled but not configured", async () => {
+    process.env[VOICE_BETA_KEY] = "true";
     process.env[TTS_ENV.ENABLED] = "true";
     delete process.env[TTS_ENV.URL];
     delete process.env[TTS_ENV.TOKEN];

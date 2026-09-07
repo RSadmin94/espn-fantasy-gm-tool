@@ -12,10 +12,10 @@ describe("RfsnBroadcastPanel replay reset wiring", () => {
     "utf8",
   );
 
-  it("clears replay when draft or session identity changes", () => {
+  it("passes sessionEpoch so playback clears when draft/session identity changes", () => {
     expect(panel).toContain("sessionResetKey");
-    expect(panel).toContain("audio.clearReplay()");
-    expect(panel).toMatch(/\[draftId,\s*sessionResetKey,\s*audio\.clearReplay\]/);
+    expect(panel).toContain("sessionEpoch: sessionResetKey");
+    expect(panel).toContain("warRoomAudioSessionKey");
   });
 
   it("passes a composite session reset key from Live Draft reset and schedule identity", () => {

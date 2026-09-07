@@ -2,8 +2,11 @@
  * Pure helpers for Live Draft manual-team control — mirrors LiveDraftEngine semantics.
  */
 
-export function buildDefaultManualTeamIds(myTeamId: number | null | undefined): Set<number> {
-  return myTeamId != null ? new Set<number>([myTeamId]) : new Set<number>();
+import { isPickManual } from "./draftClock";
+
+/** Default: full AI draft — user must explicitly check teams to pause for manual picks. */
+export function buildDefaultManualTeamIds(_myTeamId?: number | null | undefined): Set<number> {
+  return new Set<number>();
 }
 
 export function toggleManualTeamIds(prev: ReadonlySet<number>, teamId: number): Set<number> {
@@ -40,13 +43,44 @@ export function shouldStopClockForManualCheck(input: {
 }
 
 export function manualTeamIdsAfterScheduleIdentityChange(
-  myTeamId: number | null | undefined,
+  _myTeamId?: number | null | undefined,
 ): Set<number> {
-  return buildDefaultManualTeamIds(myTeamId);
+  return buildDefaultManualTeamIds();
 }
 
-export function resetTeamControlsManualIds(myTeamId: number | null | undefined): Set<number> {
-  return buildDefaultManualTeamIds(myTeamId);
+export function resetTeamControlsManualIds(_myTeamId?: number | null | undefined): Set<number> {
+  return buildDefaultManualTeamIds();
+}
+
+/**
+ * Pause-for-pick uses checked manual teams OR the separate "Pause on my picks" preference.
+ * "Pause on my picks" must never write into `manualTeamIds`.
+ */
+export function isTeamPausedForManualPick(input: {
+  manualTeamIds: ReadonlySet<number>;
+  teamId: number | null | undefined;
+  pauseOnMyPicks: boolean;
+  myTeamId: number | null | undefined;
+}): boolean {
+  if (isPickManual(input.manualTeamIds, input.teamId)) return true;
+  if (
+    input.pauseOnMyPicks &&
+    input.myTeamId != null &&
+    input.teamId != null &&
+    Number(input.teamId) === Number(input.myTeamId)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function formatManualOwnerLabel(
+  ownerName: string | null | undefined,
+  teamName: string | null | undefined,
+): string {
+  const owner = (ownerName ?? "").trim() || "Owner";
+  const team = (teamName ?? "").trim() || "Team";
+  return `${owner} — ${team}`;
 }
 
 export function isAiCountdownActive(input: {

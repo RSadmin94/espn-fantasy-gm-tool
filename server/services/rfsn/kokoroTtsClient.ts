@@ -8,8 +8,8 @@ import {
   getRfsnTtsServiceUrl,
   getRfsnTtsTimeoutMs,
   isRfsnTtsOperational,
-  RFSN_TTS_MAX_TEXT_LENGTH,
 } from "./rfsnTtsConfig";
+import { normalizeSpeechForTts } from "./rfsnSpeechNormalize";
 
 export type SynthesizeAnalystSpeechInput = {
   voice: RfsnCommentatorId | string;
@@ -45,7 +45,9 @@ export async function synthesizeAnalystSpeech(
   }
 
   const voice = assertRfsnTtsVoice(String(input.voice));
-  const text = input.text.trim().slice(0, RFSN_TTS_MAX_TEXT_LENGTH);
+  // Full commentary to Kokoro — no character truncation. Speech normalization
+  // expands abbreviations for TTS only; displayed text is unchanged upstream.
+  const text = normalizeSpeechForTts(input.text.trim());
   if (!text) {
     throw new Error("empty text");
   }
@@ -98,6 +100,28 @@ export async function synthesizeAnalystSpeech(
     const cacheHeader = response.headers.get("x-cache-status")?.toLowerCase();
     const cacheStatus: SynthesizeAnalystSpeechResult["cacheStatus"] =
       cacheHeader === "hit" || cacheHeader === "miss" ? cacheHeader : "unknown";
+
+    const durationMs = Date.now() - started;
+    try {
+      const { trackLLMEvent } = await import("../../usageTracker");
+      trackLLMEvent({
+        featureName: "rfsn.tts",
+        model: "kokoro",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        durationMs,
+        streaming: false,
+        provider: "KOKORO",
+        featureId: "DRAFT_COMMENTARY",
+        status: "SUCCESS",
+        generated: true,
+        delivered: true,
+        discarded: cacheStatus === "hit" ? false : false,
+      });
+    } catch {
+      /* never block */
+    }
 
     return {
       contentType: "audio/wav",

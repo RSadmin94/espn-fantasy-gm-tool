@@ -60,9 +60,14 @@ export function buildLockedPickNotifyPayload(input: LockedPickNotifyInput) {
       playerName,
       position,
       nflTeam: input.player.nflTeam ?? null,
+      adp:
+        input.player.adp != null && Number.isFinite(Number(input.player.adp))
+          ? Number(input.player.adp)
+          : null,
     },
     draftComplete: input.draftComplete ?? false,
     draftPace: input.draftPace,
+    teamCount: input.teamCount,
   };
 }
 

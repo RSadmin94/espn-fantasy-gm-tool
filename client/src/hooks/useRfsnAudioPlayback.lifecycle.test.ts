@@ -103,6 +103,7 @@ beforeEach(() => {
     revokeObjectURL: vi.fn(),
   });
   try { localStorage.clear(); } catch { /* ignore */ }
+  try { sessionStorage.clear(); } catch { /* ignore */ }
 });
 afterEach(() => vi.restoreAllMocks());
 
@@ -179,29 +180,40 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(result.current.state).toBe("ready"); // returns to ready, able to advance
   });
 
-  it("[item7] secondary waits for primary: advance signal fires only on 'ended'", async () => {
-    const { result, onEnded } = await setupPlaying("pick-9", "pick-9:coach:primary");
+  it("[item7b] never starts a second clip while one is already playing", async () => {
+    const { result } = await setupPlaying("pick-9", "pick-9:coach:primary");
     const primary = last();
-    expect(MockAudio.instances.length).toBe(1); // only primary is playing
-    expect(onEnded).not.toHaveBeenCalled(); // secondary not yet advanced
-    act(() => primary.emit("ended"));
-    expect(onEnded).toHaveBeenCalledTimes(1); // page advances to secondary only now
+    expect(primary.paused).toBe(false);
+    await act(async () => {
+      result.current.playForCard(card("pick-9:sofia:secondary"), vi.fn(), vi.fn());
+    });
+    await flushPlayback();
+    // Gate waits on already-playing — no overlapping Audio constructed.
+    expect(MockAudio.instances.length).toBe(1);
+    expect(primary.paused).toBe(false);
+    expect(MockAudio.instances.filter((a) => !a.paused).length).toBe(1);
   });
 
-  it("[item8] a new pick stops stale audio before playing the new clip", async () => {
+  it("[item8] a new pick status does not auto-stop active speech; next clip plays after end", async () => {
     const { result, rerender } = await setupPlaying("pick-9", "pick-9:coach:primary");
     const stale = last();
     expect(stale.paused).toBe(false);
-    // new pick arrives: page passes new audioStatus, then plays the new card
     const nextStatus = status("pick-10", [{ commentaryId: "pick-10:coach:primary" }]);
     rerender({ tts: true, s: nextStatus });
     await act(async () => {
       result.current.playForCard(card("pick-10:coach:primary"), vi.fn(), vi.fn());
     });
     await flushPlayback();
-    expect(stale.paused).toBe(true); // stale clip stopped
+    // Still speaking the prior clip — gate waits; no truncate on status change alone.
+    expect(stale.paused).toBe(false);
+    expect(MockAudio.instances.length).toBe(1);
+    act(() => stale.emit("ended"));
+    await act(async () => {
+      result.current.playForCard(card("pick-10:coach:primary"), vi.fn(), vi.fn());
+    });
+    await flushPlayback();
     expect(MockAudio.instances.length).toBe(2);
-    expect(last().paused).toBe(false); // new clip playing
+    expect(last().paused).toBe(false);
   });
 
   it("[item9] re-render / poll with identical status does not replay", async () => {
@@ -238,23 +250,76 @@ describe("useRfsnAudioPlayback — deterministic lifecycle harness", () => {
     expect(MockAudio.instances.length).toBe(0); // never created audio -> text fallback
   });
 
-  it("[unlock] a line that arrived while locked plays as soon as the user unlocks", async () => {
+  it("[unlock] clip ready before unlock: locked line waits, then plays on gesture", async () => {
     const onEnded = vi.fn();
     const onFallback = vi.fn();
     const view = renderHook(
       ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
       { initialProps: { tts: true, s: status("pick-9", [{ commentaryId: CID }]) } },
     );
-    // Locked (no user gesture yet): the on-air line must fall back to text, create no audio.
     await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
     await flushPlayback();
-    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(view.result.current.state).toBe("locked");
     expect(MockAudio.instances.length).toBe(0);
-    // Real gesture unlock -> the pending line plays immediately (root-cause fix for no sound).
     await act(async () => view.result.current.unlockAudio());
     await flushPlayback();
     expect(MockAudio.instances.length).toBe(1);
     expect(last().paused).toBe(false);
+    expect(onFallback).not.toHaveBeenCalled();
+  });
+
+  it("[race] unlock before clip ready: one play after pending → ready", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const pendingStatus = status("pick-9", [{ commentaryId: CID, status: "pending", audioId: undefined }]);
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
+      { initialProps: { tts: true, s: pendingStatus } },
+    );
+    await act(async () => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(0);
+    expect(onFallback).not.toHaveBeenCalled();
+    expect(view.result.current.state).toBe("loading");
+    const readyStatus = status("pick-9", [{ commentaryId: CID, status: "ready" }]);
+    view.rerender({ tts: true, s: readyStatus });
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(last().paused).toBe(false);
+    view.rerender({ tts: true, s: readyStatus });
+    await flushPlayback();
+    expect(MockAudio.instances.length).toBe(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("[race] failed clip after unlock invokes fallback once and does not fetch", async () => {
+    const onEnded = vi.fn();
+    const onFallback = vi.fn();
+    const view = renderHook(
+      ({ tts, s }: { tts: boolean; s: RfsnLiveAudioStatus }) => useRfsnAudioPlayback(tts, s),
+      { initialProps: {
+        tts: true,
+        s: status("pick-9", [{ commentaryId: CID, status: "pending", audioId: undefined }]),
+      } },
+    );
+    act(() => view.result.current.unlockAudio());
+    await act(async () => view.result.current.playForCard(card(CID), onEnded, onFallback));
+    view.rerender({
+      tts: true,
+      s: status("pick-9", [{ commentaryId: CID, status: "failed" }]),
+    });
+    await flushPlayback();
+    expect(onFallback).toHaveBeenCalledTimes(1);
+    expect(MockAudio.instances.length).toBe(0);
+    view.rerender({
+      tts: true,
+      s: status("pick-9", [{ commentaryId: CID, status: "failed" }]),
+    });
+    await flushPlayback();
+    expect(onFallback).toHaveBeenCalledTimes(1);
   });
 
   it("[replay] stores last playable clip and replayCurrent reuses it", async () => {

@@ -9,7 +9,7 @@ import type { BroadcastFrame, BroadcastContext } from "./broadcastFrameContract"
 import { draftMomentToBroadcastMoment } from "./broadcastMomentBridge";
 import { BroadcastOrchestrator } from "./broadcastOrchestrator";
 import { COACH, ROXANNE, SOFIA } from "./voicePersonalities";
-import { buildPlayerRegistryOracle } from "./playerRegistryOracle";
+import { DEFAULT_PLAYER_REGISTRY_ORACLE } from "./playerRegistryOracle";
 import { createShadowGroundedVoiceProvider } from "./shadowGroundedVoiceProvider";
 import type { EditorialPlanId } from "./editorialPlans";
 import {
@@ -96,7 +96,8 @@ function emptyMetrics(): ShadowPipelineMetrics {
   };
 }
 
-export function createShadowBroadcastOrchestrator(
+/** Deterministic stack for vitest — no API calls. Real certification uses createRealShadowBroadcastOrchestrator. */
+export function createDeterministicShadowBroadcastOrchestrator(
   orchestrator?: BroadcastOrchestrator,
 ): BroadcastOrchestrator {
   if (orchestrator) return orchestrator;
@@ -105,9 +106,16 @@ export function createShadowBroadcastOrchestrator(
   return new BroadcastOrchestrator({
     voices: { sofia: SOFIA, coach: COACH, roxanne: ROXANNE },
     checker: entailChecker,
-    playerOracle: buildPlayerRegistryOracle([]),
+    playerOracle: DEFAULT_PLAYER_REGISTRY_ORACLE,
     generate: createShadowGroundedVoiceProvider(),
   });
+}
+
+/** @deprecated Use createDeterministicShadowBroadcastOrchestrator (tests) or createRealShadowBroadcastOrchestrator (cert). */
+export function createShadowBroadcastOrchestrator(
+  orchestrator?: BroadcastOrchestrator,
+): BroadcastOrchestrator {
+  return createDeterministicShadowBroadcastOrchestrator(orchestrator);
 }
 
 export async function processShadowPick(
@@ -239,7 +247,7 @@ export async function runShadowPipeline(
   moments: readonly DraftMoment[],
   orchestrator?: BroadcastOrchestrator,
 ): Promise<ShadowRunResult> {
-  const orch = createShadowBroadcastOrchestrator(orchestrator);
+  const orch = orchestrator ?? createDeterministicShadowBroadcastOrchestrator();
   const state: ShadowPipelineState = { queue: [], ticker: [] };
   const metrics = emptyMetrics();
   const artifacts: ShadowPickArtifact[] = [];

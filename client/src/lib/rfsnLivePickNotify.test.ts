@@ -29,6 +29,7 @@ describe("rfsnLivePickNotify", () => {
     expect(payload.pick.position).toBe("WR");
     expect(payload.pick.playerId).toBe("p1");
     expect(payload.pick.nflTeam).toBe("DAL");
+    expect(payload.pick.adp).toBe(4);
   });
 
   it("detects only newly finalized picks", () => {
