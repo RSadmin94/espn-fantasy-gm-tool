@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadLocalEnv";
 import { clerkMiddleware } from "@clerk/express";
 import express from "express";
 import { createServer } from "http";
@@ -16,6 +16,7 @@ import { registerHealthRoute } from "./healthRoute";
 import { registerReceiptOg } from "../receiptOg";
 import { registerRivalryOg } from "../rivalryOg";
 import { registerRfsnAudioRoute } from "../rfsnAudioHandler";
+import { clerkMiddlewareOptions, describeClerkConfigGap } from "./clerkEnv";
 
 async function startServer() {
   const { runMigrations } = await import("../runMigrations");
@@ -33,7 +34,11 @@ async function startServer() {
 
   app.use(createWarRoomCorsMiddleware());
 
-  app.use(clerkMiddleware());
+  const clerkGap = describeClerkConfigGap();
+  if (clerkGap) {
+    console.warn(`[Clerk] ${clerkGap}`);
+  }
+  app.use(clerkMiddleware(clerkMiddlewareOptions()));
 
   // tRPC API
   app.use(

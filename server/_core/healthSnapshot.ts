@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
 import { ENV } from "./env";
+import { resolveClerkPublishableKey } from "./clerkEnv";
 
 export type HealthCheckValue = "ok" | "missing" | "error" | "warn";
 
@@ -42,6 +43,7 @@ export async function collectHealthSnapshot(): Promise<HealthSnapshot> {
   checks.ESPN_SWID = process.env.ESPN_SWID ? "ok" : "missing";
   checks.CREDENTIAL_ENCRYPTION_KEY = process.env.CREDENTIAL_ENCRYPTION_KEY ? "ok" : "missing";
   checks.CLERK_SECRET_KEY = ENV.clerkSecretKey ? "ok" : "warn";
+  checks.CLERK_PUBLISHABLE_KEY = resolveClerkPublishableKey() ? "ok" : "warn";
 
   const llmProvider = ENV.llmProvider ?? "anthropic";
   const llmKeyMap: Record<string, string | undefined> = {

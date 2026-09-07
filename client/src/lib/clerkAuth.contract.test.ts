@@ -5,6 +5,10 @@ const main = readFileSync(new URL("../main.tsx", import.meta.url), "utf8");
 const signOut = readFileSync(new URL("./signOutRivals.ts", import.meta.url), "utf8");
 
 describe("Google account switching contract", () => {
+  it("initializes the ClerkProvider from VITE_CLERK_PUBLISHABLE_KEY", () => {
+    expect(main).toContain("import.meta.env.VITE_CLERK_PUBLISHABLE_KEY");
+  });
+
   it("sends Clerk afterSignOutUrl to the in-app login screen", () => {
     expect(main).toContain("afterSignOutUrl={RIVALS_AFTER_SIGN_OUT_URL}");
     expect(signOut).toContain('export const RIVALS_AFTER_SIGN_OUT_URL = "/sign-in"');
