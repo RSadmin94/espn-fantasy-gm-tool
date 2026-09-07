@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-09-07 (RFSN-061P Trade Finder Production promotion **PRE-PUSH** — live Production remains RFSN-058C until founder push)  
+**Edition:** 2026-09-07 (RFSN-061 — PRODUCTION CERTIFIED. RFSN-061A/B/C/P **CLOSED**. RFSN-061D backlog only — do not implement.)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · `docs/ARCHITECTURE.md` (ESPN cache / hist pipeline) · `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md` (voice/TTS mechanics) · per-ticket audit artifacts.
 
@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery. **RFSN-061B** partner-rationality measurement. **RFSN-061C** validity ≠ quality / always-return. Status: **061C PREVIEW CERTIFIED**; **061P Production promotion candidate** on `rfsn-061-prod-promotion` (base `329b2ae`). **Not pushed. Not deployed.**
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery. **RFSN-061B** partner-rationality measurement. **RFSN-061C** validity ≠ quality / always-return. Status: **PRODUCTION CERTIFIED**. **061A / 061B / 061C / 061P CLOSED.** **RFSN-061D** is backlog only.
 
 ---
 
@@ -29,7 +29,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Production | 🟢 **PRODUCTION PARTIAL** for ESPN install | Live `buildTime=2026-09-03T03:34:54.217Z`. Health `gitSha` still stale `06b35ba`. Website **`fbd212c`** (RFSN-058C legal pages on 058P `433fdaf`). Railway **`6ed1220b`**. Bundle `index-B3xJVKLN.js`. `/privacy` `/support` **PRODUCTION**. Chrome Web Store install URL **not** live. |
+| Production | 🟢 **RFSN-061 PRODUCTION CERTIFIED** · ESPN install still **PARTIAL** | Code SHA **`d419676`**. Railway **`d2fb41b8`** SUCCESS (`commitHash=d419676`). `buildTime=2026-09-07T22:07:04.761Z`. Bundle `assets/index-B6II8Vge.js`. Health `gitSha` still stale `06b35ba` — ignore. `/privacy` `/support` remain **PRODUCTION**. Chrome Web Store install URL **not** live. |
 | Preview | 🟢 RFSN-061C **PREVIEW CERTIFIED** | Trade Finder always-return live on `/trades`. Git `9cdcaa8` · Railway `b685a31c` · `buildTime=2026-09-07T15:28:08.371Z` · bundle `index-C8gPeOg8.js`. Health gitSha stale `dff6154` — ignore. **Not Production.** 058C privacy/support remains live. |
 | GM Advisor | 🟢 / 🟡 | 052J+K live: LOZELL **3**, HoF, largest margin, H2H, 2009 limitation. **“What's my biggest win?” still FAIL** unless a later ticket closed it in source (not re-smoked this edition). |
 | RFSN | 🟢 | Live / Stories / Recaps. Voice/TTS optional via Kokoro Serverless. |
@@ -65,7 +65,7 @@ Live evidence for Production was re-fetched 2026-09-02 (`GET https://www.fantasy
 
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
-| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | RFSN-058C Git **`fbd212c`** (cherry-picks of `23c7a4b` + `e5ef1c8` onto `433fdaf`). Railway **`6ed1220b`**. `buildTime=2026-09-03T03:34:54.217Z` · bundle `index-B3xJVKLN.js` (gitSha stale `06b35ba`) |
+| **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | **RFSN-061 PRODUCTION CERTIFIED.** Code Git **`d419676`**. Railway **`d2fb41b8`**. `buildTime=2026-09-07T22:07:04.761Z` · bundle `index-B6II8Vge.js` (gitSha stale `06b35ba`) |
 | **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-061C Git **`9cdcaa8`**. Railway **`b685a31c`**. `buildTime=2026-09-07T15:28:08.371Z` · bundle `index-C8gPeOg8.js` (gitSha stale `dff6154`). |
 | **Local working tree** | localhost | — | uncommitted 058B Store package | Store ZIP still local/untracked. Privacy/support **live on Production**. |
 
@@ -194,13 +194,13 @@ Status vocabulary: **IMPLEMENTED** (in current source) · **PARTIAL** · **PREVI
 
 ## Current Production Features
 
-Shipped and live on `www.fantasyfootballrivals.com` as of `buildTime=2026-09-03T03:34:54.217Z` (RFSN-058C legal pages on 058P `433fdaf` / `fbd212c`). Feature SHAs for older 051/052/054 closes remain in **Release History**.
+Shipped and live on `www.fantasyfootballrivals.com` as of `buildTime=2026-09-07T22:07:04.761Z` (RFSN-061 Trade Finder on 058C/058P lineage `d419676` / Railway `d2fb41b8`). Feature SHAs for older 051/052/054/058 closes remain in **Release History**.
 
 | Area | What’s in Production |
 | --- | --- |
 | Auth / setup | Clerk · Google account picker · `signOutOfRivals` · SetupGate · `/connect` ESPN+Sleeper |
 | Leagues | Connected Leagues management · ESPN connector protocol (user-installed) · Sleeper API · Yahoo/workbook **secondary routes** |
-| Home / My Team | Home, Dashboard, Roster, Matchup, Trades, GM Advisor, My GM, Championship Path |
+| Home / My Team | Home, Dashboard, Roster, Matchup, Trades (**Trade Finder + Trade Analyzer**), GM Advisor, My GM, Championship Path |
 | Rivals | Cast, Owner Dossier, H2H, Rivalries, League Map, Relationships · RFSN-047/048 evidence scope |
 | RFSN | Live, Stories, Recaps (+ deep-link Breaking/Analysts). Voice optional via Kokoro Serverless |
 | Draft | War Room, Live Draft, Mock, Keepers, Draft History · FantasyPros solo mock remains **internal extension** (030C), not Store popup |
@@ -236,6 +236,7 @@ On Preview **in addition to** Production, unless noted.
 
 | ID | Work | Status |
 | --- | --- | --- |
+| **RFSN-061 / 061A / 061B / 061C / 061P** | Trade Finder Production | **CLOSED / PRODUCTION CERTIFIED** code `d419676` / Railway `d2fb41b8`. **061D backlog only — do not implement.** |
 | **RFSN-058C** | Publish Privacy + Support | **CLOSED / PRODUCTION CERTIFIED** `fbd212c` / `6ed1220b`. |
 | **RFSN-058B** | Chrome Web Store submission package | **READY EXCEPT MANUAL STORE ASSETS** — **not submitted**. Production privacy/support URLs live. |
 | **RFSN-058 / 058A** | ESPN connector Store availability | **PRODUCTION PARTIAL** — hygiene **v1.14.3** certified; listing URL still missing |
@@ -286,6 +287,7 @@ Stop after each increment. Production only when explicitly asked.
 | The League (commissioner suite as paid SKU) | Deferred commercially; Commissioner UI exists |
 | Light-theme typography debt | 051 audit dark-only; unmeasured |
 | Strength of Schedule authority | Route exists; empty — no SOS engine |
+| **RFSN-061D** Trade Finder Production Learning & Optimization | **BACKLOG ONLY.** Do not implement from this edition. |
 
 `todo.md` is **legacy planning only** — not backlog.
 
@@ -322,6 +324,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | When | What | Where |
 | --- | --- | --- |
+| 2026-09-07 | **RFSN-061 PRODUCTION CERTIFIED / CLOSED** (061A/B/C/P). Git-only push of certified `d419676` onto `release/promote-provider-expansion-dff6154` (base `329b2ae`). Railway `d2fb41b8` SUCCESS. **VALIDITY ≠ QUALITY** preserved. 061D backlog only. | Production `buildTime=2026-09-07T22:07:04.761Z` · bundle `index-B6II8Vge.js` |
 | 2026-09-03 | **RFSN-058C PRODUCTION CERTIFIED / CLOSED.** Cherry-picks `23c7a4b`+`e5ef1c8` onto `433fdaf` → Git `fbd212c` → Railway `6ed1220b`. Anonymous `/privacy` `/support`. No Store submit. | Production `buildTime=2026-09-03T03:34:54.217Z` · bundle `index-B3xJVKLN.js` |
 | 2026-09-02 | **RFSN-058B** Store package (v1.14.4 ZIP) + `/privacy` `/support` in source. **Not submitted. Not Production-deployed.** | Local `store-submission/` |
 | 2026-08-27 | **RFSN-058P** Production promotion of store-independent onboarding. Git `433fdaf` · Railway `1aa8f4f2`. Live `buildTime=2026-08-27T23:13:03.813Z` (re-fetched 2026-09-02; health `gitSha` still stale). | Production |
@@ -395,6 +398,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | Preview TTS isolation | **OPS-006 CERTIFIED** |
 | ESPN Connector Store | **v1.14.4 packaged, unpublished** |
 | Preview Git = Preview deploy | **Proven** `e48b34e` → `0afa371e` (2026-08-09) |
+| Trade Finder (RFSN-061) | **PRODUCTION CERTIFIED** `d419676` / Railway `d2fb41b8` · **VALIDITY ≠ QUALITY** |
 | Product Encyclopedia | **Retired** — this file is permanent operational SOT |
 
 ---
@@ -422,6 +426,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | **058P** | Store-independent onboarding | done | yes | **yes** `433fdaf` |
 | **058 / 058A** | Connector hygiene 1.14.3 | done | n/a | Protocol certified; Store URL **missing** |
 | **058C** | Privacy + Support public pages | done | yes | **yes** `fbd212c` / `6ed1220b` |
+| **061 / A / B / C / P** | Trade Finder v1 | done | yes `9cdcaa8` | **yes** `d419676` / `d2fb41b8` |
 | **058B** | Store package 1.14.4 | **CURRENT** | n/a | **READY EXCEPT MANUAL STORE ASSETS** — not submitted |
 
 ---
@@ -454,8 +459,9 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | **058B Store package** | n/a | **No** — founder review | ZIP ready; listing unpublished |
 | **053 gallery routes** | yes | **On Production git** | Do not treat as local-only |
 | **053 later increments / MKT-001** | mixed | Not re-certified this edition | Explicit ask |
+| **061 Trade Finder** | yes `9cdcaa8` | **Shipped** `d419676` / `d2fb41b8` | **PRODUCTION CERTIFIED.** 061D backlog only |
 
-**Production must not receive** a fake Store URL. 051 stays closed. **054 is live.** **058P is live.** **058C privacy/support are live.**
+**Production must not receive** a fake Store URL. 051 stays closed. **054 is live.** **058P is live.** **058C privacy/support are live.** **RFSN-061 Trade Finder is live.** Do **not** start RFSN-061D.
 
 ---
 
@@ -491,7 +497,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | RFSN-061P Production promotion **PRE-PUSH**. Base `329b2ae`. Preview certified `9cdcaa8`. **Not pushed. Not deployed.** |
+| Status | **RFSN-061 — PRODUCTION CERTIFIED.** 061A / 061B / 061C / 061P **CLOSED**. Code SHA `d419676`. Railway `d2fb41b8`. `buildTime=2026-09-07T22:07:04.761Z`. Bundle `assets/index-B6II8Vge.js`. **VALIDITY ≠ QUALITY.** RFSN-061D backlog only — do not implement. |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
@@ -508,7 +514,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | Preview Railway | deployment `b685a31c-a4a0-4ad4-80c0-99de434c3a1c` (`commitHash=9cdcaa8`) |
 | Preview buildTime | `2026-09-07T15:28:08.371Z` |
 | Preview bundle | `assets/index-C8gPeOg8.js` |
-| Production promotion | Branch `rfsn-061-prod-promotion` from `origin/release/promote-provider-expansion-dff6154` @ `329b2ae`. **Pre-push. Not deployed.** |
+| Production promotion | **PRODUCTION CERTIFIED.** Git `d419676` on `release/promote-provider-expansion-dff6154` (base `329b2ae`). Railway `d2fb41b8` SUCCESS. Docs SHA recorded after this certification commit. |
 
 ### Need / surplus formula
 
@@ -603,4 +609,6 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - DST/K trade-priority deprioritization unless targeted — **done in RFSN-061A**
 - Partner-rationality measurement — **done in RFSN-061B**
 - Always-return / validity ≠ quality — **done in RFSN-061C**
+- Production promotion — **done in RFSN-061P**
+- Trade Finder Production Learning & Optimization — **RFSN-061D BACKLOG ONLY. Do not implement.**
 
