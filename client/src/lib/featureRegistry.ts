@@ -185,7 +185,7 @@ export const FEATURE_REGISTRY: FeatureEntry[] = [
     showInDashboard: true,
     experienceCategory: "League Intelligence",
     marketingDescription:
-      "Model trades with league context — fairness, positional impact, and rival leverage before you send the offer.",
+      "Find league-aware trade offers, then model fairness, positional impact, and rival leverage before you send anything.",
   },
   {
     entryType: "route",
