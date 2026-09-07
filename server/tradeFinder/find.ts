@@ -9,7 +9,7 @@ import { DEFAULT_TRADE_FINDER_FILTERS } from "./types";
 import { TRADE_FINDER_BOUNDS } from "./weights";
 import { attachNeeds } from "./needSurplus";
 import { discoveryNeedPositions, generateCandidates, rankPartners } from "./generate";
-import { evaluateCandidate, rankScored } from "./score";
+import { evaluateCandidate, fillProgressively } from "./score";
 import { emptyExplanation } from "./explain";
 import { applyNarratives } from "./narrative";
 import { tradePriorityScore } from "./priority";
@@ -21,6 +21,21 @@ function tradePriorityFor(league: TradeFinderLeague, filters: TradeFinderFilters
     ...n,
     tradePriorityScore: Math.round(tradePriorityScore(n.needScore, n.position, filters, league.slots) * 10) / 10,
   }));
+}
+
+function emptyMetrics() {
+  return {
+    partnersRanked: 0,
+    candidatesGenerated: 0,
+    candidatesScored: 0,
+    candidatesHardRejected: 0,
+    candidatesRejectedByRationality: 0,
+    tier1Count: 0,
+    tier2Count: 0,
+    tier3Count: 0,
+    tier4Count: 0,
+    candidatesReturned: 0,
+  };
 }
 
 function emptyResult(
@@ -78,11 +93,7 @@ export function findTrades(
   const baseMetrics = {
     teams: league.teams.length,
     assetsEvaluated,
-    partnersRanked: 0,
-    candidatesGenerated: 0,
-    candidatesScored: 0,
-    candidatesRejectedByRationality: 0,
-    candidatesReturned: 0,
+    ...emptyMetrics(),
     elapsedMs: 0,
     wantNeedPositions,
     streamerDeprioritized,
@@ -107,10 +118,6 @@ export function findTrades(
   if (valued < 8) {
     return finish(emptyResult(league, "insufficient_values", baseMetrics, entitled, filters));
   }
-  const unavailable = rostered.filter((a) => a.unavailable).length;
-  if (unavailable >= rostered.length - 3 && rostered.length >= 8) {
-    return finish(emptyResult(league, "injury_heavy", baseMetrics, entitled, filters));
-  }
 
   const partners = rankPartners(league, filters);
   if (partners.length === 0) {
@@ -120,22 +127,36 @@ export function findTrades(
   const generated = generateCandidates(league, partners, filters);
   const scored = [];
   let rejectedByRationality = 0;
+  let rejectedHard = 0;
   for (const g of generated) {
     const outcome = evaluateCandidate(league, user, g, filters);
+    if (outcome.rejectedHard) rejectedHard += 1;
     if (outcome.rejectedByRationality) rejectedByRationality += 1;
     if (outcome.candidate) scored.push(outcome.candidate);
   }
-  const ranked = rankScored(scored).slice(0, filters.topN);
+  const tier1Count = scored.filter((t) => t.qualityTier === 1).length;
+  const tier2Count = scored.filter((t) => t.qualityTier === 2).length;
+  const tier3Count = scored.filter((t) => t.qualityTier === 3).length;
+  const tier4Count = scored.filter((t) => t.qualityTier === 4).length;
+  const ranked = fillProgressively(scored, filters);
   const withNarrative = applyNarratives(ranked, opts?.narrativeRaw ?? null);
 
+  const scoredMetrics = {
+    partnersRanked: partners.length,
+    candidatesGenerated: generated.length,
+    candidatesScored: scored.length,
+    candidatesHardRejected: rejectedHard,
+    candidatesRejectedByRationality: rejectedByRationality,
+    tier1Count,
+    tier2Count,
+    tier3Count,
+    tier4Count,
+    candidatesReturned: withNarrative.trades.length,
+  };
+
   if (withNarrative.trades.length === 0) {
-    return finish(emptyResult(league, "no_viable_partners", {
-      ...baseMetrics,
-      partnersRanked: partners.length,
-      candidatesGenerated: generated.length,
-      candidatesScored: scored.length,
-      candidatesRejectedByRationality: rejectedByRationality,
-    }, entitled, filters));
+    const reason: EmptyReason = generated.length === 0 ? "no_constructable_trade" : "no_constructable_trade";
+    return finish(emptyResult(league, reason, { ...baseMetrics, ...scoredMetrics }, entitled, filters));
   }
 
   return finish({
@@ -151,13 +172,5 @@ export function findTrades(
     disclaimers: league.disclaimers,
     picksSupported: league.teams.some((t) => t.picks.length > 0),
     narrativeApplied: withNarrative.applied,
-  }, {
-    partnersRanked: partners.length,
-    candidatesGenerated: generated.length,
-    candidatesScored: scored.length,
-    candidatesRejectedByRationality: rejectedByRationality,
-    candidatesReturned: withNarrative.trades.length,
-    wantNeedPositions,
-    streamerDeprioritized,
-  });
+  }, scoredMetrics);
 }

@@ -40,7 +40,28 @@ export const TRADE_FINDER_BOUNDS = {
   maxPerShape: 32,
 } as const;
 
-/** Gain-ratio windows by risk preference (user received / user given). */
+/**
+ * Hard sanity boundary (RFSN-061C). Not the normal fairness band.
+ * A 25% overpay is still a trade. Only radically absurd packages are noise.
+ * Ratio = user received tradeValue / user given tradeValue.
+ */
+export const TRADE_FINDER_SANITY = {
+  minGainRatio: 0.35,
+  maxGainRatio: 2.85,
+} as const;
+
+/**
+ * Trade Approach maps onto the existing `risk` filter.
+ * BEST VALUE = conservative, NEED A STARTER = balanced, MUST MAKE A MOVE = aggressive.
+ * Discovery width only — ranking still prefers better tiers.
+ */
+export const TRADE_FINDER_APPROACH = {
+  conservative: { maxPartners: 5, maxGivePool: 8, maxGetPool: 8, maxCandidates: 160, maxPairPool: 5 },
+  balanced: { maxPartners: 5, maxGivePool: 8, maxGetPool: 8, maxCandidates: 160, maxPairPool: 5 },
+  aggressive: { maxPartners: 6, maxGivePool: 10, maxGetPool: 10, maxCandidates: 200, maxPairPool: 6 },
+} as const;
+
+/** Soft ranking windows (not hard rejects). Kept for documentation / BEST VALUE preference. */
 export const TRADE_FINDER_VALUE_BANDS = {
   conservative: { min: 0.85, max: 1.12 },
   balanced: { min: 0.75, max: 1.28 },
@@ -48,9 +69,12 @@ export const TRADE_FINDER_VALUE_BANDS = {
 } as const;
 
 export const TRADE_FINDER_REJECT = {
-  /** Drop starting-lineup weekly projection beyond this → reject. */
+  /**
+   * @deprecated RFSN-061C: negative userDelta is a quality signal, not a hard reject.
+   * Retained so callers can still read the historical threshold.
+   */
   userLineupDropPpg: 0.75,
-  /** Partner becoming unable to field a legal skill lineup → reject. */
+  /** Partner becoming unable to field a legal skill lineup → hard invalid. */
   partnerUnfilledStarter: true,
   /** Remaining playable bodies at a dedicated slot position after the trade. */
   minPlayableAtDedicated: 1,

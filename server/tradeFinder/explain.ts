@@ -88,36 +88,33 @@ export function emptyExplanation(
   userNeeds: { position: string; label: string; needScore: number; surplusScore: number }[],
   extras?: { candidatesGenerated?: number; partnersRanked?: number },
 ): string {
-  const needs = userNeeds.filter((n) => n.label === "NEED").map((n) => n.position);
-  const surplus = userNeeds.filter((n) => n.label === "SURPLUS").map((n) => n.position);
-  if (reason === "no_viable_partners") {
+  void userNeeds;
+  if (reason === "no_constructable_trade" || reason === "no_viable_partners") {
     if ((extras?.candidatesGenerated ?? 0) > 0) {
-      return `No strong trade opportunities right now. Rivals evaluated ${extras!.candidatesGenerated} packages across ${extras!.partnersRanked ?? 0} partners, including QB/RB/WR/TE improvements; none cleared fairness, lineup, depth, and mutual-benefit gates.`;
+      return `Rivals couldn't construct a valid trade from the current roster data. ${extras!.candidatesGenerated} packages were considered across ${extras!.partnersRanked ?? 0} partners; none were structurally valid under league rules.`;
     }
-    const needTxt = needs.length ? `your ${needs.join("/")} need` : "a clear positional need";
-    const surTxt = surplus.length ? `${surplus.join("/")} surplus` : "tradable surplus";
-    return `No strong trade opportunities right now. Opportunities appear when another roster has ${needTxt} covered and wants your ${surTxt}.`;
+    return "Rivals couldn't construct a valid trade from the current roster data. That usually means missing opponent rosters, incomplete player identity, or no tradeable assets.";
   }
   if (reason === "insufficient_values") {
-    return "No strong trade opportunities right now. Player values are too thin to rank realistic offers — sync a current roster with projections or in-season stats.";
+    return "Rivals couldn't construct a valid trade from the current roster data. Player values are too thin to evaluate packages — sync a current roster with projections or in-season stats.";
   }
   if (reason === "no_roster") {
-    return "No strong trade opportunities right now. This season has no rostered players to evaluate.";
+    return "Rivals couldn't construct a valid trade from the current roster data. This season has no rostered players to evaluate.";
   }
   if (reason === "preseason_empty") {
-    return "No strong trade opportunities right now. Rosters are empty or not yet set for this season.";
+    return "Rivals couldn't construct a valid trade from the current roster data. Rosters are empty or not yet set for this season.";
   }
   if (reason === "injury_heavy") {
-    return "No strong trade opportunities right now. Too many key players are unavailable to form a legal, mutually useful deal.";
+    return "Rivals couldn't construct a valid trade from the current roster data. Too many key players are unavailable to form a legal package.";
   }
   if (reason === "team_mismatch") {
-    return "No strong trade opportunities right now. Your team could not be matched to a roster in this league.";
+    return "Rivals couldn't construct a valid trade from the current roster data. Your team could not be matched to a roster in this league.";
   }
   if (reason === "unsupported_season") {
-    return "No strong trade opportunities right now. This season is not synced.";
+    return "Rivals couldn't construct a valid trade from the current roster data. This season is not synced.";
   }
   if (reason === "no_league") {
     return "Connect a league to find trades against real rosters.";
   }
-  return "No strong trade opportunities right now.";
+  return "Rivals couldn't construct a valid trade from the current roster data.";
 }
