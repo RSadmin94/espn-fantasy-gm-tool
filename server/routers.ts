@@ -35,6 +35,7 @@ import { completedTradeIntelRouter } from "./completedTradeIntelRouter";
 import { loadGmTradeLegs } from "./completedTradeAuthority";
 import { enrichNormalizedTransactionsWithReconstruction } from "./transactionTradeClusterEnrichment";
 import { orphanExecutedProposalIds } from "@shared/transactionDisplay";
+import { tradeFinderRouter } from "./tradeFinderRouter";
 import { rivalryStoryRouter } from "./rivalryStoryRouter";
 import { rivalryShareRouter } from "./rivalryShareRouter";
 import { sofiaRouter } from "./sofiaRouter";
@@ -768,6 +769,7 @@ export const appRouter = router({
   draftReality: draftRealityRouter,
   leagueIntel: leagueIntelRouter,
   completedTradeIntel: completedTradeIntelRouter,
+  tradeFinder: tradeFinderRouter,
   rivalryStory: rivalryStoryRouter,
   sofia: sofiaRouter,
   postDraftEval: postDraftEvalRouter,

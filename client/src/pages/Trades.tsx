@@ -16,6 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { TradeFinderPanel } from "@/components/trades/TradeFinderPanel";
+import {
   AlertCircle,
   ArrowLeftRight,
   ArrowRight,
@@ -26,6 +33,7 @@ import {
   Plus,
   RefreshCw,
   Scale,
+  Search,
   Sparkles,
   Swords,
   Target,
@@ -1065,6 +1073,7 @@ export function Trades() {
   const [picksA, setPicksA] = useState<TradePick[]>([]);
   const [picksB, setPicksB] = useState<TradePick[]>([]);
   const [result, setResult] = useState<TradeResult | null>(null);
+  const [tradeTab, setTradeTab] = useState<"finder" | "analyzer">("finder");
 
   // Tracks the league we've already auto-selected a season for, so we force the
   // default exactly once per league (and re-default on league switch) without
@@ -1158,7 +1167,7 @@ export function Trades() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">{V1.features.tradeIntelligence}</h1>
         <p className="mt-1 text-muted-foreground">
-          Analyze trade fairness using real season data, draft pick values, and AI evaluation.
+          Find realistic league offers, then analyze any trade with season data and pick values.
         </p>
       </div>
 
@@ -1195,6 +1204,34 @@ export function Trades() {
         )}
       </div>
 
+      <Tabs value={tradeTab} onValueChange={(v) => setTradeTab(v as "finder" | "analyzer")} className="min-w-0">
+        <TabsList className="flex-wrap h-auto w-full sm:w-fit">
+          <TabsTrigger value="finder" className="gap-1.5">
+            <Search className="h-3.5 w-3.5" /> Trade Finder
+          </TabsTrigger>
+          <TabsTrigger value="analyzer" className="gap-1.5">
+            <Scale className="h-3.5 w-3.5" /> Trade Analyzer
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="finder" className="mt-4 min-w-0">
+          <TradeFinderPanel
+            season={season}
+            teams={teams}
+            seasonSynced={cachedSeasons.includes(season)}
+            leagueKeyReady={leagueKeyReady}
+            onLoadIntoAnalyzer={(trade) => {
+              setTeamAId(trade.sideA[0]?.teamId ?? null);
+              setTeamBId(trade.teamBId);
+              setSideA(trade.sideA);
+              setSideB(trade.sideB);
+              setPicksA([]);
+              setPicksB([]);
+              setResult(null);
+              setTradeTab("analyzer");
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="analyzer" className="mt-4 min-w-0 space-y-6">
       {/* Two-panel picker */}
       <div className="flex flex-col gap-4 md:flex-row">
         <RosterPicker
@@ -1305,6 +1342,8 @@ export function Trades() {
           </p>
         </CardContent>
       </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
