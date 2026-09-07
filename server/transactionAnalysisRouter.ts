@@ -8,6 +8,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { resolveActiveLeagueId, getCachedView } from "./db";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import {
@@ -161,6 +162,7 @@ export const transactionAnalysisRouter = router({
           maxTokens: 400,
           callType: "retrospective",
           temperature: 0.35,
+          usageContext: aiUsage("TRADE_ANALYSIS"),
         });
 
         const raw = result.choices?.[0]?.message?.content;

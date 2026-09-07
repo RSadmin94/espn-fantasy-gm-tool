@@ -107,7 +107,7 @@ export function LandingPage() {
               </div>
               <h1 className="mt-5 max-w-[16ch] text-[44px] font-black leading-[0.95] tracking-tight sm:text-[60px] lg:text-[66px]">
                 This isn&apos;t another fantasy tool.{" "}
-                <span className="text-lime-400">It knows your league.</span>
+                <span className="text-lime-400">It&apos;s your league&apos;s DNA.</span>
               </h1>
               <p className="mt-6 max-w-[58ch] text-[17px] leading-relaxed text-white/65 sm:text-[19px]">
                 Analyze years of real league history — rivalries, owner tendencies, championship paths, and the hidden stories that define your league.

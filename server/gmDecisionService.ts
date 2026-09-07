@@ -14,6 +14,7 @@ import {
   type InsertGmDecision,
 } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import {
   resolveLeaguePromptContext,
   buildLeaguePromptContext,
@@ -410,6 +411,7 @@ Be direct, specific, and honest. Use actual numbers from the data.`;
       { role: "system", content: "You are an expert fantasy football GM coach analyzing decision history." },
       { role: "user", content: prompt },
     ],
+    usageContext: aiUsage("TEAM_IMPROVEMENT"),
   });
 
   return (response.choices[0]?.message?.content as string) ?? "Analysis unavailable.";

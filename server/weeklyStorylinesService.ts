@@ -39,6 +39,7 @@ import {
   normalizeSettings,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -517,6 +518,7 @@ Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
         { role: "system", content: "You are a fantasy football journalist. Output only valid JSON." },
         { role: "user", content: prompt },
       ],
+      usageContext: aiUsage("WEEKLY_INTEL"),
       response_format: {
         type: "json_schema",
         json_schema: {

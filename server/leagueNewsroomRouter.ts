@@ -17,6 +17,7 @@ import { router, publicProcedure } from "./_core/trpc";
 import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }       from "drizzle-orm";
 import { invokeLLM }               from "./_core/llm";
+import { aiUsage }                 from "./aiCost/aiFeatures";
 import { buildChampionshipEvidence } from "./leagueNewsroomEvidence";
 import {
   resolveLeaguePromptContext,
@@ -95,6 +96,7 @@ Format output as JSON:
     maxTokens,
     callType: "retrospective",
     temperature: 0.7,
+    usageContext: aiUsage("NEWSROOM"),
   });
 
   const raw = result.choices?.[0]?.message?.content;

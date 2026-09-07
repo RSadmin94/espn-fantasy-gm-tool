@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { TRPCError } from "@trpc/server";
 import {
   getInjuries,
@@ -132,6 +133,7 @@ Deliver a concise START/SIT verdict. Lead with the verdict. Explain the injury m
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
+        usageContext: aiUsage("INJURY", { userId: ctx.user?.id }),
       });
 
       const verdict = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";
@@ -194,6 +196,7 @@ Provide a waiver wire scouting report with:
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
         ],
+        usageContext: aiUsage("INJURY", { userId: ctx.user?.id }),
       });
 
       const report = response.choices?.[0]?.message?.content ?? "Analysis unavailable.";

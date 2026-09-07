@@ -5,8 +5,7 @@
  * Reads: funnel.getRivalryWallStats (admin only).
  */
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
-import { protectedProcedure, resolvePremiumAccess, router } from "./_core/trpc";
+import { protectedProcedure, adminProcedure, resolvePremiumAccess, router } from "./_core/trpc";
 import { getRivalryWallFunnelStats, recordFunnelEvent } from "./funnelService";
 
 const ALLOWED_METADATA_KEYS = new Set([
@@ -57,10 +56,7 @@ export const funnelRouter = router({
     return { ok: true, skipped: false as const };
   }),
 
-  getRivalryWallStats: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role !== "admin") {
-      throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-    }
+  getRivalryWallStats: adminProcedure.query(async () => {
     return getRivalryWallFunnelStats();
   }),
 });

@@ -31,6 +31,7 @@ import { calcVORP, calcRosterGaps, calcROSValue, type PlayerRow } from "./analyt
 import { getInjuries, calcInjuryScores, buildInjuryPromptBlock } from "./injuryService";
 import { calcManagerDNA, calcTradeDesperationScore, type ManagerRawData, type DraftPickRecord } from "./leagueDNA";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -514,6 +515,8 @@ Be direct and tactical. No generic advice. Reference specific players and scores
         { role: "system", content: systemPrompt },
         { role: "user", content: `Generate the weekly GM briefing for ${team.ownerName}'s team.` },
       ],
+      callType: "weekly_briefing",
+      usageContext: aiUsage("WEEKLY_INTEL"),
     });
     const raw = response.choices?.[0]?.message?.content;
     return typeof raw === "string" ? raw : "Briefing unavailable.";
@@ -778,6 +781,8 @@ Write a 3-4 sentence executive summary of the league this week. Identify the big
   try {
     const resp = await invokeLLM({
       messages: [{ role: "user", content: leagueSummaryPrompt }],
+      callType: "weekly_briefing",
+      usageContext: aiUsage("WEEKLY_INTEL"),
     });
     const rawSummary = resp.choices?.[0]?.message?.content;
     leagueSummary = typeof rawSummary === "string" ? rawSummary : "";

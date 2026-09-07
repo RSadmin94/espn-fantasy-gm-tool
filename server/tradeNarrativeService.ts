@@ -13,6 +13,7 @@ import { getDb } from "./db";
 import { tradeNarratives } from "../drizzle/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 
 // ── Label definitions ─────────────────────────────────────────────────────────
 
@@ -194,6 +195,7 @@ Write EXACTLY one sentence (max 25 words) that captures the emotional essence of
         { role: "system", content: "You write punchy one-sentence fantasy football trade narratives. Always respond with exactly one sentence, no quotes, no period at the end." },
         { role: "user", content: prompt },
       ],
+      usageContext: aiUsage("TRADE_ANALYSIS"),
     });
     const text = (response?.choices?.[0]?.message?.content as string || "").trim();
     // Truncate to 200 chars max

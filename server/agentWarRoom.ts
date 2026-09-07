@@ -29,6 +29,7 @@
  */
 
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import {
   resolveLeaguePromptContext,
   buildLeaguePromptContext,
@@ -255,6 +256,8 @@ async function runAgent(
         { role: "system", content: config.systemPrompt },
         { role: "user", content: userMessage },
       ],
+      callType: "war_room_agent",
+      usageContext: aiUsage("DRAFT_ANALYSIS"),
       response_format: {
         type: "json_schema",
         json_schema: {

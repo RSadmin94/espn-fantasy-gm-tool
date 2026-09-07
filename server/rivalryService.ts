@@ -27,6 +27,7 @@ import {
   type CompletedTradeIntel,
 } from "./completedTradeAuthority";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { rivalryScores } from "../drizzle/schema";
 import { isMissingTableError } from "./optionalEnrichmentTable";
 import { eq, and } from "drizzle-orm";
@@ -475,6 +476,7 @@ Output: One sentence only. No quotes. No explanation.`;
   try {
     const response = await invokeLLM({
       messages: [{ role: "user", content: prompt }],
+      usageContext: aiUsage("RIVALRY_HISTORY"),
     });
     const text = (response?.choices?.[0]?.message?.content as string) || "";
     return text.trim().replace(/^["']|["']$/g, "");

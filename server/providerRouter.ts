@@ -14,6 +14,7 @@ import type { UniversalLeague } from "./providers/types";
 import { YahooAdapter, getYahooLeaguesForUser } from "./providers/yahooAdapter";
 import { isYahooConfigured } from "./providers/yahooOAuth";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { getDb, reconcileActiveLeague, setActiveLeagueForUser } from "./db";
 import { gmTeams, leagueConnections, users } from "../drizzle/schema";
 import { eq, and } from "drizzle-orm";
@@ -980,6 +981,7 @@ export const providerRouter = router({
             content: `League: ${league.settings.leagueName} (${league.settings.season} season, ${league.settings.scoringType} scoring)\nTeams and activity:\n${teamSummaries}\n\nGenerate the DNA profile.`,
           },
         ],
+        usageContext: aiUsage("DNA", { userId: ctx.user?.id }),
         response_format: {
           type: "json_schema",
           json_schema: {

@@ -19,6 +19,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 import { TRPCError } from "@trpc/server";
 import {
@@ -252,6 +253,7 @@ Answer ${focalClause}'s question using the championship equity data above as gro
           { role: "system", content: systemPrompt },
           { role: "user", content: question },
         ],
+        usageContext: aiUsage("TEAM_IMPROVEMENT", { userId: ctx.user?.id }),
       });
 
       return {

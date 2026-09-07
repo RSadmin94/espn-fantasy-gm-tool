@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { buildKeeperRecommendations } from "./keeperRecommendationEngine";
 import { buildLeagueDraftBoard } from "./draftStrategyEngine";
 import { getCachedView, getAllCachedSeasons, getCompletedSeasonForOffseason, getDefaultEspnLeagueId, upsertRefreshManifest, upsertViewHealth } from "./db";
@@ -379,6 +380,7 @@ Be specific, use the actual player names and round numbers. Write in a direct GM
           { role: "system", content: "You are a sharp, data-driven fantasy football GM advisor. Be direct, specific, and actionable." },
           { role: "user", content: prompt },
         ],
+        usageContext: aiUsage("OFFSEASON", { userId: ctx.user?.id }),
       });
 
       const brief = response.choices?.[0]?.message?.content ?? "Brief generation failed.";

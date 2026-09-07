@@ -17,6 +17,7 @@
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import {
   simulatePlayer,
   simulateStartSit,
@@ -312,6 +313,7 @@ Deliver a concise START/SIT verdict:
             { role: "system", content: systemPrompt },
             { role: "user", content: userMsg },
           ],
+          usageContext: aiUsage("SIMULATION", { userId: ctx.user?.id }),
         });
         const rawContent = response.choices?.[0]?.message?.content;
         aiVerdict = typeof rawContent === "string" ? rawContent : (rawContent ? JSON.stringify(rawContent) : "");

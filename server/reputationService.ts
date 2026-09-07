@@ -44,6 +44,7 @@ import {
   normalizeMatchups,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { getNotoriousTradesFromDb } from "./tradeNarrativeService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -383,6 +384,7 @@ Write exactly one sentence (max 25 words) in the voice of a sports journalist. B
         { role: "system", content: "You write punchy one-sentence reputation entries for a fantasy football league history book." },
         { role: "user", content: prompt },
       ],
+      usageContext: aiUsage("REPUTATION"),
     });
     const content = response?.choices?.[0]?.message?.content;
     if (typeof content === "string" && content.trim().length > 0) {

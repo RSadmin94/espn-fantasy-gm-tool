@@ -90,6 +90,27 @@ const OPENAI_DEFAULT_MODEL = "gpt-4o";
 const GEMINI_API_URL_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
+/** Active provider from `LLM_PROVIDER`. Unset defaults to anthropic in code; production/preview set openai. */
+export function resolveLlmProvider(): "anthropic" | "openai" | "gemini" {
+  return ENV.llmProvider;
+}
+
+/** Model `invokeLLM` will send when the caller does not pass `params.model`. */
+export function resolveLlmModel(explicitModel?: string): string {
+  if (explicitModel) return explicitModel;
+  const provider = resolveLlmProvider();
+  if (provider === "openai") return ENV.openaiModel || OPENAI_DEFAULT_MODEL;
+  if (provider === "gemini") return ENV.geminiModel || GEMINI_DEFAULT_MODEL;
+  return ENV.anthropicModel || ANTHROPIC_DEFAULT_MODEL;
+}
+
+export function resolveLlmRoute(explicitModel?: string): {
+  provider: "anthropic" | "openai" | "gemini";
+  model: string;
+} {
+  return { provider: resolveLlmProvider(), model: resolveLlmModel(explicitModel) };
+}
+
 // ---------------------------------------------------------------------------
 // Shared types
 // ---------------------------------------------------------------------------
@@ -242,7 +263,7 @@ async function trackUsageAfterCall(
   }
 ) {
   logUsage({
-    provider: ENV.llmProvider,
+    provider: resolveLlmProvider(),
     model: usageData.model,
     callType: params.callType,
     promptTokens: usageData.promptTokens,
@@ -273,7 +294,7 @@ async function trackUsageAfterCall(
       durationMs: usageData.durationMs,
       streaming: usageData.streaming,
       userId: ctx?.userId,
-      provider: ENV.llmProvider,
+      provider: resolveLlmProvider(),
       featureId: ctx?.feature,
       intent: ctx?.intent,
       leagueId: ctx?.leagueId,
@@ -308,7 +329,7 @@ function errorCodeFromUnknown(err: unknown): string {
 async function trackFailedCall(params: InvokeParams, err: unknown, durationMs: number, model?: string) {
   await trackUsageAfterCall(params, {
     callType: params.callType ?? "unspecified",
-    model: model ?? params.model ?? ENV.llmProvider,
+    model: model ?? params.model ?? resolveLlmModel(),
     promptTokens: 0,
     completionTokens: 0,
     totalTokens: 0,
@@ -1129,7 +1150,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   const started = Date.now();
   const resolvedModel = next.model;
   try {
-    const provider = ENV.llmProvider;
+    const provider = resolveLlmProvider();
     if (provider === "openai") return await invokeOpenAI(next);
     if (provider === "gemini") return await invokeGemini(next);
     return await invokeAnthropic(next);
@@ -1156,7 +1177,7 @@ export async function* invokeLLMStream(
   await enforceUsageGuards(next);
   const started = Date.now();
   try {
-    const provider = ENV.llmProvider;
+    const provider = resolveLlmProvider();
     if (provider === "openai") yield* invokeOpenAIStream(next);
     else if (provider === "gemini") yield* invokeGeminiStream(next);
     else yield* invokeAnthropicStream(next);

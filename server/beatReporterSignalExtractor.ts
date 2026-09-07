@@ -6,6 +6,7 @@
  */
 
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import type { RawNewsItem } from "./beatReporterService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
         { role: "system", content: SYSTEM_PROMPT },
         { role: "user", content: userPrompt },
       ],
+      usageContext: aiUsage("BEAT_REPORTER"),
       response_format: {
         type: "json_schema",
         json_schema: {
