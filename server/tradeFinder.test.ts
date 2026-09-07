@@ -939,6 +939,19 @@ describe("RFSN-061C validity vs quality", () => {
     expect(label).not.toBe("GOOD FIT");
     const result = findTrades(rbWrComplementLeague(), { topN: 5 });
     expect(result.trades.every((t) => t.tradeFit !== "BAD DEAL FOR YOU" || (t.tradeFit !== "STRONG FIT" && t.tradeFit !== "GOOD FIT"))).toBe(true);
+    expect(classifyOpportunity({
+      userDelta: 2.2,
+      partnerDelta: 0,
+      fairness: "UNREALISTIC",
+      rationality: "GOOD",
+      userNeedFit: 40,
+      partnerNeedFit: 50,
+      gainRatioUser: 2.1,
+      userDepthDamage: 0,
+      targetHit: false,
+      solvesSevereNeed: false,
+      twoForOneClutter: false,
+    })).toBe("LONG SHOT");
   });
 
   it("9. POOR partner rationality does not automatically invalidate candidate", () => {
