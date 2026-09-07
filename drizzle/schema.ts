@@ -1618,3 +1618,47 @@ export const gmTeamOwnerResolution = mysqlTable(
   (t) => [uniqueIndex("uq_gm_team_owner_resolution").on(t.leagueId, t.season, t.teamId)],
 );
 export type GmTeamOwnerResolution = typeof gmTeamOwnerResolution.$inferSelect;
+
+// ─── RFSN Story Engine ───────────────────────────────────────────────────────
+/**
+ * Persistent long-form stories produced by the deterministic Story Engine
+ * (server/storyEngine). One row per story, keyed by a stable storyId
+ * (leagueId::type:sortedOwners) so re-detection updates in place — no dupes.
+ *
+ * Lifecycle status: emerging → active → (cooling → background) ; resolved → retired.
+ * Retirement is realised by pruning rows absent from the reconciled set.
+ * confidence is stored 0..100 (int); the engine uses 0..1.
+ */
+export const rfsnStories = mysqlTable(
+  "rfsn_stories",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    storyId: varchar("storyId", { length: 255 }).notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    storyType: varchar("storyType", { length: 48 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("emerging"),
+    owners: json("owners").$type<string[]>().notNull(),
+    ownerDisplay: json("ownerDisplay").$type<string[]>().notNull(),
+    headline: varchar("headline", { length: 512 }).notNull().default(""),
+    priority: int("priority").notNull().default(0),
+    confidence: int("confidence").notNull().default(0),
+    mentionCount: int("mentionCount").notNull().default(0),
+    resolution: varchar("resolution", { length: 512 }),
+    supportingFacts: json("supportingFacts")
+      .$type<Array<{ kind: string; text: string; season?: number; value?: number }>>()
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    lastMentioned: timestamp("lastMentioned"),
+    lastDetectedAt: timestamp("lastDetectedAt"),
+    expiry: timestamp("expiry").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_rfsn_story_id").on(t.storyId),
+    index("idx_rfsn_story_league").on(t.leagueId),
+    index("idx_rfsn_story_status").on(t.status),
+    index("idx_rfsn_story_priority").on(t.priority),
+  ]
+);
+export type RfsnStoryRow = typeof rfsnStories.$inferSelect;
+export type InsertRfsnStory = typeof rfsnStories.$inferInsert;
