@@ -1,7 +1,7 @@
 # Fantasy Football Rivals — Product Tracking
 
 **Status:** Canonical operational tracking document. `FFR_PRODUCT_ENCYCLOPEDIA.md` is **permanently retired** (never committed; not recoverable). This file is the single operational source of truth until product-owner amendment.  
-**Edition:** 2026-09-02 (RFSN-058C **PRODUCTION CERTIFIED / CLOSED**)  
+**Edition:** 2026-09-07 (RFSN-061P Trade Finder Production promotion **PRE-PUSH** — live Production remains RFSN-058C until founder push)  
 **Authority:** Product + engineering. Conflicts with code or live environments are listed under **Inconsistencies**, not guessed away.  
 **Does not replace:** `PRODUCT_CONSTITUTION.md` (product law) · `docs/architecture/FFR_2.0_Product_Architecture.md` (IA lock) · `docs/ARCHITECTURE.md` (ESPN cache / hist pipeline) · `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md` (voice/TTS mechanics) · per-ticket audit artifacts.
 
@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery. **RFSN-061B** partner-rationality measurement. **RFSN-061C** validity ≠ quality / always-return. Status: **061C Preview candidate** (this change set). Do not promote to Production from this ticket.
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery. **RFSN-061B** partner-rationality measurement. **RFSN-061C** validity ≠ quality / always-return. Status: **061C PREVIEW CERTIFIED**; **061P Production promotion candidate** on `rfsn-061-prod-promotion` (base `329b2ae`). **Not pushed. Not deployed.**
 
 ---
 
@@ -30,7 +30,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 | Area | Status | Notes |
 | --- | --- | --- |
 | Production | 🟢 **PRODUCTION PARTIAL** for ESPN install | Live `buildTime=2026-09-03T03:34:54.217Z`. Health `gitSha` still stale `06b35ba`. Website **`fbd212c`** (RFSN-058C legal pages on 058P `433fdaf`). Railway **`6ed1220b`**. Bundle `index-B3xJVKLN.js`. `/privacy` `/support` **PRODUCTION**. Chrome Web Store install URL **not** live. |
-| Preview | 🟢 RFSN-058C **PREVIEW CERTIFIED** | `/privacy` `/support` live. Git `23c7a4b` · Railway `d3c9a689` · `buildTime=2026-09-02T23:44:51.956Z` · bundle `index-DkpY0IP_.js`. Health gitSha stale — ignore. **Not Production.** |
+| Preview | 🟢 RFSN-061C **PREVIEW CERTIFIED** | Trade Finder always-return live on `/trades`. Git `9cdcaa8` · Railway `b685a31c` · `buildTime=2026-09-07T15:28:08.371Z` · bundle `index-C8gPeOg8.js`. Health gitSha stale `dff6154` — ignore. **Not Production.** 058C privacy/support remains live. |
 | GM Advisor | 🟢 / 🟡 | 052J+K live: LOZELL **3**, HoF, largest margin, H2H, 2009 limitation. **“What's my biggest win?” still FAIL** unless a later ticket closed it in source (not re-smoked this edition). |
 | RFSN | 🟢 | Live / Stories / Recaps. Voice/TTS optional via Kokoro Serverless. |
 | Typography / density | 🟢 Production | 051A–E closed. **054** density Production. |
@@ -66,7 +66,7 @@ Live evidence for Production was re-fetched 2026-09-02 (`GET https://www.fantasy
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
 | **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` | RFSN-058C Git **`fbd212c`** (cherry-picks of `23c7a4b` + `e5ef1c8` onto `433fdaf`). Railway **`6ed1220b`**. `buildTime=2026-09-03T03:34:54.217Z` · bundle `index-B3xJVKLN.js` (gitSha stale `06b35ba`) |
-| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-058C Git **`23c7a4b`**. Railway **`d3c9a689`**. `buildTime=2026-09-02T23:44:51.956Z` (gitSha stale `dff6154`). |
+| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-061C Git **`9cdcaa8`**. Railway **`b685a31c`**. `buildTime=2026-09-07T15:28:08.371Z` · bundle `index-C8gPeOg8.js` (gitSha stale `dff6154`). |
 | **Local working tree** | localhost | — | uncommitted 058B Store package | Store ZIP still local/untracked. Privacy/support **live on Production**. |
 
 Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha`.
@@ -491,7 +491,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | RFSN-061C always-return actionable options (this change set). Production not promoted. |
+| Status | RFSN-061P Production promotion **PRE-PUSH**. Base `329b2ae`. Preview certified `9cdcaa8`. **Not pushed. Not deployed.** |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
@@ -504,6 +504,11 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | AI | Optional batched `TRADE_ANALYSIS` narrative after ranking. Cannot change values, order, legality, or invent acceptance probability. Failure → deterministic why/risk. |
 | Cache | `memCache` 90s keyed by league/season/team/filters/entitlement |
 | Advisory | Does not submit trades to ESPN or Sleeper |
+| Preview Git | `9cdcaa8` on `feature/provider-expansion` (Git-authoritative; not `railway up`) |
+| Preview Railway | deployment `b685a31c-a4a0-4ad4-80c0-99de434c3a1c` (`commitHash=9cdcaa8`) |
+| Preview buildTime | `2026-09-07T15:28:08.371Z` |
+| Preview bundle | `assets/index-C8gPeOg8.js` |
+| Production promotion | Branch `rfsn-061-prod-promotion` from `origin/release/promote-provider-expansion-dff6154` @ `329b2ae`. **Pre-push. Not deployed.** |
 
 ### Need / surplus formula
 
