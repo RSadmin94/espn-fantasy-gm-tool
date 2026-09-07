@@ -302,5 +302,5 @@ or Trade Reality Simulator.
 
 ### 12.7 Trade Finder (RFSN-061)
 
-Trade Finder (`server/tradeFinder/`, `tradeFinder.find`) generates ranked league offers. It reuses Market Value / `calcTradeValue` and `tradePickValueAuthority` — it does not introduce a second valuation or fairness model. Roster **needScore** is separate from **tradePriorityScore**. **Partner rationality** (`partnerRationality.ts`) rejects fair-value deals that materially hurt the partner lineup without a compensating roster benefit, and down-ranks 2-for-1 clutter. AI narrative is optional and cannot reorder results. UI: Trade Intelligence `/trades` → Trade Finder tab.
+Trade Finder (`server/tradeFinder/`, `tradeFinder.find`) generates ranked league offers. It reuses Market Value / `calcTradeValue` and `tradePickValueAuthority` — it does not introduce a second valuation or fairness model. **Validity ≠ quality** (RFSN-061C): hard invalidity is centralized in `validity.ts`; partner rationality, signed lineup deltas, fairness, and 2-for-1 clutter classify and rank, they do not hide structurally valid packages. Progressive fill returns up to 5 options across quality tiers. AI narrative is optional and cannot reorder or reclassify results. UI: Trade Intelligence `/trades` → Trade Finder tab.
 

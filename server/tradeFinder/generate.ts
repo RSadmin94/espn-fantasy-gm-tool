@@ -8,7 +8,7 @@ import type {
   TradeShape,
   TradeSideAsset,
 } from "./types";
-import { TRADE_FINDER_BOUNDS, TRADE_FINDER_VALUE_BANDS } from "./weights";
+import { TRADE_FINDER_APPROACH, TRADE_FINDER_BOUNDS, TRADE_FINDER_SANITY } from "./weights";
 import { needMap } from "./needSurplus";
 import {
   isDeprioritizedStreamer,
@@ -83,18 +83,17 @@ function valueSum(assets: TradeFinderAsset[]): number {
   return assets.reduce((s, a) => s + (Number.isFinite(a.tradeValue) ? a.tradeValue : 0), 0);
 }
 
-function inBand(give: number, receive: number, filters: TradeFinderFilters): boolean {
+function inBand(give: number, receive: number, _filters: TradeFinderFilters): boolean {
   if (give <= 0 || receive <= 0) return false;
   const ratio = receive / give;
-  const band = TRADE_FINDER_VALUE_BANDS[filters.risk];
-  return ratio >= band.min && ratio <= band.max;
+  return ratio >= TRADE_FINDER_SANITY.minGainRatio && ratio <= TRADE_FINDER_SANITY.maxGainRatio;
 }
 
 function positionsOf(assets: TradeFinderAsset[]): string[] {
   return assets.map((a) => a.position);
 }
 
-function matchesTarget(receive: TradeFinderAsset[], filters: TradeFinderFilters): boolean {
+export function matchesTarget(receive: TradeFinderAsset[], filters: TradeFinderFilters): boolean {
   if (filters.targetPosition === "ANY") return true;
   if (filters.targetPosition === "FLEX") {
     return receive.some((a) => a.position === "RB" || a.position === "WR" || a.position === "TE");
@@ -135,8 +134,9 @@ export function rankPartners(
     ranked.push({ team: opp, complementScore: denom > 0 ? num / denom : 0 });
   }
   ranked.sort((a, b) => b.complementScore - a.complementScore || a.team.teamId - b.team.teamId);
+  const cap = TRADE_FINDER_APPROACH[filters.risk].maxPartners;
   if (filters.partnerTeamId != null) return ranked.slice(0, 1);
-  return ranked.slice(0, TRADE_FINDER_BOUNDS.maxPartners);
+  return ranked.slice(0, cap);
 }
 
 /** Positions we try to acquire: skill offense always, plus high trade-priority needs. */
@@ -220,7 +220,9 @@ function complementOk(
     const n = o.get(a.position as TradePosition);
     return n != null && (n.label === "NEED" || n.needScore >= 32);
   });
-  return receiveUseful && giveHitsTheirNeed;
+  // RFSN-061C: partner NEED is a ranking signal, not a generation hard gate.
+  void giveHitsTheirNeed;
+  return receiveUseful;
 }
 
 function pushCandidate(
@@ -231,8 +233,9 @@ function pushCandidate(
   receive: TradeFinderAsset[],
   filters: TradeFinderFilters,
   user: TradeFinderTeam,
+  maxCandidates: number,
 ): void {
-  if (out.length >= TRADE_FINDER_BOUNDS.maxCandidates) return;
+  if (out.length >= maxCandidates) return;
   if (give.length === 0 || receive.length === 0) return;
   if (give.length > filters.maxAssets || receive.length > filters.maxAssets) return;
   if (!matchesTarget(receive, filters)) return;
@@ -270,7 +273,14 @@ export function generateCandidates(
 
   const out: GeneratedTrade[] = [];
   const seen = new Set<string>();
-  const B = TRADE_FINDER_BOUNDS;
+  const approach = TRADE_FINDER_APPROACH[filters.risk];
+  const B = {
+    ...TRADE_FINDER_BOUNDS,
+    maxGivePool: approach.maxGivePool,
+    maxGetPool: approach.maxGetPool,
+    maxCandidates: approach.maxCandidates,
+    maxPairPool: approach.maxPairPool,
+  };
 
   for (const { team: opp } of partners) {
     if (out.length >= B.maxCandidates) break;
@@ -283,7 +293,7 @@ export function generateCandidates(
     // 1-for-1
     for (const g of givePool) {
       for (const r of getPool) {
-        pushCandidate(out, seen, opp, [g], [r], filters, user);
+        pushCandidate(out, seen, opp, [g], [r], filters, user, B.maxCandidates);
       }
     }
 
@@ -300,21 +310,21 @@ export function generateCandidates(
         for (const primary of getNeed.slice(0, 6)) {
           for (const bal of oppBalancers) {
             if (bal.assetId === primary.assetId) continue;
-            pushCandidate(out, seen, opp, [g], [primary, bal], filters, user);
+            pushCandidate(out, seen, opp, [g], [primary, bal], filters, user, B.maxCandidates);
           }
         }
       }
       // 2-for-1
       for (const gp of givePairs) {
         for (const r of getPool) {
-          pushCandidate(out, seen, opp, gp, [r], filters, user);
+          pushCandidate(out, seen, opp, gp, [r], filters, user, B.maxCandidates);
         }
       }
       // 2-for-2 (tight bound)
       const getPairs = combinations(getPool.slice(0, B.maxPairPool), 2);
       for (const gp of givePairs) {
         for (const rp of getPairs) {
-          pushCandidate(out, seen, opp, gp, rp, filters, user);
+          pushCandidate(out, seen, opp, gp, rp, filters, user, B.maxCandidates);
         }
       }
     }
@@ -323,10 +333,10 @@ export function generateCandidates(
       for (const g of givePool.slice(0, 6)) {
         for (const r of getPool.slice(0, 6)) {
           for (const pk of userPicks) {
-            pushCandidate(out, seen, opp, [g, pk], [r], { ...filters, maxAssets: 2 }, user);
+            pushCandidate(out, seen, opp, [g, pk], [r], { ...filters, maxAssets: 2 }, user, B.maxCandidates);
           }
           for (const pk of oppPicks) {
-            pushCandidate(out, seen, opp, [g], [r, pk], { ...filters, maxAssets: 2 }, user);
+            pushCandidate(out, seen, opp, [g], [r, pk], { ...filters, maxAssets: 2 }, user, B.maxCandidates);
           }
         }
       }

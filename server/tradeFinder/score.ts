@@ -4,8 +4,6 @@ import {
   PICK_TO_MARKET_SCALE,
 } from "../tradePickValueAuthority";
 import type {
-  BehaviorFit,
-  FairnessBand,
   TradeFinderAsset,
   TradeFinderCandidate,
   TradeFinderFilters,
@@ -14,62 +12,62 @@ import type {
   TradeFitLabel,
   TradePosition,
 } from "./types";
-import { TRADE_FINDER_REJECT, TRADE_FINDER_WEIGHTS } from "./weights";
+import { TRADE_FINDER_RATIONALITY, TRADE_FINDER_WEIGHTS } from "./weights";
 import { applyTradeToRoster, bestLegalLineup, playableCountAt } from "./lineup";
 import { needMap } from "./needSurplus";
 import type { GeneratedTrade } from "./generate";
-import { toSideAsset, isCanonicalDuplicateSafe, receiveHitsFormalNeed } from "./generate";
+import { matchesTarget, toSideAsset } from "./generate";
 import { clamp, round1 } from "./positions";
 import { behaviorFitForTrade } from "./behavior";
-import { deterministicWhy, deterministicRisk, impactBlurb } from "./explain";
+import { deterministicRisk, impactBlurb } from "./explain";
 import { tradePriorityScore } from "./priority";
-import { partnerRationality, partnerRationalityRank } from "./partnerRationality";
-import type { PartnerRationality } from "./types";
+import { partnerRationality } from "./partnerRationality";
+import { hardInvalid, type HardInvalidReason } from "./validity";
+import {
+  classifyOpportunity,
+  compareCandidates,
+  opportunityCopy,
+  qualityTier,
+  resultGroup,
+  selectByTier,
+  type OpportunityInput,
+} from "./opportunity";
 
-export function fairnessBandFromGrade(grade: string, gainRatioUser: number): FairnessBand {
-  if (grade === "FAIR") return "BALANCED";
-  if (grade === "SLIGHT EDGE A") return "SLIGHT EDGE YOU";
-  if (grade === "SLIGHT EDGE B") return "SLIGHT EDGE THEM";
-  if (grade === "A WINS") return "AGGRESSIVE ASK";
-  if (grade === "B WINS") return "SLIGHT EDGE THEM";
-  if (grade === "LOPSIDED") return "UNREALISTIC";
-  if (gainRatioUser >= 0.95 && gainRatioUser <= 1.05) return "BALANCED";
-  return "UNREALISTIC";
+export function fairnessBandFromGrade(grade: string, gainRatioUser: number) {
+  if (grade === "FAIR") return "BALANCED" as const;
+  if (grade === "SLIGHT EDGE A") return "SLIGHT EDGE YOU" as const;
+  if (grade === "SLIGHT EDGE B") return "SLIGHT EDGE THEM" as const;
+  if (grade === "A WINS") return "AGGRESSIVE ASK" as const;
+  if (grade === "B WINS") return "SLIGHT EDGE THEM" as const;
+  if (grade === "LOPSIDED") return "UNREALISTIC" as const;
+  if (gainRatioUser >= 0.95 && gainRatioUser <= 1.05) return "BALANCED" as const;
+  return "UNREALISTIC" as const;
 }
 
+/** Compatibility wrapper — opportunity classification is the authority. */
 export function tradeFitLabel(args: {
   score: number;
-  fairness: FairnessBand;
+  fairness: ReturnType<typeof fairnessBandFromGrade>;
   partnerGain: number;
   userGain: number;
   userDelta: number;
   partnerDelta: number;
-  rationality: PartnerRationality;
+  rationality: TradeFinderCandidate["partnerRationality"];
 }): TradeFitLabel {
-  if (args.rationality === "POOR") return "LONG SHOT";
-  if (args.fairness === "UNREALISTIC") return "LONG SHOT";
-  const userUp = args.userDelta > 0;
-  const partnerNonNeg = args.partnerDelta >= 0;
-  if (userUp && (args.rationality === "STRONG" || args.rationality === "GOOD") && partnerNonNeg) {
-    if (args.rationality === "STRONG" && args.userDelta >= 1) return "STRONG FIT";
-    return "GOOD FIT";
-  }
-  if (userUp && args.rationality === "GOOD") {
-    if (args.fairness === "SLIGHT EDGE YOU" || args.fairness === "AGGRESSIVE ASK") return "AGGRESSIVE";
-    return "GOOD FIT";
-  }
-  if (args.rationality === "MARGINAL") {
-    if (args.fairness === "SLIGHT EDGE YOU" || args.fairness === "AGGRESSIVE ASK") return "AGGRESSIVE";
-    return "LONG SHOT";
-  }
-  if (args.fairness === "AGGRESSIVE ASK" && args.partnerGain < 0.15) return "LONG SHOT";
-  if (args.fairness === "AGGRESSIVE ASK") return "AGGRESSIVE";
-  if (args.score >= 62 && args.partnerGain >= 0.25 && args.userGain >= 0.25) {
-    return "STRONG FIT";
-  }
-  if (args.fairness === "BALANCED" || args.fairness === "SLIGHT EDGE THEM") return "BALANCED";
-  if (args.userGain > args.partnerGain + 0.2) return "AGGRESSIVE";
-  return "LONG SHOT";
+  void args.score;
+  return classifyOpportunity({
+    userDelta: args.userDelta,
+    partnerDelta: args.partnerDelta,
+    fairness: args.fairness,
+    rationality: args.rationality,
+    userNeedFit: args.userGain * 100,
+    partnerNeedFit: args.partnerGain * 100,
+    gainRatioUser: 1,
+    userDepthDamage: 0,
+    targetHit: false,
+    solvesSevereNeed: false,
+    twoForOneClutter: false,
+  });
 }
 
 function maxPriorityNeedOf(
@@ -112,6 +110,8 @@ function depthDamage(
 export interface ScoreOutcome {
   candidate: TradeFinderCandidate | null;
   rejectedByRationality: boolean;
+  rejectedHard: boolean;
+  hardReason: HardInvalidReason | null;
 }
 
 export function scoreCandidate(
@@ -129,8 +129,9 @@ export function evaluateCandidate(
   gen: GeneratedTrade,
   filters: TradeFinderFilters,
 ): ScoreOutcome {
-  if (!isCanonicalDuplicateSafe(gen.give, gen.receive)) {
-    return { candidate: null, rejectedByRationality: false };
+  const invalid = hardInvalid(league, user, gen);
+  if (invalid) {
+    return { candidate: null, rejectedByRationality: false, rejectedHard: true, hardReason: invalid };
   }
 
   const giveValue = gen.give.reduce((s, a) => s + a.tradeValue, 0);
@@ -142,7 +143,6 @@ export function evaluateCandidate(
   );
   const fairnessGrade = cmp.fairnessGrade || fairnessGradeFromGainRatio(cmp.gainRatioA);
   const fairness = fairnessBandFromGrade(fairnessGrade, cmp.gainRatioA);
-  if (fairness === "UNREALISTIC") return { candidate: null, rejectedByRationality: false };
 
   const giveIds = new Set(gen.give.map((a) => a.assetId));
   const userAfter = applyTradeToRoster(user.roster, giveIds, gen.receive);
@@ -154,32 +154,16 @@ export function evaluateCandidate(
   const partnerBeforeL = bestLegalLineup(gen.partner.roster, league.slots);
   const partnerAfterL = bestLegalLineup(partnerAfter, league.slots);
 
-  const userUnfilledAfter = Object.values(userAfterL.unfilledDedicated).reduce((s, n) => s + (n ?? 0), 0);
   const partnerUnfilledAfter = Object.values(partnerAfterL.unfilledDedicated).reduce((s, n) => s + (n ?? 0), 0);
-  const userUnfilledBefore = Object.values(userBeforeL.unfilledDedicated).reduce((s, n) => s + (n ?? 0), 0);
   const partnerUnfilledBefore = Object.values(partnerBeforeL.unfilledDedicated).reduce((s, n) => s + (n ?? 0), 0);
-
-  if (userUnfilledAfter > userUnfilledBefore) return { candidate: null, rejectedByRationality: false };
-  if (TRADE_FINDER_REJECT.partnerUnfilledStarter && partnerUnfilledAfter > partnerUnfilledBefore) {
-    return { candidate: null, rejectedByRationality: false };
-  }
 
   const userUsesPts = userBeforeL.usesRealProjections && userAfterL.usesRealProjections;
   const partnerUsesPts = partnerBeforeL.usesRealProjections && partnerAfterL.usesRealProjections;
   const userDelta = round1((userAfterL.starterPoints ?? 0) - (userBeforeL.starterPoints ?? 0));
   const partnerDelta = round1((partnerAfterL.starterPoints ?? 0) - (partnerBeforeL.starterPoints ?? 0));
 
-  if (userDelta < -TRADE_FINDER_REJECT.userLineupDropPpg) {
-    return { candidate: null, rejectedByRationality: false };
-  }
-  if (!receiveHitsFormalNeed(user, gen.receive) && userDelta <= 0) {
-    return { candidate: null, rejectedByRationality: false };
-  }
-
   const userDepth = depthDamage(user, userAfter, league.slots, gen.give);
   const partnerDepth = depthDamage(gen.partner, partnerAfter, league.slots, gen.receive);
-  if (userDepth >= 1) return { candidate: null, rejectedByRationality: false };
-  if (partnerDepth >= 1) return { candidate: null, rejectedByRationality: false };
 
   const userNeedFit = maxPriorityNeedOf(user, gen.receive, filters, league.slots) / 100;
   const partnerNeedFit = maxPriorityNeedOf(gen.partner, gen.give, filters, league.slots) / 100;
@@ -201,14 +185,13 @@ export function evaluateCandidate(
     shape: gen.shape,
     slots: league.slots,
   });
-  if (rationality.label === "POOR") {
-    return { candidate: null, rejectedByRationality: true };
-  }
 
-  const userGainNorm = clamp(userDelta / 8 + 0.35 * clamp((receiveValue - giveValue) / Math.max(giveValue, 1), -1, 1), 0, 1);
-  const partnerGainNorm = clamp(partnerDelta / 8 + 0.35 * clamp((giveValue - receiveValue) / Math.max(receiveValue, 1), -1, 1), 0, 1);
+  const signedUser = userDelta / 8 + 0.35 * clamp((receiveValue - giveValue) / Math.max(giveValue, 1), -1, 1);
+  const signedPartner = partnerDelta / 8 + 0.35 * clamp((giveValue - receiveValue) / Math.max(receiveValue, 1), -1, 1);
+  const userGainNorm = clamp(signedUser, 0, 1);
+  const partnerGainNorm = clamp(signedPartner, 0, 1);
   const fairnessNorm = 1 - clamp(Math.abs(cmp.gainRatioA - 1) / 0.35, 0, 1);
-  const depthNorm = 1 - 0.5 * userDepth - 0.5 * partnerDepth;
+  const depthNorm = clamp(1 - 0.5 * userDepth - 0.5 * partnerDepth, 0, 1);
 
   const behavior = behaviorFitForTrade(league.behaviorByTeam[gen.partner.teamId], gen.give);
   const behaviorNorm =
@@ -224,31 +207,46 @@ export function evaluateCandidate(
     w.depthStability * depthNorm;
   const tradeScore = round1(100 * (core + w.behavior * (behaviorNorm - 0.5)));
 
-  if (filters.risk === "conservative") {
-    if (fairness === "AGGRESSIVE ASK") return { candidate: null, rejectedByRationality: false };
-    if (partnerGainNorm < 0.12) return { candidate: null, rejectedByRationality: false };
-  }
+  const targetHit = matchesTarget(gen.receive, filters) && filters.targetPosition !== "ANY";
+  const solvesSevereNeed = gen.receive.some((a) => {
+    if (a.kind === "pick") return false;
+    const n = needMap(user).get(a.position as TradePosition);
+    return n != null && n.needScore >= TRADE_FINDER_RATIONALITY.severeNeedScore;
+  });
 
-  const tradeFit = tradeFitLabel({
-    score: tradeScore,
-    fairness,
-    partnerGain: partnerGainNorm,
-    userGain: userGainNorm,
+  const oppInput: OpportunityInput = {
     userDelta,
     partnerDelta,
+    fairness,
     rationality: rationality.label,
+    userNeedFit: userNeedFit * 100,
+    partnerNeedFit: partnerNeedFit * 100,
+    gainRatioUser: cmp.gainRatioA,
+    userDepthDamage: userDepth,
+    targetHit,
+    solvesSevereNeed,
+    twoForOneClutter: rationality.twoForOneClutter,
+  };
+  const opportunity = classifyOpportunity(oppInput);
+  const tier = qualityTier({ ...oppInput, opportunity });
+  const copy = opportunityCopy({
+    opportunity,
+    userDelta,
+    partnerDelta,
+    fairness,
+    giveNames: gen.give.filter((a) => a.kind === "player").map((a) => a.name).join(" and ") || "assets",
+    receiveNames: gen.receive.filter((a) => a.kind === "player").map((a) => a.name).join(" and ") || "assets",
+    givePos: gen.give.filter((a) => a.kind === "player").map((a) => a.position).join("/"),
+    receivePos: gen.receive.filter((a) => a.kind === "player").map((a) => a.position).join("/"),
+    partnerName: gen.partner.displayName,
+    twoForOneClutter: rationality.twoForOneClutter,
+    targetHit,
   });
-  if (tradeFit === "STRONG FIT" && rationality.label === "MARGINAL") {
-    return { candidate: null, rejectedByRationality: true };
-  }
-  if (tradeFit === "LONG SHOT" && filters.risk !== "aggressive") {
-    if (fairness !== "BALANCED" && fairness !== "SLIGHT EDGE THEM" && fairness !== "SLIGHT EDGE YOU") {
-      return { candidate: null, rejectedByRationality: false };
-    }
-  }
 
   return {
-    rejectedByRationality: false,
+    rejectedByRationality: rationality.label === "POOR",
+    rejectedHard: false,
+    hardReason: null,
     candidate: {
       partnerTeamId: gen.partner.teamId,
       partnerName: gen.partner.displayName,
@@ -256,7 +254,12 @@ export function evaluateCandidate(
       youReceive: gen.receive.map(toSideAsset),
       shape: gen.shape,
       tradeScore,
-      tradeFit,
+      tradeFit: opportunity,
+      opportunity,
+      qualityTier: tier,
+      resultGroup: resultGroup(tier),
+      targetSatisfied: filters.targetPosition === "ANY" ? true : targetHit,
+      twoForOneClutter: rationality.twoForOneClutter,
       fairness,
       fairnessGrade,
       gainRatioUser: round1(cmp.gainRatioA),
@@ -269,7 +272,10 @@ export function evaluateCandidate(
       partnerRationality: rationality.label,
       behaviorFit: behavior.fit,
       behaviorNote: behavior.note,
-      whyThisWorks: deterministicWhy({ user, partner: gen.partner, give: gen.give, receive: gen.receive, fairness, userDelta, partnerDelta }),
+      whyThisWorks: copy.whyYouWouldDoIt,
+      whyTheydConsider: copy.whyTheydConsider,
+      theCost: copy.theCost,
+      rivalsVerdict: copy.rivalsVerdict,
       riskWatchout: deterministicRisk({ user, give: gen.give, userDepth, userDelta }),
       yourImpact: impactBlurb("you", userDelta, userUsesPts, gen.receive, user),
       theirImpact: impactBlurb("them", partnerDelta, partnerUsesPts, gen.give, gen.partner),
@@ -279,20 +285,22 @@ export function evaluateCandidate(
   };
 }
 
-export function rankScored(scored: TradeFinderCandidate[]): TradeFinderCandidate[] {
-  return [...scored].sort((a, b) => {
-    const aMutual = (a.userLineupDelta ?? 0) > 0 && (a.partnerLineupDelta ?? 0) >= 0 ? 1 : 0;
-    const bMutual = (b.userLineupDelta ?? 0) > 0 && (b.partnerLineupDelta ?? 0) >= 0 ? 1 : 0;
-    if (bMutual !== aMutual) return bMutual - aMutual;
-    const aNonNeg = (a.partnerLineupDelta ?? 0) >= 0 ? 1 : 0;
-    const bNonNeg = (b.partnerLineupDelta ?? 0) >= 0 ? 1 : 0;
-    if (bNonNeg !== aNonNeg) return bNonNeg - aNonNeg;
-    const rat = partnerRationalityRank(b.partnerRationality) - partnerRationalityRank(a.partnerRationality);
-    if (rat !== 0) return rat;
-    if (b.tradeScore !== a.tradeScore) return b.tradeScore - a.tradeScore;
-    if (b.gainRatioUser !== a.gainRatioUser) return b.gainRatioUser - a.gainRatioUser;
-    const aIds = a.youGive.map((x) => x.assetId).join(",") + a.youReceive.map((x) => x.assetId).join(",");
-    const bIds = b.youGive.map((x) => x.assetId).join(",") + b.youReceive.map((x) => x.assetId).join(",");
-    return aIds.localeCompare(bIds);
-  });
+export function rankScored(scored: TradeFinderCandidate[], filters?: TradeFinderFilters): TradeFinderCandidate[] {
+  const f: TradeFinderFilters = filters ?? {
+    targetPosition: "ANY",
+    partnerTeamId: null,
+    maxAssets: 2,
+    includeDraftPicks: false,
+    risk: "balanced",
+    topN: 5,
+  };
+  return [...scored].sort((a, b) => compareCandidates(a, b, f));
+}
+
+export function fillProgressively(
+  scored: TradeFinderCandidate[],
+  filters: TradeFinderFilters,
+): TradeFinderCandidate[] {
+  const ranked = rankScored(scored, filters);
+  return selectByTier(ranked, filters.topN);
 }

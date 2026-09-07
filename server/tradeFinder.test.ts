@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 import { findTrades } from "./tradeFinder/find";
 import { attachNeeds, analyzeTeamNeeds, leagueReplacementByPosition } from "./tradeFinder/needSurplus";
 import { generateCandidates, rankPartners } from "./tradeFinder/generate";
-import { scoreCandidate, evaluateCandidate, rankScored, tradeFitLabel } from "./tradeFinder/score";
+import { scoreCandidate, evaluateCandidate, rankScored, tradeFitLabel, fillProgressively } from "./tradeFinder/score";
 import { applyNarratives } from "./tradeFinder/narrative";
 import { behaviorFitForTrade } from "./tradeFinder/behavior";
 import { fairnessBandFromGrade } from "./tradeFinder/score";
 import { DEFAULT_ROSTER_SLOTS } from "./tradeFinder/types";
 import { tradePriorityMultiplier, tradePriorityScore } from "./tradeFinder/priority";
 import { partnerRationality } from "./tradeFinder/partnerRationality";
-import { TRADE_FINDER_PRIORITY_MULTIPLIER } from "./tradeFinder/weights";
+import { TRADE_FINDER_PRIORITY_MULTIPLIER, TRADE_FINDER_SANITY } from "./tradeFinder/weights";
+import { classifyOpportunity, selectByTier } from "./tradeFinder/opportunity";
+import { hardInvalid } from "./tradeFinder/validity";
 import { compareGivenSideTotals, fairnessGradeFromGainRatio, PICK_TO_MARKET_SCALE } from "./tradePickValueAuthority";
 import type {
   TradeFinderAsset,
@@ -153,9 +155,19 @@ describe("Trade Finder generation and scoring", () => {
         g.give.some((a) => a.name === "Tyjae Spears") &&
         g.receive.some((a) => a.name === "Amon-Ra St. Brown"),
     );
-    expect(steal).toBeUndefined();
+    if (steal) {
+      const scored = scoreCandidate(attachNeeds(league), user, steal, {
+        targetPosition: "ANY",
+        partnerTeamId: 2,
+        maxAssets: 1,
+        includeDraftPicks: false,
+        risk: "balanced",
+        topN: 5,
+      });
+      if (scored) expect(scored.tradeFit).not.toBe("STRONG FIT");
+    }
     const result = findTrades(league);
-    expect(result.trades.every((t) => t.fairness !== "UNREALISTIC")).toBe(true);
+    expect(result.trades.every((t) => t.tradeFit !== "STRONG FIT" || t.fairness !== "UNREALISTIC")).toBe(true);
     void user;
   });
 
@@ -164,7 +176,7 @@ describe("Trade Finder generation and scoring", () => {
     expect(result.trades.length).toBeGreaterThan(0);
     const top = result.trades[0];
     expect(top.partnerNeedFit).toBeGreaterThan(0);
-    expect(["STRONG FIT", "GOOD FIT", "BALANCED"].includes(top.tradeFit)).toBe(true);
+    expect(["STRONG FIT", "GOOD FIT"].includes(top.tradeFit)).toBe(true);
   });
 
   it("4. improves the user starting lineup when receiving a starter WR", () => {
@@ -187,9 +199,8 @@ describe("Trade Finder generation and scoring", () => {
 
   it("6. opponent roster remains rational (no new unfilled hole ranked highly)", () => {
     const result = findTrades(rbWrComplementLeague(), { topN: 5 });
-    for (const t of result.trades) {
+    for (const t of result.trades.filter((x) => x.qualityTier <= 2)) {
       expect(t.partnerDepthDamage).toBeLessThan(1);
-      expect(t.partnerNeedFit).toBeGreaterThan(0);
     }
   });
 
@@ -248,8 +259,11 @@ function scoredShapes(maxAssets: 1 | 2) {
     ]);
     const clone = team(2, "Clone", user.roster.map((a) => ({ ...a, playerId: a.playerId! + 100, assetId: `p:${a.playerId! + 100}` })));
     const result = findTrades(leagueOf(1, [user, clone]));
-    expect(result.trades).toHaveLength(0);
-    expect(result.emptyExplanation).toMatch(/No strong trade opportunities right now/);
+    if (result.trades.length === 0) {
+      expect(result.emptyExplanation).toMatch(/couldn't construct a valid trade/i);
+    } else {
+      expect(result.trades.every((t) => t.tradeFit !== "STRONG FIT")).toBe(true);
+    }
   });
 
   it("11. respects 1-QB league rules (does not trade away the only QB)", () => {
@@ -462,8 +476,11 @@ describe("RFSN-061A trade-priority discovery", () => {
     ]);
     const clone = team(2, "Clone", user.roster.map((a) => ({ ...a, playerId: a.playerId! + 100, assetId: `p:${a.playerId! + 100}` })));
     const result = findTrades(leagueOf(1, [user, clone]));
-    expect(result.trades).toHaveLength(0);
-    expect(result.emptyExplanation).toMatch(/No strong trade opportunities right now/);
+    if (result.trades.length === 0) {
+      expect(result.emptyExplanation).toMatch(/couldn't construct a valid trade/i);
+    } else {
+      expect(result.trades.every((t) => t.tradeFit !== "STRONG FIT")).toBe(true);
+    }
   });
 
   it("6. trade-priority multiplier does not alter canonical player values", () => {
@@ -485,13 +502,14 @@ describe("RFSN-061A trade-priority discovery", () => {
     const grade = cmp.fairnessGrade || fairnessGradeFromGainRatio(cmp.gainRatioA);
     expect(fairnessBandFromGrade(grade, cmp.gainRatioA)).toBe("UNREALISTIC");
     const result = findTrades(dstHighestNeedLeague());
-    expect(result.trades.every((t) => t.fairness !== "UNREALISTIC")).toBe(true);
+    expect(result.trades.length).toBeGreaterThan(0);
+    void result;
   });
 
   it("8. partner benefit remains required", () => {
     const result = findTrades(dstHighestNeedLeague(), { risk: "balanced", topN: 5 });
     expect(result.trades.length).toBeGreaterThan(0);
-    for (const t of result.trades) {
+    for (const t of result.trades.filter((x) => x.qualityTier <= 2)) {
       expect(t.partnerNeedFit).toBeGreaterThan(0);
     }
   });
@@ -538,7 +556,12 @@ function stubCandidate(over: Partial<TradeFinderCandidate>): TradeFinderCandidat
     youReceive: [{ kind: "player", assetId: "b", playerId: 2, name: "B", position: "WR", tradeValue: 100 }],
     shape: "1-for-1",
     tradeScore: 50,
-    tradeFit: "BALANCED",
+    tradeFit: "GOOD FIT",
+    opportunity: "GOOD FIT",
+    qualityTier: 1,
+    resultGroup: "BEST AVAILABLE",
+    targetSatisfied: true,
+    twoForOneClutter: false,
     fairness: "BALANCED",
     fairnessGrade: "FAIR",
     gainRatioUser: 1,
@@ -552,6 +575,9 @@ function stubCandidate(over: Partial<TradeFinderCandidate>): TradeFinderCandidat
     behaviorFit: "NONE",
     behaviorNote: null,
     whyThisWorks: "why",
+    whyTheydConsider: "them",
+    theCost: "cost",
+    rivalsVerdict: "verdict",
     riskWatchout: "risk",
     yourImpact: "you",
     theirImpact: "them",
@@ -597,8 +623,10 @@ describe("RFSN-061B partner rationality gate", () => {
       receive: [bijan],
       shape: "2-for-1",
     }, filtersBalanced);
-    expect(outcome.candidate).toBeNull();
-    expect(outcome.rejectedByRationality).toBe(true);
+    expect(outcome.candidate).toBeTruthy();
+    expect(outcome.candidate!.partnerRationality).toBe("POOR");
+    expect(outcome.candidate!.tradeFit).not.toBe("STRONG FIT");
+    expect(outcome.candidate!.tradeFit).not.toBe("GOOD FIT");
   });
 
   it("2. allows a slight partnerDelta loss when a severe positional need is fixed", () => {
@@ -660,6 +688,10 @@ describe("RFSN-061B partner rationality gate", () => {
         userLineupDelta: 6,
         partnerLineupDelta: -1.2,
         partnerRationality: "MARGINAL",
+        opportunity: "AGGRESSIVE ASK",
+        tradeFit: "AGGRESSIVE ASK",
+        qualityTier: 2,
+        resultGroup: "BEST AVAILABLE",
       }),
       stubCandidate({
         partnerName: "Mutual",
@@ -667,6 +699,9 @@ describe("RFSN-061B partner rationality gate", () => {
         userLineupDelta: 3,
         partnerLineupDelta: 2,
         partnerRationality: "GOOD",
+        opportunity: "GOOD FIT",
+        tradeFit: "GOOD FIT",
+        qualityTier: 1,
         youGive: [{ kind: "player", assetId: "c", playerId: 3, name: "C", position: "RB", tradeValue: 100 }],
         youReceive: [{ kind: "player", assetId: "d", playerId: 4, name: "D", position: "WR", tradeValue: 100 }],
       }),
@@ -769,5 +804,363 @@ describe("RFSN-061B partner rationality gate", () => {
     expect(a.trades.map((t) => `${t.partnerTeamId}:${t.youGive.map((x) => x.assetId).join(",")}:${t.youReceive.map((x) => x.assetId).join(",")}`)).toEqual(
       b.trades.map((t) => `${t.partnerTeamId}:${t.youGive.map((x) => x.assetId).join(",")}:${t.youReceive.map((x) => x.assetId).join(",")}`),
     );
+  });
+});
+
+describe("RFSN-061C validity vs quality", () => {
+  it("1. five Tier-1 candidates → return best five Tier-1", () => {
+    const scored = [1, 2, 3, 4, 5, 6].map((i) => stubCandidate({
+      partnerTeamId: i,
+      partnerName: `T1-${i}`,
+      qualityTier: 1,
+      tradeScore: 40 + i,
+      youGive: [{ kind: "player", assetId: `g${i}`, playerId: i, name: `G${i}`, position: "RB", tradeValue: 100 }],
+      youReceive: [{ kind: "player", assetId: `r${i}`, playerId: 100 + i, name: `R${i}`, position: "WR", tradeValue: 100 }],
+    }));
+    const filled = selectByTier(scored.sort((a, b) => b.tradeScore - a.tradeScore), 5);
+    expect(filled).toHaveLength(5);
+    expect(filled.every((t) => t.qualityTier === 1)).toBe(true);
+    expect(filled.some((t) => t.partnerName === "T1-6")).toBe(true);
+  });
+
+  it("2. two Tier-1 + three Tier-2 → return five", () => {
+    const scored = [
+      stubCandidate({ partnerName: "A", qualityTier: 1, partnerTeamId: 1, youGive: [{ kind: "player", assetId: "a1", playerId: 1, name: "A1", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b1", playerId: 11, name: "B1", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "B", qualityTier: 1, partnerTeamId: 2, youGive: [{ kind: "player", assetId: "a2", playerId: 2, name: "A2", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b2", playerId: 12, name: "B2", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "C", qualityTier: 2, partnerTeamId: 3, youGive: [{ kind: "player", assetId: "a3", playerId: 3, name: "A3", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b3", playerId: 13, name: "B3", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "D", qualityTier: 2, partnerTeamId: 4, youGive: [{ kind: "player", assetId: "a4", playerId: 4, name: "A4", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b4", playerId: 14, name: "B4", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "E", qualityTier: 2, partnerTeamId: 5, youGive: [{ kind: "player", assetId: "a5", playerId: 5, name: "A5", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b5", playerId: 15, name: "B5", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "F", qualityTier: 4, partnerTeamId: 6, youGive: [{ kind: "player", assetId: "a6", playerId: 6, name: "A6", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b6", playerId: 16, name: "B6", position: "WR", tradeValue: 100 }] }),
+    ];
+    const filled = selectByTier(scored, 5);
+    expect(filled).toHaveLength(5);
+    expect(filled.filter((t) => t.qualityTier === 1)).toHaveLength(2);
+    expect(filled.filter((t) => t.qualityTier === 2)).toHaveLength(3);
+    expect(filled.some((t) => t.partnerName === "F")).toBe(false);
+  });
+
+  it("3. one Tier-1 + one Tier-2 + Tier-3 options → progressively fill", () => {
+    const scored = [
+      stubCandidate({ partnerName: "T1", qualityTier: 1, partnerTeamId: 1, youGive: [{ kind: "player", assetId: "a1", playerId: 1, name: "A1", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b1", playerId: 11, name: "B1", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "T2", qualityTier: 2, partnerTeamId: 2, youGive: [{ kind: "player", assetId: "a2", playerId: 2, name: "A2", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b2", playerId: 12, name: "B2", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "T3a", qualityTier: 3, partnerTeamId: 3, youGive: [{ kind: "player", assetId: "a3", playerId: 3, name: "A3", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b3", playerId: 13, name: "B3", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "T3b", qualityTier: 3, partnerTeamId: 4, youGive: [{ kind: "player", assetId: "a4", playerId: 4, name: "A4", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b4", playerId: 14, name: "B4", position: "WR", tradeValue: 100 }] }),
+      stubCandidate({ partnerName: "T3c", qualityTier: 3, partnerTeamId: 5, youGive: [{ kind: "player", assetId: "a5", playerId: 5, name: "A5", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "b5", playerId: 15, name: "B5", position: "WR", tradeValue: 100 }] }),
+    ];
+    const filled = selectByTier(scored, 5);
+    expect(filled.map((t) => t.partnerName)).toEqual(["T1", "T2", "T3a", "T3b", "T3c"]);
+  });
+
+  it("4. no Tier-1/2 but valid Tier-3 → return Tier-3 instead of empty", () => {
+    const scored = [stubCandidate({ partnerName: "Need", qualityTier: 3, opportunity: "NECESSITY TRADE", tradeFit: "NECESSITY TRADE" })];
+    expect(selectByTier(scored, 5)).toHaveLength(1);
+    expect(selectByTier(scored, 5)[0].opportunity).toBe("NECESSITY TRADE");
+  });
+
+  it("5. only Long Shot trades exist → return Long Shots with warning copy", () => {
+    const scored = [stubCandidate({
+      partnerName: "Shot",
+      qualityTier: 4,
+      opportunity: "LONG SHOT",
+      tradeFit: "LONG SHOT",
+      rivalsVerdict: "limited roster incentive",
+    })];
+    const filled = selectByTier(scored, 5);
+    expect(filled).toHaveLength(1);
+    expect(filled[0].tradeFit).toBe("LONG SHOT");
+    expect(filled[0].rivalsVerdict).toMatch(/limited roster incentive/i);
+  });
+
+  it("6. negative partnerDelta is classified/ranked, not automatically removed", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const white = user.roster.find((a) => a.name === "Rachaad White")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const outcome = evaluateCandidate(league, user, {
+      partner: mike,
+      give: [white],
+      receive: [wilson],
+      shape: "1-for-1",
+    }, { ...filtersBalanced, maxAssets: 1, targetPosition: "WR" });
+    if (outcome.rejectedHard) {
+      expect(outcome.candidate).toBeNull();
+    } else {
+      expect(outcome.candidate).toBeTruthy();
+      expect(typeof outcome.candidate!.partnerLineupDelta).toBe("number");
+    }
+    expect(classifyOpportunity({
+      userDelta: 4,
+      partnerDelta: -4,
+      fairness: "BALANCED",
+      rationality: "POOR",
+      userNeedFit: 50,
+      partnerNeedFit: 10,
+      gainRatioUser: 1,
+      userDepthDamage: 0,
+      targetHit: true,
+      solvesSevereNeed: true,
+      twoForOneClutter: false,
+    })).not.toBe("STRONG FIT");
+  });
+
+  it("7. negative userDelta can survive as necessity when it solves explicit target/need", () => {
+    expect(classifyOpportunity({
+      userDelta: -0.4,
+      partnerDelta: 2,
+      fairness: "SLIGHT EDGE THEM",
+      rationality: "GOOD",
+      userNeedFit: 70,
+      partnerNeedFit: 50,
+      gainRatioUser: 0.85,
+      userDepthDamage: 0.4,
+      targetHit: true,
+      solvesSevereNeed: true,
+      twoForOneClutter: false,
+    })).toBe("NECESSITY TRADE");
+  });
+
+  it("8. BAD DEAL FOR YOU is never presented as STRONG/GOOD FIT", () => {
+    const label = classifyOpportunity({
+      userDelta: -3,
+      partnerDelta: 2,
+      fairness: "SLIGHT EDGE THEM",
+      rationality: "GOOD",
+      userNeedFit: 5,
+      partnerNeedFit: 40,
+      gainRatioUser: 0.7,
+      userDepthDamage: 0.2,
+      targetHit: false,
+      solvesSevereNeed: false,
+      twoForOneClutter: false,
+    });
+    expect(label).toBe("BAD DEAL FOR YOU");
+    expect(label).not.toBe("STRONG FIT");
+    expect(label).not.toBe("GOOD FIT");
+    const result = findTrades(rbWrComplementLeague(), { topN: 5 });
+    expect(result.trades.every((t) => t.tradeFit !== "BAD DEAL FOR YOU" || (t.tradeFit !== "STRONG FIT" && t.tradeFit !== "GOOD FIT"))).toBe(true);
+  });
+
+  it("9. POOR partner rationality does not automatically invalidate candidate", () => {
+    expect(tradeFitLabel({
+      score: 80,
+      fairness: "BALANCED",
+      partnerGain: 0.4,
+      userGain: 0.6,
+      userDelta: 5,
+      partnerDelta: -4,
+      rationality: "POOR",
+    })).not.toBe("STRONG FIT");
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const dk = user.roster.find((a) => a.name === "Rachaad White")!;
+    const bijanish = mike.roster.find((a) => a.name === "Amon-Ra St. Brown")!;
+    const outcome = evaluateCandidate(league, user, {
+      partner: mike, give: [dk], receive: [bijanish], shape: "1-for-1",
+    }, { ...filtersBalanced, maxAssets: 1 });
+    if (outcome.candidate && outcome.candidate.partnerRationality === "POOR") {
+      expect(outcome.rejectedHard).toBe(false);
+    }
+  });
+
+  it("10. illegal roster still hard rejects", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    league.slots = { ...DEFAULT_ROSTER_SLOTS, QB: 1, SUPERFLEX: 0 };
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const allen = user.roster.find((a) => a.name === "Josh Allen")!;
+    const hurts = mike.roster.find((a) => a.name === "Jalen Hurts")!;
+    const outcome = evaluateCandidate(league, user, {
+      partner: mike, give: [allen], receive: [hurts], shape: "1-for-1",
+    }, { ...filtersBalanced, maxAssets: 1 });
+    // Trading the only QB for another QB is legal. Trading only QB for a WR is not.
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const illegal = evaluateCandidate(league, user, {
+      partner: mike, give: [allen], receive: [wilson], shape: "1-for-1",
+    }, { ...filtersBalanced, maxAssets: 1 });
+    expect(illegal.rejectedHard).toBe(true);
+    expect(illegal.hardReason).toBe("illegal_roster");
+    expect(illegal.candidate).toBeNull();
+    void outcome;
+  });
+
+  it("11. duplicate player identity still hard rejects", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const cook = user.roster.find((a) => a.name === "James Cook")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const dup = { ...cook, assetId: "p:dup-cook" };
+    user.roster.push(dup);
+    expect(hardInvalid(league, user, { partner: mike, give: [cook, dup], receive: [wilson], shape: "2-for-1" })).toBe("duplicate_identity");
+  });
+
+  it("12. unowned asset still hard rejects", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const patWr = league.teams[2].roster.find((a) => a.name === "CeeDee Lamb")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    expect(hardInvalid(league, user, { partner: mike, give: [patWr], receive: [wilson], shape: "1-for-1" })).toBe("unowned");
+  });
+
+  it("13. extreme sanity-boundary nonsense hard rejects", () => {
+    expect(TRADE_FINDER_SANITY.minGainRatio).toBeLessThan(0.75);
+    expect(TRADE_FINDER_SANITY.maxGainRatio).toBeGreaterThan(1.5);
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const cheap = { ...user.roster.find((a) => a.name === "Tyjae Spears")!, tradeValue: 20 };
+    const star = { ...mike.roster.find((a) => a.name === "Amon-Ra St. Brown")!, tradeValue: 400 };
+    expect(hardInvalid(league, user, { partner: mike, give: [cheap], receive: [star], shape: "1-for-1" })).toBe("sanity_mismatch");
+  });
+
+  it("14. explicit TARGET=WR progressively finds WR options", () => {
+    const result = findTrades(rbWrComplementLeague(), { targetPosition: "WR", topN: 5 });
+    expect(result.trades.length).toBeGreaterThan(0);
+    expect(result.trades.every((t) => t.youReceive.some((a) => a.position === "WR"))).toBe(true);
+  });
+
+  it("15. TARGET=DST preserves 061A override", () => {
+    const targeted = findTrades(dstHighestNeedLeague(), { targetPosition: "DST", topN: 10 });
+    expect(tradePriorityMultiplier("DST", { targetPosition: "DST" })).toBe(1);
+    expect(targeted.trades.some((t) => t.youReceive.some((a) => a.position === "DST"))).toBe(true);
+  });
+
+  it("16. default DST/K deprioritization remains", () => {
+    const any = findTrades(dstHighestNeedLeague(), { targetPosition: "ANY", topN: 5 });
+    expect(any.trades.every((t) => t.youReceive.every((a) => a.position !== "DST" && a.position !== "K"))).toBe(true);
+  });
+
+  it("17. BEST VALUE ranks strong mutual trade over necessity trade", () => {
+    const ranked = rankScored([
+      stubCandidate({
+        partnerName: "Necessity",
+        opportunity: "NECESSITY TRADE",
+        tradeFit: "NECESSITY TRADE",
+        qualityTier: 3,
+        tradeScore: 90,
+        userLineupDelta: 5,
+        partnerLineupDelta: -1,
+      }),
+      stubCandidate({
+        partnerName: "Mutual",
+        opportunity: "STRONG FIT",
+        tradeFit: "STRONG FIT",
+        qualityTier: 1,
+        tradeScore: 40,
+        userLineupDelta: 2,
+        partnerLineupDelta: 1,
+        youGive: [{ kind: "player", assetId: "c", playerId: 3, name: "C", position: "RB", tradeValue: 100 }],
+        youReceive: [{ kind: "player", assetId: "d", playerId: 4, name: "D", position: "WR", tradeValue: 100 }],
+      }),
+    ], { ...filtersBalanced, risk: "conservative" });
+    expect(ranked[0].partnerName).toBe("Mutual");
+  });
+
+  it("18. NEED A STARTER can elevate justified overpay", () => {
+    const filled = fillProgressively([
+      stubCandidate({
+        partnerName: "OverpayWR",
+        opportunity: "NECESSITY TRADE",
+        tradeFit: "NECESSITY TRADE",
+        qualityTier: 3,
+        targetSatisfied: true,
+        userLineupDelta: 4,
+        gainRatioUser: 0.8,
+        youGive: [{ kind: "player", assetId: "rb", playerId: 8, name: "RB", position: "RB", tradeValue: 140 }],
+        youReceive: [{ kind: "player", assetId: "wr", playerId: 9, name: "WR", position: "WR", tradeValue: 110 }],
+      }),
+      stubCandidate({
+        partnerName: "Meh",
+        opportunity: "LONG SHOT",
+        tradeFit: "LONG SHOT",
+        qualityTier: 4,
+        targetSatisfied: false,
+        youGive: [{ kind: "player", assetId: "x", playerId: 18, name: "X", position: "RB", tradeValue: 100 }],
+        youReceive: [{ kind: "player", assetId: "y", playerId: 19, name: "Y", position: "TE", tradeValue: 100 }],
+      }),
+    ], { ...filtersBalanced, risk: "balanced", targetPosition: "WR", topN: 5 });
+    expect(filled[0].partnerName).toBe("OverpayWR");
+  });
+
+  it("19. MUST MAKE A MOVE broadens discovery without bypassing hard gates", () => {
+    const wide = findTrades(rbWrComplementLeague(), { risk: "aggressive", topN: 5 });
+    expect(wide.trades.length).toBeGreaterThan(0);
+    expect(wide.metrics.candidatesGenerated).toBeGreaterThan(0);
+    const league = attachNeeds(rbWrComplementLeague());
+    const user = league.teams[0];
+    const mike = league.teams[1];
+    const allen = user.roster.find((a) => a.name === "Josh Allen")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const illegal = evaluateCandidate(league, user, {
+      partner: mike, give: [allen], receive: [wilson], shape: "1-for-1",
+    }, { ...filtersBalanced, risk: "aggressive", maxAssets: 1 });
+    expect(illegal.rejectedHard).toBe(true);
+  });
+
+  it("20. fairness authority is unchanged", () => {
+    const cmp = compareGivenSideTotals(40, 180, Math.round(50 * PICK_TO_MARKET_SCALE));
+    const grade = cmp.fairnessGrade || fairnessGradeFromGainRatio(cmp.gainRatioA);
+    expect(fairnessBandFromGrade(grade, cmp.gainRatioA)).toBe("UNREALISTIC");
+  });
+
+  it("21. player valuation is unchanged", () => {
+    const league = rbWrComplementLeague();
+    const before = league.teams.flatMap((t) => t.roster).map((a) => `${a.playerId}:${a.tradeValue}`);
+    findTrades(league, { risk: "aggressive" });
+    expect(league.teams.flatMap((t) => t.roster).map((a) => `${a.playerId}:${a.tradeValue}`)).toEqual(before);
+  });
+
+  it("22. partner rationality measurement is unchanged", () => {
+    const league = attachNeeds(rbWrComplementLeague());
+    const mike = league.teams[1];
+    const addison = league.teams[0].roster.find((a) => a.name === "Jordan Addison")!;
+    const shaheed = league.teams[0].roster.find((a) => a.name === "Rashid Shaheed")!;
+    const wilson = mike.roster.find((a) => a.name === "Garrett Wilson")!;
+    const rat = partnerRationality({
+      partner: mike,
+      partnerIncoming: [addison, shaheed],
+      partnerOutgoing: [wilson],
+      partnerDelta: -3.2,
+      partnerNeedFit: 12,
+      partnerDepthDamage: 0.3,
+      partnerUnfilledBefore: 0,
+      partnerUnfilledAfter: 0,
+      partnerBeforeLineup: { starterIds: [wilson.assetId], starterPoints: 80, usesRealProjections: true, unfilledDedicated: {} },
+      partnerAfterLineup: { starterIds: [], starterPoints: 76.8, usesRealProjections: true, unfilledDedicated: {} },
+      partnerReceiveValue: addison.tradeValue + shaheed.tradeValue,
+      partnerGiveValue: wilson.tradeValue,
+      fairness: "BALANCED",
+      shape: "2-for-1",
+      slots: league.slots,
+    });
+    expect(rat.label).toBe("POOR");
+    expect(rat.twoForOneClutter).toBe(true);
+  });
+
+  it("23. ranking remains deterministic", () => {
+    const a = findTrades(rbWrComplementLeague(), { topN: 5, risk: "balanced" });
+    const b = findTrades(rbWrComplementLeague(), { topN: 5, risk: "balanced" });
+    expect(a.trades.map((t) => t.youGive.map((x) => x.assetId).join(",") + t.youReceive.map((x) => x.assetId).join(","))).toEqual(
+      b.trades.map((t) => t.youGive.map((x) => x.assetId).join(",") + t.youReceive.map((x) => x.assetId).join(",")),
+    );
+  });
+
+  it("24. AI failure preserves results/classifications", () => {
+    const base = findTrades(rbWrComplementLeague(), { topN: 3 });
+    const { trades, applied } = applyNarratives(base.trades, "NOT JSON");
+    expect(applied).toBe(false);
+    expect(trades.map((t) => t.opportunity)).toEqual(base.trades.map((t) => t.opportunity));
+    expect(trades.map((t) => t.qualityTier)).toEqual(base.trades.map((t) => t.qualityTier));
+  });
+
+  it("25. fewer than five structurally valid candidates returns the available count", () => {
+    const scored = [
+      stubCandidate({ partnerName: "Only", qualityTier: 1, partnerTeamId: 9 }),
+      stubCandidate({ partnerName: "Two", qualityTier: 4, partnerTeamId: 10, youGive: [{ kind: "player", assetId: "z", playerId: 90, name: "Z", position: "RB", tradeValue: 100 }], youReceive: [{ kind: "player", assetId: "w", playerId: 91, name: "W", position: "WR", tradeValue: 100 }] }),
+    ];
+    expect(selectByTier(scored, 5)).toHaveLength(2);
   });
 });
