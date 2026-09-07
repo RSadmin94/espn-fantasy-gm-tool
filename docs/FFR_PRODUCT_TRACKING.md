@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery (K/DST 0.20 unless targeted). **RFSN-061B** partner-rationality gate. Status: **061B PREVIEW CERTIFIED**. Do not promote to Production from this ticket.
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery. **RFSN-061B** partner-rationality measurement. **RFSN-061C** validity ≠ quality / always-return. Status: **061C Preview candidate** (this change set). Do not promote to Production from this ticket.
 
 ---
 
@@ -491,11 +491,11 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | RFSN-061B PREVIEW CERTIFIED. Production not promoted. |
+| Status | RFSN-061C always-return actionable options (this change set). Production not promoted. |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
-| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Trade-priority: `server/tradeFinder/priority.ts`. Partner rationality: `server/tradeFinder/partnerRationality.ts`. Score weights: `server/tradeFinder/weights.ts`. |
+| Formula | Need/surplus: `needSurplus.ts`. Trade-priority: `priority.ts`. Partner rationality: `partnerRationality.ts`. Hard validity: `validity.ts`. Opportunity: `opportunity.ts`. Score weights: `weights.ts`. |
 | Player value | Existing Market Value Engine V2 + `calcTradeValue` (`server/marketValue.ts`, `server/analytics.ts`) |
 | Pick value / fairness | Existing `server/tradePickValueAuthority.ts` (`compareGivenSideTotals`, `fairnessGradeFromGainRatio`) |
 | Roster / lineup | ESPN combined cache via `normalizeRosters` / `normalizeTeams`; slots from `settings.rosterSettings.lineupSlotCounts` |
@@ -550,19 +550,33 @@ injury exposure reduced, depth repaired at a NEED, or ≥15% value premium to pa
 Clutter + negative partnerDelta + no compensator → reject.
 ```
 
-Labels: STRONG / GOOD / MARGINAL / POOR. POOR is never returned. Ranking prefers mutual starter improvement, then partnerDelta ≥ 0, then rationality, then tradeScore.
+Labels: STRONG / GOOD / MARGINAL / POOR. POOR is a ranking/warning signal (RFSN-061C); it does not hide a structurally valid package.
 
-Trade fit:
+### Validity vs quality (RFSN-061C)
 
 ```
-STRONG FIT: user benefit + partner rationality STRONG/GOOD + partnerDelta ≥ 0
-GOOD FIT:   user benefit + partner rationality GOOD
-BALANCED:   reasonable both sides
-AGGRESSIVE: user-favored but still rational
-LONG SHOT:  marginal partner incentive
+VALIDITY ≠ QUALITY.
+Hard invalid: unowned, duplicate identity, unresolved identity, same asset both sides,
+invalid shape, illegal roster, incomplete values, non-tradeable (IR/unavailable receive),
+sanity ratio outside 0.35–2.85 (not the normal fairness band).
+Soft/quality: signed userDelta, signed partnerDelta, POOR/MARGINAL rationality,
+2-for-1 clutter, depth loss, overpay, AGGRESSIVE fairness, missed NEED.
 ```
 
-STRONG FIT cannot be assigned when partner rationality is POOR.
+Progressive fill (default 5): Tier 1 STRONG/MUTUAL → Tier 2 REASONABLE → Tier 3 NECESSITY/OVERPAY → Tier 4 LONG SHOT. Do not invent packages. True empty = Rivals could not construct a structurally valid trade from current roster data.
+
+Opportunity (separate from canonical fairness):
+
+```
+STRONG FIT        both sides have roster reasons; user benefits; partner GOOD/STRONG
+GOOD FIT          user improves; partner has credible incentive
+AGGRESSIVE ASK    favors the user; weaker partner incentive; still a valid offer
+NECESSITY TRADE   user pays premium/depth to solve a real lineup problem
+LONG SHOT         valid but limited roster reason for the other manager
+BAD DEAL FOR YOU  user loses more than the roster improvement justifies
+```
+
+Trade Approach UI maps to existing `risk`: BEST VALUE = conservative, NEED A STARTER = balanced, MUST MAKE A MOVE = aggressive.
 
 ### Trade score (initial weights)
 
@@ -577,7 +591,7 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - No calibrated acceptance probability (by design).
 - Dynasty/keeper economics are disclosed, not fully priced.
 - Superflex/IDP/DST supported when slots exist; exotic IR/taxi scoring is limited.
-- Default discovery deprioritizes K/DST (0.20) so a DST roster hole does not block skill-position recommendations. Empty remains valid when skill packages fail fairness/lineup/mutual-benefit gates.
+- Default discovery deprioritizes K/DST (0.20) unless targeted. Valid imperfect skill packages still return under 061C instead of a quality-empty state.
 - Sleeper leagues only work if the same ESPN-shaped combined cache is populated. Provider auth is unchanged.
 
 ### Recommended later
@@ -587,5 +601,6 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - Taxi/IR/keeper-cost in the need model
 - Sleeper-native roster payload if ESPN-shaped cache is absent
 - DST/K trade-priority deprioritization unless targeted — **done in RFSN-061A**
-- Partner-rationality gate — **done in RFSN-061B**
+- Partner-rationality measurement — **done in RFSN-061B**
+- Always-return / validity ≠ quality — **done in RFSN-061C**
 
