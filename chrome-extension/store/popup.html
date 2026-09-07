@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fantasy Football Rivals — ESPN Connector</title>
+    <style>
+      body {
+        font: 13px/1.45 system-ui, sans-serif;
+        margin: 0;
+        padding: 14px;
+        width: 320px;
+        color: #f4f8ff;
+        background: #120d15;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 6px;
+        font-weight: 700;
+      }
+      p {
+        margin: 0 0 10px;
+        color: #b8b0c0;
+      }
+      .status {
+        font-weight: 600;
+        margin: 0 0 12px;
+      }
+      .ok { color: #a3e635; }
+      .warn { color: #fbbf24; }
+      a.btn {
+        display: block;
+        text-align: center;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-weight: 700;
+        text-decoration: none;
+        background: #a3e635;
+        color: #0b0b0c;
+        margin-bottom: 8px;
+      }
+      a.secondary {
+        background: #2a2230;
+        color: #f4f8ff;
+      }
+      .links {
+        display: flex;
+        gap: 12px;
+        margin-top: 10px;
+        font-size: 11px;
+      }
+      .links a { color: #c4b5fd; }
+    </style>
+  </head>
+  <body>
+    <h1>Fantasy Football Rivals — ESPN Connector</h1>
+    <p>Connects your ESPN Fantasy Football league to Fantasy Football Rivals. Complete the flow on the Rivals website.</p>
+    <div id="status" class="status">Checking ESPN session…</div>
+    <a class="btn" id="openRivals" href="https://www.fantasyfootballrivals.com/connect/espn" target="_blank" rel="noopener">
+      Continue on Fantasy Football Rivals
+    </a>
+    <a class="btn secondary" id="openEspn" href="https://www.espn.com/login" target="_blank" rel="noopener">
+      Sign in to ESPN
+    </a>
+    <div class="links">
+      <a href="https://www.fantasyfootballrivals.com/privacy" target="_blank" rel="noopener">Privacy</a>
+      <a href="https://www.fantasyfootballrivals.com/support" target="_blank" rel="noopener">Support</a>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

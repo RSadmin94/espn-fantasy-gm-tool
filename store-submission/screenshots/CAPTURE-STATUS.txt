@@ -1,0 +1,6 @@
+01-connector-popup.png READY 1280x800
+02-espn-detected.png READY 1280x800
+03-league-discovery.png FOUNDER CAPTURE REQUIRED
+04-league-selection.png FOUNDER CAPTURE REQUIRED
+05-connected.png FOUNDER CAPTURE REQUIRED
+See store-submission/SUBMISSION_CHECKLIST.md and assets/screenshots/README.md

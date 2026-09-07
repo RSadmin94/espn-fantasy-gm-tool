@@ -1,0 +1,1 @@
+Superseded by SUBMISSION_CHECKLIST.md (RFSN-058D).
