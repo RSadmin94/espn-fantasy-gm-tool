@@ -3,11 +3,11 @@ export { findTrades } from "./find";
 export { attachNeeds, analyzeTeamNeeds, leagueReplacementByPosition } from "./needSurplus";
 export { bestLegalLineup, applyTradeToRoster } from "./lineup";
 export { rankPartners, generateCandidates, discoveryNeedPositions } from "./generate";
-export { scoreCandidate, fairnessBandFromGrade } from "./score";
+export { scoreCandidate, evaluateCandidate, fairnessBandFromGrade, tradeFitLabel } from "./score";
 export { applyNarratives, parseNarrativePayload } from "./narrative";
 export { behaviorFitForTrade, evidenceFromCompleted } from "./behavior";
 export { rosterSlotsFromLineupSlotCounts } from "./positions";
-export { tradePriorityMultiplier, tradePriorityScore } from "./priority";
+export { partnerRationality } from "./partnerRationality";
 export { DEFAULT_TRADE_FINDER_FILTERS, DEFAULT_ROSTER_SLOTS } from "./types";
 export type {
   TradeFinderLeague,
@@ -17,6 +17,7 @@ export type {
   TradeFinderAsset,
   PositionNeedSurplus,
   TradePriorityNeed,
+  PartnerRationality,
   FairnessBand,
   TradeFitLabel,
   BehaviorFit,
