@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** adds trade-priority discovery (K/DST 0.20 unless targeted). Status: **061A Preview candidate** (this change set). Do not promote to Production from this ticket.
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery (K/DST 0.20 unless targeted). **RFSN-061B** partner-rationality gate. Status: **061B Preview candidate** (this change set). Do not promote to Production from this ticket.
 
 ---
 
@@ -491,11 +491,11 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | RFSN-061A Preview candidate (this change set). Production not promoted. |
+| Status | RFSN-061B partner-rationality gate (this change set). Production not promoted. |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
-| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Trade-priority: `server/tradeFinder/priority.ts`. Score weights: `server/tradeFinder/weights.ts`. |
+| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Trade-priority: `server/tradeFinder/priority.ts`. Partner rationality: `server/tradeFinder/partnerRationality.ts`. Score weights: `server/tradeFinder/weights.ts`. |
 | Player value | Existing Market Value Engine V2 + `calcTradeValue` (`server/marketValue.ts`, `server/analytics.ts`) |
 | Pick value / fairness | Existing `server/tradePickValueAuthority.ts` (`compareGivenSideTotals`, `fairnessGradeFromGainRatio`) |
 | Roster / lineup | ESPN combined cache via `normalizeRosters` / `normalizeTeams`; slots from `settings.rosterSettings.lineupSlotCounts` |
@@ -533,6 +533,32 @@ Explicit TARGET=K or TARGET=DST sets that position's multiplier to 1.00
 
 Default search always considers QB/RB/WR/TE lineup improvements even when the highest raw need is K/DST. K/DST remain visible as roster needs.
 
+### Partner rationality (RFSN-061B)
+
+Fair value is not enough. Recommendations must be understandable for the other manager.
+
+```
+If partnerDelta < -1.5 ppg: require a strong compensator, else reject (POOR).
+Compensators: starter hole filled, severe NEED (needScore ≥ 50) improved,
+injury exposure reduced, depth repaired at a NEED, or ≥15% value premium to partner.
+2-for-1 extras that do not start and do not hit a NEED are clutter.
+Clutter + negative partnerDelta + no compensator → reject.
+```
+
+Labels: STRONG / GOOD / MARGINAL / POOR. POOR is never returned. Ranking prefers mutual starter improvement, then partnerDelta ≥ 0, then rationality, then tradeScore.
+
+Trade fit:
+
+```
+STRONG FIT: user benefit + partner rationality STRONG/GOOD + partnerDelta ≥ 0
+GOOD FIT:   user benefit + partner rationality GOOD
+BALANCED:   reasonable both sides
+AGGRESSIVE: user-favored but still rational
+LONG SHOT:  marginal partner incentive
+```
+
+STRONG FIT cannot be assigned when partner rationality is POOR.
+
 ### Trade score (initial weights)
 
 ```
@@ -542,18 +568,19 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 
 ### Known limitations
 
-- Draft picks: optional, upcoming `draft_picks` year only, max one pick per side as a balancer. Full pick packages → RFSN-061B.
+- Draft picks: optional, upcoming `draft_picks` year only, max one pick per side as a balancer. Full pick packages remain a later ticket.
 - No calibrated acceptance probability (by design).
 - Dynasty/keeper economics are disclosed, not fully priced.
 - Superflex/IDP/DST supported when slots exist; exotic IR/taxi scoring is limited.
 - Default discovery deprioritizes K/DST (0.20) so a DST roster hole does not block skill-position recommendations. Empty remains valid when skill packages fail fairness/lineup/mutual-benefit gates.
 - Sleeper leagues only work if the same ESPN-shaped combined cache is populated. Provider auth is unchanged.
 
-### Recommended RFSN-061B
+### Recommended later
 
 - Richer pick packages and mid-season pick trading
 - Calibrated acceptance only if a labeled historical model exists
 - Taxi/IR/keeper-cost in the need model
 - Sleeper-native roster payload if ESPN-shaped cache is absent
 - DST/K trade-priority deprioritization unless targeted — **done in RFSN-061A**
+- Partner-rationality gate — **done in RFSN-061B**
 
