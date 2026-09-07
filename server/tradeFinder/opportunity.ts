@@ -51,6 +51,7 @@ export function classifyOpportunity(a: OpportunityInput): OpportunityLabel {
     if (a.rationality === "STRONG" && a.userDelta >= 1) return "STRONG FIT";
     return "GOOD FIT";
   }
+  if (a.fairness === "UNREALISTIC" && userUp) return "LONG SHOT";
   if (userUp && (ratGood || partnerNonNeg) && a.partnerDelta >= -1.5 && !partnerWeak) {
     return "GOOD FIT";
   }
