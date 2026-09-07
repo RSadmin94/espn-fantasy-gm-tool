@@ -16,7 +16,7 @@ export type FairnessBand =
   | "UNREALISTIC";
 export type BehaviorFit = "NONE" | "WEAK" | "MODERATE" | "STRONG";
 export type TradeShape = "1-for-1" | "2-for-1" | "1-for-2" | "2-for-2";
-export type TargetPositionFilter = "ANY" | "QB" | "RB" | "WR" | "TE" | "FLEX";
+export type TargetPositionFilter = "ANY" | "QB" | "RB" | "WR" | "TE" | "FLEX" | "K" | "DST";
 export type EmptyReason =
   | "no_league"
   | "no_roster"
@@ -73,6 +73,11 @@ export interface PositionNeedSurplus {
   needScore: number;
   surplusScore: number;
   label: NeedLabel;
+}
+
+/** Roster need plus discovery multiplier. needScore is unchanged. */
+export interface TradePriorityNeed extends PositionNeedSurplus {
+  tradePriorityScore: number;
 }
 
 export interface TradeFinderTeam {
@@ -165,6 +170,8 @@ export interface TradeFinderMetrics {
   candidatesScored: number;
   candidatesReturned: number;
   elapsedMs: number;
+  wantNeedPositions: string[];
+  streamerDeprioritized: boolean;
 }
 
 export interface TradeFinderResult {
@@ -175,6 +182,7 @@ export interface TradeFinderResult {
   emptyExplanation: string | null;
   userNeeds: PositionNeedSurplus[];
   userSurplus: PositionNeedSurplus[];
+  tradePriority: TradePriorityNeed[];
   trades: TradeFinderCandidate[];
   disclaimers: string[];
   picksSupported: boolean;

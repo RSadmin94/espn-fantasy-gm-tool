@@ -86,10 +86,14 @@ export function impactBlurb(
 export function emptyExplanation(
   reason: string,
   userNeeds: { position: string; label: string; needScore: number; surplusScore: number }[],
+  extras?: { candidatesGenerated?: number; partnersRanked?: number },
 ): string {
   const needs = userNeeds.filter((n) => n.label === "NEED").map((n) => n.position);
   const surplus = userNeeds.filter((n) => n.label === "SURPLUS").map((n) => n.position);
   if (reason === "no_viable_partners") {
+    if ((extras?.candidatesGenerated ?? 0) > 0) {
+      return `No strong trade opportunities right now. Rivals evaluated ${extras!.candidatesGenerated} packages across ${extras!.partnersRanked ?? 0} partners, including QB/RB/WR/TE improvements; none cleared fairness, lineup, depth, and mutual-benefit gates.`;
+    }
     const needTxt = needs.length ? `your ${needs.join("/")} need` : "a clear positional need";
     const surTxt = surplus.length ? `${surplus.join("/")} surplus` : "tradable surplus";
     return `No strong trade opportunities right now. Opportunities appear when another roster has ${needTxt} covered and wants your ${surTxt}.`;

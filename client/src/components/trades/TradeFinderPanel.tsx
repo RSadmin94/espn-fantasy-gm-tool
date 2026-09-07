@@ -19,7 +19,7 @@ import {
   Sparkles,
 } from "lucide-react";
 
-type TargetPos = "ANY" | "QB" | "RB" | "WR" | "TE" | "FLEX";
+type TargetPos = "ANY" | "QB" | "RB" | "WR" | "TE" | "FLEX" | "K" | "DST";
 type RiskPref = "conservative" | "balanced" | "aggressive";
 
 type FinderAsset = {
@@ -60,6 +60,7 @@ type FinderResult = {
   emptyExplanation: string | null;
   userNeeds: Array<{ position: string; needScore: number; surplusScore: number; label: string }>;
   userSurplus: Array<{ position: string; needScore: number; surplusScore: number; label: string }>;
+  tradePriority: Array<{ position: string; needScore: number; surplusScore: number; label: string; tradePriorityScore: number }>;
   trades: FinderTrade[];
   disclaimers: string[];
   picksSupported: boolean;
@@ -153,7 +154,7 @@ export function TradeFinderPanel(props: {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 min-w-0">
         <FilterSelect label="Target position" value={targetPosition} onChange={(v) => setTargetPosition(v as TargetPos)} options={[
-          ["ANY", "Any"], ["QB", "QB"], ["RB", "RB"], ["WR", "WR"], ["TE", "TE"], ["FLEX", "FLEX"],
+          ["ANY", "Any"], ["QB", "QB"], ["RB", "RB"], ["WR", "WR"], ["TE", "TE"], ["FLEX", "FLEX"], ["K", "K"], ["DST", "DST"],
         ]} />
         <FilterSelect
           label="Trade partner"
@@ -234,6 +235,11 @@ function FinderResults(props: {
   const { result } = props;
   const needLine = result.userNeeds.map((n) => n.position).join(", ") || "none labeled";
   const surplusLine = result.userSurplus.map((n) => n.position).join(", ") || "none labeled";
+  const focus = (result.tradePriority ?? [])
+    .filter((n) => n.tradePriorityScore >= 20)
+    .sort((a, b) => b.tradePriorityScore - a.tradePriorityScore)
+    .map((n) => n.position);
+  const focusLine = focus.length ? focus.join(", ") : "QB, RB, WR, TE";
 
   return (
     <div className="space-y-4 min-w-0">
@@ -251,6 +257,9 @@ function FinderResults(props: {
           </CardContent>
         </Card>
       </div>
+      <p className="text-xs text-muted-foreground break-words">
+        Trade focus: {focusLine}. Roster needs can include K/DST; default search prioritizes QB/RB/WR/TE unless you target K or DST.
+      </p>
 
       {result.gated && (
         <p className="text-sm text-muted-foreground">Trade Finder recommendations are a Pro feature. Your positional needs are shown above.</p>

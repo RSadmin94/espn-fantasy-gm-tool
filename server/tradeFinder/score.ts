@@ -18,10 +18,11 @@ import { TRADE_FINDER_REJECT, TRADE_FINDER_WEIGHTS } from "./weights";
 import { applyTradeToRoster, bestLegalLineup, playableCountAt } from "./lineup";
 import { needMap } from "./needSurplus";
 import type { GeneratedTrade } from "./generate";
-import { toSideAsset, isCanonicalDuplicateSafe } from "./generate";
+import { toSideAsset, isCanonicalDuplicateSafe, receiveHitsFormalNeed } from "./generate";
 import { clamp, round1 } from "./positions";
 import { behaviorFitForTrade } from "./behavior";
 import { deterministicWhy, deterministicRisk, impactBlurb } from "./explain";
+import { tradePriorityScore } from "./priority";
 
 export function fairnessBandFromGrade(grade: string, gainRatioUser: number): FairnessBand {
   if (grade === "FAIR") return "BALANCED";
@@ -50,13 +51,18 @@ function fitLabel(args: {
   return "LONG SHOT";
 }
 
-function maxNeedOf(team: TradeFinderTeam, assets: TradeFinderAsset[]): number {
+function maxPriorityNeedOf(
+  team: TradeFinderTeam,
+  assets: TradeFinderAsset[],
+  filters: TradeFinderFilters,
+  slots: TradeFinderLeague["slots"],
+): number {
   const m = needMap(team);
   let max = 0;
   for (const a of assets) {
     if (a.kind === "pick") continue;
     const n = m.get(a.position as TradePosition);
-    if (n) max = Math.max(max, n.needScore);
+    if (n) max = Math.max(max, tradePriorityScore(n.needScore, n.position, filters, slots));
   }
   return max;
 }
@@ -129,14 +135,15 @@ export function scoreCandidate(
     : round1((partnerAfterL.starterPoints ?? 0) - (partnerBeforeL.starterPoints ?? 0));
 
   if (userDelta < -TRADE_FINDER_REJECT.userLineupDropPpg) return null;
+  if (!receiveHitsFormalNeed(user, gen.receive) && userDelta <= 0) return null;
 
   const userDepth = depthDamage(user, userAfter, league.slots, gen.give);
   const partnerDepth = depthDamage(gen.partner, partnerAfter, league.slots, gen.receive);
   if (userDepth >= 1) return null;
   if (partnerDepth >= 1) return null;
 
-  const userNeedFit = maxNeedOf(user, gen.receive) / 100;
-  const partnerNeedFit = maxNeedOf(gen.partner, gen.give) / 100;
+  const userNeedFit = maxPriorityNeedOf(user, gen.receive, filters, league.slots) / 100;
+  const partnerNeedFit = maxPriorityNeedOf(gen.partner, gen.give, filters, league.slots) / 100;
   const userGainNorm = clamp(userDelta / 8 + 0.35 * clamp((receiveValue - giveValue) / Math.max(giveValue, 1), -1, 1), 0, 1);
   const partnerGainNorm = clamp(partnerDelta / 8 + 0.35 * clamp((giveValue - receiveValue) / Math.max(receiveValue, 1), -1, 1), 0, 1);
   const fairnessNorm = 1 - clamp(Math.abs(cmp.gainRatioA - 1) / 0.35, 0, 1);

@@ -6,11 +6,11 @@ Single product tracker for Fantasy Football Rivals features. Do not create a sec
 
 | Field | Value |
 | --- | --- |
-| Status | Preview candidate (this change set) |
+| Status | RFSN-061 Preview certified; RFSN-061A quality gate (this change set) |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
-| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Score weights: `server/tradeFinder/weights.ts`. |
+| Formula | Need/surplus: `server/tradeFinder/needSurplus.ts`. Trade-priority: `server/tradeFinder/priority.ts`. Score weights: `server/tradeFinder/weights.ts`. |
 | Player value | Existing Market Value Engine V2 + `calcTradeValue` (`server/marketValue.ts`, `server/analytics.ts`) |
 | Pick value / fairness | Existing `server/tradePickValueAuthority.ts` (`compareGivenSideTotals`, `fairnessGradeFromGainRatio`) |
 | Roster / lineup | ESPN combined cache via `normalizeRosters` / `normalizeTeams`; slots from `settings.rosterSettings.lineupSlotCounts` |
@@ -33,6 +33,21 @@ else NEUTRAL
 
 Replacement at each position is the median dedicated-starter quality across the league.
 
+### Trade-priority score (RFSN-061A)
+
+Roster needScore is unchanged. Discovery, partner ranking, and need-fit use:
+
+```
+tradePriorityScore = needScore × tradePriorityMultiplier(position)
+QB/RB/WR/TE = 1.00
+K = 0.20
+DST = 0.20
+DP (IDP) = 1.00 when the league starts IDP; 0.20 if no IDP slots
+Explicit TARGET=K or TARGET=DST sets that position's multiplier to 1.00
+```
+
+Default search always considers QB/RB/WR/TE lineup improvements even when the highest raw need is K/DST. K/DST remain visible as roster needs.
+
 ### Trade score (initial weights)
 
 ```
@@ -46,6 +61,7 @@ userGain 30% + partnerGain 20% + fairness 20% + userNeedFit 10% + partnerNeedFit
 - No calibrated acceptance probability (by design).
 - Dynasty/keeper economics are disclosed, not fully priced.
 - Superflex/IDP/DST supported when slots exist; exotic IR/taxi scoring is limited.
+- Default discovery deprioritizes K/DST (0.20) so a DST roster hole does not block skill-position recommendations.
 - Sleeper leagues only work if the same ESPN-shaped combined cache is populated. Provider auth is unchanged.
 
 ### Recommended RFSN-061B
