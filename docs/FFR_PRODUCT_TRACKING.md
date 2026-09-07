@@ -21,7 +21,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 
 **RFSN-054** — UI Density & Scanability (spacing rhythm, not typography). 051 stays closed.
 
-**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery (K/DST 0.20 unless targeted). **RFSN-061B** partner-rationality gate. Status: **061B Preview candidate** (this change set). Do not promote to Production from this ticket.
+**RFSN-061 — Trade Finder v1** — league-aware trade recommendations on `/trades` (Trade Finder tab). Deterministic engine `server/tradeFinder/`. **RFSN-061A** trade-priority discovery (K/DST 0.20 unless targeted). **RFSN-061B** partner-rationality gate. Status: **061B PREVIEW CERTIFIED**. Do not promote to Production from this ticket.
 
 ---
 
@@ -30,7 +30,7 @@ Former “051D = measure typography again” is **cancelled**. Do not start a ne
 | Area | Status | Notes |
 | --- | --- | --- |
 | Production | 🟢 **PRODUCTION PARTIAL** for ESPN install | Live `buildTime=2026-08-27T23:13:03.813Z` (fetched 2026-09-02). Health `gitSha` still stale `06b35ba`. Certified website commit **`433fdaf`** (RFSN-058P) · Railway deploy **`1aa8f4f2`**. Admin + PDE + provider-first onboarding present. Chrome Web Store install URL **not** live. |
-| Preview | 🟢 RFSN-061 **PREVIEW CERTIFIED** | Trade Finder live on `/trades`. Git `080b636` · Railway `0bcb0a24` · `buildTime=2026-09-07T07:09:13.422Z` · bundle `index-DL8SnFGB.js`. Health gitSha stale `dff6154` — ignore. **Not Production.** 058C privacy/support remains live. |
+| Preview | 🟢 RFSN-061B **PREVIEW CERTIFIED** | Trade Finder partner-rationality gate live on `/trades`. Git `871c7f7` · Railway `63dfabe3` · `buildTime=2026-09-07T14:48:48.183Z` · bundle `index-ngJ3-UBp.js`. Health gitSha stale `dff6154` — ignore. **Not Production.** |
 | GM Advisor | 🟢 / 🟡 | 052J+K live: LOZELL **3**, HoF, largest margin, H2H, 2009 limitation. **“What's my biggest win?” still FAIL** unless a later ticket closed it in source (not re-smoked this edition). |
 | RFSN | 🟢 | Live / Stories / Recaps. Voice/TTS optional via Kokoro Serverless. |
 | Typography / density | 🟢 Production | 051A–E closed. **054** density Production. |
@@ -66,7 +66,7 @@ Live evidence for Production was re-fetched 2026-09-02 (`GET https://www.fantasy
 | Env | Host | Railway | Git trigger (intended) | Last verified live |
 | --- | --- | --- | --- | --- |
 | **Production** | `https://www.fantasyfootballrivals.com` | env `production` / `87b948fd-810d-4be2-a0b7-651ec0468200` | `release/promote-provider-expansion-dff6154` (058P commit `433fdaf` on that branch) | `buildTime=2026-08-27T23:13:03.813Z` · health `gitSha` stale `06b35ba` · `gitIdentitySource=build-meta` · Railway deploy **`1aa8f4f2`** (058P cert) |
-| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-061 Git **`080b636`**. Railway **`0bcb0a24`**. `buildTime=2026-09-07T07:09:13.422Z` · bundle `index-DL8SnFGB.js` (gitSha stale `dff6154`). |
+| **Preview** | `https://sprint-8-preview.fantasyfootballrivals.com` | env `sprint-8-preview` · service `espn-fantasy-gm-tool` `55c68659-ee4c-4352-98f7-4fff0e4aad87` | `feature/provider-expansion` | RFSN-061B Git **`871c7f7`**. Railway **`63dfabe3`**. `buildTime=2026-09-07T14:48:48.183Z` · bundle `index-ngJ3-UBp.js` (gitSha stale `dff6154`). |
 | **Local working tree** | localhost | — | uncommitted 058B | Store package + `/privacy` `/support` **not** on Production |
 
 Trust **`buildTime`** + Railway deployment `commitHash`, not health `gitSha`.
@@ -491,7 +491,7 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 
 | Field | Value |
 | --- | --- |
-| Status | RFSN-061B partner-rationality gate (this change set). Production not promoted. |
+| Status | RFSN-061B PREVIEW CERTIFIED. Production not promoted. |
 | Surface | Trade Intelligence `/trades` → Trade Finder tab |
 | Endpoint | `tradeFinder.find` |
 | Engine | `server/tradeFinder/` (deterministic) |
@@ -505,10 +505,10 @@ Full mechanic: `docs/RFSN_VOICE_IMPLEMENTATION_PLAYBOOK.md`.
 | Cache | `memCache` 90s keyed by league/season/team/filters/entitlement |
 | Advisory | Does not submit trades to ESPN or Sleeper |
 | Preview host | `https://sprint-8-preview.fantasyfootballrivals.com` |
-| Preview Git | `080b636` on `feature/provider-expansion` (Git-authoritative; not `railway up`) |
-| Preview Railway | deployment `0bcb0a24-cfdd-4984-a974-a0a2528aa3c4` |
-| Preview buildTime | `2026-09-07T07:09:13.422Z` |
-| Preview bundle | `assets/index-DL8SnFGB.js` |
+| Preview Git | `871c7f7` on `feature/provider-expansion` (Git-authoritative; not `railway up`) |
+| Preview Railway | deployment `63dfabe3-ebf0-4f57-9dac-f6a49d23eae8` (`commitHash=871c7f7`) |
+| Preview buildTime | `2026-09-07T14:48:48.183Z` |
+| Preview bundle | `assets/index-ngJ3-UBp.js` |
 
 ### Need / surplus formula
 
