@@ -7,10 +7,11 @@
  *   standings_snapshots — per-week rank (populated when present)
  *
  * Guardrails:
- *   - playerOfGame  → null  when gm_weekly_player_stats has no rows for that week
+ *   - playerOfGame  → null  when weekly_player_stats + week roster snapshot are missing
  *   - benchRegret   → null  when roster_entries has no per-week actuals
  *   - rivalryNote   → null  when H2H history has < 2 prior games
  *   - playoffImpact → null  when standings data unavailable
+ *   - Ownership for weekly performance joins teams.ownerId (never gm_weekly_player_stats.ownerKey)
  *   - NO fabricated stats, NO LLM inference, NO estimated values
  */
 
@@ -18,6 +19,14 @@ import { z }                    from "zod";
 import { router, publicProcedure } from "./_core/trpc";
 import { getDb, resolveActiveLeagueId } from "./db";
 import { sql as drizzleSql }    from "drizzle-orm";
+import {
+  benchRegretForTeam,
+  loadLineupPlayersForWeek,
+  playerOfGameForTeams,
+  type BenchRegret,
+  type LineupPlayer,
+  type PlayerOfGame,
+} from "./weeklyLineupOutcomes";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,8 +51,8 @@ export interface MatchupReport {
   shareableLine:  string;
 
   // Conditional — null when data unavailable (guardrails)
-  playerOfGame:  null; // always null until gm_weekly_player_stats populated
-  benchRegret:   null; // always null until roster_entries has per-week actuals
+  playerOfGame:  PlayerOfGame | null;
+  benchRegret:   BenchRegret | null;
   rivalryNote:   { seriesRecord: string; winnerLeads: boolean; evidence: string } | null;
   playoffImpact: { summary: string; winnerRecord: string; loserRecord: string; evidence: string } | null;
 }
@@ -197,8 +206,9 @@ function buildPostgameReport(params: {
   priorMatchups:    any[];
   allMatchupsThruWeek: any[];
   teamCount:        number;
+  lineupPlayers:    LineupPlayer[];
 }): MatchupReport {
-  const { matchup, homeTeam, awayTeam, allScoresThisWeek, priorMatchups, allMatchupsThruWeek, teamCount } = params;
+  const { matchup, homeTeam, awayTeam, allScoresThisWeek, priorMatchups, allMatchupsThruWeek, teamCount, lineupPlayers } = params;
 
   const homeScore = parseFloat(matchup.homeScore ?? "0");
   const awayScore = parseFloat(matchup.awayScore ?? "0");
@@ -233,6 +243,17 @@ function buildPostgameReport(params: {
 
   const rivalryNote   = buildRivalryNote(winner.teamId, loser.teamId, priorMatchups);
   const playoffImpact = buildPlayoffImpact(winner.teamId, loser.teamId, allMatchupsThruWeek, teamCount);
+  const playerOfGame  = playerOfGameForTeams(lineupPlayers, [matchup.homeTeamId, matchup.awayTeamId], {
+    [matchup.homeTeamId]: homeScore,
+    [matchup.awayTeamId]: awayScore,
+  });
+  const benchRegret   = benchRegretForTeam(lineupPlayers, winner.teamId, {
+    teamScore: winScore,
+    opponentScore: loseScore,
+  }) ?? benchRegretForTeam(lineupPlayers, loser.teamId, {
+    teamScore: loseScore,
+    opponentScore: winScore,
+  });
 
   return {
     matchupId:     matchup.id,
@@ -249,8 +270,8 @@ function buildPostgameReport(params: {
     shortRecap:    shortRecap(winnerName, loserName, winScore, loseScore, margin, combined, !!matchup.isPlayoff, matchup.week),
     keyStat:       keyStat(winScore, loseScore, allScoresThisWeek),
     shareableLine: shareableLine(winnerName, loserName, winScore, loseScore, matchup.week),
-    playerOfGame:  null, // guardrail: gm_weekly_player_stats is empty
-    benchRegret:   null, // guardrail: roster_entries has no per-week actuals
+    playerOfGame,
+    benchRegret,
     rivalryNote,
     playoffImpact,
   };
@@ -338,6 +359,12 @@ export const leagueWireRouter = router({
         WHERE leagueId = ${lid} AND season = ${season} AND week <= ${week} AND isCompleted = 1
       `) as unknown as [any[]];
       const thruMatchups = (thruRows[0] as any[]);
+      let lineupPlayers: LineupPlayer[] = [];
+      try {
+        lineupPlayers = await loadLineupPlayersForWeek(lid, season, week);
+      } catch {
+        lineupPlayers = [];
+      }
 
       return weekMatchups.map(m =>
         buildPostgameReport({
@@ -348,6 +375,7 @@ export const leagueWireRouter = router({
           priorMatchups,
           allMatchupsThruWeek: thruMatchups,
           teamCount,
+          lineupPlayers,
         })
       );
     }),
@@ -390,6 +418,13 @@ export const leagueWireRouter = router({
         FROM matchups WHERE leagueId = ${lid} AND season = ${season} AND week <= ${week} AND isCompleted = 1
       `) as unknown as [any[]];
 
+      let lineupPlayers: LineupPlayer[] = [];
+      try {
+        lineupPlayers = await loadLineupPlayersForWeek(String(lid), Number(season), Number(week));
+      } catch {
+        lineupPlayers = [];
+      }
+
       return buildPostgameReport({
         matchup,
         homeTeam: teamMap.get(Number(matchup.homeTeamId)),
@@ -398,6 +433,7 @@ export const leagueWireRouter = router({
         priorMatchups: (priorRows[0] as any[]),
         allMatchupsThruWeek: (thruRows[0] as any[]),
         teamCount: teamMap.size,
+        lineupPlayers,
       });
     }),
 });

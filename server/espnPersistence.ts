@@ -334,7 +334,7 @@ export async function upsertMatchups(
     const aid = Number(m.awayTeamId);
     if (!Number.isFinite(hid) || !Number.isFinite(aid)) continue;
     const mpid = Number(m.matchupPeriodId ?? 0) || 0;
-    const week = Number(m.scoringPeriodId ?? 0) || 0;
+    const week = Number(m.scoringPeriodId ?? 0) || mpid;
     const hs = Number(m.homeTotalPoints ?? 0) || 0;
     const as = Number(m.awayTotalPoints ?? 0) || 0;
     const hp = m.homeProjectedPoints != null ? Number(m.homeProjectedPoints) : null;
@@ -371,6 +371,7 @@ export async function upsertMatchups(
       })
       .onDuplicateKeyUpdate({
         set: {
+          week,
           homeScore: hs,
           awayScore: as,
           homeProjected: hp,
@@ -631,10 +632,12 @@ export async function upsertRosterEntries(
   db: AppDb,
   leagueId: string,
   season: number,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  week = 0,
 ): Promise<number> {
   const lid = String(leagueId).slice(0, 32);
   const yr = Math.floor(Number(season));
+  const wk = Math.max(0, Math.floor(Number(week)) || 0);
   let roster: unknown[] = [];
   try {
     roster = normalizeRosters(payload);
@@ -653,7 +656,7 @@ export async function upsertRosterEntries(
       .values({
         leagueId: lid,
         season: yr,
-        week: 0,
+        week: wk,
         teamId,
         playerId,
         playerName: String(row.playerName ?? ""),
@@ -734,10 +737,12 @@ export async function upsertStandingsSnapshots(
   db: AppDb,
   leagueId: string,
   season: number,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  week = 0,
 ): Promise<number> {
   const lid = String(leagueId).slice(0, 32);
   const yr = Math.floor(Number(season));
+  const wk = Math.max(0, Math.floor(Number(week)) || 0);
   let teams: ReturnType<typeof normalizeTeams> = [];
   try {
     teams = normalizeTeams(payload);
@@ -755,7 +760,7 @@ export async function upsertStandingsSnapshots(
       .values({
         leagueId: lid,
         season: yr,
-        week: 0,
+        week: wk,
         teamId: tid,
         rank: rk,
         wins: Number(t.wins ?? 0) || 0,
@@ -775,6 +780,62 @@ export async function upsertStandingsSnapshots(
           pointsFor: Number(t.pointsFor ?? 0) || 0,
           pointsAgainst: Number(t.pointsAgainst ?? 0) || 0,
           rawStanding: safeStringify(t),
+          updatedAt: now,
+        },
+      });
+    n++;
+  }
+  return n;
+}
+
+/** Persist derived standings for a completed week. Does not overwrite the live week-0 snapshot. */
+export async function upsertDerivedStandingsSnapshots(
+  db: AppDb,
+  leagueId: string,
+  season: number,
+  week: number,
+  rows: Array<{
+    teamId: number;
+    rank: number;
+    wins: number;
+    losses: number;
+    ties: number;
+    pointsFor: number;
+    pointsAgainst: number;
+  }>,
+): Promise<number> {
+  const lid = String(leagueId).slice(0, 32);
+  const yr = Math.floor(Number(season));
+  const wk = Math.max(1, Math.floor(Number(week)) || 0);
+  if (wk < 1 || rows.length === 0) return 0;
+  const now = new Date();
+  let n = 0;
+  for (const row of rows) {
+    await db
+      .insert(schema.gmStandingsSnapshots)
+      .values({
+        leagueId: lid,
+        season: yr,
+        week: wk,
+        teamId: row.teamId,
+        rank: row.rank,
+        wins: row.wins,
+        losses: row.losses,
+        ties: row.ties,
+        pointsFor: row.pointsFor,
+        pointsAgainst: row.pointsAgainst,
+        rawStanding: safeStringify({ source: "weekly_season_engine", ...row }),
+        updatedAt: now,
+      })
+      .onDuplicateKeyUpdate({
+        set: {
+          rank: row.rank,
+          wins: row.wins,
+          losses: row.losses,
+          ties: row.ties,
+          pointsFor: row.pointsFor,
+          pointsAgainst: row.pointsAgainst,
+          rawStanding: safeStringify({ source: "weekly_season_engine", ...row }),
           updatedAt: now,
         },
       });

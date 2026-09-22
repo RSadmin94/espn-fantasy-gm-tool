@@ -41,6 +41,7 @@ export interface WeeklyStatRow {
   proTeam: string;
   teamId: number | null;
   ownerName: string | null;
+  leagueId?: string;
   // Receiving
   targets: number;
   receptions: number;
@@ -85,7 +86,7 @@ export async function fetchWeeklyStatsForPeriod(
   season: number,
   scoringPeriodId: number,
   creds?: EspnCreds
-): Promise<{ rows: WeeklyStatRow[]; error?: string }> {
+): Promise<{ rows: WeeklyStatRow[]; payload?: Record<string, unknown>; error?: string }> {
   const url = new URL(getBaseUrlFor(season, creds));
   url.searchParams.append("view", "mRoster");
   url.searchParams.append("scoringPeriodId", String(scoringPeriodId));
@@ -108,7 +109,7 @@ export async function fetchWeeklyStatsForPeriod(
     }
     const data = await res.json() as Record<string, unknown>;
     const rows = normalizeWeeklyStats(data, season, scoringPeriodId);
-    return { rows };
+    return { rows, payload: data };
   } catch (err) {
     return { rows: [], error: err instanceof Error ? err.message : "Network error" };
   }
@@ -306,3 +307,46 @@ export function computePlayerTrend(
     trend,
   };
 }
+
+/**
+ * Existing ESPN weekly-stats fetch + cache. Used by the weekly-season engine
+ * and the tRPC weeklyStats.fetchAndCache procedure. Does not introduce a
+ * second ESPN client.
+ */
+export async function fetchAndCacheWeeklyStats(opts: {
+  leagueId: string;
+  season: number;
+  week: number;
+  creds?: EspnCreds;
+  forceRefresh?: boolean;
+}): Promise<{
+  status: "cached" | "ok" | "error";
+  rowCount: number;
+  payload?: Record<string, unknown>;
+  error?: string;
+}> {
+  const { upsertWeeklyStats, getCachedWeeksForSeason } = await import("./db");
+  const leagueId = String(opts.leagueId).slice(0, 32);
+  const fetchCreds: EspnCreds = {
+    ...(opts.creds ?? {}),
+    leagueId,
+    swid: opts.creds?.swid ?? SWID,
+    espnS2: opts.creds?.espnS2 ?? ESPN_S2,
+  };
+
+  if (!opts.forceRefresh) {
+    const cachedWeeks = await getCachedWeeksForSeason(opts.season, leagueId);
+    if (cachedWeeks.includes(opts.week)) {
+      return { status: "cached", rowCount: 0 };
+    }
+  }
+
+  const result = await fetchWeeklyStatsForPeriod(opts.season, opts.week, fetchCreds);
+  if (result.error) {
+    return { status: "error", rowCount: 0, error: result.error };
+  }
+  const rows = result.rows.map((row) => ({ ...row, leagueId }));
+  if (rows.length > 0) await upsertWeeklyStats(rows);
+  return { status: "ok", rowCount: rows.length, payload: result.payload };
+}
+

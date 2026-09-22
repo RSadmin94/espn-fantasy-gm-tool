@@ -129,22 +129,30 @@ describe("computeFearIndex", () => {
     }
   });
 
-  it("assigns correct heatLabel based on fearScore", () => {
+  it("assigns NEUTRAL when there is no regular-season PF evidence", () => {
     const input = makeBaseInput({
+      week: 1,
+      matchups: [],
       rosterHealthMap: { 1: 100, 2: 50, 3: 0 },
       exploitabilityMap: { m1: 0, m2: 50, m3: 100 },
     });
     const entries = computeFearIndex(input);
-    for (const e of entries) {
-      expect(e.heatLabel).toBe(
-        e.fearScore >= 85 ? "UNTOUCHABLE" :
-        e.fearScore >= 70 ? "RISING THREAT" :
-        e.fearScore >= 55 ? "DANGEROUS" :
-        e.fearScore >= 40 ? "NEUTRAL" :
-        e.fearScore >= 25 ? "DECLINING" :
-        "COLLAPSING"
-      );
-    }
+    expect(entries.every((e) => e.heatLabel === "NEUTRAL")).toBe(true);
+  });
+
+  it("uses completed current-week scores and ignores stale 0-0 pairings", () => {
+    const input = makeBaseInput({
+      week: 1,
+      matchups: [
+        { matchupPeriodId: 1, homeTeamId: 1, awayTeamId: 99, homeTotalPoints: 0, awayTotalPoints: 0 },
+        { matchupPeriodId: 1, homeTeamId: 1, awayTeamId: 2, homeTotalPoints: 172.4, awayTotalPoints: 90 },
+        { matchupPeriodId: 1, homeTeamId: 3, awayTeamId: 4, homeTotalPoints: 80, awayTotalPoints: 70 },
+      ] as FearIndexInput["matchups"],
+    });
+    const entries = computeFearIndex(input);
+    const a = entries.find((e) => e.teamId === 1)!;
+    expect(a.avgPfLast4).toBeGreaterThan(0);
+    expect(a.heatLabel).not.toBe("NEUTRAL");
   });
 
   it("high roster health increases fear score", () => {

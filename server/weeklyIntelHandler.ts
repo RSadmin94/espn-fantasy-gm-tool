@@ -1,190 +1,102 @@
 /**
  * weeklyIntelHandler.ts
  * ─────────────────────
- * Project-level Heartbeat handler for the weekly intelligence refresh.
+ * Heartbeat handler for the weekly intelligence refresh.
  * Registered at POST /api/scheduled/weekly-intel
  *
- * Schedule: Tuesdays 09:00 UTC ("0 0 9 * * 2") — after MNF settles.
- * Created via CLI (after deploy):
- *   manus-heartbeat create \
- *     --name weekly-intel \
- *     --cron "0 0 9 * * 2" \
- *     --path /api/scheduled/weekly-intel \
- *     --description "Weekly ESPN data refresh + owner notification"
- *
- * Auth: platform POSTs with x-manus-cron-task-uid header.
- * We trust the platform gateway (which restricts /api/scheduled/* to cron callers only)
- * and read the task UID from the header for logging.
+ * Delegates to processLeagueWeek — the canonical (leagueId, season, week)
+ * orchestrator. Season and week are resolved from ESPN provider state, never
+ * from a hardcoded CURRENT_SEASON.
  */
 
 import type { Request, Response } from "express";
 import { sdk } from "./_core/sdk";
-import {
-  fetchEspnViewsHardened,
-  normalizeTeams,
-  normalizeRosters,
-  normalizeMatchups,
-  normalizeDraftPicks,
-  normalizeTransactions,
-  validateDataQuality,
-} from "./espnService";
-import {
-  upsertViewHealth,
-  upsertRefreshManifest,
-  getRefreshManifests,
-  getDefaultEspnLeagueId,
-} from "./db";
-import { syncEspnCombinedFullPipeline } from "./espnPersistence";
-import { upsertLeagueIdentity } from "./leagueIdentityService";
 import { notifyOwner } from "./_core/notification";
-import { memCache } from "./memCache";
-
-const CURRENT_SEASON = 2025;
+import {
+  processLeagueWeek,
+  resolveCronLeagueIds,
+  planScheduledWeeks,
+  refreshWeeklyProviderForLeague,
+} from "./weeklySeasonEngine";
 
 export async function weeklyIntelHandler(req: Request, res: Response) {
   const startedAt = Date.now();
   let taskUid: string | undefined;
 
   try {
-    // ── 0. Authenticate the cron caller ───────────────────────────────────
     const user = await sdk.authenticateRequest(req);
     if (!user.isCron) {
       return res.status(403).json({ error: "cron-only endpoint" });
     }
     taskUid = user.taskUid;
 
-    // ── 1. Fetch ESPN data for the current season ──────────────────────────
-    const pipelineResult = await fetchEspnViewsHardened(CURRENT_SEASON);
-    const data = pipelineResult.merged;
-
-    // ── 2. Persist per-view health records ────────────────────────────────
-    for (const vr of pipelineResult.viewResults) {
-      try {
-        await upsertViewHealth(CURRENT_SEASON, vr.viewName, {
-          status: vr.status === "auth_error" ? "error" : vr.status,
-          errorMessage: vr.error,
-          recordCount: vr.recordCount,
+    const body = (req.body ?? {}) as { leagueId?: string; season?: number; week?: number };
+    const leagueIds = await resolveCronLeagueIds(body.leagueId);
+    const packs = [];
+    for (const leagueId of leagueIds) {
+      await refreshWeeklyProviderForLeague(leagueId, body.season);
+      const planned = await planScheduledWeeks({
+        leagueId,
+        season: body.season,
+        week: body.week,
+      });
+      for (const week of planned.weeks) {
+        const pack = await processLeagueWeek({
+          leagueId,
+          season: planned.clock.season,
+          week,
+          mode: "scheduled",
+          skipProviderRefresh: true,
         });
-      } catch (vhErr) {
-        console.warn("[weeklyIntel] upsertViewHealth failed:", vr.viewName, vhErr);
+        packs.push(pack);
       }
     }
 
-    // ── 3. Persist combined cache + league identity ────────────────────────
-    const leagueId = (await getDefaultEspnLeagueId()) ?? "default";
-    const quality = validateDataQuality(CURRENT_SEASON, data);
-    try {
-      await syncEspnCombinedFullPipeline(leagueId, CURRENT_SEASON, data as Record<string, unknown>, {
-        pipelineAllOk: pipelineResult.allViewsOk,
-        qualityUsable: quality.isUsable,
-      });
-    } catch (persistErr) {
-      console.warn("[weeklyIntel] syncEspnCombinedFullPipeline failed:", persistErr);
-      throw persistErr;
-    }
-    try { await upsertLeagueIdentity(CURRENT_SEASON, data); } catch (_e) { /* non-fatal */ }
-
-    // ── 4. Normalize and compute quality ──────────────────────────────────
-    const teams = normalizeTeams(data);
-    const rosters = normalizeRosters(data);
-    const matchups = normalizeMatchups(data);
-    const picks = normalizeDraftPicks(data);
-    const txs = normalizeTransactions(data);
-
-    const overallStatus = pipelineResult.allViewsOk && quality.isUsable
-      ? "success"
-      : pipelineResult.hasPartialData || !quality.isUsable
-        ? "partial"
-        : "success";
-
-    try {
-      await upsertRefreshManifest(CURRENT_SEASON, {
-        teamCount: teams.length,
-        rosterCount: rosters.length,
-        matchupCount: matchups.length,
-        draftPickCount: picks.length,
-        transactionCount: txs.length,
-        status: overallStatus,
-        viewsRefreshed: pipelineResult.viewResults
-          .filter(v => v.status === "ok")
-          .map(v => v.viewName),
-        errorMessage: quality.issues.length > 0 ? quality.issues.join("; ") : undefined,
-      });
-    } catch (mfErr) {
-      console.warn("[weeklyIntel] upsertRefreshManifest failed:", mfErr);
-    }
-
-    // ── 5. Bust in-memory caches ───────────────────────────────────────────
-    memCache.invalidateAll();
-
-    // ── 5b. Refresh weekly storylines (deterministic labels only, no LLM) ──
-    try {
-      const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
-      await refreshWeeklyStorylines(CURRENT_SEASON);
-    } catch (_e) { /* non-fatal — storylines are supplemental */ }
-
-    // ── 5c. Refresh fear index (deterministic, no LLM) ────────────────────
-    try {
-      const { refreshFearIndex } = await import("./fearIndexService");
-      await refreshFearIndex(CURRENT_SEASON);
-    } catch (_e) { /* non-fatal — fear index is supplemental */ }
-
-    // ── 5d. Refresh reputation events (deterministic labels only, no LLM) ──
-    try {
-      const { refreshReputationEvents } = await import("./reputationService");
-      await refreshReputationEvents({ generateLLM: false });
-    } catch (_e) { /* non-fatal — reputation events are supplemental */ }
-
-    // ── 6. Build owner notification ───────────────────────────────────────
     const durationSec = ((Date.now() - startedAt) / 1000).toFixed(1);
-    const failedViews = pipelineResult.viewResults
-      .filter(v => v.status !== "ok")
-      .map(v => `${v.viewName}(${v.status})`)
-      .join(", ");
-
-    const notifTitle = overallStatus === "success"
-      ? `✅ Weekly Intel Refresh — ${CURRENT_SEASON} Season`
-      : `⚠️ Weekly Intel Refresh — Partial (${CURRENT_SEASON})`;
-
-    const notifContent = [
-      `Status: **${overallStatus}**`,
-      `Teams: ${teams.length} | Rosters: ${rosters.length} | Matchups: ${matchups.length}`,
-      `Transactions: ${txs.length} | Draft Picks: ${picks.length}`,
-      failedViews ? `Failed views: ${failedViews}` : `All views OK`,
-      quality.issues.length > 0 ? `Quality issues: ${quality.issues.join("; ")}` : "",
-      `Duration: ${durationSec}s`,
-      taskUid ? `Task UID: ${taskUid}` : "",
-    ].filter(Boolean).join("\n");
-
-    // Fire-and-forget — don't block the 200 response on notification delivery
-    notifyOwner({ title: notifTitle, content: notifContent }).catch(() => {});
-
-    console.log(`[weekly-intel] ${overallStatus} in ${durationSec}s (taskUid=${taskUid ?? "unknown"})`);
+    const primary = packs[0];
+    if (primary) {
+      notifyOwner({
+        title: `Weekly Intel Refresh — ${primary.clock.season} Week ${primary.clock.requestedWeek}`,
+        content: [
+          `League: ${primary.clock.leagueId}`,
+          `Weeks: ${packs.map((p) => p.clock.requestedWeek).join(", ")}`,
+          `Week status: **${primary.clock.weekStatus}**`,
+          `Teams: ${primary.facts.teamCount} | Matchups: ${primary.facts.matchupCount}`,
+          `Stats: ${primary.receipts.weeklyStatsStatus} (${primary.receipts.weeklyStatsRows} rows)`,
+          `Storylines: ${primary.receipts.storylineCount} | Fear: ${primary.receipts.fearCount}`,
+          primary.receipts.errors.length ? `Errors: ${primary.receipts.errors.join("; ")}` : "No step errors",
+          `Duration: ${durationSec}s`,
+        ].join("\n"),
+      }).catch(() => {});
+    }
 
     return res.json({
       ok: true,
-      status: overallStatus,
-      season: CURRENT_SEASON,
-      teams: teams.length,
-      rosters: rosters.length,
-      matchups: matchups.length,
+      season: primary?.clock.season ?? body.season ?? null,
+      week: primary?.clock.requestedWeek ?? body.week ?? null,
+      weekStatus: primary?.clock.weekStatus ?? null,
+      leagueId: primary?.clock.leagueId ?? leagueIds[0] ?? null,
+      weeks: packs.map((p) => p.clock.requestedWeek),
+      packs: packs.map((p) => ({
+        leagueId: p.clock.leagueId,
+        season: p.clock.season,
+        week: p.clock.requestedWeek,
+        weekStatus: p.clock.weekStatus,
+        receipts: p.receipts,
+      })),
       durationMs: Date.now() - startedAt,
+      taskUid,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : undefined;
     console.error(`[weekly-intel] FAILED (taskUid=${taskUid ?? "unknown"}):`, msg);
-
-    // Notify owner of failure
     notifyOwner({
-      title: `❌ Weekly Intel Refresh FAILED`,
+      title: `Weekly Intel Refresh FAILED`,
       content: `Error: ${msg}\nTask UID: ${taskUid ?? "unknown"}`,
     }).catch(() => {});
-
     return res.status(500).json({
       error: msg,
-      stack,
-      context: { taskUid, season: CURRENT_SEASON },
+      context: { taskUid },
       timestamp: new Date().toISOString(),
     });
   }

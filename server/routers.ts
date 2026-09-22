@@ -906,10 +906,20 @@ export const appRouter = router({
   weeklyStorylines: router({
     /** Get cached storylines for a specific season + week */
     getByWeek: publicProcedure
-      .input(z.object({ season: z.number().int(), week: z.number().int() }))
-      .query(async ({ input }) => {
+      .input(z.object({
+        season: z.number().int(),
+        week: z.number().int(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
         const { getWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
-        return getWeeklyStorylinesFromDb(input.season, input.week);
+        return getWeeklyStorylinesFromDb(input.season, input.week, String(leagueId).slice(0, 32));
       }),
     /** Get the latest cached storylines for a season (most recent week) */
     getLatest: publicProcedure
@@ -919,29 +929,266 @@ export const appRouter = router({
           activeLeagueKey: z.string().optional(),
         }),
       )
-      .query(async ({ input }) => {
-        void input.activeLeagueKey;
+      .query(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
+        const lid = String(leagueId).slice(0, 32);
+        let season = input.season;
+        if (season == null) {
+          try {
+            const { resolveSeasonClockForLeague } = await import("./weeklySeasonEngine");
+            season = (await resolveSeasonClockForLeague({ leagueId: lid })).season;
+          } catch {
+            season = undefined;
+          }
+        }
         const { getLatestWeeklyStorylinesFromDb } = await import("./weeklyStorylinesService");
-        const season = input.season ?? 2025;
-        return getLatestWeeklyStorylinesFromDb(season);
+        if (season != null) {
+          return getLatestWeeklyStorylinesFromDb(season, lid);
+        }
+        return [];
       }),
     /** Manually trigger storylines refresh for a season (no new ESPN calls) */
     refresh: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
+      .input(z.object({
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
+        const lid = String(leagueId).slice(0, 32);
+        let season = input.season;
+        let week = input.week;
+        if (season == null || week == null) {
+          const { resolveSeasonClockForLeague } = await import("./weeklySeasonEngine");
+          const clock = await resolveSeasonClockForLeague({ leagueId: lid, season, week });
+          season = season ?? clock.season;
+          week = week ?? clock.requestedWeek;
+        }
         const { refreshWeeklyStorylines } = await import("./weeklyStorylinesService");
-        const season = input.season ?? 2025;
-        const rows = await refreshWeeklyStorylines(season, ctx.user?.id);
-        return { ok: true, count: rows.length, season };
+        const rows = await refreshWeeklyStorylines(season, ctx.user?.id, {
+          leagueId: lid,
+          week,
+        });
+        return { ok: true, count: rows.length, season, week, leagueId: lid };
+      }),
+    /** Run the full weekly-season engine for a league-week */
+    processWeek: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        mode: z.enum(["scheduled", "manual", "regenerate", "replay", "certify"]).optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const resolved = input.leagueId
+          ? { leagueId: input.leagueId }
+          : await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+              input.activeLeagueKey ?? null,
+              input.season,
+            );
+        const { processLeagueWeek } = await import("./weeklySeasonEngine");
+        return processLeagueWeek({
+          leagueId: String(resolved.leagueId),
+          season: input.season,
+          week: input.week,
+          mode: input.mode ?? "manual",
+          userId: ctx.user?.id,
+        });
+      }),
+    getPack: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const resolved = input.leagueId
+          ? { leagueId: input.leagueId }
+          : await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+              input.activeLeagueKey ?? null,
+              input.season,
+            );
+        const lid = String(resolved.leagueId);
+        const { resolveSeasonClockForLeague, getWeeklySeasonPack } = await import("./weeklySeasonEngine");
+        const clock = await resolveSeasonClockForLeague({ leagueId: lid, season: input.season, week: input.week });
+        const week = input.week ?? clock.requestedWeek;
+        return getWeeklySeasonPack(lid, clock.season, week);
+      }),
+    generateSelected: publicProcedure
+      .input(z.object({
+        leagueId: z.string(),
+        season: z.number().int(),
+        week: z.number().int(),
+        eventId: z.string(),
+        packet: z.object({
+          eventId: z.string(),
+          eventType: z.string(),
+          subject: z.string(),
+          opponent: z.string().nullable().optional(),
+          facts: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+          confidence: z.number(),
+          tone: z.string(),
+        }),
+      }))
+      .mutation(async ({ input }) => {
+        const { getOrCreateWeeklyNarrative } = await import("./weeklySeasonNarratives");
+        return getOrCreateWeeklyNarrative({
+          leagueId: input.leagueId,
+          season: input.season,
+          week: input.week,
+          packet: {
+            ...input.packet,
+            opponent: input.packet.opponent ?? null,
+          },
+        });
+      }),
+    getEdition: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const resolved = input.leagueId
+          ? { leagueId: input.leagueId }
+          : await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+              input.activeLeagueKey ?? null,
+              input.season,
+            );
+        const lid = String(resolved.leagueId);
+        const { resolveSeasonClockForLeague, listProcessedFinalWeeks } = await import("./weeklySeasonEngine");
+        const { resolvedEditionWeek } = await import("./weeklyEdition");
+        const clock = await resolveSeasonClockForLeague({ leagueId: lid, season: input.season, week: input.week });
+        const latestFinal = (await listProcessedFinalWeeks(lid, clock.season)).at(-1) ?? null;
+        const week = resolvedEditionWeek({
+          explicitWeek: input.week,
+          currentWeek: clock.requestedWeek,
+          currentStatus: clock.weekStatus,
+          latestFinalWeek: latestFinal,
+        });
+        if (week == null) {
+          return {
+            edition: null,
+            narratives: [],
+            ownerTake: null,
+            ownerTeamId: null,
+            weekStatus: clock.weekStatus,
+          };
+        }
+        const { weeklyEditionPayload } = await import("./weeklyEditionService");
+        return weeklyEditionPayload({
+          leagueId: lid,
+          season: clock.season,
+          week,
+          userId: ctx.user?.id ?? null,
+        });
+      }),
+    ensureEdition: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const resolved = input.leagueId
+          ? { leagueId: input.leagueId }
+          : await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+              input.activeLeagueKey ?? null,
+              input.season,
+            );
+        const lid = String(resolved.leagueId);
+        const { resolveSeasonClockForLeague, listProcessedFinalWeeks } = await import("./weeklySeasonEngine");
+        const { resolvedEditionWeek } = await import("./weeklyEdition");
+        const clock = await resolveSeasonClockForLeague({ leagueId: lid, season: input.season, week: input.week });
+        const latestFinal = (await listProcessedFinalWeeks(lid, clock.season)).at(-1) ?? null;
+        const week = resolvedEditionWeek({
+          explicitWeek: input.week,
+          currentWeek: clock.requestedWeek,
+          currentStatus: clock.weekStatus,
+          latestFinalWeek: latestFinal,
+        });
+        if (week == null) {
+          return { ok: true, generated: 0, hits: 0 };
+        }
+        const { ensureEditionNarratives } = await import("./weeklyEditionService");
+        const { results } = await ensureEditionNarratives({ leagueId: lid, season: clock.season, week });
+        return {
+          ok: true,
+          generated: results.filter((r) => r.status === "GENERATE").length,
+          hits: results.filter((r) => r.cache === "HIT").length,
+        };
+      }),
+    ensureOwnerTake: publicProcedure
+      .input(z.object({
+        leagueId: z.string().optional(),
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        teamId: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const resolved = input.leagueId
+          ? { leagueId: input.leagueId }
+          : await resolveActiveLeagueId(
+              { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+              input.activeLeagueKey ?? null,
+              input.season,
+            );
+        const lid = String(resolved.leagueId);
+        const { resolveSeasonClockForLeague } = await import("./weeklySeasonEngine");
+        const clock = await resolveSeasonClockForLeague({ leagueId: lid, season: input.season, week: input.week });
+        const week = input.week ?? clock.requestedWeek;
+        let teamId = input.teamId;
+        if (teamId == null && ctx.user?.id) {
+          const { resolveCurrentOwner } = await import("./currentOwnerService");
+          teamId = (await resolveCurrentOwner({ id: ctx.user.id })).teamId ?? undefined;
+        }
+        if (teamId == null) return { ok: false as const, reason: "no team" };
+        const { ensureOwnerTakeNarrative } = await import("./weeklyEditionService");
+        return ensureOwnerTakeNarrative({ leagueId: lid, season: clock.season, week, teamId });
       }),
   }),
   fearIndex: router({
     /** Get fear index for a specific season + week */
     getByWeek: publicProcedure
-      .input(z.object({ season: z.number().int(), week: z.number().int() }))
-      .query(async ({ input }) => {
+      .input(z.object({
+        season: z.number().int(),
+        week: z.number().int(),
+        activeLeagueKey: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
         const { getFearIndexFromDb } = await import("./fearIndexService");
-        return getFearIndexFromDb(input.season, input.week);
+        return getFearIndexFromDb(input.season, input.week, String(leagueId).slice(0, 32));
       }),
     /** Get the latest fear index for a season (most recent week with data) */
     getLatest: publicProcedure
@@ -952,44 +1199,73 @@ export const appRouter = router({
         }),
       )
       .query(async ({ ctx, input }) => {
-        void input.activeLeagueKey;
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
+        const lid = String(leagueId).slice(0, 32);
         const {
           getLatestFearIndexFromDb,
           getLatestFearIndexAnySeason,
           refreshFearIndex,
         } = await import("./fearIndexService");
 
-        // 1. Requested/active season, if it already has data.
-        if (input.season) {
-          const rows = await getLatestFearIndexFromDb(input.season);
+        let season = input.season;
+        if (season == null) {
+          try {
+            const { resolveSeasonClockForLeague } = await import("./weeklySeasonEngine");
+            season = (await resolveSeasonClockForLeague({ leagueId: lid })).season;
+          } catch {
+            season = undefined;
+          }
+        }
+
+        if (season != null) {
+          const rows = await getLatestFearIndexFromDb(season, lid);
           if (rows.length) return rows;
         }
 
-        // 2. Fall back to the latest season that has any data (e.g. the last
-        //    in-season week), so the page isn't blank in the offseason.
-        const anyRows = await getLatestFearIndexAnySeason();
+        const anyRows = await getLatestFearIndexAnySeason(lid);
         if (anyRows.length) return anyRows;
 
-        // 3. Table empty → compute on demand (deterministic, no LLM) for the
-        //    most recent cached season that yields entries.
         const { getAllCachedSeasons } = await import("./db");
-        const cached = (await getAllCachedSeasons(undefined, ctx.user?.id))
+        const cached = (await getAllCachedSeasons(lid, ctx.user?.id))
           .filter((s) => s > 2000)
           .sort((a, b) => b - a);
         for (const s of cached) {
-          const computed = await refreshFearIndex(s, undefined, ctx.user?.id);
+          const computed = await refreshFearIndex(s, undefined, ctx.user?.id, { leagueId: lid });
           if (computed.length) return computed;
         }
         return [];
       }),
     /** Manually trigger fear index refresh (no new ESPN calls) */
     refresh: publicProcedure
-      .input(z.object({ season: z.number().int().optional() }))
+      .input(z.object({
+        season: z.number().int().optional(),
+        week: z.number().int().optional(),
+        activeLeagueKey: z.string().optional(),
+      }))
       .mutation(async ({ ctx, input }) => {
+        const { resolveActiveLeagueId } = await import("./db");
+        const { leagueId } = await resolveActiveLeagueId(
+          { user: ctx.user?.id != null ? { id: ctx.user.id } : undefined },
+          input.activeLeagueKey ?? null,
+          input.season,
+        );
+        const lid = String(leagueId).slice(0, 32);
+        let season = input.season;
+        let week = input.week;
+        if (season == null || week == null) {
+          const { resolveSeasonClockForLeague } = await import("./weeklySeasonEngine");
+          const clock = await resolveSeasonClockForLeague({ leagueId: lid, season, week });
+          season = season ?? clock.season;
+          week = week ?? clock.requestedWeek;
+        }
         const { refreshFearIndex } = await import("./fearIndexService");
-        const season = input.season ?? 2025;
-        const entries = await refreshFearIndex(season, undefined, ctx.user?.id);
-        return { ok: true, count: entries.length, season };
+        const entries = await refreshFearIndex(season, undefined, ctx.user?.id, { leagueId: lid, week });
+        return { ok: true, count: entries.length, season, week, leagueId: lid };
       }),
   }),
   reputation: router({

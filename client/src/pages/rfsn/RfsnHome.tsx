@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useLeagueActiveGate } from "@/hooks/useLeagueActiveGate";
 import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { RfsnMediaShell } from "@/components/rfsn/RfsnMediaShell";
+import { WeeklyEditionPanel } from "@/components/leagueWire/WeeklyEditionPanel";
 import {
   RFSN_ROUTES,
   articleExcerpt,
@@ -194,7 +195,8 @@ export function RfsnHome() {
               </div>
               {latestWeek ? (
                 <>
-                  <p className="text-sm text-zinc-300">
+                  <WeeklyEditionPanel season={latestWeek.season} week={latestWeek.week} variant="rail" />
+                  <p className="text-sm text-zinc-300 mt-3">
                     Season {latestWeek.season} · Week {latestWeek.week}
                   </p>
                   {wireReports.filter((r) => r.winner).length > 0 ? (
