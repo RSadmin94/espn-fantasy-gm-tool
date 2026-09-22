@@ -10,6 +10,7 @@ import { withLeagueSalt } from "@/lib/leagueQuerySalt";
 import { cn } from "@/lib/utils";
 import { TYPE_BADGE, TYPE_CAPTION, TYPE_META } from "@/lib/typeScale";
 import { Radio, ArrowRight, TrendingUp, Swords } from "lucide-react";
+import { WeeklyEditionPanel } from "@/components/leagueWire/WeeklyEditionPanel";
 
 interface TeamSide { name: string; score: number }
 interface MatchupReport {
@@ -116,6 +117,8 @@ export function LeagueWireNewsFeed() {
           View all <ArrowRight className="h-3 w-3" />
         </Link>
       </div>
+
+      <WeeklyEditionPanel variant="feed" />
 
       {/* Report cards - horizontal scroll on mobile */}
       <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

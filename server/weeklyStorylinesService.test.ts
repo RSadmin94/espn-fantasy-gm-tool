@@ -475,19 +475,22 @@ describe("computeWeeklyStorylines", () => {
       const fearStories = result.filter((s) => s.storyType === "FEAR_RISING");
       expect(fearStories.every((s) => s.teamId !== 1)).toBe(true);
     });
+
+    it("does not fire on 0-PF weeks (Week 1 with no prior scoring)", () => {
+      const input = baseInput({ week: 1, matchups: [] });
+      const result = computeWeeklyStorylines(input);
+      expect(storyTypes(result)).not.toContain("FEAR_RISING");
+    });
   });
 
   // ── General ────────────────────────────────────────────────────────────────
 
   describe("general", () => {
-    it("fires only PLAYOFF_BUBBLE and FEAR_RISING when teams are balanced with no history", () => {
+    it("fires only PLAYOFF_BUBBLE when teams are balanced with no scoring history", () => {
       // 14 teams all 4-6 (wins < 6 so SILENT_THREAT won't fire),
       // no matchup history, no rivalry data, no transactions, no prevSeasonRanks.
       // PLAYOFF_BUBBLE fires for ranks 7 and 8.
-      // FEAR_RISING fires for top-2 recent scorers — with all teams at 0 recent points
-      // (no matchup history), the sort picks the first 2 entries as top-2, so
-      // FEAR_RISING fires for 2 teams as a tie-break artifact.
-      // No other story types should fire.
+      // FEAR_RISING must NOT fire on 0-PF / no-history ties (Week 1 stale-fixture trap).
       const teams = Array.from({ length: 14 }, (_, i) => makeTeam({
         teamId: i + 1,
         wins: 4,
@@ -505,7 +508,7 @@ describe("computeWeeklyStorylines", () => {
         focalTeamId: null,
       });
       const result = computeWeeklyStorylines(input);
-      const allowedTypes = new Set(["PLAYOFF_BUBBLE", "FEAR_RISING"]);
+      const allowedTypes = new Set(["PLAYOFF_BUBBLE"]);
       const unexpected = result.filter((s) => !allowedTypes.has(s.storyType));
       expect(unexpected.length).toBe(0);
       // Exactly 2 bubble stories (rank 7 and rank 8)

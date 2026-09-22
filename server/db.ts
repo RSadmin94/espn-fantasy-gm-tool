@@ -295,6 +295,27 @@ export async function getEspnRawCacheCombinedPayload(
   return null;
 }
 
+export async function getLatestEspnRawCacheCombined(
+  leagueId: string,
+): Promise<{ season: number; payload: Record<string, unknown>; updatedAt: Date | null } | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const lid = String(leagueId).trim().slice(0, 32);
+  const rows = await db
+    .select()
+    .from(espnRawCache)
+    .where(and(eq(espnRawCache.leagueId, lid), eq(espnRawCache.viewName, "combined")))
+    .orderBy(desc(espnRawCache.season), desc(espnRawCache.updatedAt))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const decoded = decodeFantasyDataJsonPayload(row.payload);
+  if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return null;
+  const payload = decoded as Record<string, unknown>;
+  if (Object.keys(payload).length === 0) return null;
+  return { season: row.season, payload, updatedAt: row.updatedAt ?? null };
+}
+
 export async function upsertCachedView(season: number, viewName: string, payload: unknown, leagueId?: string) {
   if (String(viewName) === "combined") {
     console.warn(
@@ -799,6 +820,7 @@ export async function upsertWeeklyStats(rows: InsertWeeklyPlayerStats[]): Promis
             fantasyPoints: row.fantasyPoints,
             ownerName: row.ownerName,
             teamId: row.teamId,
+            leagueId: row.leagueId,
             updatedAt: new Date(),
           },
         });
@@ -833,14 +855,18 @@ export async function getWeeklyStatsByWeek(season: number, week: number) {
     .orderBy(desc(weeklyPlayerStats.fantasyPoints));
 }
 
-/** Get which weeks have already been cached for a season */
-export async function getCachedWeeksForSeason(season: number): Promise<number[]> {
+/** Get which weeks have already been cached for a season (optionally league-scoped). */
+export async function getCachedWeeksForSeason(season: number, leagueId?: string): Promise<number[]> {
   const db = await getDb();
   if (!db) return [];
   const rows = await db
     .selectDistinct({ week: weeklyPlayerStats.week })
     .from(weeklyPlayerStats)
-    .where(eq(weeklyPlayerStats.season, season))
+    .where(
+      leagueId
+        ? and(eq(weeklyPlayerStats.season, season), eq(weeklyPlayerStats.leagueId, leagueId))
+        : eq(weeklyPlayerStats.season, season),
+    )
     .orderBy(weeklyPlayerStats.week);
   return rows.map(r => r.week);
 }

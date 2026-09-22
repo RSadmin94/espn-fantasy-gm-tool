@@ -43,11 +43,14 @@ export function articleTypeLabel(articleType: string): string {
   return ARTICLE_TYPE_LABELS[articleType] ?? "League Story";
 }
 
-/** Prefer championship march, else newest article in feed order. */
+/** Prefer current-season coverage; do not let career championships flood This Week. */
 export function selectFeaturedArticle(articles: NewsroomArticle[]): NewsroomArticle | null {
   if (!articles.length) return null;
-  const champ = articles.find((a) => a.articleType === "championship_march");
-  return champ ?? articles[0] ?? null;
+  const latestSeason = Math.max(...articles.map((a) => a.season));
+  const current = articles.filter((a) => a.season === latestSeason);
+  const pool = current.length ? current : articles;
+  const champ = pool.find((a) => a.articleType === "championship_march");
+  return champ ?? pool[0] ?? null;
 }
 
 export function articleExcerpt(body: string, maxLen = 220): string {

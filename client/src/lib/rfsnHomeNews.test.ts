@@ -60,12 +60,20 @@ describe("rfsnHomeNews", () => {
     expect(RFSN_ROUTES.storiesArticle(42)).toBe("/rfsn/stories/article/42");
   });
 
-  it("selects championship march as featured when present", () => {
+  it("selects championship march as featured when present in the current season", () => {
     const articles = [
-      article({ id: 1, headline: "Newest", articleType: "roster_construction", createdAt: "2026-02-01" }),
-      article({ id: 2, headline: "Champ", articleType: "championship_march", createdAt: "2026-01-01" }),
+      article({ id: 1, headline: "Newest", articleType: "roster_construction", season: 2026, createdAt: "2026-02-01" }),
+      article({ id: 2, headline: "Champ", articleType: "championship_march", season: 2026, createdAt: "2026-01-01" }),
     ];
     expect(selectFeaturedArticle(articles)?.id).toBe(2);
+  });
+
+  it("does not let a prior-season championship flood the current weekly featured slot", () => {
+    const articles = [
+      article({ id: 1, headline: "2026 roster", articleType: "roster_construction", season: 2026 }),
+      article({ id: 2, headline: "2025 champ", articleType: "championship_march", season: 2025 }),
+    ];
+    expect(selectFeaturedArticle(articles)?.id).toBe(1);
   });
 
   it("falls back to newest article when no championship march", () => {

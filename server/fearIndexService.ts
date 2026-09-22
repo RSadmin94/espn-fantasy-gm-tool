@@ -91,6 +91,24 @@ export interface FearIndexInput {
 // ─── Pure computation (no DB, fully testable) ─────────────────────────────────
 
 /** Compute average fantasy points for a team across the last N matchup weeks. */
+function pickTeamMatchup(
+  matchups: Array<Record<string, unknown>>,
+  teamId: number,
+  week: number,
+): Record<string, unknown> | null {
+  const cands = matchups.filter(
+    (mx) =>
+      (mx.matchupPeriodId as number) === week &&
+      ((mx.homeTeamId as number) === teamId || (mx.awayTeamId as number) === teamId),
+  );
+  const scored = cands.filter((mx) => {
+    const hs = Number(mx.homeTotalPoints ?? mx.homeScore) || 0;
+    const as = Number(mx.awayTotalPoints ?? mx.awayScore) || 0;
+    return hs > 0 || as > 0;
+  });
+  return scored[0] ?? null;
+}
+
 function recentAvgPF(
   matchups: ReturnType<typeof normalizeMatchups>,
   teamId: number,
@@ -98,12 +116,9 @@ function recentAvgPF(
   lookback = 4
 ): number {
   const pts: number[] = [];
-  for (let w = Math.max(1, currentWeek - lookback); w < currentWeek; w++) {
-    const m = (matchups as Array<Record<string, unknown>>).find(
-      (mx) =>
-        (mx.matchupPeriodId as number) === w &&
-        ((mx.homeTeamId as number) === teamId || (mx.awayTeamId as number) === teamId)
-    );
+  const rows = matchups as Array<Record<string, unknown>>;
+  for (let w = Math.max(1, currentWeek - lookback + 1); w <= currentWeek; w++) {
+    const m = pickTeamMatchup(rows, teamId, w);
     if (!m) continue;
     const score =
       (m.homeTeamId as number) === teamId
@@ -122,13 +137,13 @@ function computeWinStreak(
   currentWeek: number
 ): number {
   let streak = 0;
-  for (let w = currentWeek - 1; w >= 1; w--) {
-    const m = (matchups as Array<Record<string, unknown>>).find(
-      (mx) =>
-        (mx.matchupPeriodId as number) === w &&
-        ((mx.homeTeamId as number) === teamId || (mx.awayTeamId as number) === teamId)
-    );
-    if (!m) break;
+  const rows = matchups as Array<Record<string, unknown>>;
+  for (let w = currentWeek; w >= 1; w--) {
+    const m = pickTeamMatchup(rows, teamId, w);
+    if (!m) {
+      if (w === currentWeek) continue;
+      break;
+    }
     const isHome = (m.homeTeamId as number) === teamId;
     const myPts = isHome ? (m.homeTotalPoints as number) || 0 : (m.awayTotalPoints as number) || 0;
     const oppPts = isHome ? (m.awayTotalPoints as number) || 0 : (m.homeTotalPoints as number) || 0;
@@ -187,7 +202,7 @@ export function computeFearIndex(input: FearIndexInput): FearIndexEntry[] {
   for (const t of teams) {
     rawAvgPfMap[t.teamId as number] = recentAvgPF(matchups, t.teamId as number, week);
   }
-  const maxRawAvgPf = Math.max(1, ...Object.values(rawAvgPfMap));
+  const maxRawAvgPf = Math.max(0, ...Object.values(rawAvgPfMap));
 
   // ── Compute per-team scores ────────────────────────────────────────────────
   const entries: FearIndexEntry[] = teams.map((t) => {
@@ -196,7 +211,7 @@ export function computeFearIndex(input: FearIndexInput): FearIndexEntry[] {
     const ownerName = ownerMap[tid] || t.owners as string || `Team ${tid}`;
 
     // Component 1: avg PF last 4 weeks, normalised 0-100
-    const avgPfLast4 = Math.round((rawAvgPfMap[tid] / maxRawAvgPf) * 100);
+    const avgPfLast4 = maxRawAvgPf > 0 ? Math.round((rawAvgPfMap[tid] / maxRawAvgPf) * 100) : 0;
 
     // Component 2: win streak (positive = wins, capped at 6 for scoring)
     const streak = computeWinStreak(matchups, tid, week);
@@ -242,14 +257,22 @@ export function computeFearIndex(input: FearIndexInput): FearIndexEntry[] {
   // Sort by fearScore descending, assign ranks
   entries.sort((a, b) => b.fearScore - a.fearScore);
   entries.forEach((e, i) => { e.rank = i + 1; });
+  if (maxRawAvgPf <= 0) {
+    for (const e of entries) e.heatLabel = "NEUTRAL";
+  } else {
+    for (const e of entries) {
+      if (e.avgPfLast4 <= 0 && e.winStreak <= 0) e.heatLabel = "NEUTRAL";
+    }
+  }
 
   return entries;
 }
 
 // ─── DB helpers ───────────────────────────────────────────────────────────────
 
-/** Upsert fear index rows for a given season + week. */
+/** Upsert fear index rows for a given league + season + week. */
 async function upsertFearIndex(
+  leagueId: string,
   season: number,
   week: number,
   entries: FearIndexEntry[]
@@ -260,6 +283,7 @@ async function upsertFearIndex(
     await db
       .insert(fearIndex)
       .values({
+        leagueId,
         season,
         week,
         teamId: e.teamId,
@@ -291,14 +315,17 @@ async function upsertFearIndex(
 /** Read fear index rows for a given season + week, sorted by fearScore desc. */
 export async function getFearIndexFromDb(
   season: number,
-  week: number
+  week: number,
+  leagueId?: string,
 ): Promise<FearIndexEntry[]> {
   const db = await getDb();
   if (!db) return [];
+  const filters = [eq(fearIndex.season, season), eq(fearIndex.week, week)];
+  if (leagueId) filters.push(eq(fearIndex.leagueId, leagueId));
   const rows = await db
     .select()
     .from(fearIndex)
-    .where(and(eq(fearIndex.season, season), eq(fearIndex.week, week)))
+    .where(and(...filters))
     .orderBy(desc(fearIndex.fearScore));
 
   return rows.map((r, i: number) => ({
@@ -317,20 +344,21 @@ export async function getFearIndexFromDb(
 }
 
 /** Get the most recent fear index (latest week with data) for a season. */
-export async function getLatestFearIndexFromDb(season: number): Promise<FearIndexEntry[]> {
+export async function getLatestFearIndexFromDb(season: number, leagueId?: string): Promise<FearIndexEntry[]> {
   const db = await getDb();
   if (!db) return [];
-  // Find the latest week with data
+  const filters = [eq(fearIndex.season, season)];
+  if (leagueId) filters.push(eq(fearIndex.leagueId, leagueId));
   const latestRows = await db
     .select({ week: fearIndex.week })
     .from(fearIndex)
-    .where(eq(fearIndex.season, season))
+    .where(and(...filters))
     .orderBy(desc(fearIndex.week))
     .limit(1);
 
   if (latestRows.length === 0) return [];
   const latestWeek = latestRows[0].week;
-  return getFearIndexFromDb(season, latestWeek);
+  return getFearIndexFromDb(season, latestWeek, leagueId);
 }
 
 /**
@@ -339,16 +367,17 @@ export async function getLatestFearIndexFromDb(season: number): Promise<FearInde
  * yet — e.g. the offseason, when the in-season weekly refresh hasn't run for the
  * current year.
  */
-export async function getLatestFearIndexAnySeason(): Promise<FearIndexEntry[]> {
+export async function getLatestFearIndexAnySeason(leagueId?: string): Promise<FearIndexEntry[]> {
   const db = await getDb();
   if (!db) return [];
-  const latest = await db
+  const base = db
     .select({ season: fearIndex.season, week: fearIndex.week })
-    .from(fearIndex)
-    .orderBy(desc(fearIndex.season), desc(fearIndex.week))
-    .limit(1);
+    .from(fearIndex);
+  const latest = leagueId
+    ? await base.where(eq(fearIndex.leagueId, leagueId)).orderBy(desc(fearIndex.season), desc(fearIndex.week)).limit(1)
+    : await base.orderBy(desc(fearIndex.season), desc(fearIndex.week)).limit(1);
   if (latest.length === 0) return [];
-  return getFearIndexFromDb(latest[0].season, latest[0].week);
+  return getFearIndexFromDb(latest[0].season, latest[0].week, leagueId);
 }
 
 // ─── Refresh (compute + persist) ─────────────────────────────────────────────
@@ -365,20 +394,23 @@ export async function getLatestFearIndexAnySeason(): Promise<FearIndexEntry[]> {
 export async function refreshFearIndex(
   season: number,
   rosterHealthOverride?: Record<number, number>,
-  userId?: number
+  userId?: number,
+  opts?: { leagueId?: string; week?: number },
 ): Promise<FearIndexEntry[]> {
-  const { leagueId } = await resolveActiveLeagueId(
-    { user: userId != null ? { id: userId } : undefined },
-    null,
-    season,
-  );
+  const { leagueId } = opts?.leagueId
+    ? { leagueId: opts.leagueId }
+    : await resolveActiveLeagueId(
+        { user: userId != null ? { id: userId } : undefined },
+        null,
+        season,
+      );
   const ref = { leagueId: String(leagueId).slice(0, 32), season };
 
   const [teamsRes, matchRes, txRes, payloadRow] = await Promise.all([
     getSeasonTeams(ref),
     getSeasonMatchups(ref),
     getSeasonTransactions(ref),
-    getCachedView(season, "combined", undefined, { userId }),
+    getCachedView(season, "combined", ref.leagueId, { userId }),
   ]);
 
   if (teamsRes.count === 0) {
@@ -392,10 +424,11 @@ export async function refreshFearIndex(
   const payload = payloadRow?.payload as Record<string, unknown> | undefined;
 
   // Determine current week from matchup data
-  const matchupWeeks = (matchups as Array<Record<string, unknown>>).map(
-    (m) => m.matchupPeriodId as number
-  );
-  const currentWeek = matchupWeeks.length > 0 ? Math.max(...matchupWeeks) : 1;
+  const statusWeek = Number((payload?.status as Record<string, unknown> | undefined)?.currentMatchupPeriod);
+  const inferredWeek = Number.isFinite(statusWeek) && statusWeek > 0
+    ? statusWeek
+    : 1;
+  const currentWeek = Math.max(1, Math.floor(Number(opts?.week ?? inferredWeek)) || 1);
 
   // Build ownerMap and memberIdMap
   const ownerMap: Record<number, string> = {};
@@ -492,7 +525,7 @@ export async function refreshFearIndex(
     exploitabilityMap,
   });
 
-  await upsertFearIndex(season, currentWeek, entries);
-  console.log(`[fearIndex] Computed ${entries.length} entries for season=${season} week=${currentWeek}`);
+  await upsertFearIndex(ref.leagueId, season, currentWeek, entries);
+  console.log(`[fearIndex] Computed ${entries.length} entries for league=${ref.leagueId} season=${season} week=${currentWeek}`);
   return entries;
 }

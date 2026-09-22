@@ -167,6 +167,11 @@ export const weeklyPlayerStats = mysqlTable(
     snapPct: int("snapPct").default(0), // 0-100
     // Fantasy
     fantasyPoints: int("fantasyPoints").default(0), // stored as points * 100 for precision
+    /**
+     * League scope. Legacy rows migrate as `unattributed` and are never treated as
+     * belonging to a specific ESPN league. New weekly-engine writes always set an explicit id.
+     */
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default("unattributed"),
     fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -174,6 +179,7 @@ export const weeklyPlayerStats = mysqlTable(
     index("idx_wps_season_week").on(t.season, t.week),
     index("idx_wps_player_season").on(t.playerId, t.season),
     index("idx_wps_season_week_player").on(t.season, t.week, t.playerId),
+    uniqueIndex("uq_wps_league_week_player").on(t.leagueId, t.season, t.week, t.playerId),
   ]
 );
 
@@ -1124,6 +1130,11 @@ export const weeklyStorylines = mysqlTable(
   "weekly_storylines",
   {
     id: int("id").autoincrement().primaryKey(),
+    /**
+     * League scope. Legacy rows migrate as `unattributed` ??? not silently assigned
+     * to ESPN 457622. Reads for a real league never include unattributed rows.
+     */
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default("unattributed"),
     season: int("season").notNull(),
     week: int("week").notNull(),
     storyType: varchar("storyType", { length: 64 }).notNull(),
@@ -1140,7 +1151,9 @@ export const weeklyStorylines = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
+    uniqueIndex("uq_ws_league_week_story_team").on(t.leagueId, t.season, t.week, t.storyType, t.teamId),
     index("idx_ws_season_week").on(t.season, t.week),
+    index("idx_ws_league_season_week").on(t.leagueId, t.season, t.week),
     index("idx_ws_story_type").on(t.storyType),
     index("idx_ws_intensity").on(t.intensityScore),
   ]
@@ -1162,6 +1175,8 @@ export const fearIndex = mysqlTable(
   "fear_index",
   {
     id: int("id").autoincrement().primaryKey(),
+    /** League scope. Legacy rows migrate as `unattributed`. */
+    leagueId: varchar("leagueId", { length: 32 }).notNull().default("unattributed"),
     season: int("season").notNull(),
     week: int("week").notNull(),
     teamId: int("teamId").notNull(),
@@ -1178,8 +1193,9 @@ export const fearIndex = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (t) => [
-    uniqueIndex("uq_fear_team_week").on(t.season, t.week, t.teamId),
+    uniqueIndex("uq_fear_league_team_week").on(t.leagueId, t.season, t.week, t.teamId),
     index("idx_fi_season_week").on(t.season, t.week),
+    index("idx_fi_league_season_week").on(t.leagueId, t.season, t.week),
     index("idx_fi_score").on(t.fearScore),
   ]
 );
@@ -1618,3 +1634,111 @@ export const gmTeamOwnerResolution = mysqlTable(
   (t) => [uniqueIndex("uq_gm_team_owner_resolution").on(t.leagueId, t.season, t.teamId)],
 );
 export type GmTeamOwnerResolution = typeof gmTeamOwnerResolution.$inferSelect;
+
+// ????????? RFSN Story Engine ?????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+/**
+ * Persistent long-form stories produced by the deterministic Story Engine
+ * (server/storyEngine). One row per story, keyed by a stable storyId
+ * (leagueId::type:sortedOwners) so re-detection updates in place ??? no dupes.
+ *
+ * Lifecycle status: emerging ??? active ??? (cooling ??? background) ; resolved ??? retired.
+ * Retirement is realised by pruning rows absent from the reconciled set.
+ * confidence is stored 0..100 (int); the engine uses 0..1.
+ */
+export const rfsnStories = mysqlTable(
+  "rfsn_stories",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    storyId: varchar("storyId", { length: 255 }).notNull(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    storyType: varchar("storyType", { length: 48 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("emerging"),
+    owners: json("owners").$type<string[]>().notNull(),
+    ownerDisplay: json("ownerDisplay").$type<string[]>().notNull(),
+    headline: varchar("headline", { length: 512 }).notNull().default(""),
+    priority: int("priority").notNull().default(0),
+    confidence: int("confidence").notNull().default(0),
+    mentionCount: int("mentionCount").notNull().default(0),
+    resolution: varchar("resolution", { length: 512 }),
+    supportingFacts: json("supportingFacts")
+      .$type<Array<{ kind: string; text: string; season?: number; value?: number }>>()
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    lastMentioned: timestamp("lastMentioned"),
+    lastDetectedAt: timestamp("lastDetectedAt"),
+    expiry: timestamp("expiry").notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_rfsn_story_id").on(t.storyId),
+    index("idx_rfsn_story_league").on(t.leagueId),
+    index("idx_rfsn_story_status").on(t.status),
+    index("idx_rfsn_story_priority").on(t.priority),
+  ]
+);
+export type RfsnStoryRow = typeof rfsnStories.$inferSelect;
+export type InsertRfsnStory = typeof rfsnStories.$inferInsert;
+
+/**
+ * Orchestration receipt for one (leagueId, season, week) weekly-season run.
+ * Not a parallel ESPN/matchup store ??? facts are derived from existing GM tables.
+ */
+export const weeklySeasonPacks = mysqlTable(
+  "weekly_season_packs",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    weekStatus: varchar("weekStatus", { length: 16 }).notNull(),
+    currentMatchupPeriod: int("currentMatchupPeriod").notNull().default(0),
+    factsJson: longtext("factsJson").notNull(),
+    receiptsJson: longtext("receiptsJson").notNull(),
+    generatedAt: timestamp("generatedAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_weekly_season_pack").on(t.leagueId, t.season, t.week),
+    index("idx_wsp_league_season").on(t.leagueId, t.season),
+  ]
+);
+export type WeeklySeasonPack = typeof weeklySeasonPacks.$inferSelect;
+export type InsertWeeklySeasonPack = typeof weeklySeasonPacks.$inferInsert;
+
+/**
+ * Durable weekly narrative cache. Identity is league-week-event-fingerprint-prompt,
+ * never a request timestamp. Unique constraint is the concurrency lock.
+ */
+export const weeklySeasonNarratives = mysqlTable(
+  "weekly_season_narratives",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    leagueId: varchar("leagueId", { length: 32 }).notNull(),
+    season: int("season").notNull(),
+    week: int("week").notNull(),
+    eventId: varchar("eventId", { length: 128 }).notNull(),
+    factFingerprint: varchar("factFingerprint", { length: 64 }).notNull(),
+    promptVersion: varchar("promptVersion", { length: 32 }).notNull().default("rfsn-week-v1"),
+    status: varchar("status", { length: 16 }).notNull().default("pending"),
+    headline: varchar("headline", { length: 256 }),
+    bodyText: text("bodyText"),
+    usageEventId: int("usageEventId"),
+    errorMessage: varchar("errorMessage", { length: 512 }),
+    generatedAt: timestamp("generatedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("uq_weekly_season_narrative").on(
+      t.leagueId,
+      t.season,
+      t.week,
+      t.eventId,
+      t.factFingerprint,
+      t.promptVersion,
+    ),
+    index("idx_wsn_league_week").on(t.leagueId, t.season, t.week),
+  ]
+);
+export type WeeklySeasonNarrative = typeof weeklySeasonNarratives.$inferSelect;
+export type InsertWeeklySeasonNarrative = typeof weeklySeasonNarratives.$inferInsert;

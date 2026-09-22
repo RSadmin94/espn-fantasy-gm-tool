@@ -11,6 +11,7 @@ import {
   Sparkles, Archive, FileText, ChevronRight,
   AlertCircle, Zap,
 } from "lucide-react";
+import { WeeklyEditionPanel } from "./WeeklyEditionPanel";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -516,6 +517,10 @@ export function LeagueWireNewsroom({
         )}
 
         <GenerateControls onRefresh={() => { void refetchFeed(); }} onSwitchToFeed={() => { setView("feed"); setSelectedSeason(null); }} leagueContextKey={leagueContextKey} />
+
+        {view === "feed" && (
+          <WeeklyEditionPanel variant="newsroom" />
+        )}
 
         {view === "feed" && (wireReports as any[]).length > 0 && (
           <div className="rounded-[15px] border border-white/[0.07] bg-[linear-gradient(180deg,#1f1624,#18111c)] overflow-hidden">

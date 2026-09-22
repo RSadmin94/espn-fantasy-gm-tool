@@ -261,6 +261,94 @@ export const adminConsoleRouter = router({
         .optional(),
     )
     .query(async ({ input }) => listAdminAudit(input ?? {})),
+
+  weeklyWeek: adminProcedure
+    .input(
+      z.object({
+        leagueId: z.string().min(1).max(32),
+        week: z.number().int().min(1).max(18).optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const { resolveSeasonClockForLeague, getWeeklySeasonPack } = await import("../weeklySeasonEngine");
+      const clock = await resolveSeasonClockForLeague({ leagueId: input.leagueId, week: input.week });
+      const week = input.week ?? clock.requestedWeek;
+      const pack = await getWeeklySeasonPack(input.leagueId, clock.season, week);
+      const { inspectLeagueWeek } = await import("../weeklyWeekInspect");
+      const inspect = await inspectLeagueWeek({ leagueId: input.leagueId, season: clock.season, week });
+      let edition: { headline: string | null; majors: string[]; weeklyEventCount: number; historicalContextCount: number; canonicalEditorialEventCount: number } | null = null;
+      try {
+        const { loadWeeklyEdition } = await import("../weeklyEditionService");
+        const ed = await loadWeeklyEdition({ leagueId: input.leagueId, season: clock.season, week });
+        edition = {
+          headline: ed.headline ? `${ed.headline.eventType}: ${ed.headline.dek}` : null,
+          majors: ed.majorStories.map((s) => `${s.eventType}: ${s.dek}`),
+          weeklyEventCount: ed.weeklyEventCount,
+          historicalContextCount: ed.historicalContextCount,
+          canonicalEditorialEventCount: ed.canonicalEditorialEventCount,
+        };
+      } catch {
+        edition = null;
+      }
+      const { getDb } = await import("../db");
+      const { weeklySeasonNarratives, usageEvents } = await import("../../drizzle/schema");
+      const { and, eq, desc } = await import("drizzle-orm");
+      const db = await getDb();
+      const narratives = db
+        ? await db
+            .select()
+            .from(weeklySeasonNarratives)
+            .where(
+              and(
+                eq(weeklySeasonNarratives.leagueId, input.leagueId),
+                eq(weeklySeasonNarratives.season, clock.season),
+                eq(weeklySeasonNarratives.week, week),
+              ),
+            )
+        : [];
+      const usage = db
+        ? await db
+            .select()
+            .from(usageEvents)
+            .where(and(eq(usageEvents.featureId, "WEEKLY_INTEL"), eq(usageEvents.leagueId, input.leagueId)))
+            .orderBy(desc(usageEvents.createdAt))
+            .limit(20)
+        : [];
+      return {
+        season: clock.season,
+        week,
+        weekStatus: clock.weekStatus,
+        pack,
+        dataFreshness: clock.providerFreshness,
+        weeklyStatsStatus: pack?.receipts.weeklyStatsStatus ?? null,
+        snapshots: {
+          roster: inspect.rosterSnapshotCount,
+          week0Roster: inspect.week0RosterCount,
+          standings: inspect.standingsSnapshotCount,
+        },
+        detections: {
+          raw: inspect.rawEventCount,
+          canonical: inspect.canonicalEventCount,
+          storylines: inspect.storylines.length,
+          fear: inspect.fear.length,
+        },
+        narratives: narratives.map((n) => ({
+          eventId: n.eventId,
+          status: n.status,
+          headline: n.headline,
+          generatedAt: n.generatedAt,
+        })),
+        usage: usage.map((u) => ({
+          id: u.id,
+          callType: u.callType,
+          estimatedCostUsd: u.estimatedCostUsd,
+          createdAt: u.createdAt,
+          generated: u.generated,
+        })),
+        warnings: pack?.receipts.errors ?? [],
+        edition,
+      };
+    }),
 });
 
 export async function publicFeatureGateState(user: Parameters<typeof isFeatureAllowedForUser>[1]) {

@@ -145,6 +145,8 @@ const MIGRATIONS = [
   "drizzle/migrations/0003_fantasy_data_cache_tables.sql",
   "drizzle/migrations/0006_gmwarroom_clean_schema.sql",
   "drizzle/migrations/0007_transactions_related_tx.sql",
+  "drizzle/migrations/0037_weekly_season_intelligence.sql",
+  "drizzle/migrations/0038_weekly_season_narratives.sql",
 ];
 
 for (const migration of MIGRATIONS) {

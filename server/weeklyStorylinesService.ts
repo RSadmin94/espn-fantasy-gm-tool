@@ -39,6 +39,7 @@ import {
   normalizeSettings,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
+import { aiUsage } from "./aiCost/aiFeatures";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -460,6 +461,7 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
     // ── 8. FEAR_RISING ───────────────────────────────────────────────────
     if (top2RecentTeamIds.has(tid)) {
       const pts = recentPtsMap[tid] || 0;
+      if (pts <= 0) continue;
       stories.push({
         storyType: "FEAR_RISING",
         emotionalTag: "THREAT LEVEL RISING",
@@ -517,6 +519,7 @@ Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
         { role: "system", content: "You are a fantasy football journalist. Output only valid JSON." },
         { role: "user", content: prompt },
       ],
+      usageContext: aiUsage("WEEKLY_INTEL"),
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -553,28 +556,36 @@ Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
 
 export async function getWeeklyStorylinesFromDb(
   season: number,
-  week: number
+  week: number,
+  leagueId?: string,
 ): Promise<WeeklyStorylineRow[]> {
   const db = await getDb();
   if (!db) return [];
+  const filters = [
+    eq(weeklyStorylines.season, season),
+    eq(weeklyStorylines.week, week),
+  ];
+  if (leagueId) filters.push(eq(weeklyStorylines.leagueId, leagueId));
   const rows = await db
     .select()
     .from(weeklyStorylines)
-    .where(and(eq(weeklyStorylines.season, season), eq(weeklyStorylines.week, week)))
+    .where(and(...filters))
     .orderBy(desc(weeklyStorylines.intensityScore));
   return rows as WeeklyStorylineRow[];
 }
 
 export async function getLatestWeeklyStorylinesFromDb(
-  season: number
+  season: number,
+  leagueId?: string,
 ): Promise<WeeklyStorylineRow[]> {
   const db = await getDb();
   if (!db) return [];
-  // Get the max week for this season
+  const filters = [eq(weeklyStorylines.season, season)];
+  if (leagueId) filters.push(eq(weeklyStorylines.leagueId, leagueId));
   const allRows = await db
     .select()
     .from(weeklyStorylines)
-    .where(eq(weeklyStorylines.season, season))
+    .where(and(...filters))
     .orderBy(desc(weeklyStorylines.week), desc(weeklyStorylines.intensityScore));
   if (!allRows.length) return [];
   const maxWeek = allRows[0].week;
@@ -585,26 +596,38 @@ export async function getLatestWeeklyStorylinesFromDb(
 
 /**
  * Full pipeline: compute triggers → generate LLM content → persist to DB.
- * Called from the weekly refresh handler and manual refresh procedures.
+ * Called from the weekly-season engine, weekly refresh handler, and manual procedures.
  * Uses existing cached ESPN data — no new ESPN API calls.
  */
-export async function refreshWeeklyStorylines(season: number, userId?: number): Promise<WeeklyStorylineRow[]> {
+export async function refreshWeeklyStorylines(
+  season: number,
+  userId?: number,
+  opts?: {
+    leagueId?: string;
+    week?: number;
+    generateLLM?: boolean;
+    replaceExisting?: boolean;
+  },
+): Promise<WeeklyStorylineRow[]> {
   const db = await getDb();
   if (!db) return [];
 
-  const { leagueId } = await resolveActiveLeagueId(
-    { user: userId != null ? { id: userId } : undefined },
-    null,
-    season,
-  );
+  const { leagueId } = opts?.leagueId
+    ? { leagueId: opts.leagueId }
+    : await resolveActiveLeagueId(
+        { user: userId != null ? { id: userId } : undefined },
+        null,
+        season,
+      );
   const leagueKey = String(leagueId).slice(0, 32);
+  const generateLLM = opts?.generateLLM !== false;
   const ref = { leagueId: leagueKey, season };
 
   const [teamsRes, matchRes, txRes, data] = await Promise.all([
     getSeasonTeams(ref),
     getSeasonMatchups(ref),
     getSeasonTransactions(ref),
-    getCachedView(season, "combined", undefined, { userId }),
+    getCachedView(season, "combined", leagueKey, { userId }),
   ]);
 
   if (teamsRes.count === 0) return [];
@@ -617,11 +640,7 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
   const settings = normalizeSettings(payload);
 
   const currentWeek = Math.max(1, (settings.currentMatchupPeriod as number) || 1);
-  const calendarYear = new Date().getFullYear();
-  const isSeasonComplete = currentWeek >= 14 || season < calendarYear;
-
-  // For completed seasons, use week 14 as the final week
-  const week = isSeasonComplete ? 14 : currentWeek;
+  const week = Math.max(1, Math.floor(Number(opts?.week ?? currentWeek)) || currentWeek);
 
   const ownerMap: Record<number, string> = {};
   const teamNameMap: Record<number, string> = {};
@@ -786,8 +805,20 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
     ownerTrophyBlocks,
   });
 
-  // Generate LLM content for each trigger (skip if already cached for this week)
-  const existingRows = await getWeeklyStorylinesFromDb(season, week);
+  if (opts?.replaceExisting) {
+    await db
+      .delete(weeklyStorylines)
+      .where(
+        and(
+          eq(weeklyStorylines.leagueId, leagueKey),
+          eq(weeklyStorylines.season, season),
+          eq(weeklyStorylines.week, week),
+        ),
+      );
+  }
+
+  // Generate LLM content for each trigger (skip if already cached for this league-week)
+  const existingRows = await getWeeklyStorylinesFromDb(season, week, leagueKey);
   const existingKeys = new Set(existingRows.map((r) => `${r.storyType}-${r.teamId}`));
 
   const results: WeeklyStorylineRow[] = [...existingRows];
@@ -800,9 +831,12 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
     const key = `${trigger.storyType}-${trigger.teamId}`;
     if (existingKeys.has(key)) continue; // already cached
 
-    const { headline, bodyText } = await generateStoryContent(trigger, __leaguePrompt);
+    const { headline, bodyText } = generateLLM
+      ? await generateStoryContent(trigger, __leaguePrompt)
+      : { headline: trigger.supportingStat, bodyText: trigger.llmContext };
 
     const row = {
+      leagueId: leagueKey,
       season,
       week,
       storyType: trigger.storyType,
@@ -824,6 +858,7 @@ export async function refreshWeeklyStorylines(season: number, userId?: number): 
         .from(weeklyStorylines)
         .where(
           and(
+            eq(weeklyStorylines.leagueId, leagueKey),
             eq(weeklyStorylines.season, season),
             eq(weeklyStorylines.week, week),
             eq(weeklyStorylines.storyType, trigger.storyType),
