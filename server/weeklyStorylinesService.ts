@@ -39,7 +39,7 @@ import {
   normalizeSettings,
 } from "./espnService";
 import { invokeLLM } from "./_core/llm";
-import { aiUsage } from "./aiCost/aiFeatures";
+import { weeklyIntelUsage } from "./weeklySeasonNarratives";
 import { resolveLeaguePromptContext, buildLeaguePromptContext } from "./leaguePromptContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -498,7 +498,8 @@ export function computeWeeklyStorylines(input: StorylinesInput): StoryTrigger[] 
 
 async function generateStoryContent(
   trigger: StoryTrigger,
-  league: { leagueDescriptor: string; historyClause: string; focalClause: string }
+  league: { leagueDescriptor: string; historyClause: string; focalClause: string },
+  usage: { leagueId: string; season: number; week: number },
 ): Promise<{ headline: string; bodyText: string }> {
   const tagLabel = trigger.emotionalTag;
   const prompt = `You are a sharp, emotionally intelligent fantasy football journalist writing for ${league.leagueDescriptor} - ${league.historyClause}. Write a story card for this week's storylines feed.
@@ -519,7 +520,7 @@ Respond ONLY with valid JSON: {"headline": "...", "bodyText": "..."}`;
         { role: "system", content: "You are a fantasy football journalist. Output only valid JSON." },
         { role: "user", content: prompt },
       ],
-      usageContext: aiUsage("WEEKLY_INTEL"),
+      usageContext: weeklyIntelUsage(usage),
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -832,7 +833,11 @@ export async function refreshWeeklyStorylines(
     if (existingKeys.has(key)) continue; // already cached
 
     const { headline, bodyText } = generateLLM
-      ? await generateStoryContent(trigger, __leaguePrompt)
+      ? await generateStoryContent(trigger, __leaguePrompt, {
+          leagueId: leagueKey,
+          season,
+          week,
+        })
       : { headline: trigger.supportingStat, bodyText: trigger.llmContext };
 
     const row = {

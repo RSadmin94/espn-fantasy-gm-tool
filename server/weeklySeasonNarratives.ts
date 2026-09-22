@@ -416,7 +416,27 @@ async function findCleanCachedBody(opts: {
   return null;
 }
 
-async function invokeSofia(opts: { week: number; packet: NarrativeFactPacket; strict: boolean }) {
+/** Existing usage path: feature + leagueId + season/week intent. No schema change. */
+export function weeklyIntelUsage(opts: {
+  leagueId: string;
+  season: number;
+  week: number;
+  retryCount?: number;
+}) {
+  return aiUsage("WEEKLY_INTEL", {
+    leagueId: opts.leagueId,
+    intent: `season:${opts.season} week:${opts.week}`,
+    retryCount: opts.retryCount ?? 0,
+  });
+}
+
+async function invokeSofia(opts: {
+  leagueId: string;
+  season: number;
+  week: number;
+  packet: NarrativeFactPacket;
+  strict: boolean;
+}) {
   const result = await invokeLLM({
     messages: [
       { role: "system", content: sofiaSystemPrompt(opts.strict) },
@@ -433,7 +453,12 @@ ${formatFactGroups(opts.packet)}`,
       },
     ],
     callType: "weekly_briefing",
-    usageContext: aiUsage("WEEKLY_INTEL"),
+    usageContext: weeklyIntelUsage({
+      leagueId: opts.leagueId,
+      season: opts.season,
+      week: opts.week,
+      retryCount: opts.strict ? 1 : 0,
+    }),
   });
   const raw = result.choices?.[0]?.message?.content ?? "";
   return parseModelJson(raw, opts.packet.eventType);
@@ -444,6 +469,8 @@ ${formatFactGroups(opts.packet)}`,
  * Never publishes CONTRADICTED or UNSUPPORTED copy.
  */
 export async function generateGroundedNarrative(opts: {
+  leagueId: string;
+  season: number;
   week: number;
   packet: NarrativeFactPacket;
 }): Promise<{
@@ -454,7 +481,13 @@ export async function generateGroundedNarrative(opts: {
 }> {
   const fallback = deterministicWeeklyNarrative(opts.packet, opts.week);
   const tryOnce = async (strict: boolean) => {
-    const draft = await invokeSofia({ week: opts.week, packet: opts.packet, strict });
+    const draft = await invokeSofia({
+      leagueId: opts.leagueId,
+      season: opts.season,
+      week: opts.week,
+      packet: opts.packet,
+      strict,
+    });
     const grounding = groundNarrative(draft.body, opts.packet, draft.headline);
     return { draft, grounding };
   };
@@ -577,7 +610,12 @@ export async function getOrCreateWeeklyNarrative(opts: {
   }
 
   try {
-    const produced = await generateGroundedNarrative({ week: opts.week, packet: opts.packet });
+    const produced = await generateGroundedNarrative({
+      leagueId: opts.leagueId,
+      season: opts.season,
+      week: opts.week,
+      packet: opts.packet,
+    });
     const fallback = deterministicWeeklyNarrative(opts.packet, opts.week);
     const fallbackGrounding = groundNarrative(fallback.body, opts.packet, fallback.headline);
     const persist = isPublishableGrounding(produced.grounding)

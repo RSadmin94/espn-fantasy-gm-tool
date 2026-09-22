@@ -208,6 +208,7 @@ export function recordInvokeUsage(
       intent?: string | null;
       userId?: string | number | null;
       leagueId?: string | null;
+      retryCount?: number | null;
     };
   },
   usageData: {
@@ -236,6 +237,7 @@ export function recordInvokeUsage(
     featureId: ctx?.feature,
     intent: ctx?.intent,
     leagueId: ctx?.leagueId,
+    retryCount: ctx?.retryCount ?? 0,
     status: "SUCCESS",
   });
 }
