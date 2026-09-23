@@ -91,6 +91,27 @@ Keep the no-CLI rule. Do not `railway up` Preview.
 
 ---
 
+## Production Git source (Weekly Season Intelligence)
+
+**Production source of truth:** `release/promote-provider-expansion-dff6154`  
+Railway env `production` auto-deploys on push to that branch (`checkSuites=false`). Do not push uncertified work there.
+
+**Certified Weekly Season Intelligence lineage (Preview RC):** `9cdcaa8` → `ced35f07` → `7525732` on `release/weekly-season-intelligence-rc`.  
+Application trees `client` / `server` / `shared` / `drizzle` of former production `bc56073` and RC baseline `9cdcaa8` were identical. Production received those two RC commits by cherry-pick (`-x`), not by merging `feat/admin-console`, `main`, or the stale GitHub `production` default branch.
+
+| Step | Branch | Who | What |
+| --- | --- | --- | --- |
+| 1. Development | feature branches; Preview trigger `feature/provider-expansion` | engineering | Iterate on Preview. Do not push here to Production. |
+| 2. Release candidate | `release/weekly-season-intelligence-rc` (or a new `release/…-rc`) | engineering | Freeze certified SHA. Preview-certify. |
+| 3. Approval | — | founder / explicit production-promotion task | No auto-promote from RC or feature branches. |
+| 4. Promotion | cherry-pick certified commits onto `release/promote-provider-expansion-dff6154` | engineering | Prove `client`/`server`/`shared`/`drizzle` (+ runtime package/deploy files) match the certified SHA. |
+| 5. Railway | Git push to the production trigger branch | GitHub → Railway | Auto-deploy. Trust Railway `commitHash` + `buildTime`, not health `gitSha`. |
+| 6. Do not | `feat/admin-console`, `main`, GitHub default `production` (stale 048C-era), or CLI `railway up` | — | Those are not the production website source. |
+
+**Rollback:** certified CLI deploy `3f71e0bb` (`7525732`) · previous Git production `05e19987` (`bc56073`). Health `gitSha` remains stale `build-meta`; do not use it as deploy identity.
+
+---
+
 ## Executive Project Status
 
 Fantasy Football Rivals is a **live production product** (Clerk + Google account picker, provider-first ESPN/Sleeper onboarding, Rivalry Center, Draft War Room, RFSN, GM Advisor, Admin Console, Post-Draft Evaluation, Stripe billing).
