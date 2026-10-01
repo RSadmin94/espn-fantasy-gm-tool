@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import { readBuildMeta, resolveDeployIdentity } from "./deployIdentity";
 import { ENV } from "./env";
 
 export type HealthCheckValue = "ok" | "missing" | "error" | "warn";
@@ -16,14 +17,6 @@ export type HealthSnapshot = {
   failed: string[];
   warnings: string[];
 };
-
-function optionalEnv(...keys: string[]): string {
-  for (const key of keys) {
-    const v = process.env[key];
-    if (typeof v === "string" && v.trim() !== "") return v.trim();
-  }
-  return "unknown";
-}
 
 function nodeEnvLabel(): string {
   const v = process.env.NODE_ENV;
@@ -64,15 +57,16 @@ export async function collectHealthSnapshot(): Promise<HealthSnapshot> {
   const hardFailed = Object.entries(checks).filter(([, v]) => v === "missing" || v === "error");
   const warned = Object.entries(checks).filter(([, v]) => v === "warn");
   const httpStatus = hardFailed.length === 0 ? 200 : 503;
+  const identity = resolveDeployIdentity(process.env, readBuildMeta());
 
   return {
     status: httpStatus === 200 ? "ok" : "degraded",
     httpStatus,
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version ?? "unknown",
-    gitSha: optionalEnv("GIT_COMMIT", "RAILWAY_GIT_COMMIT_SHA", "VERCEL_GIT_COMMIT_SHA"),
-    gitBranch: optionalEnv("RAILWAY_GIT_BRANCH", "VERCEL_GIT_COMMIT_REF"),
-    buildTime: optionalEnv("BUILD_TIME"),
+    gitSha: identity.gitSha,
+    gitBranch: identity.gitBranch,
+    buildTime: identity.buildTime,
     nodeEnv: nodeEnvLabel(),
     checks,
     failed: hardFailed.map(([k, v]) => `${k}: ${v}`),
